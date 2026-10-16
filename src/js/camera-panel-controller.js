@@ -16,6 +16,7 @@ import { CAMERA_ZOOM_STEP } from './preview.js';
 import {
   closeOtherPhoneDrawers,
   isPhoneLayout,
+  placeDrawerColumnTop,
   registerPhoneDrawer,
 } from './phone-drawers.js';
 
@@ -702,20 +703,9 @@ function initMobileCameraDrawer() {
     shown.forEach((d) => d.body.style.setProperty('min-height', `${height}px`));
   };
 
-  // Held sideways, a drawer opens as a column from the preview's top down
-  // (layout.css); the column starts below the preview's own header row.
-  const placeColumnTop = () => {
-    const header = document.querySelector('.preview-drawer-header');
-    const top = header ? header.getBoundingClientRect().bottom : 0;
-    document.documentElement.style.setProperty(
-      '--phone-drawer-top',
-      `${Math.max(0, Math.round(top))}px`
-    );
-  };
-
   const onChange = (opened) => {
     if (opened) {
-      placeColumnTop();
+      placeDrawerColumnTop();
       matchHeights();
     }
     syncPreviewPadding();
@@ -749,7 +739,7 @@ function initMobileCameraDrawer() {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
       syncPreviewPadding({ checkWidth: true });
-      if (drawers.some((d) => d.isOpen())) placeColumnTop();
+      if (drawers.some((d) => d.isOpen())) placeDrawerColumnTop();
     }, 150);
   });
 }

@@ -6,6 +6,9 @@
  * and ASCII drawers open into the same space. So opening one first closes
  * whichever other one is open, and the one asked for then opens. On a
  * desktop window the panels sit side by side and none of this applies.
+ *
+ * The measures the phone drawers share live here too: how tall the preview
+ * stays while a sheet is open, and where a sideways column starts.
  * @license GPL-3.0-or-later
  */
 
@@ -66,4 +69,30 @@ export function closeOtherPhoneDrawers(name) {
 export function closePhoneDrawer(name) {
   const drawer = drawers.get(name);
   if (drawer?.isOpen()) drawer.close({ restoreFocus: false });
+}
+
+/**
+ * How tall the preview stays while a sheet is open on a phone: half the
+ * screen's height, and a sliver more (the small spacing token) so it never
+ * reads as less than half.
+ * @returns {number} px
+ */
+export function previewKeepsPx() {
+  const sliver = parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue('--space-sm')
+  );
+  return Math.ceil(window.innerHeight / 2 + (sliver || 0));
+}
+
+/**
+ * Held sideways, a drawer opens as a column from the preview's top down
+ * (layout.css); the column starts below the preview's own header row.
+ */
+export function placeDrawerColumnTop() {
+  const header = document.querySelector('.preview-drawer-header');
+  const top = header ? header.getBoundingClientRect().bottom : 0;
+  document.documentElement.style.setProperty(
+    '--phone-drawer-top',
+    `${Math.max(0, Math.round(top))}px`
+  );
 }

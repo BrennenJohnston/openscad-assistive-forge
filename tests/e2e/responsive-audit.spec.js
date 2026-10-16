@@ -164,7 +164,9 @@ for (const vp of VIEWPORTS) {
     })
 
     // ── Surface 4: Parameter drawer (mobile) ────────────────────────────
-    test('parameter drawer — toggle visible, opens/closes, backdrop, scrollable', async ({
+    // The drawer is a sheet with the preview live beside it: nothing dims
+    // or blocks the preview, and its own button closes it.
+    test('parameter drawer — toggle visible, opens/closes, the preview live, scrollable', async ({
       page,
     }) => {
       test.skip(!isMobile, 'Parameter drawer is mobile-only (below 768px)')
@@ -179,9 +181,7 @@ for (const vp of VIEWPORTS) {
       await toggle.click()
       const drawer = page.locator('#paramPanel')
       await expect(drawer).toHaveClass(/drawer-open/)
-
-      const backdrop = page.locator('#drawerBackdrop')
-      await expect(backdrop).toHaveClass(/visible/)
+      await expect(page.locator('#drawerBackdrop')).toBeHidden()
 
       const isScrollable = await drawer.evaluate((el) => {
         const style = getComputedStyle(el)
@@ -189,33 +189,19 @@ for (const vp of VIEWPORTS) {
       })
       expect(isScrollable).toBe(true)
 
-      // The backdrop spans the whole viewport and the open drawer covers the
-      // middle of it, so Playwright's default click, at the element's center,
-      // lands on the drawer's own content every time: with the drawer open, the
-      // center hits the preset actions at 320, Reset at 375, the customizer
-      // header at 480 and the panel body at 600. A person taps the strip beside
-      // the drawer, 32 px wide at the narrowest of these; so does this.
-      const strip = await page.evaluate(() => {
-        const back = document.querySelector('#drawerBackdrop')
-        const panel = document
-          .querySelector('#paramPanel')
+      const previewReachable = await page.evaluate(() => {
+        const r = document
+          .getElementById('previewContainer')
           .getBoundingClientRect()
-        // Search the strip rather than assume a point in it: at 320 px it is
-        // 32 px wide and a disabled preset button overflows the panel's right
-        // edge into part of it.
-        for (let f = 0.5; f > 0.05; f -= 0.05) {
-          const y = Math.round(window.innerHeight * f)
-          for (let x = window.innerWidth - 3; x > panel.right; x -= 4) {
-            if (document.elementFromPoint(x, y) === back) return { x, y }
-          }
-        }
-        return null
+        const hit = document.elementFromPoint(
+          r.x + r.width / 2,
+          r.y + r.height / 2
+        )
+        return !!hit?.closest('#previewContainer')
       })
-      expect(
-        strip,
-        'the open drawer leaves no strip of backdrop a finger could tap'
-      ).not.toBeNull()
-      await backdrop.click({ position: strip })
+      expect(previewReachable, 'the preview beside the open sheet').toBe(true)
+
+      await toggle.click()
       await expect(drawer).not.toHaveClass(/drawer-open/)
 
       await checkNoHorizontalOverflow(page)

@@ -60,29 +60,27 @@ test.describe('Mobile Drawer', () => {
     await expect(toggle).toBeVisible();
   });
   
+  // The sheet sits above the bottom bar with the preview live above it:
+  // nothing dims or blocks the preview while it is open.
   test('drawer opens and closes', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     await loadSampleFile(page);
-    
+
     const toggle = page.locator('#mobileDrawerToggle');
     const drawer = page.locator('#paramPanel');
-    const backdrop = page.locator('#drawerBackdrop');
-    
-    // Open drawer
+
     await toggle.click();
     await expect(drawer).toHaveClass(/drawer-open/);
-    await expect(backdrop).toHaveClass(/visible/);
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    
-    // Close with backdrop click.
-    //
-    // A bare `backdrop.click()` aims at the element's center, and the backdrop
-    // is the whole 375x667 viewport while the drawer covers 337.5 of those
-    // 375px, so the center is the drawer and the actionability check never
-    // passes. At the backdrop's center `elementFromPoint` returns the drawer's
-    // summary; at x=369 it returns `#drawerBackdrop`, and tapping there closes
-    // the drawer on every repeat.
-    await backdrop.click({ position: { x: 369, y: 333 } });
+    await expect(page.locator('#drawerBackdrop')).toBeHidden();
+    const previewReachable = await page.evaluate(() => {
+      const r = document.getElementById('previewContainer').getBoundingClientRect();
+      const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return !!hit?.closest('#previewContainer');
+    });
+    expect(previewReachable).toBe(true);
+
+    await toggle.click();
     await expect(drawer).not.toHaveClass(/drawer-open/);
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });
@@ -98,55 +96,53 @@ test.describe('Mobile Drawer', () => {
     await expect(page.locator('#paramPanel')).not.toHaveClass(/drawer-open/, { timeout: 10000 });
   });
   
-  test('focus is trapped in drawer', async ({ page }) => {
+  // The sheet is not a dialog: focus starts in it and Tab carries on past
+  // it to the rest of the page.
+  test('focus moves freely between the sheet and the page', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     await loadSampleFile(page);
-    
-    await page.locator('#mobileDrawerToggle').click();
-    // Focus is moved into the drawer after the open transition
-    await page.waitForTimeout(400);
 
-    // The drawer focuses its first focusable element; the first matching
-    // button in DOM order is the disabled Undo toolbar button, so assert the
-    // a11y contract directly: focus landed inside the drawer, whatever row
-    // comes first.
+    await page.locator('#mobileDrawerToggle').click();
+    await expect(page.locator('#paramPanel')).toHaveClass(/drawer-open/);
+
     const focusInsideDrawer = await page.evaluate(
       () => document.activeElement.closest('#paramPanel') !== null
     );
     expect(focusInsideDrawer).toBe(true);
-    
-    // Many tabs should keep focus in drawer
-    for (let i = 0; i < 20; i++) {
+
+    let leftTheSheet = false;
+    for (let i = 0; i < 120 && !leftTheSheet; i++) {
       await page.keyboard.press('Tab');
+      leftTheSheet = await page.evaluate(
+        () =>
+          !document.activeElement.closest('#paramPanel') &&
+          document.activeElement !== document.body
+      );
     }
-    
-    const activeElement = await page.evaluate(() => document.activeElement.closest('#paramPanel'));
-    expect(activeElement).not.toBeNull();
+    expect(leftTheSheet).toBe(true);
+    await expect(page.locator('#paramPanel')).toHaveClass(/drawer-open/);
   });
 
-  test('drawer stays open when dragging from inside to backdrop', async ({ page }) => {
+  // A drag that starts in the sheet (a slider, a scroll) and ends over the
+  // preview leaves the sheet open.
+  test('drawer stays open when a drag from inside ends on the preview', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     await loadSampleFile(page);
-    
+
     const toggle = page.locator('#mobileDrawerToggle');
     const drawer = page.locator('#paramPanel');
-    const backdrop = page.locator('#drawerBackdrop');
-    
-    // Open drawer
+
     await toggle.click();
     await expect(drawer).toHaveClass(/drawer-open/);
-    
-    // Get bounding boxes
+
     const drawerBox = await drawer.boundingBox();
-    const backdropBox = await backdrop.boundingBox();
-    
-    // Simulate dragging from inside drawer to backdrop (common accidental gesture)
+    const previewBox = await page.locator('#previewContainer').boundingBox();
+
     await page.mouse.move(drawerBox.x + drawerBox.width / 2, drawerBox.y + drawerBox.height / 2);
     await page.mouse.down();
-    await page.mouse.move(backdropBox.x + backdropBox.width - 50, backdropBox.y + backdropBox.height / 2);
+    await page.mouse.move(previewBox.x + previewBox.width / 2, previewBox.y + previewBox.height / 2);
     await page.mouse.up();
-    
-    // Drawer should still be open (gesture was protected)
+
     await expect(drawer).toHaveClass(/drawer-open/);
   });
 
@@ -306,28 +302,6 @@ test.describe('Desktop Layout', () => {
         await page.waitForTimeout(300);
         await expect(mobileToggle).toHaveAttribute('aria-expanded', 'false');
       }
-    }
-  });
-
-  test('parameters drawer backdrop appears and is dismissible', async ({ page }) => {
-    test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
-    await loadSampleFile(page);
-
-    const mobileToggle = page.locator('#mobileDrawerToggle');
-    if (await mobileToggle.isVisible()) {
-      await mobileToggle.click();
-      await page.waitForTimeout(400);
-
-      // Backdrop should be visible
-      const backdrop = page.locator('.drawer-backdrop');
-      await expect(backdrop).toHaveClass(/visible/);
-
-      // Click backdrop to dismiss
-      await backdrop.click({ position: { x: 10, y: 10 } });
-      await page.waitForTimeout(400);
-
-      // Drawer should be closed
-      await expect(mobileToggle).toHaveAttribute('aria-expanded', 'false');
     }
   });
 });

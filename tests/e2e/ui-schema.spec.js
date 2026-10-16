@@ -481,13 +481,6 @@ for (const size of SIZES) {
         if (!wasOpen) await press('#cameraPanelToggle');
       });
 
-      test('S6: on a phone the preview keeps half the screen', () => {
-        test.skip(
-          true,
-          'The phone case: today the Customizer and Preview Settings sheets cover the whole preview on a phone'
-        );
-      });
-
       test('S7: a menu drops under its pressed button with nothing over the page', async () => {
         expectRule('S7');
         for (const name of MENUS) {
@@ -732,11 +725,8 @@ for (const look of LOOKS.filter((l) => !l.altView)) {
   });
 }
 
-/**
- * The simple box open in Standard at a phone's size, in a look, with the
- * camera drawer opened by its toggle.
- */
-async function openPhoneCameraDrawer(page, look) {
+/** The simple box open in Standard at a phone's size, in a look. */
+async function openPhoneProject(page, look) {
   await page.addInitScript((l) => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
@@ -782,6 +772,14 @@ async function openPhoneCameraDrawer(page, look) {
       () => document.documentElement.getAttribute('data-ui-variant') === 'mono'
     );
   }
+}
+
+/**
+ * The simple box open in Standard at a phone's size, in a look, with the
+ * camera drawer opened by its toggle.
+ */
+async function openPhoneCameraDrawer(page, look) {
+  await openPhoneProject(page, look);
   const toggle = page.locator('#cameraDrawerToggle');
   if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
     await toggle.focus();
@@ -975,6 +973,203 @@ for (const height of [915, 810]) {
   }
 }
 
+/** The share of the screen's height, down its middle, where the preview shows. */
+function previewHeightShare() {
+  const x = innerWidth / 2;
+  let seen = 0;
+  let total = 0;
+  for (let y = 1; y < innerHeight; y += 2) {
+    total++;
+    if (document.elementFromPoint(x, y)?.closest('#previewContainer')) seen++;
+  }
+  return seen / total;
+}
+
+/** The open Customizer sheet and what is around it, read in the page. */
+function readCustomizerSheet() {
+  const box = (el) => el.getBoundingClientRect();
+  const shown = (el) => !!el && el.checkVisibility() && box(el).width > 0;
+  const sheet = document.getElementById('paramPanel');
+  const s = box(sheet);
+  const bar = box(document.getElementById('actionsBar'));
+  const camera = document.getElementById('cameraDrawerToggle');
+  const c = box(camera);
+  const hit = document.elementFromPoint(c.x + c.width / 2, c.y + c.height / 2);
+  const header = sheet.querySelector('.panel-header');
+  const scrollTop =
+    header && getComputedStyle(header).position === 'sticky'
+      ? box(header).bottom
+      : s.top;
+  const underHeader = document.elementFromPoint(
+    s.left + s.width / 2,
+    scrollTop + 4
+  );
+  const focused = document.activeElement
+    ? box(document.activeElement)
+    : null;
+  return {
+    top: s.top,
+    bottom: s.bottom,
+    barTop: bar.top,
+    cameraReachable: !!hit && camera.contains(hit),
+    backdrop: shown(document.getElementById('drawerBackdrop')),
+    modal: sheet.getAttribute('aria-modal'),
+    role: sheet.getAttribute('role'),
+    // The parameters at the top of what scrolls: right under the sheet's
+    // own header is their search block or a group, not the sections above.
+    atParameters: !!underHeader?.closest(
+      '#paramSearchSection, #parametersContainer'
+    ),
+    focusInParameters: !!document.activeElement?.closest(
+      '#paramSearchSection, #parametersContainer'
+    ),
+    focusInView:
+      !!focused &&
+      focused.top >= scrollTop - 1 &&
+      focused.bottom <= s.bottom + 1,
+  };
+}
+
+/** Whether the bottom bar's toggles and Generate share one row. */
+function readBarRow() {
+  const box = (el) => el.getBoundingClientRect();
+  const shown = (el) => !!el && el.checkVisibility() && box(el).width > 0;
+  const ids = ['asciiDrawerToggle', 'cameraDrawerToggle', 'primaryActionBtn'];
+  const boxes = ids
+    .map((id) => document.getElementById(id))
+    .filter(shown)
+    .map(box);
+  const centers = boxes.map((b) => Math.round(b.top + b.height / 2));
+  const shortest = Math.min(...boxes.map((b) => b.height));
+  return {
+    centers,
+    oneRow: Math.max(...centers) - Math.min(...centers) <= shortest / 2,
+  };
+}
+
+// Phones held upright: the Customizer is a sheet above the bottom bar, which
+// keeps to one row, and Preview Settings & Info drops from its own row; with
+// either open the preview keeps half the screen's height, the model drawn in
+// that half. The sheet is not a dialog: no backdrop, the preview and the bar
+// stay usable, it opens at the parameters, Escape closes it, and closed it is
+// out of the way of Tab and of a screen reader.
+for (const height of [915, 810]) {
+  for (const look of LOOKS) {
+    test.describe(`The phone sheets, 412 x ${height}, ${look.name}`, () => {
+      // No isMobile: Firefox rejects it when the browser context is created.
+      test.use({ viewport: { width: 412, height }, hasTouch: true });
+
+      test('S6: the preview keeps half the screen under the Customizer and Preview Settings', async ({
+        page,
+      }) => {
+        test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+        await openPhoneProject(page, look);
+        await page.waitForTimeout(500);
+        const bar = await page.evaluate(readBarRow);
+        expect
+          .soft(bar.oneRow, `S8: the bottom bar on one row (${bar.centers})`)
+          .toBe(true);
+
+        const toggle = page.locator('#mobileDrawerToggle');
+        const closed = await page.evaluate(readToggle, '#mobileDrawerToggle');
+        expect.soft(closed.travel, 'S1: the Customizer rises').toBe('up');
+        expect
+          .soft(
+            angleDiff(closed.arrow ?? 999, ANGLE.up),
+            `S1: the closed Customizer's arrow points at ${Math.round(closed.arrow)} degrees`
+          )
+          .toBeLessThanOrEqual(1);
+
+        await toggle.focus();
+        await page.keyboard.press('Enter');
+        await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        await page.waitForTimeout(600);
+        const c = await page.evaluate(readCustomizerSheet);
+        expect
+          .soft(
+            await page.evaluate(previewHeightShare),
+            'S6: the preview with the Customizer open'
+          )
+          .toBeGreaterThanOrEqual(0.5);
+        expect
+          .soft(
+            Math.abs(c.bottom - c.barTop),
+            `the sheet ends at the bar (${Math.round(c.bottom)} and ${Math.round(c.barTop)})`
+          )
+          .toBeLessThanOrEqual(1);
+        expect.soft(c.cameraReachable, 'Camera stays in reach').toBe(true);
+        expect.soft(c.backdrop, 'no backdrop over the preview').toBe(false);
+        expect.soft(c.modal, 'the sheet is not modal').toBeNull();
+        expect.soft(c.role, 'the sheet is a region').toBe('region');
+        expect.soft(c.atParameters, 'it opens at the parameters').toBe(true);
+        expect
+          .soft(c.focusInParameters, 'focus starts at the parameters')
+          .toBe(true);
+        expect
+          .soft(c.focusInView, 'the focused control in view in the sheet')
+          .toBe(true);
+
+        await page.keyboard.press('Escape');
+        await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        await expect(toggle).toBeFocused();
+        const name = await page.evaluate(() =>
+          document.getElementById('paramPanel').getAttribute('aria-labelledby')
+        );
+        expect
+          .soft(name, 'the region keeps its name once closed')
+          .toBe('parameters-heading');
+        // Closed means once it has slid away.
+        await page
+          .locator('#paramPanel')
+          .evaluate((el) =>
+            Promise.all(el.getAnimations().map((a) => a.finished))
+          );
+        let reachedClosed = 0;
+        for (let i = 0; i < 40; i++) {
+          await page.keyboard.press('Tab');
+          if (
+            await page.evaluate(
+              () => !!document.activeElement?.closest('#paramPanel')
+            )
+          ) {
+            reachedClosed++;
+          }
+        }
+        expect
+          .soft(reachedClosed, 'Tab presses that land in the closed Customizer')
+          .toBe(0);
+
+        const settings = page.locator('#previewDrawerToggle');
+        await settings.focus();
+        await page.keyboard.press('Enter');
+        await expect(settings).toHaveAttribute('aria-expanded', 'true');
+        await page.waitForTimeout(600);
+        const p = await page.evaluate(() => {
+          const box = (el) => el.getBoundingClientRect();
+          return {
+            sectionBottom: box(document.getElementById('previewInfoSection'))
+              .bottom,
+            canvasTop: box(document.getElementById('previewCanvasSection'))
+              .top,
+          };
+        });
+        expect
+          .soft(
+            await page.evaluate(previewHeightShare),
+            'S6: the preview with Preview Settings open'
+          )
+          .toBeGreaterThanOrEqual(0.5);
+        expect
+          .soft(
+            p.canvasTop,
+            'Preview Settings drops from its row, the preview below it'
+          )
+          .toBeGreaterThanOrEqual(p.sectionBottom - 1);
+      });
+    });
+  }
+}
+
 // A phone held sideways (a touch screen, landscape, a phone's height): the
 // header keeps to one row, the menu bar shares the Preview Settings row,
 // below 768 px the bottom bar keeps to one row, from 768 px the Customizer
@@ -1154,6 +1349,81 @@ for (const size of SIDEWAYS_SIZES) {
         )
         .toBe(true);
       expect.soft(c.small, 'buttons under 44 px').toEqual([]);
+    });
+  });
+}
+
+// Held sideways under 768 px wide, the Customizer is a side sheet at most
+// half the width, from the left edge, below the Preview Settings row; the
+// preview beside it is neither dimmed nor covered and draws the model in the
+// space that is left.
+for (const size of SIDEWAYS_SIZES.filter((s) => s.width < 768)) {
+  test.describe(`The Customizer held sideways, ${size.width} x ${size.height}`, () => {
+    test.use({ viewport: size, hasTouch: true });
+
+    test('a side sheet at most half the width, the preview live beside it', async ({
+      page,
+    }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+      await openPhoneProject(page, LOOKS[0]);
+      test.skip(
+        !(await page.evaluate((q) => matchMedia(q).matches, SIDEWAYS_QUERY)),
+        'this browser does not report a touch screen held sideways'
+      );
+      await page.waitForTimeout(500);
+      const toggle = page.locator('#mobileDrawerToggle');
+      expect
+        .soft(
+          await toggle.getAttribute('data-travel-open'),
+          'S1: held sideways the Customizer opens to the right'
+        )
+        .toBe('right');
+      await toggle.focus();
+      await page.keyboard.press('Enter');
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      await page.waitForTimeout(600);
+      const m = await page.evaluate(() => {
+        const box = (el) => el.getBoundingClientRect();
+        const sheet = box(document.getElementById('paramPanel'));
+        const row = box(document.querySelector('.preview-drawer-header'));
+        const canvas = box(document.getElementById('previewCanvasSection'));
+        const x = (sheet.right + innerWidth) / 2;
+        const y = canvas.top + canvas.height / 2;
+        return {
+          left: sheet.left,
+          right: sheet.right,
+          top: sheet.top,
+          width: sheet.width,
+          rowBottom: row.bottom,
+          canvasLeft: canvas.left,
+          canvasBottom: canvas.bottom,
+          barTop: box(document.getElementById('actionsBar')).top,
+          besideIsPreview: !!document
+            .elementFromPoint(x, y)
+            ?.closest('#previewContainer'),
+          backdrop: document.getElementById('drawerBackdrop').checkVisibility(),
+        };
+      });
+      expect.soft(m.left, 'from the left edge').toBeLessThanOrEqual(0.5);
+      expect
+        .soft(m.width / size.width, 'at most half the width')
+        .toBeLessThanOrEqual(0.5);
+      expect
+        .soft(m.top, 'below the Preview Settings row')
+        .toBeGreaterThanOrEqual(m.rowBottom - 1);
+      expect
+        .soft(m.besideIsPreview, 'the preview beside it, not dimmed')
+        .toBe(true);
+      expect.soft(m.backdrop, 'no backdrop').toBe(false);
+      expect
+        .soft(m.canvasLeft, 'the model drawn in the space beside the sheet')
+        .toBeGreaterThanOrEqual(m.right - 1);
+      expect
+        .soft(
+          m.canvasBottom,
+          `the preview ends at the bar (${Math.round(m.canvasBottom)} and ${Math.round(m.barTop)})`
+        )
+        .toBeLessThanOrEqual(m.barTop + 1);
     });
   });
 }

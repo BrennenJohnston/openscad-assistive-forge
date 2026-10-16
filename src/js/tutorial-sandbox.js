@@ -126,16 +126,29 @@ function findScrollableParent(element) {
  * y=48 under an 86px header, while `#welcomeScreen` itself was still clipping
  * at ~145. So take the lowest top edge of every clipping ancestor.
  *
+ * Except the ones below the first box that scrolls: they move with the
+ * element, so their edge is never in its way. A parameter group clips its
+ * own content and starts 1px above its summary; counted, it put the summary
+ * forever "too high", and each pass scrolled the Customizer sheet up and the
+ * summary further out of view.
+ *
  * @param {HTMLElement} el
  * @returns {number} Viewport y below which the element is not clipped
  */
 function visibleTopBoundFor(el) {
   let bound = 0;
+  let scrolls = false;
   let parent = el.parentElement;
 
   while (parent && parent !== document.documentElement) {
     const style = getComputedStyle(parent);
-    if (style.overflowY !== 'visible' || style.overflowX !== 'visible') {
+    scrolls ||= [style.overflowY, style.overflowX].some(
+      (value) => value === 'auto' || value === 'scroll'
+    );
+    if (
+      scrolls &&
+      (style.overflowY !== 'visible' || style.overflowX !== 'visible')
+    ) {
       bound = Math.max(bound, parent.getBoundingClientRect().top);
     }
     parent = parent.parentElement;
@@ -161,8 +174,10 @@ function visibleTopBoundFor(el) {
  * usually begins.
  *
  * @param {HTMLElement} el - The step's target
+ * @param {{topInset?: number}} [options] - Pixels at the box's top that
+ *   something sticky covers; the target is centered in the rest
  */
-function scrollTargetIntoContainerView(el) {
+function scrollTargetIntoContainerView(el, { topInset = 0 } = {}) {
   const margin = SPOTLIGHT_PADDING + 8;
   const container = findScrollableParent(el);
   if (!container) {
@@ -172,8 +187,9 @@ function scrollTargetIntoContainerView(el) {
 
   const containerRect = container.getBoundingClientRect();
   const elRect = el.getBoundingClientRect();
-  const view = container.clientHeight;
-  const elTopInContent = elRect.top - containerRect.top + container.scrollTop;
+  const view = container.clientHeight - topInset;
+  const elTopInContent =
+    elRect.top - containerRect.top + container.scrollTop - topInset;
 
   const next =
     elRect.height + margin * 2 >= view
@@ -482,6 +498,32 @@ async function resolveTargetWithRetry(step, timeoutMs = 1500) {
 function isMobileDrawerOpen() {
   const paramPanel = document.getElementById('paramPanel');
   return paramPanel && paramPanel.classList.contains('drawer-open');
+}
+
+/**
+ * On a phone the Customizer is a sheet a few rows tall, and a step can
+ * arrive with its target scrolled out of those rows (the sheet opens at the
+ * parameter search). Scrolled there smoothly after the card is placed, the
+ * target moved while the card stayed where the last step left it, over the
+ * sheet and its Close button. Brought in at once, before placing, the card
+ * docks clear of the sheet as the step appears.
+ *
+ * @param {HTMLElement|null} el - The step's target
+ */
+function bringIntoPhoneSheet(el) {
+  if (!el || !isMobileViewport() || !isMobileDrawerOpen()) return;
+  const sheet = document.getElementById('paramPanel');
+  if (!sheet.contains(el)) return;
+
+  const box = sheet.getBoundingClientRect();
+  const top = box.top + sheet.clientTop;
+  const r = el.getBoundingClientRect();
+  if (r.top >= top && r.bottom <= top + sheet.clientHeight) return;
+
+  // The sheet's scroll padding is the strip its sticky header covers.
+  scrollTargetIntoContainerView(el, {
+    topInset: parseFloat(getComputedStyle(sheet).scrollPaddingTop) || 0,
+  });
 }
 
 /**
@@ -807,6 +849,7 @@ function handleDrawerStateChange(isNowOpen) {
       if (newTarget !== currentTarget) {
         // Update to the new visible target and reposition spotlight
         currentTarget = newTarget;
+        bringIntoPhoneSheet(newTarget);
         updateSpotlightAndPosition();
       }
       resetStepRequirement(step);
@@ -3903,13 +3946,18 @@ async function showStep(stepIndex) {
     // the resolver demands viewport intersection, and the engine's own
     // scroll runs only after resolution — so an off-screen target could
     // never resolve. Bring the candidate on screen first (instant, so the
-    // rect is correct immediately); the project tours keep their existing
-    // drawer-driven path untouched.
+    // rect is correct immediately). The project tours do the same inside a
+    // phone's Customizer sheet, and nowhere else.
     if (activeTutorial.surface === 'welcome') {
       const candidate = resolveStepTarget(step, { requireVisible: false });
       if (candidate && !isElementVisible(candidate)) {
         scrollTargetIntoContainerView(candidate);
       }
+    } else {
+      bringIntoPhoneSheet(
+        resolveStepTarget(step) ||
+          resolveStepTarget(step, { requireVisible: false })
+      );
     }
     resolvedTarget = await resolveTargetWithRetry(step);
     if (!resolvedTarget) {
@@ -4259,14 +4307,29 @@ function updateSpotlightAndPosition() {
         ? Math.max(0, actionsBarRect.height || 0)
         : 0;
 
-    // The card stays up over the open Customizer drawer instead of collapsing
-    // to a pill, so a top dock has something to respect: the drawer's title
-    // row carries its only Close button, and a card starting at the viewport
-    // top would land squarely on it (at 412x915 it covered y 8-348). Start
-    // below that row instead.
-    const drawerTitleRow = isMobileDrawerOpen()
-      ? document.querySelector('#paramPanel .panel-header-title-row')
+    // The card stays up over the open Customizer instead of collapsing to a
+    // pill, so its docks have something to respect. Held upright the
+    // Customizer is a sheet across the bottom of the screen: the card docks
+    // above it, never on it (its title row carries Close, and the step's
+    // target is often inside it). Held sideways it is a column from the top,
+    // and a card starting at the viewport top would land on its Close
+    // button, so a top dock starts below its title row instead.
+    const drawer = isMobileDrawerOpen()
+      ? document.getElementById('paramPanel')
       : null;
+    const drawerRect =
+      drawer && isRendered(drawer) ? drawer.getBoundingClientRect() : null;
+    const sheetAcross =
+      !!drawerRect && drawerRect.width >= viewport.width * 0.9;
+    // offsetTop is where the sheet comes to rest; the box can still be
+    // sliding in when a step arrives.
+    const sheetBelow = sheetAcross
+      ? Math.max(0, viewport.height - drawer.offsetTop)
+      : 0;
+    const drawerTitleRow =
+      drawer && !sheetAcross
+        ? drawer.querySelector('.panel-header-title-row')
+        : null;
     const drawerHeaderBottom =
       drawerTitleRow && isRendered(drawerTitleRow)
         ? drawerTitleRow.getBoundingClientRect().bottom + 8
@@ -4297,7 +4360,11 @@ function updateSpotlightAndPosition() {
       drawerHeaderBottom,
       topChromeBottom + 8
     );
-    const bottomOffset = Math.max(8, safeAreas.bottom + actionsBarHeight + 8);
+    const bottomOffset = Math.max(
+      8,
+      safeAreas.bottom + actionsBarHeight + 8,
+      sheetBelow + 8
+    );
 
     const intersects = (a, b, pad = 6) => {
       return !(

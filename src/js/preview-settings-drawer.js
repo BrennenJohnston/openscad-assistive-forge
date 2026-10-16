@@ -9,6 +9,9 @@
 import { getDrawerStateKey, safeGetItem, safeSetItem } from './storage-keys.js';
 import {
   closeOtherPhoneDrawers,
+  isPhoneLayout,
+  isSidewaysPhone,
+  previewKeepsPx,
   registerPhoneDrawer,
 } from './phone-drawers.js';
 
@@ -62,12 +65,31 @@ export function initPreviewSettingsDrawer(options = {}) {
   };
 
   /**
+   * On an upright phone the drawer drops from its row in the page's flow,
+   * as tall as leaves the preview below it half the screen (layout.css
+   * reads the height). Measured while it is still closed.
+   */
+  const placeOnPhone = () => {
+    const canvas = document.getElementById('previewCanvasSection');
+    if (!canvas || !isPhoneLayout() || isSidewaysPhone()) return;
+    const row = previewInfoSection.getBoundingClientRect();
+    const c = canvas.getBoundingClientRect();
+    const gap = c.top - row.bottom;
+    const height = Math.floor(c.bottom - previewKeepsPx() - gap - row.top);
+    document.documentElement.style.setProperty(
+      '--phone-settings-height',
+      `${Math.max(row.height, height)}px`
+    );
+  };
+
+  /**
    * Expand the drawer to show all settings (auto-sized)
    */
   const expand = () => {
     if (isExpanded) return;
     // On a phone one drawer is open at a time.
     closeOtherPhoneDrawers('preview-settings');
+    placeOnPhone();
     isExpanded = true;
     previewInfoSection.classList.remove('preview-drawer-collapsed');
     previewInfoSection.classList.add('preview-drawer-expanded');

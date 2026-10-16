@@ -116,7 +116,9 @@ export const MEASURED_SECONDS = {
   'camera-face-view-orbit.spec.js': 210.0,
   // Measured 142.1; four cases on what a tour says (about 9 s locally) add 15.
   'tutorials.spec.js': 157.1,
-  'tour-interaction.spec.js': 269.2,
+  // Measured 269.2; a case on a target half behind a phone's bar (about 7 s
+  // locally) adds 10.
+  'tour-interaction.spec.js': 279.2,
   'preferences-dialog.spec.js': 90.6,
   // Two cases, an example and a failing upload, and the braille sign's
   // return to a cached preview: 8.5 s together locally.
@@ -367,11 +369,11 @@ export const MEASURED_SECONDS = {
   'recovery-mode.spec.js': 30.0,
   // Eight groups (two window sizes, four looks), each loading the charm once
   // for its seven cases, then the desktop camera panel cases, the phone
-  // drawer cases and the sideways phone cases, each loading the simple box.
+  // drawer, sheet and sideways cases, each loading the simple box.
   // 906 s for its 68 timed cases on a CI shard log (the Alt View groups slow
-  // there, drawn in software), before the four sideways cases, about 15 s
-  // each; booked at 970.
-  'ui-schema.spec.js': 970.0,
+  // there, drawn in software), before fourteen phone cases were added, about
+  // 15 s each; booked at 1120.
+  'ui-schema.spec.js': 1120.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

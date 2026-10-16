@@ -1248,20 +1248,27 @@ body[data-app-surface='welcome'] #uiModeToggle {
     flex-direction: column;
   }
 
-  /* Parameters panel becomes off-canvas drawer */
+  /* The Customizer is a sheet above the bottom bar. drawer-controller.js
+     sets --phone-sheet-top where the preview's half of the screen ends.
+     Closed, it slides under the bar and is hidden from Tab and from a
+     screen reader. */
   .param-panel {
     position: fixed;
-    top: 0;
+    top: var(--phone-sheet-top, 50vh);
+    bottom: var(--actions-bar-reserved, var(--actions-bar-collapsed-offset));
     left: 0;
-    bottom: 0;
-    width: min(90vw, 360px);
-    max-height: 100vh;
-    max-height: 100dvh; /* Dynamic viewport height */
-    transform: translateX(-100%);
-    transition: transform var(--motion-slow) ease-out;
-    /* Keep below app modals */
+    right: 0;
+    width: auto;
+    min-height: 0;
+    max-height: none;
+    transform: translateY(100%);
+    visibility: hidden;
+    transition:
+      transform var(--motion-slow) ease-out,
+      visibility 0s linear var(--motion-slow);
+    /* Under the bar, so it slides away beneath it */
     z-index: var(--z-index-modal-backdrop);
-    border-right: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border);
     box-shadow: var(--shadow-lg);
     /* Ensure opaque background */
     background-color: var(--color-bg-primary);
@@ -1272,27 +1279,34 @@ body[data-app-surface='welcome'] #uiModeToggle {
     padding-right: env(safe-area-inset-right, 0px);
   }
 
-  .param-panel .panel-header {
-    padding-top: calc(var(--space-md) + env(safe-area-inset-top, 0px));
-  }
-
   .param-panel.drawer-open {
-    transform: translateX(0);
-    /* Elevate above backdrop (965) and actions bar (960) when open */
-    z-index: calc(var(--z-index-modal-backdrop) + 20);
+    transform: none;
+    visibility: visible;
+    transition:
+      transform var(--motion-slow) ease-out,
+      visibility 0s;
   }
 
-  /* Add bottom padding to drawer body to allow scrolling past fixed actions bar */
-  /* The actions bar is ~120px tall when expanded (drawer toggle + primary button rows) */
-  .param-panel .param-panel-body {
-    padding-bottom: calc(
-      var(--actions-bar-expanded-padding) + env(safe-area-inset-bottom, 0px)
-    );
+  /* The preview ends where the sheet begins, so the model is drawn in the
+     half of the screen that stays in view. */
+  .preview-panel.customizer-sheet-open {
+    padding-bottom: var(--phone-sheet-reserve);
+  }
+
+  /* Preview Settings & Info drops from its row in the page's flow, as tall
+     as leaves the preview below it half the screen
+     (preview-settings-drawer.js sets the height). :root outweighs the
+     overlay rule further down. */
+  :root .preview-info-section.preview-drawer-expanded {
+    position: relative;
+    height: var(--phone-settings-height, auto);
+    max-height: var(--phone-settings-height, none);
   }
 
   /* Respect reduced motion */
   @media (prefers-reduced-motion: reduce) {
-    .param-panel {
+    .param-panel,
+    .param-panel.drawer-open {
       transition: none;
     }
   }
@@ -1337,11 +1351,6 @@ body[data-app-surface='welcome'] #uiModeToggle {
   /* Hide horizontal gutter on mobile */
   .gutter.gutter-horizontal {
     display: none;
-  }
-
-  /* Body scroll lock when drawer is open */
-  body.drawer-open {
-    overflow: hidden;
   }
 }
 
@@ -3855,28 +3864,25 @@ details summary:focus,
 
 @media (max-width: 480px) and (orientation: portrait) {
   /* ============================================================================
-     Mobile Portrait: the Camera toggle across the bar, Generate below it
+     Mobile Portrait: the Camera toggle and Generate on one row
      ============================================================================ */
 
   :root .preview-panel .actions-bar {
     display: grid;
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
     grid-template-areas:
-      'drawer-content'
-      'camera'
-      'primary';
+      'drawer-content drawer-content'
+      'camera primary';
     flex-direction: unset;
   }
 
-  /* In the Alt View the ASCII toggle shares the row, at the left, the
-     camera's at the right. */
+  /* In the Alt View the ASCII toggle joins the row, at the left. */
   :root .preview-panel .actions-bar:has(> #asciiDrawer:not([hidden])) {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     grid-template-areas:
-      'drawer-content drawer-content'
-      'ascii camera'
-      'primary primary';
+      'drawer-content drawer-content drawer-content'
+      'ascii camera primary';
   }
 
   :root #asciiDrawer {
@@ -3896,10 +3902,10 @@ details summary:focus,
     -webkit-backdrop-filter: none;
   }
 
-  /* Primary actions span full width at bottom */
+  /* Generate at the row's right end */
   :root .actions-primary {
     grid-area: primary;
-    border-top: 1px solid var(--color-border);
+    border-left: 1px solid var(--color-border);
   }
 
   /* Camera drawer toggle */
@@ -3933,9 +3939,10 @@ details summary:focus,
     left: 0 !important;
     right: 0 !important;
     width: 100% !important;
-    /* Position above: toggle row (44px) + primary row (44px) + safe area */
-    bottom: calc(
-      (var(--actions-bar-height) * 2) + env(safe-area-inset-bottom, 0px)
+    /* Just above the bar (actions-bar-reserve.js keeps its real height) */
+    bottom: var(
+      --actions-bar-reserved,
+      calc(var(--actions-bar-height) + env(safe-area-inset-bottom, 0px))
     ) !important;
     /* At most half the screen; the rest scrolls inside it */
     max-height: 50vh !important;
@@ -4395,6 +4402,45 @@ details summary:focus,
   :root .ascii-drawer-body .hfm-slider-section .camera-drawer-section-title {
     flex: 0 0 auto;
   }
+
+  /* The Customizer is a column at the left, at most half the width, from
+     below the preview's row to the bar; the preview beside it draws the
+     model in the space that is left. */
+  .param-panel {
+    top: var(--phone-drawer-top, 0px);
+    right: auto;
+    width: min(50vw, 360px);
+    transform: translateX(-100%);
+    border-top: none;
+    border-right: 1px solid var(--color-border);
+  }
+
+  .preview-panel.customizer-sheet-open {
+    padding-bottom: var(
+      --actions-bar-reserved,
+      var(--actions-bar-collapsed-offset)
+    );
+  }
+
+  .preview-panel.customizer-sheet-open .preview-canvas-section {
+    margin-left: min(50vw, 360px);
+  }
+
+  /* The phones' floors (400px for the panel, 200px for the picture) are
+     taller than this screen leaves: the preview would run on under the bar,
+     its model drawn below the middle of what shows. */
+  .preview-panel,
+  .preview-canvas-section {
+    min-height: 0;
+  }
+
+  /* Preview Settings & Info lies over the preview here: the screen is too
+     short to share. */
+  :root .preview-info-section.preview-drawer-expanded {
+    position: absolute;
+    height: auto;
+    max-height: calc(100% - var(--space-sm));
+  }
 }
 
 @media (min-width: 768px) and (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
@@ -4433,13 +4479,13 @@ details summary:focus,
 /* ============================================================================
    Expert Mode: Mobile Bottom-Sheet Layout
    ============================================================================
-   On mobile, the param-panel is normally an off-canvas left drawer. When Expert
-   Mode is active, the panel converts to a bottom sheet so the code editor sits
-   below the 3D preview at full viewport width — far more usable than the narrow
-   off-canvas drawer for editing code.
+   On mobile, the param-panel is normally the Customizer sheet, shown while
+   it is open. When Expert Mode is active, the panel is a bottom sheet of its
+   own, shown open or closed, so the code editor sits below the 3D preview at
+   full viewport width.
    ============================================================================ */
 @media (max-width: 767px) {
-  /* Convert param-panel from off-canvas drawer to bottom sheet */
+  /* The code editor's sheet, over the bottom bar */
   .param-panel:has(.expert-mode-panel.active) {
     top: auto;
     left: 0;
@@ -4449,6 +4495,7 @@ details summary:focus,
     max-height: 40vh;
     max-height: 40dvh;
     transform: none;
+    visibility: visible;
     border-right: none;
     border-top: 2px solid var(--color-border);
     border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
@@ -4489,11 +4536,6 @@ details summary:focus,
 
   .expert-mode-panel.expert-mode-collapsed .expert-mode-body {
     display: none;
-  }
-
-  /* Rotate chevron when collapsed */
-  .expert-mode-panel.expert-mode-collapsed #expertModeCollapseBtn svg {
-    transform: rotate(180deg);
   }
 
   /* Preview panel needs bottom spacing so content isn't hidden behind the sheet */
