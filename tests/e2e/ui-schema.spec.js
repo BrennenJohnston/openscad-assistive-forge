@@ -969,8 +969,92 @@ for (const height of [915, 810]) {
           .toBe(true);
         expect.soft(a.small, 'ASCII drawer buttons under 44 px').toEqual([]);
       });
+
+      test('S6: Full Screen with the drawer open, the preview the top half and the drawer the bottom half', async ({
+        page,
+      }) => {
+        test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+        await openPhoneCameraDrawer(page, look);
+        await page.locator('#focusModeBtn').focus();
+        await page.keyboard.press('Enter');
+        await expect(page.locator('#mainInterface')).toHaveClass(
+          /camera-focus-mode/
+        );
+        await page.waitForTimeout(500);
+
+        const drawers = [['camera', 'cameraDrawerBody']];
+        if (look.altView) drawers.push(['ASCII', 'asciiDrawerBody']);
+        for (const [name, bodyId] of drawers) {
+          if (name === 'ASCII') {
+            await page.locator('#asciiDrawerToggle').focus();
+            await page.keyboard.press('Enter');
+            await expect(page.locator('#mainInterface')).toHaveClass(
+              /camera-focus-mode/
+            );
+            await page.waitForTimeout(500);
+          }
+          const m = await page.evaluate(readFullScreenSplit, bodyId);
+          const half = m.viewportHeight / 2;
+          // The line the sheets keep: half the screen and a small sliver.
+          const near = SPLIT_TOLERANCE_PX;
+          expect
+            .soft(
+              Math.abs(m.previewPx - half),
+              `S6: the preview is ${Math.round(m.previewPx)} px of ${m.viewportHeight} with the ${name} drawer in Full Screen`
+            )
+            .toBeLessThanOrEqual(near);
+          expect
+            .soft(
+              Math.abs(m.bodyTop - half),
+              `S6: the ${name} drawer begins at y ${Math.round(m.bodyTop)} of ${m.viewportHeight}`
+            )
+            .toBeLessThanOrEqual(near);
+          expect
+            .soft(m.bodyBottom, `the ${name} drawer ends above the bar`)
+            .toBeLessThanOrEqual(m.barTop + 1);
+          expect
+            .soft(m.generateReachable, 'Generate stays in reach')
+            .toBe(true);
+          expect
+            .soft(m.generateHeight, 'Generate keeps the touch target')
+            .toBeGreaterThanOrEqual(43.5);
+        }
+      });
     });
   }
+}
+
+/**
+ * How far from half the screen each part of the Full Screen split may sit:
+ * the sliver the sheets add to the preview's half, and a few pixels for the
+ * preview's own inset and rounding.
+ */
+const SPLIT_TOLERANCE_PX = 14;
+
+/** Full Screen with a phone drawer open: where the preview and the drawer meet. */
+function readFullScreenSplit(bodyId) {
+  const box = (el) => el.getBoundingClientRect();
+  const body = box(document.getElementById(bodyId));
+  const bar = box(document.getElementById('actionsBar'));
+  const generate = document.getElementById('primaryActionBtn');
+  const g = box(generate);
+  const hit = document.elementFromPoint(g.x + g.width / 2, g.y + g.height / 2);
+  const x = innerWidth / 2;
+  let seen = 0;
+  for (let y = 0; y < innerHeight; y++) {
+    if (document.elementFromPoint(x, y + 0.5)?.closest('#previewContainer')) {
+      seen++;
+    }
+  }
+  return {
+    viewportHeight: innerHeight,
+    previewPx: seen,
+    bodyTop: body.top,
+    bodyBottom: body.bottom,
+    barTop: bar.top,
+    generateHeight: g.height,
+    generateReachable: !!hit && generate.contains(hit),
+  };
 }
 
 /** The share of the screen's height, down its middle, where the preview shows. */

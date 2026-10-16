@@ -371,9 +371,9 @@ export const MEASURED_SECONDS = {
   // for its seven cases, then the desktop camera panel cases, the phone
   // drawer, sheet and sideways cases, each loading the simple box.
   // 906 s for its 68 timed cases on a CI shard log (the Alt View groups slow
-  // there, drawn in software), before fourteen phone cases were added, about
-  // 15 s each; booked at 1120.
-  'ui-schema.spec.js': 1120.0,
+  // there, drawn in software), before twenty-two phone cases were added,
+  // about 15 s each; booked at 1240.
+  'ui-schema.spec.js': 1240.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

@@ -4086,10 +4086,13 @@ details summary:focus,
   /* ============================================================================
      Mobile Portrait Camera Focus Mode
      ============================================================================
-     When focus mode is active and camera drawer is expanded on mobile portrait:
-     - Preview fills the space above the camera controls
+     Full Screen with a bottom drawer open (Camera, or the Alt View's ASCII
+     drawer) on a phone held upright splits the screen in two: the preview in
+     the top half and the drawer in the bottom half, the bar at its foot. The
+     line is the one the sheets keep, half the screen and a small sliver, so
+     the preview never measures under half.
      - Header, workflow progress, and other UI are hidden/overlaid
-     - Only the focus mode button remains visible (floating top-right)
+     - A floating Exit button leaves Full Screen
      ============================================================================ */
 
   /* Focus mode with the camera drawer expanded: full-screen preview overlay */
@@ -4107,11 +4110,7 @@ details summary:focus,
     top: 0 !important;
     left: 0 !important;
     right: 0 !important;
-    /* Leave space for camera drawer + primary action + safe area */
-    bottom: calc(
-      var(--camera-focus-bottom-offset, 180px) +
-        env(safe-area-inset-bottom, 0px)
-    ) !important;
+    bottom: calc(50% - var(--space-sm)) !important;
     display: flex !important;
     flex-direction: column !important;
     border: none !important;
@@ -4161,6 +4160,21 @@ details summary:focus,
   /* Keep camera drawer visible in camera focus mode */
   .main-interface.focus-mode.camera-focus-mode .camera-drawer {
     display: flex !important;
+  }
+
+  /* The open drawer takes the bottom half, down to the bar; its controls
+     keep their place at its top. Beats the shared height the two drawers
+     are given when both exist. */
+  .main-interface.focus-mode.camera-focus-mode
+    .camera-drawer:not(.collapsed)
+    .camera-drawer-body,
+  .main-interface.focus-mode.camera-focus-mode
+    .ascii-drawer:not(.collapsed)
+    .ascii-drawer-body {
+    top: calc(50% + var(--space-sm)) !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    align-content: start;
   }
 
   /* Show primary actions in camera focus mode */
