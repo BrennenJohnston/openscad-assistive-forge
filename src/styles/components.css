@@ -6797,7 +6797,7 @@ body.first-visit-blocking #app {
 }
 
 .console-entry--echo .console-type {
-  color: var(--color-info, #2196f3);
+  color: var(--color-info-text);
 }
 
 .console-entry--warning .console-type {
@@ -6820,7 +6820,7 @@ body.first-visit-blocking #app {
 }
 
 .console-entry--deprecated .console-type {
-  color: var(--color-info, #2196f3);
+  color: var(--color-info-text);
 }
 
 .console-entry--trace .console-type {
@@ -7084,7 +7084,7 @@ body.first-visit-blocking #app {
 
 .error-log-type-badge--deprecated {
   background: var(--color-info-bg, rgba(33, 150, 243, 0.12));
-  color: var(--color-info);
+  color: var(--color-info-text);
 }
 
 .error-log-type-badge--trace {
