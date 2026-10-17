@@ -1084,8 +1084,19 @@ test.describe('Ctrl+E and Ctrl+Alt+3, one command', () => {
     page,
   }) => {
     await loadFixture(page)
+    // The file's first preview ends with "Preview ready", which takes the
+    // place of a sentence still waiting to be said: on a busy machine it
+    // landed on the shortcut's. Let the preview finish and the region empty.
+    await expect(page.locator('.preview-state-indicator')).toHaveClass(/state-current/, {
+      timeout: 120_000,
+    })
     await page.locator('#uiModeToggle').click()
     await expect(page.locator('#uiModeToggle')).toHaveAttribute('aria-checked', 'false')
+    await expect
+      .poll(() => page.evaluate(() => document.getElementById('srAnnouncer').textContent), {
+        timeout: 10_000,
+      })
+      .toBe('')
     await recordSpeech(page)
     for (const key of ['Control+e', 'Control+Alt+3']) {
       await page.evaluate(() => (window.__said.length = 0))
