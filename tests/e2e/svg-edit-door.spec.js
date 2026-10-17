@@ -17,6 +17,11 @@ import AxeBuilder from '@axe-core/playwright'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import {
+  recordAnnouncements,
+  announcementMark,
+  announcementsSince,
+} from './helpers/invariants.js'
 
 const FIXTURES = path.join(process.cwd(), 'tests', 'fixtures', 'svg-edit')
 const BIRD_PNG = path.join(FIXTURES, 'bird-drawing.png')
@@ -346,6 +351,32 @@ test.describe('The drawing editor door', () => {
       page.locator('button[data-action="save"]').click(),
     ])
     expect(download.suggestedFilename()).toBe('bird-drawing-edited.svg')
+  })
+
+  // A Save is said once: the file written, and that the one opened is
+  // unchanged, as the DXF Save says it.
+  test('Save says one sentence, naming the saved file', async ({ page }) => {
+    test.setTimeout(120000)
+    await recordAnnouncements(page)
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    await expect(page.locator('button[data-action="save"]')).toBeEnabled()
+
+    const mark = await announcementMark(page)
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 60000 }),
+      page.locator('button[data-action="save"]').click(),
+    ])
+    await page.waitForTimeout(1500)
+    const said = (await announcementsSince(page, mark)).filter((w) =>
+      /saved/i.test(w.text)
+    )
+    expect(
+      said.map((w) => w.text),
+      JSON.stringify(said)
+    ).toEqual([
+      `${download.suggestedFilename()} saved. Your original file is untouched.`,
+    ])
   })
 
   // One picture, with the shapes turning on or off in it; a side-by-side of
