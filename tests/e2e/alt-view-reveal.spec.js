@@ -276,34 +276,52 @@ test.describe('The Alt View is heard', () => {
     await page.locator('#cameraPanelToggle').click();
     await expect.poll(async () => (await heard()).keys, { timeout: 5_000 }).toBe(2);
 
-    // A slider in the look, dragged: a click per step crossed, the same file
-    // every time (the Characters slider's steps give it the fifth tone, the
-    // file p5.wav), and silence once it is let go.
+    // A slider in the look, dragged: a click as the steps go by, the same
+    // file every time (the Characters slider's steps give it the fifth tone,
+    // the file p5.wav), fifteen a second at most, and silence once let go.
     const characters = page.locator('#_hfmFontScale');
     await expect(characters).toBeVisible();
     await characters.scrollIntoViewIfNeeded();
     const box = await characters.boundingBox();
     const thumbX = box.x + (box.width * (0.6 - 0.3)) / (2.5 - 0.3);
     const y = box.y + box.height / 2;
-    await page.mouse.move(thumbX, y);
-    await page.mouse.down();
-    for (let i = 1; i <= 8; i++) await page.mouse.move(thumbX + i * 6, y);
-    await page.mouse.up();
     // The drag's clicks, once they have all started (each waits its turn on
     // the decoder): the count is read every half second until it holds.
-    let lastCount = -1;
-    await expect
-      .poll(
-        async () => {
-          const count = (await heard()).clicks.length;
-          const held = count === lastCount;
-          lastCount = count;
-          return held && count >= 3;
-        },
-        { timeout: 10_000, intervals: [500] }
-      )
-      .toBe(true);
-    const dragged = await heard();
+    const settled = async (atLeast) => {
+      let lastCount = -1;
+      await expect
+        .poll(
+          async () => {
+            const count = (await heard()).clicks.length;
+            const held = count === lastCount;
+            lastCount = count;
+            return held && count >= atLeast;
+          },
+          { timeout: 10_000, intervals: [500] }
+        )
+        .toBe(true);
+      return heard();
+    };
+    // A flick across eight moves as fast as the mouse goes: a ceiling of
+    // fifteen a second allows two or three clicks in the time it takes.
+    await page.mouse.move(thumbX, y);
+    await page.mouse.down();
+    const flickBegan = Date.now();
+    for (let i = 1; i <= 8; i++) await page.mouse.move(thumbX + i * 6, y);
+    const flickMs = Date.now() - flickBegan;
+    await page.mouse.up();
+    const flicked = await settled(1);
+    expect(flicked.clicks.length, `a flick of ${flickMs} ms`).toBeLessThanOrEqual(
+      Math.ceil(flickMs / 66) + 1
+    );
+    // A drag with a pause between moves: a click per move, the same file.
+    await page.mouse.down();
+    for (let i = 7; i >= 0; i--) {
+      await page.mouse.move(thumbX + i * 6, y);
+      await page.waitForTimeout(80);
+    }
+    await page.mouse.up();
+    const dragged = await settled(flicked.clicks.length + 4);
     expect(new Set(dragged.clicks).size, 'one click file for the whole drag').toBe(1);
     expect(Math.abs(dragged.clicks[0] - P5_SECONDS), 'the fifth tone').toBeLessThan(0.002);
     expect(dragged.keys, 'a slider is not a key').toBe(2);

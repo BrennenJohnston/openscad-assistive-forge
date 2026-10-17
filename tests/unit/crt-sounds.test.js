@@ -136,7 +136,6 @@ describe('playing a switch sound', () => {
     decodeGate = {};
     context = {
       state: 'running',
-      currentTime: 10,
       destination: { node: 'destination' },
       resume: vi.fn(() => Promise.resolve()),
       decodeAudioData: vi.fn(async ({ url }) => {
@@ -326,16 +325,16 @@ describe('playing a switch sound', () => {
     expect(globalThis.fetch).toHaveBeenCalledTimes(30);
   });
 
-  it('plays a dial click by its look and variant, now or a moment later, over whatever else plays', async () => {
+  it('plays a dial click by its look and variant, over whatever else plays', async () => {
     const { playDialSound, playCrtSound } = await load();
     const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
     await playCrtSound('on');
     await expect(playDialSound('p', 4)).resolves.toBeGreaterThan(0);
     expect(urls().at(-1)).toBe('/sounds/dials/p4.wav');
-    expect(sources[1].start).toHaveBeenCalledWith();
+    expect(sources[1].started).toBe(true);
     expect(sources[0].stopped, 'a click does not cut the switch sound').toBe(false);
-    await playDialSound('p', 4, 0.012);
-    expect(sources[2].start, 'a later click is timed on the context\'s clock').toHaveBeenCalledWith(10.012);
+    await playDialSound('p', 4);
+    expect(sources[2].started).toBe(true);
     expect(globalThis.fetch, 'one fetch for the two').toHaveBeenCalledTimes(2);
     await playDialSound('d', 7);
     expect(urls().at(-1)).toBe('/sounds/dials/d7.wav');

@@ -89,15 +89,16 @@ const _HFM_KEY_TARGET =
   'button, [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="tab"], [role="switch"]';
 let _hfmKeyListeners = null;
 let _hfmKeyDown = null;
-// A slider moved while the look is on clicks once per step crossed, as a
-// dial does, its tone by how many steps the slider has: the edges of the
-// seven tones, a slider of eight steps or fewer the lowest, one of more
-// than a hundred the highest. A drag that jumps several steps at once plays
-// at most four clicks, a few milliseconds apart.
+// A slider moved while the look is on clicks as a dial does, its tone by
+// how many steps the slider has: the edges of the seven tones, a slider of
+// eight steps or fewer the lowest, one of more than a hundred the highest.
+// A click comes at most this many times a second, however fast the drag;
+// a step that would click sooner is passed over, never queued, so a fast
+// drag stays a ratchet and not a saw, and release is silence.
 const _HFM_DIAL_STEP_EDGES = [8, 14, 22, 32, 48, 100];
-const _HFM_DIAL_CLICKS_MAX = 4;
-const _HFM_DIAL_CLICK_GAP_S = 0.012;
+const _HFM_DIAL_CLICKS_PER_SECOND = 15;
 const _hfmDials = new WeakMap();
+let _hfmDialLastClickAt = -Infinity;
 
 // The key's name says what it is; what it does is said once it is pressed.
 const _HFM_TOGGLE_NAME = 'Alt View';
@@ -936,9 +937,9 @@ function _hfmDial(el) {
   return dial;
 }
 
-function _playDialSound(variant, delaySeconds) {
+function _playDialSound(variant) {
   if (!_soundsOn()) return;
-  playDialSound(_hfmKeySet(), variant, delaySeconds).catch((error) => {
+  playDialSound(_hfmKeySet(), variant).catch((error) => {
     console.warn(`[Alt View] A dial click did not play:`, error);
   });
 }
@@ -984,8 +985,9 @@ function _installKeySounds() {
     const el = _hfmDialTarget(event);
     if (el) _hfmDial(el).value = Number(el.value);
   };
-  // Every move the slider makes: a click per step crossed, nothing for a
-  // move that left the value where it was.
+  // Every move the slider makes: one click when a step was crossed and the
+  // last click is far enough behind; nothing for a move that left the
+  // value where it was.
   const dialInput = (event) => {
     const el = _hfmDialTarget(event);
     if (!el) return;
@@ -996,10 +998,11 @@ function _installKeySounds() {
       ? Math.round(Math.abs(value - dial.value) / step)
       : 1;
     dial.value = value;
-    const clicks = Math.min(crossed, _HFM_DIAL_CLICKS_MAX);
-    for (let i = 0; i < clicks; i++) {
-      _playDialSound(dial.variant, i * _HFM_DIAL_CLICK_GAP_S);
-    }
+    if (!crossed) return;
+    const now = performance.now();
+    if (now - _hfmDialLastClickAt < 1000 / _HFM_DIAL_CLICKS_PER_SECOND) return;
+    _hfmDialLastClickAt = now;
+    _playDialSound(dial.variant);
   };
   _hfmKeyListeners = [
     ['pointerdown', down],
@@ -1023,6 +1026,7 @@ function _removeKeySounds() {
   }
   _hfmKeyListeners = null;
   _hfmKeyDown = null;
+  _hfmDialLastClickAt = -Infinity;
 }
 
 /** @returns {Promise<void>|null} Settles once the sound has started or failed; null when none plays */

@@ -140,9 +140,8 @@ function _fetchAhead(urls, what) {
   _armContext();
 }
 
-// Waits for the context to run, a second at most, then starts the buffer,
-// now or after the delay given, on the context's own clock.
-async function _start(context, running, buffer, delaySeconds = 0) {
+// Waits for the context to run, a second at most, then starts the buffer.
+async function _start(context, running, buffer) {
   let timer = null;
   await Promise.race([
     running,
@@ -156,8 +155,7 @@ async function _start(context, running, buffer, delaySeconds = 0) {
   const source = context.createBufferSource();
   source.buffer = buffer;
   source.connect(context.destination);
-  if (delaySeconds > 0) source.start(context.currentTime + delaySeconds);
-  else source.start();
+  source.start();
   return source;
 }
 
@@ -279,19 +277,17 @@ export async function playKeySound(set, band, phase) {
 
 /**
  * Play a dial click for a slider's step: the look's one click, at the
- * speed of the variant, now or a few milliseconds on (a drag that jumps
- * several steps plays its clicks a little apart).
+ * speed of the variant.
  * @param {'p'|'d'} set - The look's dial set
  * @param {number} variant - The tone, 1 (lowest) to 7 (highest)
- * @param {number} [delaySeconds] - How long after now the click starts
- * @returns {Promise<number>} The click's length in seconds once it is queued
+ * @returns {Promise<number>} The click's length in seconds once it has begun
  */
-export async function playDialSound(set, variant, delaySeconds = 0) {
+export async function playDialSound(set, variant) {
   if (!DIAL_SETS.includes(set)) throw new Error(`No such dial set: ${set}`);
   const tone = Math.max(1, Math.min(DIAL_VARIANTS, Math.round(variant)));
   const context = _audioContext();
   const running = context.resume();
   const buffer = await _bufferFor(_dialUrl(set, tone), context);
-  await _start(context, running, buffer, delaySeconds);
+  await _start(context, running, buffer);
   return buffer.duration;
 }

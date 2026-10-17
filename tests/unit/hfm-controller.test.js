@@ -503,19 +503,24 @@ describe('the Alt View is heard', () => {
     document.body.appendChild(input)
     return input
   }
-  // A drag or a key moves the slider to a value and the browser says input.
-  const slide = (el, value) => {
+  // The page's clock, which the drag's moves advance.
+  let clock = 0
+  // A drag or a key moves the slider to a value, some milliseconds on, and
+  // the browser says input.
+  const slide = (el, value, afterMs = 100) => {
+    clock += afterMs
     el.value = String(value)
     el.dispatchEvent(new Event('input', { bubbles: true }))
   }
-  // The look, the tone and the delay in milliseconds (a float, rounded).
   const clicksAsked = async () => {
     const { playDialSound } = await import('../../src/js/crt-sounds.js')
-    return playDialSound.mock.calls.map(([set, tone, delay]) => `${set} ${tone} ${Math.round(delay * 1000)}`)
+    return playDialSound.mock.calls.map(([set, tone]) => `${set} ${tone}`)
   }
 
-  it('while on, a slider clicks once per step crossed, one click file per slider by its steps, until it is let go', async () => {
+  it('while on, a slider clicks as a dial does, one click file per slider by its steps, fifteen a second at most, until it is let go', async () => {
     pageWithHeaderAndDpad()
+    clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
     const fine = slider('fine', 0, 3, 0.1)
     const coarse = slider('coarse', 1, 3, 0.5)
     const wide = slider('wide', -180, 180, 1)
@@ -534,25 +539,36 @@ describe('the Alt View is heard', () => {
     slide(fine, 0.2)
     slide(fine, 0.3)
     slide(fine, 0.3)
-    expect(await clicksAsked(), 'a value that did not change is no click').toEqual(['p 4 0', 'p 4 0'])
+    expect(await clicksAsked(), 'a value that did not change is no click').toEqual(['p 4', 'p 4'])
     press(fine, 'pointerup')
     // Four steps of 0.5: the lowest tone.
     press(coarse, 'pointerdown')
     slide(coarse, 1.5)
     slide(coarse, 2)
     press(coarse, 'pointerup')
-    expect((await clicksAsked()).slice(2)).toEqual(['p 1 0', 'p 1 0'])
-    // 360 steps of 1: the highest tone; a jump across many steps is at most
-    // four clicks, a few milliseconds apart.
+    expect((await clicksAsked()).slice(2)).toEqual(['p 1', 'p 1'])
+    // 360 steps of 1: the highest tone; a jump across many steps is one click.
     press(wide, 'pointerdown')
     slide(wide, -170)
     press(wide, 'pointerup')
-    expect((await clicksAsked()).slice(4)).toEqual(['p 7 0', 'p 7 12', 'p 7 24', 'p 7 36'])
+    expect((await clicksAsked()).slice(4)).toEqual(['p 7'])
+    // The ceiling: a step sooner than 67 ms after the last click is passed
+    // over, and the next one counts from the click that played.
+    press(fine, 'pointerdown')
+    slide(fine, 0.4)
+    slide(fine, 0.5, 30)
+    slide(fine, 0.6, 30)
+    expect((await clicksAsked()).slice(5), 'two steps 30 ms apart: one click').toEqual(['p 4'])
+    slide(fine, 0.7, 10)
+    expect((await clicksAsked()).slice(5), '70 ms after the click that played: a click').toEqual(['p 4', 'p 4'])
+    slide(fine, 0.8, 66)
+    expect((await clicksAsked()).slice(5), '66 ms is too soon').toHaveLength(2)
+    press(fine, 'pointerup')
     // The keyboard: an arrow moves a focused slider one step.
     fine.focus()
     fine.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
-    slide(fine, 0.4)
-    expect((await clicksAsked()).slice(8)).toEqual(['p 4 0'])
+    slide(fine, 0.9)
+    expect((await clicksAsked()).slice(7)).toEqual(['p 4'])
 
     // Classic is the DOS look; its clicks are fetched when it is entered.
     document.body.dataset.uiMode = 'classic'
@@ -561,19 +577,19 @@ describe('the Alt View is heard', () => {
     press(coarse, 'pointerdown')
     slide(coarse, 2.5)
     press(coarse, 'pointerup')
-    expect((await clicksAsked()).slice(9)).toEqual(['d 1 0'])
+    expect((await clicksAsked()).slice(8)).toEqual(['d 1'])
     delete document.body.dataset.uiMode
 
     controller.disableAltViewWithPreview(toggle)
     press(fine, 'pointerdown')
-    slide(fine, 0.5)
-    expect(await clicksAsked(), 'nothing once off').toHaveLength(10)
+    slide(fine, 1)
+    expect(await clicksAsked(), 'nothing once off').toHaveLength(9)
 
     localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
     await controller.enableAltViewWithPreview(toggle)
     press(fine, 'pointerdown')
-    slide(fine, 0.6)
-    expect(await clicksAsked(), 'nothing with sounds off').toHaveLength(10)
+    slide(fine, 1.1)
+    expect(await clicksAsked(), 'nothing with sounds off').toHaveLength(9)
     controller.disableAltViewWithPreview(toggle)
   })
 
