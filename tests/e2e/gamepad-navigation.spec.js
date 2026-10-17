@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { skipWithoutWebGL } from './helpers/webgl.js';
 
 // A game controller drives the interface as a keyboard would: the right
 // bumper steps to the next control and its focus ring shows, A presses the
@@ -122,6 +123,10 @@ test.describe('A game controller drives the interface', () => {
     page,
   }) => {
     await openWithPad(page);
+    await skipWithoutWebGL(
+      page,
+      'no WebGL context: this browser draws no preview canvas to start from'
+    );
     await page.locator('#previewContainer canvas').first().focus();
     await press(page, BUTTON.rt);
     const landed = await page.evaluate(() => {
