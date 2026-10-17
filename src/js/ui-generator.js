@@ -4206,7 +4206,8 @@ function createFileControl(
         // stages do not. The count is what a person actually wants to hear,
         // because it decides whether the drawing is workable at all.
         announceChange(
-          `Converted: ${pathCount} ${pathCount === 1 ? 'shape' : 'shapes'}`
+          `Converted: ${pathCount} ${pathCount === 1 ? 'shape' : 'shapes'}`,
+          { source: 'conversion' }
         );
       }
       // Last, with the page live: the editor, when the drawing needs a look.

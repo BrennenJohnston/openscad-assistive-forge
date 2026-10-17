@@ -8232,7 +8232,9 @@ async function initApp() {
     // Debounce progress-style updates (percent text) to avoid announcement spam.
     if (announce) {
       const shouldDebounce = /\d+%/.test(message);
-      stateManager.announceChange(message, shouldDebounce);
+      stateManager.announceChange(message, shouldDebounce, {
+        source: 'status',
+      });
     }
   }
 
@@ -15333,7 +15335,9 @@ if (rounded) {
       summary.push(`${warnCount} warning${warnCount > 1 ? 's' : ''}`);
     if (echoCount > 0)
       summary.push(`${echoCount} echo message${echoCount > 1 ? 's' : ''}`);
-    announceImmediate(`Model has ${summary.join(', ')}`);
+    announceImmediate(`Model has ${summary.join(', ')}`, {
+      source: 'messages',
+    });
   }
 
   /**

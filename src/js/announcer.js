@@ -22,13 +22,17 @@
  * @license GPL-3.0-or-later
  */
 
-// Debounce timer for announcement batching (per politeness level)
-let announceTimeoutPolite = null;
-let announceTimeoutAssertive = null;
+// Per politeness level: the debounce timer, the timer that empties the
+// region after a message, and the sentences waiting to be written (one per
+// source, in the order they came).
+const levels = {
+  polite: { timeout: null, clearTimeout: null, pending: [] },
+  assertive: { timeout: null, clearTimeout: null, pending: [] },
+};
 
-// Clear timer to reset live region after announcement (per politeness level)
-let clearTimeoutPolite = null;
-let clearTimeoutAssertive = null;
+// The source of a sentence that names none. Such sentences replace one
+// another, so a slider dragged says only its last value.
+const DEFAULT_SOURCE = 'default';
 
 // Default configuration
 const DEFAULT_DEBOUNCE_MS = 350;
@@ -48,36 +52,6 @@ export const POLITENESS = {
 };
 
 /**
- * Get the timer refs for a given politeness level.
- * @param {string} politeness - 'polite' or 'assertive'
- * @returns {{ getTimeout: () => number|null, setTimeout: (v: number|null) => void, getClearTimeout: () => number|null, setClearTimeout: (v: number|null) => void }}
- */
-function getTimerRefs(politeness) {
-  if (politeness === POLITENESS.ASSERTIVE) {
-    return {
-      getTimeout: () => announceTimeoutAssertive,
-      setTimeout: (v) => {
-        announceTimeoutAssertive = v;
-      },
-      getClearTimeout: () => clearTimeoutAssertive,
-      setClearTimeout: (v) => {
-        clearTimeoutAssertive = v;
-      },
-    };
-  }
-  return {
-    getTimeout: () => announceTimeoutPolite,
-    setTimeout: (v) => {
-      announceTimeoutPolite = v;
-    },
-    getClearTimeout: () => clearTimeoutPolite,
-    setClearTimeout: (v) => {
-      clearTimeoutPolite = v;
-    },
-  };
-}
-
-/**
  * Announce a message to screen readers via the live region.
  * Uses debouncing to prevent announcement spam from rapid state changes.
  *
@@ -87,6 +61,11 @@ function getTimerRefs(politeness) {
  * @param {number} [options.clearDelayMs=1500] - Delay before clearing the live region
  * @param {boolean} [options.immediate=false] - Skip debounce and announce immediately
  * @param {string} [options.politeness='polite'] - 'polite' for routine status, 'assertive' for errors/critical
+ * @param {string} [options.source] - What is speaking (the status line, the
+ *   console, a menu). A newer sentence replaces a waiting one only from the
+ *   same source; sentences from different sources that come together are
+ *   said as one message, in order. Sentences that name no source replace
+ *   one another, as one control's values do.
  */
 export function announce(message, options = {}) {
   const {
@@ -94,6 +73,7 @@ export function announce(message, options = {}) {
     clearDelayMs = DEFAULT_CLEAR_DELAY_MS,
     immediate = false,
     politeness = POLITENESS.POLITE,
+    source = DEFAULT_SOURCE,
   } = options;
 
   // Route to the appropriate live region
@@ -104,64 +84,111 @@ export function announce(message, options = {}) {
   const srAnnouncer = document.getElementById(announcerId);
   if (!srAnnouncer) return;
 
-  const timers = getTimerRefs(politeness);
+  const level =
+    politeness === POLITENESS.ASSERTIVE ? levels.assertive : levels.polite;
 
-  // Clear any pending announcements for this politeness level
-  if (timers.getTimeout()) {
-    window.clearTimeout(timers.getTimeout());
-    timers.setTimeout(null);
+  // A newer sentence replaces a waiting one from the same source; one from
+  // another source waits beside it, to be said with it.
+  const waiting = level.pending.find((entry) => entry.source === source);
+  if (waiting) waiting.text = message;
+  else level.pending.push({ source, text: message });
+
+  if (level.timeout) {
+    window.clearTimeout(level.timeout);
+    level.timeout = null;
   }
-
   // Cancel pending clear to avoid clearing a newer message
-  if (timers.getClearTimeout()) {
-    window.clearTimeout(timers.getClearTimeout());
-    timers.setClearTimeout(null);
+  if (level.clearTimeout) {
+    window.clearTimeout(level.clearTimeout);
+    level.clearTimeout = null;
   }
 
-  const performAnnouncement = () => {
-    const repeat = srAnnouncer.textContent === message;
-
-    // Clear first so repeated strings are re-announced reliably
-    // (ARIA live regions may not re-announce identical content)
-    srAnnouncer.textContent = '';
-
-    const write = () => {
-      srAnnouncer.textContent = message;
-
-      // Schedule clearing the live region
-      const clearId = window.setTimeout(() => {
-        // Only clear if the content hasn't changed
-        if (srAnnouncer.textContent === message) {
-          srAnnouncer.textContent = '';
-        }
-        timers.setClearTimeout(null);
-      }, clearDelayMs);
-      timers.setClearTimeout(clearId);
-    };
-
-    if (repeat) {
-      // Held in the debounce slot, so a newer announcement cancels the wait
-      const repeatId = window.setTimeout(() => {
-        timers.setTimeout(null);
-        write();
-      }, REPEAT_GAP_MS);
-      timers.setTimeout(repeatId);
-    } else {
-      // Use requestAnimationFrame to ensure the clear is processed
-      // before setting the new content
-      requestAnimationFrame(write);
-    }
+  const flush = () => {
+    level.timeout = null;
+    const batch = level.pending.splice(0);
+    if (batch.length === 0) return;
+    writeToRegion(
+      srAnnouncer,
+      joinSentences(batch.map((entry) => entry.text)),
+      level,
+      clearDelayMs
+    );
   };
 
   if (immediate || debounceMs === 0) {
-    performAnnouncement();
+    flush();
   } else {
-    const timeoutId = window.setTimeout(() => {
-      // Freed first: a repeat may take the slot for its own wait
-      timers.setTimeout(null);
-      performAnnouncement();
-    }, debounceMs);
-    timers.setTimeout(timeoutId);
+    level.timeout = window.setTimeout(flush, debounceMs);
+  }
+}
+
+/**
+ * Sentences said as one message: each but the last ends with a full stop
+ * when it has no closing punctuation of its own.
+ * @param {string[]} texts
+ * @returns {string}
+ */
+function joinSentences(texts) {
+  return texts
+    .map((text, i) =>
+      i < texts.length - 1 && !/[.!?…:]["'”]?$/.test(text) ? `${text}.` : text
+    )
+    .join(' ');
+}
+
+/**
+ * Write a message to a live region so a screen reader says it, and empty
+ * the region again after a while.
+ * @param {HTMLElement} srAnnouncer
+ * @param {string} message
+ * @param {{timeout: number|null, clearTimeout: number|null}} level
+ * @param {number} clearDelayMs
+ */
+function writeToRegion(srAnnouncer, message, level, clearDelayMs) {
+  const repeat = srAnnouncer.textContent === message;
+
+  // Clear first so repeated strings are re-announced reliably
+  // (ARIA live regions may not re-announce identical content)
+  srAnnouncer.textContent = '';
+
+  const write = () => {
+    srAnnouncer.textContent = message;
+
+    // Schedule clearing the live region
+    level.clearTimeout = window.setTimeout(() => {
+      // Only clear if the content hasn't changed
+      if (srAnnouncer.textContent === message) {
+        srAnnouncer.textContent = '';
+      }
+      level.clearTimeout = null;
+    }, clearDelayMs);
+  };
+
+  if (repeat) {
+    // Held in the debounce slot, so a newer announcement cancels the wait
+    level.timeout = window.setTimeout(() => {
+      level.timeout = null;
+      write();
+    }, REPEAT_GAP_MS);
+  } else {
+    // Use requestAnimationFrame to ensure the clear is processed
+    // before setting the new content
+    requestAnimationFrame(write);
+  }
+}
+
+/**
+ * Take back a sentence that is no longer true before it is said.
+ * @param {string} source - The source it was announced with
+ * @param {string} [politeness='polite']
+ */
+export function withdrawAnnouncement(source, politeness = POLITENESS.POLITE) {
+  const level =
+    politeness === POLITENESS.ASSERTIVE ? levels.assertive : levels.polite;
+  level.pending = level.pending.filter((entry) => entry.source !== source);
+  if (level.pending.length === 0 && level.timeout) {
+    window.clearTimeout(level.timeout);
+    level.timeout = null;
   }
 }
 
@@ -249,10 +276,11 @@ export function announceCameraAction(action, options = {}) {
  * Use for form control value changes (sliders, toggles, etc.)
  *
  * @param {string} message - The change description
+ * @param {Object} [options] - As announce() takes them
  */
-export function announceChange(message) {
+export function announceChange(message, options = {}) {
   // Parameter changes use debouncing to batch rapid slider adjustments
-  announce(message);
+  announce(message, options);
 }
 
 /**
@@ -262,16 +290,20 @@ export function announceChange(message) {
  * @param {string} [politeness] - Optional: only cancel for specific politeness level
  */
 export function cancelPendingAnnouncements(politeness) {
-  const cancelForLevel = (level) => {
-    const timers = getTimerRefs(level);
-    if (timers.getTimeout()) {
-      window.clearTimeout(timers.getTimeout());
-      timers.setTimeout(null);
+  const cancelForLevel = (politenessLevel) => {
+    const level =
+      politenessLevel === POLITENESS.ASSERTIVE
+        ? levels.assertive
+        : levels.polite;
+    if (level.timeout) {
+      window.clearTimeout(level.timeout);
+      level.timeout = null;
     }
-    if (timers.getClearTimeout()) {
-      window.clearTimeout(timers.getClearTimeout());
-      timers.setClearTimeout(null);
+    if (level.clearTimeout) {
+      window.clearTimeout(level.clearTimeout);
+      level.clearTimeout = null;
     }
+    level.pending.length = 0;
   };
 
   if (politeness) {

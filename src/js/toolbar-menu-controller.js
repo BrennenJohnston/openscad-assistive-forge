@@ -16,7 +16,7 @@
  */
 
 import { keyboardConfig, formatShortcut } from './keyboard-config.js';
-import { announce } from './announcer.js';
+import { announce, withdrawAnnouncement } from './announcer.js';
 import { getUIModeController } from './ui-mode-controller.js';
 import {
   showWorkflowProgress,
@@ -462,7 +462,10 @@ export class ToolbarMenuController {
       }
     }
 
-    announce(`${MENU_LABELS[menuId]} menu opened`, { clearDelayMs: 1500 });
+    announce(`${MENU_LABELS[menuId]} menu opened`, {
+      clearDelayMs: 1500,
+      source: 'menu',
+    });
   }
 
   /**
@@ -474,6 +477,8 @@ export class ToolbarMenuController {
   _hideMenu(menuId, { restoreFocus = true } = {}) {
     const modal = this._modals.get(menuId);
     const btn = this._buttons.get(menuId);
+    // A closed menu is no longer open: its sentence is not said late.
+    withdrawAnnouncement('menu');
 
     // Read before hiding: a focused item inside a hidden menu is focus lost.
     // Focus somewhere else on the page belongs to whoever put it there.

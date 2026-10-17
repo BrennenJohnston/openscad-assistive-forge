@@ -1100,6 +1100,7 @@ export class UIModeController {
 
     announceImmediate(messages[mode] || `Switched to ${mode} mode`, {
       clearDelayMs: 3000,
+      source: 'mode',
     });
   }
 

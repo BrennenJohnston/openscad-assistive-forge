@@ -575,7 +575,7 @@ export class ConsolePanel {
     if (entry.type === CONSOLE_ENTRY_TYPE.ERROR) {
       announceError(message);
     } else {
-      announceImmediate(message);
+      announceImmediate(message, { source: 'console' });
     }
   }
 

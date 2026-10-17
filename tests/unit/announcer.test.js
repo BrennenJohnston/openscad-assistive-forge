@@ -88,3 +88,70 @@ describe('announcer: a repeated message', () => {
     expect(region().textContent).toBe(cell);
   });
 });
+
+describe('announcer: two sentences at once', () => {
+  let frames;
+  let announce;
+  let announceImmediate;
+  let withdrawAnnouncement;
+
+  beforeEach(async () => {
+    document.body.innerHTML =
+      '<div id="srAnnouncer" role="status" aria-live="polite"></div>' +
+      '<div id="srAnnouncerAssertive" role="alert" aria-live="assertive"></div>';
+    vi.useFakeTimers();
+    frames = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      frames.push(cb);
+      return frames.length;
+    });
+    vi.resetModules();
+    ({ announce, announceImmediate, withdrawAnnouncement } =
+      await import('../../src/js/announcer.js'));
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+  });
+
+  const region = () => document.getElementById('srAnnouncer');
+  const nextFrame = () => frames.splice(0).forEach((cb) => cb(0));
+
+  it('says a waiting sentence with one from another source that comes before it is written', () => {
+    announce('File menu opened', { source: 'menu' });
+    vi.advanceTimersByTime(100);
+    announceImmediate('Preview ready', { source: 'status' });
+    nextFrame();
+    expect(region().textContent).toBe('File menu opened. Preview ready');
+  });
+
+  it("says only the last of one control's values, waiting or written", () => {
+    announce('Width 50 mm');
+    vi.advanceTimersByTime(100);
+    announce('Width 51 mm');
+    vi.advanceTimersByTime(100);
+    announce('Width 52 mm');
+    vi.advanceTimersByTime(350);
+    nextFrame();
+    expect(region().textContent).toBe('Width 52 mm');
+
+    announceImmediate('Rotate up');
+    nextFrame();
+    vi.advanceTimersByTime(100);
+    announceImmediate('Rotate down');
+    nextFrame();
+    expect(region().textContent).toBe('Rotate down');
+  });
+
+  it('does not say a sentence taken back before it was written', () => {
+    announce('Edit menu opened', { source: 'menu' });
+    vi.advanceTimersByTime(100);
+    withdrawAnnouncement('menu');
+    announceImmediate('Bookmark added, line 1');
+    nextFrame();
+    expect(region().textContent).toBe('Bookmark added, line 1');
+  });
+});
