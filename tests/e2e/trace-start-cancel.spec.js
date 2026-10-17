@@ -798,7 +798,9 @@ test.describe('a changed setting waits for the press where the picture is not qu
     await expect(p.note).toContainText('Convert again when you are ready.');
     const heard = await page.evaluate(() => window.__heard ?? []);
     expect(
-      heard.some((t) => /^Colors\. .*Convert again when you are ready\.$/.test(t)),
+      // The sentence may share its message with one that waited beside it
+      // (the last conversion's own completion): it is whole either way.
+      heard.some((t) => /(^|\. )Colors\. .*Convert again when you are ready\.( |$)/.test(t)),
       `heard: ${heard.join(' | ')}`
     ).toBe(true);
 
