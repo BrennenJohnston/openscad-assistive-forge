@@ -33,12 +33,18 @@ the app on a desktop.
 
 Held upright, the header's first row holds the Customizer and Main Page
 buttons (as arrows), the Simplified/Standard switch, GitHub and Keys. The
-Customizer opens as a sheet above a one-row bottom bar, and Preview Settings &
-Info drops from its row, so the preview keeps the top half of the screen while
-you change a value. The camera controls open in a see-through drawer within
-half the screen, with a picture on each view button; one drawer is open at a
-time. Full Screen with a drawer open splits the screen in half, and keeps the
-button that leaves it.
+Customizer comes in from the left over the preview, the way it opens beside
+the preview on a desktop. It is see-through, so the model shows behind it while
+you change a value, and a strip of the preview stays in view at its right.
+Drag the grip on its right edge to make it wider or narrower (with a keyboard,
+the arrow keys move the grip); the width is kept. Preferences > 3D View sets
+how solid it is; high contrast, and a system setting that asks for less
+transparency, keep it solid. In it, each number box is as wide as its value,
+with its slider beside it. Preview Settings & Info drops from its row. The
+camera controls open in a see-through drawer as tall as its buttons, with a
+picture on each view button; one drawer is open at a time. Full Screen with a
+drawer open gives the drawer the room its controls need and the preview the
+rest, and keeps the button that leaves it.
 
 Held sideways, the header and the menu bar each keep to one row, the camera
 controls open as a see-through column at the right edge, and the Customizer is
