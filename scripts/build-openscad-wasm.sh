@@ -105,6 +105,23 @@ if [ "$VARIANT" = "wasm-exceptions" ]; then
   fi
   grep -v -F "$BOOST_REWRITE" "$BASE_SRC/Makefile" > "$BASE_SRC/Makefile.forge"
   mv "$BASE_SRC/Makefile.forge" "$BASE_SRC/Makefile"
+  # GMP and MPFR at the versions the Makefile names, from GNU's own mirror:
+  # gmplib.org refused connections from the runner (2026-10-17). A library
+  # already in libs/ is one make does not fetch.
+  mkdir -p "$BASE_SRC/libs"
+  for lib in gmp-6.3.0 mpfr-4.2.1; do
+    name="${lib%%-*}"
+    if [ ! -d "$BASE_SRC/libs/$name" ]; then
+      wget -q -O "$WORK/$lib.tar.xz" "https://ftp.gnu.org/gnu/$name/$lib.tar.xz"
+      tar xf "$WORK/$lib.tar.xz" -C "$BASE_SRC/libs"
+      mv "$BASE_SRC/libs/$lib" "$BASE_SRC/libs/$name"
+      rm "$WORK/$lib.tar.xz"
+    fi
+  done
+  grep -q 'gmp-6.3.0.tar.xz' "$BASE_SRC/Makefile" && grep -q 'mpfr-4.2.1.tar.xz' "$BASE_SRC/Makefile" || {
+    echo "openscad-wasm's Makefile names other GMP or MPFR versions; upstream changed." >&2
+    exit 1
+  }
   make -C "$BASE_SRC" libs
   IMAGE="forge/wasm-base-wasm-exceptions:${OPENSCAD_WASM_COMMIT:0:8}"
   docker build "$BASE_SRC/libs" -f "$BASE_SRC/Dockerfile.base" -t "$IMAGE" \
