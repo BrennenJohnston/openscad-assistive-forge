@@ -7899,6 +7899,20 @@ async function initApp() {
   // Import shared validation schemas (FILE_SIZE_LIMITS is imported at top of initApp() to avoid TDZ)
   ({ validateFileUpload } = await import('./js/validation-schemas.js'));
 
+  // A file's offer of a place in Saved Projects waits for the kept-draft
+  // question, so the two never open at once. A draft restored in answer has
+  // replaced the file the offer was for, and then nothing is offered.
+  const savedProjectsUIForFiles = {
+    ...savedProjectsUI,
+    showSaveProjectPrompt: async (fileData, options) => {
+      await draftQuestionSettled;
+      if (stateManager.getState().uploadedFile !== fileData.uploadedFile) {
+        return { saved: false };
+      }
+      return savedProjectsUI.showSaveProjectPrompt(fileData, options);
+    },
+  };
+
   // Initialize file handler controller
   fileHandler = initFileHandler({
     getPreviewManager: () => previewManager,
@@ -7924,7 +7938,7 @@ async function initApp() {
     getDisplayOptionsCtrl: getDisplayOptionsController,
     getCompanionFilesCtrl: () => companionFilesCtrl,
     getHfmCtrl: () => hfmCtrl,
-    getSavedProjectsUI: () => savedProjectsUI,
+    getSavedProjectsUI: () => savedProjectsUIForFiles,
     getFileActionsController: () => fileActionsController,
     getLibraryManager: () => libraryManager,
     getPreviewContainer: () => previewContainer,

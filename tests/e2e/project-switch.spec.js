@@ -131,3 +131,78 @@ test.describe('Closing a project', () => {
     expectNoPageErrors(page)
   })
 })
+
+test.describe('Arriving with a kept draft', () => {
+  test.setTimeout(300_000)
+
+  // Counts every moment the draft question and the Save prompt are both on
+  // screen, from the first page load on.
+  async function watchForTwoDialogs(page) {
+    await page.addInitScript(() => {
+      window.__twoDialogs = 0
+      const shown = (selector) => {
+        const el = document.querySelector(selector)
+        return !!el && el.getClientRects().length > 0
+      }
+      setInterval(() => {
+        if (shown('.confirm-modal') && shown('.save-project-modal')) window.__twoDialogs++
+      }, 50)
+    })
+  }
+
+  // A value changed in an uploaded file leaves a draft of it in the browser.
+  async function keepDraft(page) {
+    await page.goto('/')
+    await waitForEngine(page)
+    await loadFixture(page, 'sample.scad')
+    await setNumber(page, 'width', 61)
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem('openscad-forge-editor-draft') || ''), {
+        timeout: 15_000,
+      })
+      .toContain('61')
+  }
+
+  // One of the program's examples offers a place in Saved Projects when it
+  // opens; the draft of the other file is asked about at the same arrival.
+  async function arriveAtExample(page) {
+    await page.goto('/?example=braille-sign')
+    const question = page.locator('.confirm-modal', { hasText: 'Restore a saved draft?' })
+    await expect(question).toBeVisible({ timeout: 120_000 })
+    await page.locator('.param-control').first().waitFor({ state: 'attached', timeout: 120_000 })
+    await page.waitForTimeout(2_000)
+    return question
+  }
+
+  test('the draft question comes first and the Save prompt after it', async ({ page }) => {
+    attachInvariants(page)
+    await watchForTwoDialogs(page)
+    await keepDraft(page)
+
+    const question = await arriveAtExample(page)
+    expect(await page.evaluate(() => window.__twoDialogs), 'both dialogs on screen at once').toBe(0)
+
+    await question.locator('[data-action="cancel"]').click()
+    await expect(page.locator('.save-project-modal')).toBeVisible({ timeout: 30_000 })
+    await page.locator('#saveProjectNotNow').click()
+    await expect(page.locator('.save-project-modal')).toHaveCount(0)
+    expect(await page.evaluate(() => window.__twoDialogs), 'both dialogs on screen at once').toBe(0)
+    expectNoPageErrors(page)
+  })
+
+  test('a restored draft opens with its value and no Save prompt over it', async ({ page }) => {
+    attachInvariants(page)
+    await watchForTwoDialogs(page)
+    await keepDraft(page)
+
+    const question = await arriveAtExample(page)
+    expect(await page.evaluate(() => window.__twoDialogs), 'both dialogs on screen at once').toBe(0)
+
+    await question.locator('[data-action="confirm"]').click()
+    await expect(page.locator('#param-width-spinbox')).toHaveValue('61', { timeout: 60_000 })
+    await page.waitForTimeout(2_000)
+    await expect(page.locator('.save-project-modal')).toHaveCount(0)
+    expect(await page.evaluate(() => window.__twoDialogs), 'both dialogs on screen at once').toBe(0)
+    expectNoPageErrors(page)
+  })
+})
