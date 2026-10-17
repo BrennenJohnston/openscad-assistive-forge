@@ -4247,10 +4247,9 @@ body[data-mobile-toolbar='relocated']
      Mobile Portrait Camera Focus Mode
      ============================================================================
      Full Screen with a bottom drawer open (Camera, or the Alt View's ASCII
-     drawer) on a phone held upright splits the screen in two: the preview in
-     the top half and the drawer in the bottom half, the bar at its foot. The
-     line is the one the sheets keep, half the screen and a small sliver, so
-     the preview never measures under half.
+     drawer) on a phone held upright gives the drawer its controls' height
+     above the bar, never more than half the screen, and the preview
+     everything above it.
      - Header, workflow progress, and other UI are hidden/overlaid
      - A floating Exit button leaves Full Screen
      ============================================================================ */
@@ -4270,7 +4269,9 @@ body[data-mobile-toolbar='relocated']
     top: 0 !important;
     left: 0 !important;
     right: 0 !important;
-    bottom: calc(50% - var(--space-sm)) !important;
+    /* Down to the open drawer's top (camera-panel-controller.js measures
+       how far the drawer reaches up from the screen's foot). */
+    bottom: var(--phone-drawer-reach, calc(50% - var(--space-sm))) !important;
     display: flex !important;
     flex-direction: column !important;
     border: none !important;
@@ -4322,18 +4323,16 @@ body[data-mobile-toolbar='relocated']
     display: flex !important;
   }
 
-  /* The open drawer takes the bottom half, down to the bar; its controls
-     keep their place at its top. Beats the shared height the two drawers
-     are given when both exist. */
+  /* The open drawer is as tall as its controls, above the bar, never more
+     than half the screen; the preview has the rest. */
   .main-interface.focus-mode.camera-focus-mode
     .camera-drawer:not(.collapsed)
     .camera-drawer-body,
   .main-interface.focus-mode.camera-focus-mode
     .ascii-drawer:not(.collapsed)
     .ascii-drawer-body {
-    top: calc(50% + var(--space-sm)) !important;
+    top: auto !important;
     min-height: 0 !important;
-    max-height: none !important;
     align-content: start;
   }
 

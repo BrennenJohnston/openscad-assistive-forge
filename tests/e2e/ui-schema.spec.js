@@ -50,8 +50,6 @@ const MENUS = ['file', 'edit', 'design', 'view', 'window', 'help'];
 // page meets it, the case reports that it passed unexpectedly and its entry
 // comes out. Entries only ever leave this list.
 const NOT_MET_YET = {
-  'S6-drawers':
-    'The phone drawers still keep a shared height, and Full Screen still splits the screen in half.',
   'S5-ascii':
     'The ASCII drawer still holds the Characters and Edges buttons and the pan adjust button.',
 };
@@ -1038,6 +1036,22 @@ for (const height of [915, 810]) {
             .soft(m.generateHeight, 'Generate keeps the touch target')
             .toBeGreaterThanOrEqual(43.5);
         }
+
+        // Leaving Full Screen, the drawer that is open goes back to its
+        // controls' height, whichever drawer was opened inside Full Screen.
+        await page.locator('#cameraFocusExitBtn').click();
+        await expect(page.locator('#mainInterface')).not.toHaveClass(
+          /camera-focus-mode/
+        );
+        await page.waitForTimeout(500);
+        const [lastName, , lastBody] = drawers[drawers.length - 1];
+        const after = await page.evaluate(readDrawerBand, lastBody);
+        expect
+          .soft(
+            after.band,
+            `S6: after Full Screen the ${lastName} drawer is ${Math.round(after.height)} px tall for ${Math.round(after.content)} px of controls`
+          )
+          .toBeLessThanOrEqual(DRAWER_BAND_PX);
       });
 
       if (look.altView) {
