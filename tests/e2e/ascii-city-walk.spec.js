@@ -1019,8 +1019,21 @@ test.describe('ASCII City Walk — looking around', () => {
     await enterCity(page)
     await page.keyboard.press('KeyH')
     await expect(page.locator('#cityWalkHelpPanel')).toBeVisible()
+    // The arrows look, W A S D walk, and a controller's sticks do both.
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
-      'R and F: look up and down'
+      'W and S: walk forward and backward'
+    )
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'Arrow keys: look around'
+    )
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'Q and E: turn, as Left and Right do'
+    )
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'On a controller: the left stick walks and the right stick looks'
+    )
+    await expect(page.locator('#cityWalkHelpPanel')).not.toContainText(
+      'Arrow Up or W'
     )
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
       'V: level the view'
@@ -2278,7 +2291,7 @@ test.describe('ASCII City Walk — find the traveler', () => {
       const g = window.__cityWalkGame
       window.__approachProbe = { from: { x: g.walkState.x, y: g.walkState.y }, seen: null }
     })
-    await page.keyboard.down('ArrowUp')
+    await page.keyboard.down('KeyW')
     await page.waitForFunction(
       () => {
         const g = window.__cityWalkGame
@@ -2318,7 +2331,7 @@ test.describe('ASCII City Walk — find the traveler', () => {
     // steps in hops of PLAYER_RADIUS_M / 2, so it cannot tunnel past a 6 m
     // radius however slow the frames are; only the wait varies.
     await expect(bubble(page)).toBeVisible({ timeout: 25000 })
-    await page.keyboard.up('ArrowUp')
+    await page.keyboard.up('KeyW')
     await expect(announcer(page)).toContainText('You found the traveler')
     // Focus moves to the one control the bubble has, so a keyboard player is
     // not left hunting for it.
@@ -2446,9 +2459,9 @@ test.describe('ASCII City Walk — find the traveler', () => {
     await enterCity(page)
     await standOff(page, 9)
     await page.locator('#cityWalkViewport').click({ position: { x: 400, y: 300 } })
-    await page.keyboard.down('ArrowUp')
+    await page.keyboard.down('KeyW')
     await expect(bubble(page)).toBeVisible({ timeout: 25000 })
-    await page.keyboard.up('ArrowUp')
+    await page.keyboard.up('KeyW')
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])

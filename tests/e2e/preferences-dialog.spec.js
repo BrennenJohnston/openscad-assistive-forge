@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import path from 'path';
 import { skipWithoutWebGL } from './helpers/webgl.js';
 
@@ -20,14 +21,16 @@ const SAMPLE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
 
 const WASM_READY_TIMEOUT = 180_000;
 
-/** Upstream's six, then Keyboard — a Forge addition, documented as such. */
+/**
+ * Upstream's tabs with Axes and Buttons made one Controller tab, then
+ * Keyboard, a Forge addition.
+ */
 const TAB_ORDER = [
   '3D View',
   'Editor',
   '3D Print',
   'Advanced',
-  'Axes',
-  'Buttons',
+  'Controller',
   'Keyboard',
 ];
 
@@ -56,8 +59,11 @@ async function gotoWithFile(page) {
   } catch {
     // No save-project modal to dismiss.
   }
-  // The menu bar is hidden in the Simplified interface.
-  await page.locator('#uiModeToggle').click();
+  // The menu bar is hidden in the Simplified interface. A second load in
+  // one case starts in the interface the first one chose.
+  if (!(await page.locator('#editMenuBtn').isVisible())) {
+    await page.locator('#uiModeToggle').click();
+  }
   await expect(page.locator('#editMenuBtn')).toBeVisible();
 }
 
@@ -128,15 +134,7 @@ test('the tab bar follows the APG pattern', async ({ page }) => {
   expect(walked).toEqual(
     TAB_ORDER.map(
       (_, i) =>
-        [
-          '3dview',
-          'editor',
-          '3dprint',
-          'advanced',
-          'axes',
-          'buttons',
-          'keyboard',
-        ][i]
+        ['3dview', 'editor', '3dprint', 'advanced', 'controller', 'keyboard'][i]
     ).map((s) => `prefs-tab-${s}`)
   );
 
@@ -186,7 +184,7 @@ test('every unavailable tab is disabled and names its reason', async ({
   // here: it is how a keyboard user gets to the explanation at all.
   // Advanced is not in this list: it hosts the engine and cache controls, so
   // it is a live tab like 3D View.
-  const STEPS = { '3dprint': 2, axes: 4, buttons: 5 };
+  const STEPS = { '3dprint': 2 };
   for (const [id, steps] of Object.entries(STEPS)) {
     await page.locator('#prefs-tab-3dview').click();
     for (let i = 0; i < steps; i++) await page.keyboard.press('ArrowRight');
@@ -634,12 +632,9 @@ test('in Classic the dialog leaves the viewport visible while arrow keys live-ap
   });
 });
 
-test('the input-device tabs describe the gamepad support that exists', async ({
+test('the Controller tab says what it sees when no controller is attached', async ({
   page,
 }) => {
-  // Both tabs describe the gamepad support gamepad-controller.js provides. A
-  // reason that is false is worse than no reason: it tells a user to stop
-  // looking for a feature they already have.
   test.setTimeout(240_000);
   // The no-controller sentence is true only where no controller is attached,
   // and a test machine can have one. Hide any real pad from the page, keeping
@@ -656,26 +651,104 @@ test('the input-device tabs describe the gamepad support that exists', async ({
 
   await page.locator('#prefs-tab-3dview').click();
   for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
-  const axes = page.locator('#prefs-reason-axes');
-  await expect(axes).toBeVisible();
-  await expect(axes).not.toContainText(/no input-device engine/i);
-  await expect(axes).toContainText(/stick/i);
+  const tab = page.locator('#prefs-tab-controller');
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+  await expect(tab).not.toHaveAttribute('aria-disabled', 'true');
 
-  // The read-only status line says what the engine actually sees. With the
-  // Gamepad API present and no device in sight (made so above), the honest
-  // report is the no-controller invitation — never a fabricated pad, and
-  // never the unsupported-browser claim.
+  // With the Gamepad API present and no device in sight (made so above),
+  // the honest report is the no-controller invitation: never a made-up pad,
+  // and never the unsupported-browser claim.
   const status = page.locator('#prefsGamepadStatus');
   await expect(status).toBeVisible();
   await expect(status).toHaveText(
     'No controller detected. Connect one and press any button.'
   );
+  await expect(page.locator('#prefsGamepadAssignments tbody tr')).toHaveCount(
+    16
+  );
+});
 
-  await page.keyboard.press('ArrowRight');
-  const buttons = page.locator('#prefs-reason-buttons');
-  await expect(buttons).toBeVisible();
-  await expect(buttons).not.toContainText(/no input-device engine/i);
-  await expect(buttons).toContainText(/D-pad/i);
+test('a button changed in the Controller tab is kept after a reload', async ({
+  page,
+}) => {
+  test.setTimeout(300_000);
+  // A stand-in Xbox pad the page reads through navigator.getGamepads().
+  await page.addInitScript(() => {
+    window.__padButtons = Array.from({ length: 17 }, () => ({
+      pressed: false,
+      touched: false,
+      value: 0,
+    }));
+    const pad = {
+      id: 'Test pad (STANDARD GAMEPAD Vendor: 045e Product: 02ea)',
+      index: 0,
+      connected: true,
+      mapping: 'standard',
+      timestamp: 0,
+      axes: [0, 0, 0, 0],
+      get buttons() {
+        return window.__padButtons;
+      },
+    };
+    Object.defineProperty(Navigator.prototype, 'getGamepads', {
+      configurable: true,
+      value: () => [pad, null, null, null],
+    });
+  });
+  const openController = async () => {
+    await openPreferences(page);
+    await page.locator('#prefs-tab-3dview').click();
+    for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#prefs-tab-controller')).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+  };
+  const buttonOf = (action) =>
+    page.locator(`#prefsGamepadInput-${action}`).textContent();
+
+  await openController();
+  await expect(page.locator('#prefsGamepadStatus')).toHaveText(
+    'Controller detected: Test pad.'
+  );
+  await expect(page.locator('#prefsGamepadFamily')).toHaveValue('xbox');
+  expect(await buttonOf('activate')).toBe('A');
+
+  const change = page.locator('#prefsGamepadChange-activate');
+  await expect(change).toHaveAccessibleName('Change Activate');
+  await change.click();
+  await expect(page.locator('#prefsGamepadInput-activate')).toHaveText(
+    'Press a button on your controller. Esc cancels.'
+  );
+  await page.evaluate(() => {
+    window.__padButtons[2] = { pressed: true, touched: true, value: 1 };
+  });
+  await expect(page.locator('#prefsGamepadInput-activate')).toHaveText('X');
+  await page.evaluate(() => {
+    window.__padButtons[2] = { pressed: false, touched: false, value: 0 };
+  });
+  expect(await buttonOf('zoomOut')).toBe('A');
+
+  // The tab passes the WCAG 2.2 A and AA rules, and the rule that a
+  // control's visible words are in its name.
+  const results = await new AxeBuilder({ page })
+    .options({ rules: { 'label-content-name-mismatch': { enabled: true } } })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .include('#preferencesModal')
+    .analyze();
+  expect(
+    results.violations.map(
+      (v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`
+    )
+  ).toEqual([]);
+
+  // openPreferences() loads the page afresh: the saved mapping is read again.
+  await openController();
+  expect(await buttonOf('activate')).toBe('X');
+  expect(await buttonOf('zoomOut')).toBe('A');
+
+  await page.locator('#prefsGamepadReset').click();
+  expect(await buttonOf('activate')).toBe('A');
 });
 
 test('the shortcuts dialog’s headings step down one level at a time', async ({

@@ -8202,27 +8202,12 @@
             role="tab"
             type="button"
             class="preferences-tab"
-            id="prefs-tab-axes"
+            id="prefs-tab-controller"
             aria-selected="false"
-            aria-controls="prefs-panel-axes"
+            aria-controls="prefs-panel-controller"
             tabindex="-1"
-            aria-disabled="true"
-            aria-describedby="prefs-reason-axes"
           >
-            Axes
-          </button>
-          <button
-            role="tab"
-            type="button"
-            class="preferences-tab"
-            id="prefs-tab-buttons"
-            aria-selected="false"
-            aria-controls="prefs-panel-buttons"
-            tabindex="-1"
-            aria-disabled="true"
-            aria-describedby="prefs-reason-buttons"
-          >
-            Buttons
+            Controller
           </button>
           <button
             role="tab"
@@ -8735,49 +8720,153 @@
           </div>
           <div
             role="tabpanel"
-            id="prefs-panel-axes"
-            aria-labelledby="prefs-tab-axes"
+            id="prefs-panel-controller"
+            aria-labelledby="prefs-tab-controller"
             class="preferences-panel"
             tabindex="0"
             hidden
           >
-            <!-- The disabled tab's description is the first sentence only;
-                 the rest stays visible here. Keep the id on the span: moving
-                 it onto the paragraph would silently restore the full text to
-                 every arrow-key pass along the tab strip. -->
-            <p class="preferences-panel-reason">
-              <span id="prefs-reason-axes"
-                >A game controller already moves the view: the right stick
-                rotates, and the left stick zooms and pans.</span
-              >
-              What is not built is changing those assignments, or the dead-zone
-              and trim controls the desktop offers. The dead zone is fixed.
-              Space mice and other specialist 3D input devices are not
-              supported.
-            </p>
             <!-- Read-only, deliberately not a live region: plugging a pad in
                  already announces through the status line (main.js wires
                  gamepad connect/disconnect to updateStatus), so a live region
                  here would double-announce the same event. -->
             <p id="prefsGamepadStatus" class="preferences-field-note"></p>
-          </div>
-          <div
-            role="tabpanel"
-            id="prefs-panel-buttons"
-            aria-labelledby="prefs-tab-buttons"
-            class="preferences-panel"
-            tabindex="0"
-            hidden
-          >
-            <p class="preferences-panel-reason">
-              <span id="prefs-reason-buttons"
-                >A game controller's buttons already run commands: A renders, X
-                downloads, Y switches the preview on and off, B cancels, and the
-                D-pad steps through the parameters and changes their
-                values.</span
+            <div class="preferences-select-row">
+              <label for="prefsGamepadFamily">Controller layout</label>
+              <select id="prefsGamepadFamily">
+                <option value="xbox">Xbox</option>
+                <option value="playstation">PlayStation</option>
+                <option value="nintendo">Nintendo</option>
+                <option value="generic">Generic</option>
+              </select>
+            </div>
+            <!-- A picture of the buttons for sighted readers; the list of
+                 actions below names every button in full, so the picture is
+                 hidden from assistive technology. preferences-dialog.js
+                 writes each part's word for the chosen layout. -->
+            <svg
+              id="prefsGamepadDiagram"
+              class="gamepad-diagram"
+              viewBox="0 0 320 210"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <rect
+                class="gamepad-diagram-part"
+                x="52"
+                y="8"
+                width="60"
+                height="22"
+                rx="8"
+              />
+              <text data-part="lt" x="82" y="19">LT</text>
+              <rect
+                class="gamepad-diagram-part"
+                x="208"
+                y="8"
+                width="60"
+                height="22"
+                rx="8"
+              />
+              <text data-part="rt" x="238" y="19">RT</text>
+              <rect
+                class="gamepad-diagram-part"
+                x="46"
+                y="33"
+                width="72"
+                height="17"
+                rx="6"
+              />
+              <text data-part="lb" x="82" y="41.5">LB</text>
+              <rect
+                class="gamepad-diagram-part"
+                x="202"
+                y="33"
+                width="72"
+                height="17"
+                rx="6"
+              />
+              <text data-part="rb" x="238" y="41.5">RB</text>
+              <path
+                class="gamepad-diagram-body"
+                d="M60 52 H260 C290 52 304 72 310 100 L318 160 C322 186 300 200 282 192 C268 186 258 170 246 156 H74 C62 170 52 186 38 192 C20 200 -2 186 2 160 L10 100 C16 72 30 52 60 52 Z"
+              />
+              <circle class="gamepad-diagram-part" cx="90" cy="94" r="20" />
+              <circle class="gamepad-diagram-part" cx="90" cy="94" r="11" />
+              <path
+                class="gamepad-diagram-part"
+                d="M112 116 h16 v10 h10 v16 h-10 v10 h-16 v-10 h-10 v-16 h10 z"
+              />
+              <circle class="gamepad-diagram-part" cx="200" cy="134" r="20" />
+              <circle class="gamepad-diagram-part" cx="200" cy="134" r="11" />
+              <rect
+                class="gamepad-diagram-part"
+                x="134"
+                y="78"
+                width="18"
+                height="10"
+                rx="5"
+              />
+              <text
+                class="gamepad-diagram-end"
+                data-part="select"
+                x="150"
+                y="68"
               >
-              What is not built is choosing which button does what.
-            </p>
+                View
+              </text>
+              <rect
+                class="gamepad-diagram-part"
+                x="168"
+                y="78"
+                width="18"
+                height="10"
+                rx="5"
+              />
+              <text
+                class="gamepad-diagram-start"
+                data-part="start"
+                x="170"
+                y="68"
+              >
+                Menu
+              </text>
+              <circle class="gamepad-diagram-part" cx="160" cy="104" r="8" />
+              <circle class="gamepad-diagram-part" cx="230" cy="76" r="9" />
+              <text data-part="y" x="230" y="76">Y</text>
+              <circle class="gamepad-diagram-part" cx="212" cy="94" r="9" />
+              <text data-part="x" x="212" y="94">X</text>
+              <circle class="gamepad-diagram-part" cx="248" cy="94" r="9" />
+              <text data-part="b" x="248" y="94">B</text>
+              <circle class="gamepad-diagram-part" cx="230" cy="112" r="9" />
+              <text data-part="a" x="230" y="112">A</text>
+            </svg>
+            <div class="preferences-select-row">
+              <label for="prefsGamepadPreset">Preset</label>
+              <select id="prefsGamepadPreset">
+                <option value="menus">Menus first</option>
+                <option value="camera">Camera first</option>
+              </select>
+            </div>
+            <table id="prefsGamepadAssignments" class="gamepad-assignments">
+              <thead>
+                <tr>
+                  <th scope="col">Action</th>
+                  <th scope="col">Button</th>
+                </tr>
+              </thead>
+              <!-- One row per action, written by preferences-dialog.js. -->
+              <tbody></tbody>
+            </table>
+            <div class="preferences-check-row">
+              <button
+                type="button"
+                id="prefsGamepadReset"
+                class="btn btn-sm btn-outline gamepad-reset"
+              >
+                Reset to preset
+              </button>
+            </div>
           </div>
           <div
             role="tabpanel"

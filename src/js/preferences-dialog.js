@@ -28,17 +28,23 @@ import {
   closeModal,
   setupModalCloseHandlers,
 } from './modal-manager.js';
+import {
+  GAMEPAD_ACTIONS,
+  GAMEPAD_PRESETS,
+  gamepadDiagramLabel,
+  gamepadInputLabel,
+} from './gamepad-controller.js';
 
 const TAB_IDS = [
   'prefs-tab-3dview',
   'prefs-tab-editor',
   'prefs-tab-3dprint',
   'prefs-tab-advanced',
-  'prefs-tab-axes',
-  'prefs-tab-buttons',
-  // Upstream's six tabs end at Buttons. Keyboard is a Forge addition: the
-  // shortcuts editor had to live somewhere once Edit ▸ Preferences stopped
-  // being a synonym for it.
+  // Upstream's Axes and Buttons tabs are one Controller tab here: the
+  // sticks and the buttons are assigned in one list.
+  'prefs-tab-controller',
+  // Keyboard is a Forge addition: the shortcuts editor had to live
+  // somewhere once Edit ▸ Preferences stopped being a synonym for it.
   'prefs-tab-keyboard',
 ];
 
@@ -139,15 +145,29 @@ let activeHandlers = {};
  * @property {() => boolean} [getZoomToCursor]
  * @property {() => Object} [getEditorPrefs]
  * @property {(name: string, value: number|boolean) => number|boolean} [onEditorPrefChange]
- * @property {() => {supported: boolean, padName: string|null, deadZone: number|null}} [getGamepadStatus]
+ * @property {() => {supported: boolean, padName: string|null}} [getGamepadStatus]
+ * @property {GamepadHandlers} [gamepad]
  */
 
 /**
- * The Axes tab's read-only status line, so a user can verify that their
- * controller was seen: the reason text names the live engine, and this
- * states the actual device.
+ * @typedef {Object} GamepadHandlers
+ * @property {ReturnType<typeof import('./gamepad-controller.js').createGamepadMapping>} mapping
+ * @property {(timeoutMs: number) => Promise<string|null>} capture - waits
+ *   for one press on the controller
+ * @property {() => void} cancelCapture
+ * @property {(text: string) => void} announce
+ */
+
+/** How long Change waits for a press, in milliseconds. */
+const GAMEPAD_CAPTURE_MS = 5000;
+const GAMEPAD_CAPTURE_PROMPT =
+  'Press a button on your controller. Esc cancels.';
+
+/**
+ * The Controller tab's read-only status line, so a user can verify that
+ * their controller was seen.
  *
- * @param {{supported: boolean, padName: string|null, deadZone: number|null}} [status]
+ * @param {{supported: boolean, padName: string|null}} [status]
  * @returns {string}
  */
 export function formatGamepadStatus(status) {
@@ -157,11 +177,149 @@ export function formatGamepadStatus(status) {
   if (!status.padName) {
     return 'No controller detected. Connect one and press any button.';
   }
-  const deadZone =
-    typeof status.deadZone === 'number'
-      ? ` The camera dead zone is fixed at ${status.deadZone}.`
-      : '';
-  return `Controller detected: ${status.padName}.${deadZone}`;
+  return `Controller detected: ${status.padName}.`;
+}
+
+/** The action whose Change button is waiting for a press, if any. */
+let capturingAction = null;
+
+/**
+ * Write the Controller tab from the saved mapping: the pickers, the
+ * picture's words for the layout, and one row per action with its button
+ * and a Change button named for the action.
+ */
+function renderGamepadPanel() {
+  const gamepad = activeHandlers.gamepad;
+  const body = el('prefsGamepadAssignments')?.querySelector('tbody');
+  if (!gamepad || !body) return;
+  const now = gamepad.mapping.get();
+
+  const family = el('prefsGamepadFamily');
+  if (family) family.value = now.family;
+  const preset = el('prefsGamepadPreset');
+  if (preset) preset.value = now.preset;
+
+  for (const part of document.querySelectorAll(
+    '#prefsGamepadDiagram [data-part]'
+  )) {
+    part.textContent = gamepadDiagramLabel(part.dataset.part, now.family);
+  }
+
+  if (body.rows.length !== GAMEPAD_ACTIONS.length) {
+    body.textContent = '';
+    for (const action of GAMEPAD_ACTIONS) {
+      const row = document.createElement('tr');
+      row.dataset.action = action.id;
+      const name = document.createElement('th');
+      name.scope = 'row';
+      name.id = `prefsGamepadAction-${action.id}`;
+      name.textContent = action.name;
+      const cell = document.createElement('td');
+      const wrap = document.createElement('div');
+      wrap.className = 'gamepad-assignment';
+      const input = document.createElement('span');
+      input.className = 'gamepad-input';
+      input.id = `prefsGamepadInput-${action.id}`;
+      const change = document.createElement('button');
+      change.type = 'button';
+      change.className = 'btn btn-sm btn-outline gamepad-change';
+      change.id = `prefsGamepadChange-${action.id}`;
+      change.textContent = 'Change';
+      // "Change Activate": the visible word and the row's action, so each
+      // button says which action it changes.
+      change.setAttribute('aria-labelledby', `${change.id} ${name.id}`);
+      // On the button itself: a listener on the table makes screen readers
+      // call the whole table clickable.
+      change.addEventListener('click', () =>
+        changeGamepadAssignment(action.id)
+      );
+      wrap.append(input, change);
+      cell.append(wrap);
+      row.append(name, cell);
+      body.append(row);
+    }
+  }
+
+  for (const action of GAMEPAD_ACTIONS) {
+    if (action.id === capturingAction) continue;
+    const input = el(`prefsGamepadInput-${action.id}`);
+    if (input) {
+      input.textContent = gamepadInputLabel(
+        now.assignments[action.id],
+        now.family
+      );
+    }
+  }
+}
+
+/**
+ * Change one action's button: wait for one press on the controller (Escape
+ * stops waiting), then assign it and say what changed.
+ * @param {string} actionId
+ */
+async function changeGamepadAssignment(actionId) {
+  const gamepad = activeHandlers.gamepad;
+  if (!gamepad || capturingAction) return;
+  capturingAction = actionId;
+  const input = el(`prefsGamepadInput-${actionId}`);
+  if (input) input.textContent = GAMEPAD_CAPTURE_PROMPT;
+  gamepad.announce?.(GAMEPAD_CAPTURE_PROMPT);
+
+  // Escape stops the wait and nothing else: in the capture phase, before
+  // the dialog's own Escape closes it.
+  const onEscape = (event) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    gamepad.cancelCapture();
+  };
+  document.addEventListener('keydown', onEscape, true);
+  let pressed = null;
+  try {
+    pressed = await gamepad.capture(GAMEPAD_CAPTURE_MS);
+  } finally {
+    document.removeEventListener('keydown', onEscape, true);
+    capturingAction = null;
+  }
+
+  if (!pressed) {
+    renderGamepadPanel();
+    gamepad.announce?.('Nothing changed.');
+    return;
+  }
+  const { swappedWith } = gamepad.mapping.assign(actionId, pressed);
+  renderGamepadPanel();
+  const now = gamepad.mapping.get();
+  const said = (id) =>
+    `${GAMEPAD_ACTIONS.find((a) => a.id === id).name}: ${gamepadInputLabel(
+      now.assignments[id],
+      now.family
+    )}.`;
+  gamepad.announce?.(
+    swappedWith ? `${said(actionId)} ${said(swappedWith)}` : said(actionId)
+  );
+}
+
+/** Controller tab: the pickers and Reset to preset. */
+function wireControllerTab() {
+  el('prefsGamepadFamily')?.addEventListener('change', (event) => {
+    activeHandlers.gamepad?.mapping.setFamily(event.target.value);
+    renderGamepadPanel();
+  });
+
+  el('prefsGamepadPreset')?.addEventListener('change', (event) => {
+    activeHandlers.gamepad?.mapping.setPreset(event.target.value);
+    renderGamepadPanel();
+  });
+
+  el('prefsGamepadReset')?.addEventListener('click', () => {
+    const gamepad = activeHandlers.gamepad;
+    if (!gamepad) return;
+    gamepad.mapping.reset();
+    renderGamepadPanel();
+    const preset = GAMEPAD_PRESETS[gamepad.mapping.get().preset];
+    gamepad.announce?.(`${preset.name} restored.`);
+  });
 }
 
 /**
@@ -240,6 +398,7 @@ function syncControls() {
   }
 
   renderGamepadStatus();
+  renderGamepadPanel();
 }
 
 /** Editor tab: instant-apply on the running editor. */
@@ -349,6 +508,7 @@ export function initPreferencesDialog(handlers = {}) {
 
   wireThreeDViewTab();
   wireEditorTab();
+  wireControllerTab();
 
   // The status line heals itself while the dialog is open — without this,
   // "No controller detected" would sit beside a pad that was plugged in a
@@ -411,4 +571,5 @@ export function openPreferencesDialog(options = {}) {
 /** Test seam: forget the wiring so a fresh DOM can be wired again. */
 export function _resetPreferencesDialogForTests() {
   wired = false;
+  capturingAction = null;
 }

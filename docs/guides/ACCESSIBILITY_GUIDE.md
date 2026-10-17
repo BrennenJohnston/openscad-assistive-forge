@@ -8,6 +8,7 @@
 - [For Clinicians and Caregivers](#for-clinicians-and-caregivers)
 - [For Novice Makers](#for-novice-makers)
 - [For Voice Input Users](#for-voice-input-users)
+- [For Game Controller Users](#for-game-controller-users)
 - [General Accessibility Features](#general-accessibility-features)
 
 ---
@@ -326,6 +327,48 @@ For numeric parameters:
 2. Use voice commands to navigate via Tab
 3. Use keyboard shortcuts for frequent actions (Ctrl+Z, etc.)
 4. Enable "Show Keyboard Focus" in your OS accessibility settings
+
+## For Game Controller Users
+
+A game controller can move through the interface and turn the 3D view, with
+no keyboard or mouse. Connect it and press any button; the status line says
+when it is found. Preferences > Controller names the controller, shows a
+picture of its buttons, and lists what each button does.
+
+### Two presets
+
+The table uses the names an Xbox controller prints. Preferences > Controller
+shows your own controller's names.
+
+| Action | Menus first | Camera first |
+|---|---|---|
+| Previous and next control, as Shift+Tab and Tab do | LB and RB | LB and RB |
+| Previous and next toolbar | LT and RT | not assigned |
+| Press the focused control | A | A |
+| Back, as Escape does | B | B |
+| The arrow keys, to the focused control (a slider steps) | D-pad | D-pad |
+| Zoom in and out | Y and X | RT and LT, by how far each is pressed |
+| Reset View and View All | not assigned | X and Y |
+| Full Screen | Menu | Menu |
+| Keyboard shortcuts | View | View |
+
+In both, the right stick turns the view the way you push it and the left
+stick pans it, at the same speed whatever the computer's frame rate. Menus
+first is the default: it gives the most buttons to moving through the
+interface, so every control is in reach. Camera first suits time spent
+turning and zooming a model. A held direction or bumper repeats after half a
+second, as a held key does, and focus shows the same ring the keyboard gives.
+
+### Changing a button
+
+In Preferences > Controller, **Change** beside an action waits five seconds
+for the next button you press; Escape stops the wait. If another action had
+that button, it takes the one you replaced, so every action keeps a button.
+**Reset to preset** puts the preset's buttons back, and your choices are kept
+for your next visit. **Controller layout** names the buttons as Xbox,
+PlayStation, Nintendo or generic controllers print them; it follows the
+controller you connect until you choose one. On a Nintendo controller the
+button printed A presses and the one printed B goes back.
 
 ---
 

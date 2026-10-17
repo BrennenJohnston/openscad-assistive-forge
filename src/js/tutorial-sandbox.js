@@ -1477,7 +1477,7 @@ const TUTORIALS = {
         title: 'Camera controls',
         content: `
           <p>The <strong>camera bar</strong> rotates, zooms, and resets the view with buttons. No dragging needed.</p>
-          <p class="tutorial-hint">A connected gamepad also steers the camera.</p>
+          <p class="tutorial-hint">A game controller steers the camera too, and moves through the controls (Preferences &gt; Controller).</p>
         `,
         highlightSelector: '#classicCameraBar',
         position: 'top',

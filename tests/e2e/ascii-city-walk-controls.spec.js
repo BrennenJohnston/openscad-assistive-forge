@@ -550,7 +550,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar', () => {
     }).toBeGreaterThan(1)
   })
 
-  test('W A S D pan the map, exactly as the arrows do', async ({
+  test('W A S D and the arrows pan the map', async ({
     page,
   }) => {
     // A pin, not a fix: W A S D have always panned the map. KeyW binds the
@@ -608,6 +608,16 @@ test.describe('ASCII City Walk — the mouse-only toolbar', () => {
 
     const d = await panBy('KeyD')
     expect(d.x).toBeGreaterThan(50)
+
+    // The arrows look in the street, and on the map they still pan.
+    const up = await panBy('ArrowUp')
+    expect(up.y).toBeGreaterThan(50)
+    const down = await panBy('ArrowDown')
+    expect(down.y).toBeLessThan(-50)
+    const left = await panBy('ArrowLeft')
+    expect(left.x).toBeLessThan(-50)
+    const right = await panBy('ArrowRight')
+    expect(right.x).toBeGreaterThan(50)
   })
 
   test('Enter on a hold button takes one step and then stops', async ({
@@ -2022,25 +2032,47 @@ test.describe('ASCII City Walk — look without dragging, walk without holding',
     expect((await gaze(page)).autoWalk).toBe(false)
   })
 
-  test('arrow-look: while auto-walk carries the walking, Arrow Up looks', async ({
+  test('the arrows look: Arrow Up looks up and does not walk, while auto-walk walks too', async ({
     page,
   }) => {
     test.setTimeout(120000)
     await launchGame(page)
     await enterCity(page)
 
-    await page.keyboard.press('KeyN')
-    await expect(announcer(page)).toContainText('Auto-walk on')
-    const p0 = (await gaze(page)).pitch
+    const before = await gaze(page)
     // Hold the arrow until the game's pitch answers, not for a wall-clock
     // 700 ms: look rates integrate per frame with dt clamped, and a
     // frame-starved renderer under-delivers a fixed-time hold.
     await page.keyboard.down('ArrowUp')
     await expect
-      .poll(async () => (await gaze(page)).pitch - p0, { timeout: 20000 })
-      .toBeGreaterThan(5 * (Math.PI / 180))
+      .poll(async () => (await gaze(page)).pitch - before.pitch, {
+        timeout: 20000,
+      })
+      .toBeGreaterThan(5 * DEG)
     await page.keyboard.up('ArrowUp')
-    // And the walking never stopped: an arrow is a look, not a walk, here.
+    const after = await gaze(page)
+    expect(
+      Math.hypot(after.x - before.x, after.y - before.y),
+      'an arrow looks; it does not walk'
+    ).toBeLessThan(0.5)
+
+    await page.keyboard.down('ArrowDown')
+    await expect
+      .poll(async () => (await gaze(page)).pitch - after.pitch, {
+        timeout: 20000,
+      })
+      .toBeLessThan(-5 * DEG)
+    await page.keyboard.up('ArrowDown')
+
+    await page.keyboard.press('KeyN')
+    await expect(announcer(page)).toContainText('Auto-walk on')
+    const p0 = (await gaze(page)).pitch
+    await page.keyboard.down('ArrowUp')
+    await expect
+      .poll(async () => (await gaze(page)).pitch - p0, { timeout: 20000 })
+      .toBeGreaterThan(5 * DEG)
+    await page.keyboard.up('ArrowUp')
+    // And the walking never stopped: an arrow is a look, not a walk.
     expect((await gaze(page)).autoWalk).toBe(true)
     await page.keyboard.press('KeyN')
     await expect(announcer(page)).toContainText('Auto-walk off')
@@ -2285,5 +2317,109 @@ test.describe('ASCII City Walk — the tour: take me there', () => {
       .include('#cityWalkLegend')
       .analyze()
     expectOnlyAllowedViolations(results)
+  })
+})
+
+test.describe('ASCII City Walk — a game controller', () => {
+  const DEG = Math.PI / 180
+  const gaze = (page) =>
+    page.evaluate(() => ({
+      pitch: window.__cityWalkGame.walkState.pitchRad ?? 0,
+      x: window.__cityWalkGame.walkState.x,
+      y: window.__cityWalkGame.walkState.y,
+    }))
+
+  // A stand-in Xbox pad the page reads through navigator.getGamepads().
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__padAxes = [0, 0, 0, 0]
+      window.__padButtons = Array.from({ length: 17 }, () => ({
+        pressed: false,
+        touched: false,
+        value: 0,
+      }))
+      const pad = {
+        id: 'Test pad (STANDARD GAMEPAD Vendor: 045e Product: 02ea)',
+        index: 0,
+        connected: true,
+        mapping: 'standard',
+        timestamp: 0,
+        get axes() {
+          return window.__padAxes.slice()
+        },
+        get buttons() {
+          return window.__padButtons
+        },
+      }
+      Object.defineProperty(Navigator.prototype, 'getGamepads', {
+        configurable: true,
+        value: () => [pad, null, null, null],
+      })
+    })
+  })
+
+  const stick = (page, axes) =>
+    page.evaluate((a) => {
+      window.__padAxes = a
+    }, axes)
+  // Pressed and let go, a few frames each way.
+  const press = async (page, index) => {
+    await page.evaluate((i) => {
+      window.__padButtons[i] = { pressed: true, touched: true, value: 1 }
+    }, index)
+    await page.waitForTimeout(150)
+    await page.evaluate((i) => {
+      window.__padButtons[i] = { pressed: false, touched: false, value: 0 }
+    }, index)
+    await page.waitForTimeout(150)
+  }
+
+  test('the left stick walks and the right stick looks; A opens the map, B closes it, Start the help', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await launchGame(page)
+    await enterCity(page)
+
+    const start = await gaze(page)
+    await stick(page, [0, -1, 0, 0])
+    await expect
+      .poll(
+        async () => {
+          const g = await gaze(page)
+          return Math.hypot(g.x - start.x, g.y - start.y)
+        },
+        { timeout: 20000 }
+      )
+      .toBeGreaterThan(1)
+    await stick(page, [0, 0, 0, 0])
+
+    const p0 = (await gaze(page)).pitch
+    await stick(page, [0, 0, 0, -1])
+    await expect
+      .poll(async () => (await gaze(page)).pitch - p0, { timeout: 20000 })
+      .toBeGreaterThan(5 * DEG)
+    await stick(page, [0, 0, 0, 0])
+
+    const status = page.locator('#cityWalkHudStatus')
+    await press(page, 0)
+    await expect(status).toContainText('map view')
+    await press(page, 1)
+    await expect(status).toContainText('street view')
+    await press(page, 9)
+    await expect(page.locator('#cityWalkHelpPanel')).toBeVisible()
+    await press(page, 1)
+    await expect(page.locator('#cityWalkHelpPanel')).toBeHidden()
+
+    // B never leaves the game, and the app's own use of the controller
+    // stands down while it runs: the bumper does not take focus out.
+    await press(page, 1)
+    await press(page, 5)
+    await expect(page.locator('#cityWalkLayer')).toBeVisible()
+    expect(
+      await page.evaluate(
+        () => !!document.activeElement?.closest('#cityWalkLayer')
+      )
+    ).toBe(true)
   })
 })

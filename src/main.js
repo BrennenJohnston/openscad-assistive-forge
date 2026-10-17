@@ -167,8 +167,11 @@ import { initCameraPanelController } from './js/camera-panel-controller.js';
 import { initSequenceDetector } from './js/_seq.js';
 import {
   createGamepadController,
+  createGamepadMapping,
   isGamepadSupported,
+  GAMEPAD_ACTIONS,
 } from './js/gamepad-controller.js';
+import { createGamepadNavigator } from './js/gamepad-navigator.js';
 import {
   initKeyboardShortcuts,
   keyboardConfig,
@@ -1842,12 +1845,17 @@ async function initApp() {
   let gamepadController = null;
   if (isGamepadSupported()) {
     gamepadController = createGamepadController({
-      cameraSensitivity: 2.0,
+      cameraSensitivity: 1.0,
       parameterSensitivity: 1.0,
       deadzone: 0.15,
     });
     console.log('[Input] Gamepad controller initialized');
   }
+  // The person's controller assignments (Preferences > Controller); the
+  // layout follows the plugged-in pad until one is chosen.
+  const gamepadMapping = createGamepadMapping({
+    getPadId: () => gamepadController?.getGamepadInfo()?.id ?? '',
+  });
 
   // Storage UI - Update storage display
   const formatStorageUsage = (usage) => {
@@ -4426,8 +4434,16 @@ async function initApp() {
               padName:
                 gamepadController?.getGamepadInfo?.()?.id?.split(' (')[0] ??
                 null,
-              deadZone: gamepadController?.deadzone ?? null,
             }),
+            gamepad: {
+              mapping: gamepadMapping,
+              capture: (ms) =>
+                gamepadController
+                  ? gamepadController.captureNextInput(ms)
+                  : Promise.resolve(null),
+              cancelCapture: () => gamepadController?.cancelCapture(),
+              announce: (text) => announceImmediate(text),
+            },
             getEditorPrefs: () => loadEditorPrefs(),
             onEditorPrefChange: (name, value) => {
               // The preference owner clamps and persists; whatever it stored
@@ -16006,12 +16022,13 @@ if (rounded) {
   // modal, "Toggle Customizer panel", and run the same command.
   keyboardConfig.on('toggleParameters', () => toggleCustomizerPanel());
 
-  keyboardConfig.on('resetView', () => {
+  const resetViewCommand = () => {
     if (previewManager) {
       previewManager.resetCamera();
       announceImmediate('View reset to default');
     }
-  });
+  };
+  keyboardConfig.on('resetView', resetViewCommand);
 
   // Camera view presets (Ctrl+numpad to match OpenSCAD desktop)
   keyboardConfig.on('viewTop', () => {
@@ -16190,12 +16207,13 @@ if (rounded) {
   );
 
   // Display action shortcuts
-  keyboardConfig.on('viewAll', () => {
+  const viewAllCommand = () => {
     if (previewManager?.mesh) {
       previewManager.viewAllCamera();
       announceImmediate('View fitted to model');
     }
-  });
+  };
+  keyboardConfig.on('viewAll', viewAllCommand);
   // Ctrl+] / Ctrl+[. The menu, the camera bar and these share one step, so
   // every surface moves the camera by the same amount.
   keyboardConfig.on('zoomIn', () => {
@@ -16249,42 +16267,101 @@ if (rounded) {
 
   // ========== Gamepad controller integration ==========
   if (gamepadController) {
-    // Camera controls - use rotateHorizontal/rotateVertical for orbit
+    // The controller says how far to move in each step: degrees to orbit,
+    // and shares of the view to pan and zoom, so the view moves at the same
+    // speed on a large model and a small one. A stick moves the camera the
+    // way it is pushed: right takes the camera right around the model (a
+    // positive angle here), up takes it up.
+    const orthographicCamera = () =>
+      previewManager?.projectionMode === 'orthographic'
+        ? previewManager.orthoCamera
+        : null;
+    // A share of 1, in model millimeters: the camera's distance from what
+    // it looks at, or the height an orthographic view shows.
+    const viewSpan = () => {
+      const ortho = orthographicCamera();
+      if (ortho) return (ortho.top - ortho.bottom) / ortho.zoom;
+      const camera = previewManager?.getActiveCamera?.();
+      const target = previewManager?.controls?.target;
+      return camera && target ? camera.position.distanceTo(target) : 0;
+    };
+    // While the City Walk runs it reads the controller itself; the preview
+    // behind it must not move.
+    const cityWalkUp = () => {
+      const layer = document.getElementById('cityWalkLayer');
+      return !!layer && !layer.hidden;
+    };
     gamepadController.on('camera:rotate', ({ x, y }) => {
-      if (previewManager) {
-        previewManager.rotateHorizontal(x * 0.02);
-        previewManager.rotateVertical(y * 0.02);
+      if (previewManager && !cityWalkUp()) {
+        previewManager.rotateHorizontal((x * Math.PI) / 180);
+        previewManager.rotateVertical((y * Math.PI) / 180);
       }
     });
 
     gamepadController.on('camera:zoom', ({ delta }) => {
-      if (previewManager) {
-        previewManager.zoomCamera(delta * 0.1);
+      if (!previewManager || cityWalkUp()) return;
+      // An orthographic view zooms by a factor of 1 + 0.02 for each unit
+      // zoomCamera() takes, rather than by moving: the same share becomes
+      // that factor there.
+      const amount = orthographicCamera()
+        ? (Math.sign(delta) * Math.expm1(Math.abs(delta))) / 0.02
+        : delta * viewSpan();
+      previewManager.zoomCamera(amount);
+    });
+
+    gamepadController.on('camera:pan', ({ x, y }) => {
+      if (previewManager && !cityWalkUp()) {
+        const span = viewSpan();
+        previewManager.panCamera(x * span, y * span);
       }
     });
 
-    gamepadController.on('camera:pan', ({ x }) => {
-      if (previewManager) {
-        previewManager.panCamera(x * 0.5, 0);
-      }
+    // The buttons drive the interface by the preset: focus steps as Tab
+    // does, A presses, B does what Escape does (a render's Cancel
+    // included), the D-pad sends the arrow keys. The navigator stands down
+    // while the City Walk runs.
+    const gamepadNavigator = createGamepadNavigator({
+      onUnhandledBack: () => getToolbarMenuController().closeAll(),
     });
-
-    // Action buttons
-    gamepadController.on('action:render', () => {
-      const state = stateManager.getState();
-      if (state.uploadedFile && !primaryActionBtn.disabled) {
-        primaryActionBtn.click();
+    const gamepadCommands = {
+      previous: gamepadNavigator.previous,
+      next: gamepadNavigator.next,
+      previousRegion: gamepadNavigator.previousRegion,
+      nextRegion: gamepadNavigator.nextRegion,
+      activate: gamepadNavigator.activate,
+      back: gamepadNavigator.back,
+      up: () => gamepadNavigator.arrow('up'),
+      down: () => gamepadNavigator.arrow('down'),
+      left: () => gamepadNavigator.arrow('left'),
+      right: () => gamepadNavigator.arrow('right'),
+      fullScreen: gamepadNavigator.fullScreen,
+      keys: gamepadNavigator.keys,
+      resetView: resetViewCommand,
+      viewAll: viewAllCommand,
+    };
+    const repeatingActions = new Set(
+      GAMEPAD_ACTIONS.filter((a) => a.repeats).map((a) => a.id)
+    );
+    // Each input's action, from the saved assignments; read again whenever
+    // they change, and when a pad is plugged in (its layout may differ).
+    let actionByInput = {};
+    const applyGamepadMapping = () => {
+      const { assignments } = gamepadMapping.get();
+      gamepadController.setAssignments(assignments);
+      actionByInput = {};
+      for (const [action, input] of Object.entries(assignments)) {
+        if (input) actionByInput[input] = action;
       }
+    };
+    applyGamepadMapping();
+    gamepadMapping.subscribe(applyGamepadMapping);
+    gamepadController.on('connected', applyGamepadMapping);
+    gamepadController.on('input', ({ name, repeat }) => {
+      if (gamepadNavigator.isPaused()) return;
+      const action = actionByInput[name];
+      if (!action || (repeat && !repeatingActions.has(action))) return;
+      gamepadCommands[action]?.();
     });
-
-    gamepadController.on('action:download', () => {
-      const state = stateManager.getState();
-      if (state.stl && primaryActionBtn.dataset.action === 'download') {
-        primaryActionBtn.click();
-      }
-    });
-
-    gamepadController.on('action:cancel', cancelGenerate);
 
     // Gamepad connection feedback
     gamepadController.on('connected', (info) => {
