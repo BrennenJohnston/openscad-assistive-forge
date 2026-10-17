@@ -89,7 +89,9 @@ test('the Customizer’s one reset-all button, full size, still asks first', asy
   await page.locator('#resetAllBtn').click();
   const question = page
     .locator('[role="alertdialog"]')
-    .filter({ has: page.getByRole('heading', { name: 'Reset the Customizer?' }) });
+    .filter({
+      has: page.getByRole('heading', { name: 'Reset the Customizer?' }),
+    });
   await expect(question).toBeVisible();
   await question.getByRole('button', { name: 'Reset', exact: true }).click();
   await expect(width).toHaveValue('50');
@@ -164,9 +166,9 @@ test.describe('the phone camera drawer', () => {
   });
 });
 
-test.describe('the Alt View’s Characters control on a phone', () => {
+test.describe('the Alt View’s controls on a phone', () => {
   test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
-  test('its smaller and larger buttons', async ({ page }) => {
+  test('its sliders in the ASCII drawer', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
     });
@@ -179,17 +181,12 @@ test.describe('the Alt View’s Characters control on a phone', () => {
     await expect(key).toBeVisible();
     await key.click();
     await expect(key).toHaveAttribute('aria-pressed', 'true');
-    // On a phone they sit in the ASCII drawer.
+    // On a phone the three sliders sit in the ASCII drawer.
     await page.locator('#asciiDrawerToggle').click();
     await expectAtLeast(
       page,
-      '#asciiDrawerBody .alt-view-stepper-btn',
-      'a characters button'
-    );
-    await expectAtLeast(
-      page,
-      '#asciiDrawerBody .alt-view-level-btn',
-      'an edges button'
+      '#asciiDrawerBody input[type="range"]',
+      'an ASCII drawer slider'
     );
   });
 });

@@ -49,10 +49,7 @@ const MENUS = ['file', 'edit', 'design', 'view', 'window', 'help'];
 // so the rest of the suite stays green while a rule is being met; once the
 // page meets it, the case reports that it passed unexpectedly and its entry
 // comes out. Entries only ever leave this list.
-const NOT_MET_YET = {
-  'S5-ascii':
-    'The ASCII drawer still holds the Characters and Edges buttons and the pan adjust button.',
-};
+const NOT_MET_YET = {};
 
 function expectRule(rule) {
   test.fail(Boolean(NOT_MET_YET[rule]), NOT_MET_YET[rule]);
@@ -871,13 +868,6 @@ function readAsciiDrawer() {
     bodyHeight: box(body).height,
     leftOfCamera:
       Math.abs(ascii.top - camera.top) <= 1 && ascii.right <= camera.left + 1,
-    steps:
-      shown(document.getElementById('altViewCharactersSmallerMobile')) &&
-      shown(document.getElementById('altViewCharactersLargerMobile')) &&
-      [
-        ...body.querySelectorAll('#altViewEdgesMobile .alt-view-level-btn'),
-      ].filter(shown).length === 3 &&
-      shown(document.getElementById('_hfmPanAdjustMobile')),
     small: [...body.querySelectorAll('button')]
       .filter(shown)
       .map((b) => {
