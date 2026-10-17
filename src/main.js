@@ -6865,6 +6865,27 @@ async function initApp() {
           autoPreviewEnabled,
           autoPreviewEnabled ? null : 'user'
         );
+        // setEnabled() catches up a preview gone out of date; a file opened
+        // while it was off has never been drawn, so it is drawn now.
+        const state = stateManager.getState();
+        if (
+          autoPreviewEnabled &&
+          state.uploadedFile &&
+          autoPreviewController.state === PREVIEW_STATE.IDLE
+        ) {
+          autoPreviewController
+            .forcePreview(state.parameters)
+            .catch((error) => {
+              console.error(
+                '[AutoPreview] Preview on turning on failed:',
+                error
+              );
+              showErrorToast({
+                title: 'Preview Failed',
+                message: error.message,
+              });
+            });
+        }
       }
     });
   }
