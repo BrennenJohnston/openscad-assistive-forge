@@ -261,8 +261,7 @@ body[data-ui-mode='classic'] {
  * ground with the black icon, 15.3:1 green and 11.5:1 amber. layout.css
  * pairs them the same way, but the look's hover above takes the ground at
  * the same weight and left the black icon on #1a4d1a (2.12:1) or #1a1000
- * (1.12:1). The pan adjust toggle keeps its own pair below: its icon's
- * stroke is the accent. */
+ * (1.12:1). The pan adjust toggle is a camera button too. */
 @media (hover: hover) {
   :root[data-ui-variant='mono']
     :is(
@@ -270,7 +269,7 @@ body[data-ui-mode='classic'] {
       .camera-view-btn,
       .camera-btn-wide,
       .camera-drawer-btn
-    ):not(.alt-pan-toggle):hover:not(:disabled) {
+    ):hover:not(:disabled) {
     background: var(--color-accent);
     color: var(--color-accent-text);
     border-color: var(--color-accent);
@@ -278,8 +277,11 @@ body[data-ui-mode='classic'] {
 }
 
 :root[data-ui-variant='mono']
-  :is(.camera-btn, .camera-view-btn, .camera-btn-wide, .camera-drawer-btn):not(
-    .alt-pan-toggle
+  :is(
+    .camera-btn,
+    .camera-view-btn,
+    .camera-btn-wide,
+    .camera-drawer-btn
   ):active:not(:disabled) {
   background: var(--color-accent);
   color: var(--color-accent-text);
@@ -298,8 +300,10 @@ body[data-ui-mode='classic'] {
   border-radius: 0;
 }
 
+/* The icon is the button's own color, so every rule that sets a state's
+   ground and color (pressed, or high contrast's fill) sets the icon too. */
 :root[data-ui-variant='mono'] .alt-view-toggle svg {
-  stroke: var(--color-accent);
+  stroke: currentColor;
 }
 
 @media (hover: hover) {
@@ -315,8 +319,13 @@ body[data-ui-mode='classic'] {
   border-color: var(--color-accent);
 }
 
-:root[data-ui-variant='mono'] .alt-view-toggle[aria-pressed='true'] svg {
-  stroke: var(--color-accent-text);
+/* The sounds button rides beside the key, in the look only. */
+.alt-view-toggle.alt-view-sounds {
+  display: none;
+}
+
+:root[data-ui-variant='mono'] .alt-view-toggle.alt-view-sounds {
+  display: flex;
 }
 
 /* Cursor theming (mono variant only) */
@@ -1139,15 +1148,11 @@ body[data-ui-mode='classic'] {
   border-radius: 0;
 }
 
+/* The icon is the button's own color, as on the key: a press or high
+   contrast's fill that sets the color sets the icon too. Its hover and
+   press are the camera buttons' pair, above. */
 :root[data-ui-variant='mono'] .alt-pan-toggle svg {
-  stroke: var(--color-accent);
-}
-
-@media (hover: hover) {
-  :root[data-ui-variant='mono'] .alt-pan-toggle:hover {
-    background: var(--color-hover-bg);
-    border-color: var(--color-accent);
-  }
+  stroke: currentColor;
 }
 
 :root[data-ui-variant='mono'] .alt-pan-toggle.active,
@@ -1155,11 +1160,6 @@ body[data-ui-mode='classic'] {
   background: var(--color-accent);
   color: var(--color-accent-text);
   border-color: var(--color-accent);
-}
-
-:root[data-ui-variant='mono'] .alt-pan-toggle.active svg,
-:root[data-ui-variant='mono'] .alt-pan-toggle[aria-pressed='true'] svg {
-  stroke: var(--color-accent-text);
 }
 
 :root[data-ui-variant='mono'] .alt-pan-toggle:focus,

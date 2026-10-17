@@ -30,6 +30,8 @@ vi.mock('../../src/js/crt-sounds.js', () => ({
   preloadKeySounds: vi.fn(),
   playDialSound: vi.fn(async () => 0.12),
   preloadDialSounds: vi.fn(),
+  setMuted: vi.fn(),
+  duck: vi.fn(),
 }))
 
 // The screen waits for its sound to start, which the mock settles on a tick.
@@ -596,6 +598,60 @@ describe('the Alt View is heard', () => {
     slide(fine, 1.1)
     expect(await clicksAsked(), 'nothing with sounds off').toHaveLength(9)
     controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('the sounds button: just before the key; a press turns sounds off without a key and on with one, and the setting, the mute and Preferences follow', async () => {
+    pageWithHeaderAndDpad()
+    const controller = await freshController(previewManagerStub())
+    const sounds = await import('../../src/js/crt-sounds.js')
+    const { setSoundsOn } = await import('../../src/js/hfm-controller.js')
+    controller.injectAltToggle()
+    const button = document.getElementById('_hfmSounds')
+    expect(button, 'made with the key').not.toBeNull()
+    expect(document.getElementById('_hfmToggle').previousElementSibling, 'just before the key').toBe(button)
+    expect(button.getAttribute('aria-label')).toBe('Sounds')
+    expect(button.getAttribute('aria-pressed'), 'sounds start on').toBe('true')
+    expect(button.classList.contains('alt-view-toggle'), "the key's look").toBe(true)
+    expect(button.querySelector('svg').getAttribute('aria-hidden')).toBe('true')
+
+    const said = []
+    const listen = (event) => said.push(event.detail.on)
+    document.addEventListener('sounds-setting-change', listen)
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+
+    press(button, 'pointerdown')
+    press(button, 'pointerup')
+    button.click()
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(localStorage.getItem(STORAGE_KEY_SOUNDS)).toBe('false')
+    expect(sounds.setMuted).toHaveBeenLastCalledWith(true)
+    expect(await keysAsked(), 'no key for the press that turns sounds off').toEqual([])
+
+    press(button, 'pointerdown')
+    press(button, 'pointerup')
+    button.click()
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    expect(localStorage.getItem(STORAGE_KEY_SOUNDS)).toBe('true')
+    expect(sounds.setMuted).toHaveBeenLastCalledWith(false)
+    const keys = await keysAsked()
+    expect(keys, 'one key for the press that turns them on').toHaveLength(1)
+    expect(keys[0]).toMatch(/^p \d down$/)
+
+    // Preferences' checkbox goes through the same door.
+    setSoundsOn(false)
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(said).toEqual([false, true, false])
+    document.removeEventListener('sounds-setting-change', listen)
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('a page that starts with sounds off starts muted', async () => {
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    pageWithHeaderAndDpad()
+    await freshController(previewManagerStub())
+    const { setMuted } = await import('../../src/js/crt-sounds.js')
+    expect(setMuted).toHaveBeenCalledWith(true)
   })
 
   it('plays with reduced motion too: sound is not motion', async () => {

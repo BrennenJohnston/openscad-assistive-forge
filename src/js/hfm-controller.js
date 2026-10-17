@@ -21,6 +21,7 @@ import {
   preloadCrtSounds,
   preloadDialSounds,
   preloadKeySounds,
+  setMuted,
   stopCrtSound,
 } from './crt-sounds.js';
 import { closePhoneDrawer } from './phone-drawers.js';
@@ -102,6 +103,22 @@ let _hfmDialLastClickAt = -Infinity;
 
 // The key's name says what it is; what it does is said once it is pressed.
 const _HFM_TOGGLE_NAME = 'Alt View';
+// The sounds button beside it: its pressed state is whether sounds are on,
+// the same setting as Preferences > Play sounds.
+const _HFM_SOUNDS_NAME = 'Sounds';
+const _HFM_SOUNDS_ICON_ON = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 9h4l5-4v14l-5-4H4z" />
+      <path d="M16.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M19 6a8.5 8.5 0 0 1 0 12" />
+    </svg>
+  `;
+const _HFM_SOUNDS_ICON_OFF = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 9h4l5-4v14l-5-4H4z" />
+      <path d="M3 3l18 18" />
+    </svg>
+  `;
 const _HFM_ON_SENTENCE =
   'Alt View on. The preview is drawn with characters and the interface follows.';
 const _HFM_OFF_SENTENCE = 'Alt View off.';
@@ -192,6 +209,38 @@ function _soundsOn() {
   } catch (_) {
     return true;
   }
+}
+
+function _syncSoundsButton(on) {
+  const button = document.getElementById('_hfmSounds');
+  if (!button) return;
+  button.setAttribute('aria-pressed', String(on));
+  button.innerHTML = on ? _HFM_SOUNDS_ICON_ON : _HFM_SOUNDS_ICON_OFF;
+}
+
+/**
+ * Turn the sounds on or off: the setting Preferences > Play sounds shows,
+ * the mute, and the look's sounds button, together. Anything else showing
+ * the setting listens for `sounds-setting-change` on the document.
+ * @param {boolean} on
+ */
+export function setSoundsOn(on) {
+  const value = Boolean(on);
+  try {
+    localStorage.setItem(STORAGE_KEY_SOUNDS, value ? 'true' : 'false');
+  } catch (error) {
+    console.warn('[Alt View] Could not save the sounds setting:', error);
+  }
+  setMuted(!value);
+  _syncSoundsButton(value);
+  // Turned on with the key there: its sounds are fetched now.
+  if (value && _hfmUnlocked) {
+    preloadCrtSounds();
+    if (_hfmEnabled) _preloadLookSounds();
+  }
+  document.dispatchEvent(
+    new CustomEvent('sounds-setting-change', { detail: { on: value } })
+  );
 }
 
 function _formatPercent(value) {
@@ -861,10 +910,13 @@ function _hfmKeyBand(el) {
   return band;
 }
 
-// The button a press lands on; the look's own key keeps its switch sounds.
+// The button a press lands on; the look's own key keeps its switch sounds,
+// and the sounds button plays its key only when it turns sounds on.
 function _hfmKeyTarget(event) {
   const el = event.target?.closest?.(_HFM_KEY_TARGET);
-  if (!el || el.id === '_hfmToggle' || el.disabled) return null;
+  if (!el || el.id === '_hfmToggle' || el.id === '_hfmSounds' || el.disabled) {
+    return null;
+  }
   return el;
 }
 
@@ -1299,6 +1351,24 @@ function _injectAltToggle() {
   // waiting on a download.
   if (_soundsOn()) preloadCrtSounds();
 
+  // Just before the key; the stylesheet shows it while the look is on. The
+  // row is right-aligned, so the key stays under the pointer that pressed it
+  // when this appears (placed after the key, it pushed the key 48 px away).
+  const soundsBtn = document.createElement('button');
+  soundsBtn.id = '_hfmSounds';
+  soundsBtn.type = 'button';
+  soundsBtn.className =
+    'btn btn-sm btn-secondary alt-view-toggle alt-view-sounds';
+  soundsBtn.setAttribute('aria-label', _HFM_SOUNDS_NAME);
+  soundsBtn.setAttribute('title', _HFM_SOUNDS_NAME);
+  toggleBtn.before(soundsBtn);
+  _syncSoundsButton(_soundsOn());
+  soundsBtn.addEventListener('click', () => {
+    const on = soundsBtn.getAttribute('aria-pressed') !== 'true';
+    setSoundsOn(on);
+    if (on) _playKeySound(soundsBtn, 'down');
+  });
+
   const panToggleBtn = document.createElement('button');
   panToggleBtn.id = '_hfmPanAdjust';
   panToggleBtn.className = 'btn btn-sm btn-icon camera-btn alt-pan-toggle';
@@ -1459,6 +1529,8 @@ export function initHfmController({
 }) {
   _getPreviewManager = getPreviewManager;
   _getDisplayOptionsController = getDisplayOptionsController;
+  // A page that starts with sounds off starts muted.
+  setMuted(!_soundsOn());
 
   return {
     handleUnlock: _handleUnlock,

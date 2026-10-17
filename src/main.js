@@ -306,7 +306,7 @@ import { TextareaEditor } from './js/textarea-editor.js';
 import { CodeMirrorEditor } from './js/codemirror-editor.js';
 import { showConfirmDialog, showTextToCopyDialog } from './js/dialogs.js';
 import { showLibraryInfoDialog } from './js/library-info-dialog.js';
-import { initHfmController } from './js/hfm-controller.js';
+import { initHfmController, setSoundsOn } from './js/hfm-controller.js';
 import {
   EXAMPLE_DEFINITIONS,
   PROGRAM_DEFINITIONS,
@@ -7122,15 +7122,16 @@ async function initApp() {
   }
 
   // Play sounds: on unless turned off. The moments that play one read the
-  // stored choice when they happen.
+  // stored choice when they happen. The Alt View's sounds button is the same
+  // setting, so each follows the other.
   const soundsToggle = document.getElementById('soundsToggle');
   if (soundsToggle) {
     soundsToggle.checked = localStorage.getItem(STORAGE_KEY_SOUNDS) !== 'false';
     soundsToggle.addEventListener('change', () => {
-      localStorage.setItem(
-        STORAGE_KEY_SOUNDS,
-        soundsToggle.checked ? 'true' : 'false'
-      );
+      setSoundsOn(soundsToggle.checked);
+    });
+    document.addEventListener('sounds-setting-change', (event) => {
+      soundsToggle.checked = event.detail.on;
     });
   }
 

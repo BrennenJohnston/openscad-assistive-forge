@@ -7,7 +7,8 @@
  * THIRD_PARTY_NOTICES.md). A file is fetched ahead or the first time it is
  * wanted, decoded once and kept. The switch sounds play one at a time, the
  * newest one asked for winning; the keys and the clicks play as pressed,
- * over each other if need be.
+ * over each other if need be. Every sound passes through its group's level
+ * and one master, which the sounds setting silences.
  * @license GPL-3.0-or-later
  */
 
@@ -54,7 +55,27 @@ const DIAL_VARIANTS = 7;
 // context waiting; past this the sound is given up.
 const START_TIMEOUT_MS = 1000;
 
+// The groups a sound plays in, each at its own level under the master: the
+// camera's sounds 6 dB under the keys, typing a quiet key 12 dB under.
+const GROUP_LEVELS_DB = {
+  switch: 0,
+  keys: 0,
+  dials: 0,
+  camera: -6,
+  drawers: 0,
+  typing: -12,
+};
+// Muting fades the master out over this, so a sound stops without a click.
+const MUTE_RAMP_S = 0.02;
+// A key or a dial click lowers the camera group this far, for this long, so
+// a press is never muddied by a movement sound.
+const DUCK_DB = 8;
+const DUCK_MS = 150;
+const DUCK_RAMP_S = 0.06;
+
 let _context = null;
+let _mixer = null;
+let _muted = false;
 const _bytes = new Map();
 const _buffers = new Map();
 let _playing = null;
@@ -140,8 +161,41 @@ function _fetchAhead(urls, what) {
   _armContext();
 }
 
-// Waits for the context to run, a second at most, then starts the buffer.
-async function _start(context, running, buffer) {
+const _gainOf = (db) => 10 ** (db / 20);
+
+function _checkGroup(name) {
+  if (!Object.prototype.hasOwnProperty.call(GROUP_LEVELS_DB, name)) {
+    throw new Error(`No such sound group: ${name}`);
+  }
+}
+
+// The master and the groups, made with the context's first sound.
+function _mixerFor(context) {
+  if (_mixer?.context === context) return _mixer;
+  const master = context.createGain();
+  master.gain.value = _muted ? 0 : 1;
+  master.connect(context.destination);
+  const groups = {};
+  for (const [name, db] of Object.entries(GROUP_LEVELS_DB)) {
+    const node = context.createGain();
+    node.gain.value = _gainOf(db);
+    node.connect(master);
+    groups[name] = node;
+  }
+  _mixer = { context, master, groups };
+  return _mixer;
+}
+
+// A level moves on from where it stands, so a change arriving in the middle
+// of another does not jump.
+function _holdFrom(param, at) {
+  param.cancelScheduledValues(at);
+  param.setValueAtTime(param.value, at);
+}
+
+// Waits for the context to run, a second at most, then starts the buffer in
+// its group.
+async function _start(context, running, buffer, group) {
   let timer = null;
   await Promise.race([
     running,
@@ -154,9 +208,56 @@ async function _start(context, running, buffer) {
   ]).finally(() => clearTimeout(timer));
   const source = context.createBufferSource();
   source.buffer = buffer;
-  source.connect(context.destination);
+  source.connect(_mixerFor(context).groups[group]);
   source.start();
   return source;
+}
+
+/**
+ * The gain a group's sounds pass through, or null before the first sound.
+ * @param {'switch'|'keys'|'dials'|'camera'|'drawers'|'typing'} name
+ * @returns {GainNode|null}
+ */
+export function soundGroup(name) {
+  _checkGroup(name);
+  return _mixer ? _mixer.groups[name] : null;
+}
+
+/**
+ * Silence every sound, or let them be heard again: the master fades over
+ * 20 ms. Kept in step with the sounds setting; a mixer made later starts as
+ * this left it.
+ * @param {boolean} on
+ */
+export function setMuted(on) {
+  _muted = Boolean(on);
+  if (!_mixer) return;
+  const { context, master } = _mixer;
+  const now = context.currentTime;
+  _holdFrom(master.gain, now);
+  master.gain.linearRampToValueAtTime(_muted ? 0 : 1, now + MUTE_RAMP_S);
+}
+
+/**
+ * Lower a group for a moment and bring it back, ramping 60 ms each way.
+ * @param {string} name - The group
+ * @param {number} [byDb=8]
+ * @param {number} [forMs=150] - From now until the group starts back up
+ */
+export function duck(name, byDb = DUCK_DB, forMs = DUCK_MS) {
+  _checkGroup(name);
+  if (!_mixer) return;
+  const { context, groups } = _mixer;
+  const param = groups[name].gain;
+  const level = _gainOf(GROUP_LEVELS_DB[name]);
+  const low = level * _gainOf(-byDb);
+  const now = context.currentTime;
+  const down = now + DUCK_RAMP_S;
+  const up = Math.max(down, now + forMs / 1000);
+  _holdFrom(param, now);
+  param.linearRampToValueAtTime(low, down);
+  param.setValueAtTime(low, up);
+  param.linearRampToValueAtTime(level, up + DUCK_RAMP_S);
 }
 
 /**
@@ -235,7 +336,7 @@ export async function playCrtSound(name) {
   const buffer = await _bufferFor(FILES[name], context);
   if (asked !== _asked) return 0;
   // Checked again past the wait for the context: a newer ask may have come.
-  const source = await _start(context, running, buffer);
+  const source = await _start(context, running, buffer, 'switch');
   if (asked !== _asked) {
     source.stop();
     return 0;
@@ -271,7 +372,8 @@ export async function playKeySound(set, band, phase) {
   const context = _audioContext();
   const running = context.resume();
   const buffer = await _bufferFor(_keyUrl(set, take, phase), context);
-  await _start(context, running, buffer);
+  await _start(context, running, buffer, 'keys');
+  duck('camera');
   return buffer.duration;
 }
 
@@ -288,6 +390,7 @@ export async function playDialSound(set, variant) {
   const context = _audioContext();
   const running = context.resume();
   const buffer = await _bufferFor(_dialUrl(set, tone), context);
-  await _start(context, running, buffer);
+  await _start(context, running, buffer, 'dials');
+  duck('camera');
   return buffer.duration;
 }

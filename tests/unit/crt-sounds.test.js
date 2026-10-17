@@ -123,9 +123,23 @@ describe('the dial click files', () => {
   });
 });
 
+// A gain's level over time, as the code scheduled it: every call kept in
+// order, the value set at once where a call sets it.
+function fakeParam(value) {
+  const param = { value, calls: [] };
+  param.cancelScheduledValues = vi.fn((at) => param.calls.push(['cancel', at]));
+  param.setValueAtTime = vi.fn((level, at) => {
+    param.calls.push(['set', level, at]);
+    param.value = level;
+  });
+  param.linearRampToValueAtTime = vi.fn((level, at) => param.calls.push(['ramp', level, at]));
+  return param;
+}
+
 describe('playing a switch sound', () => {
   let context;
   let sources;
+  let gains;
   let decodeGate;
   let hadAudioContext;
   let hadFetch;
@@ -133,10 +147,21 @@ describe('playing a switch sound', () => {
   beforeEach(() => {
     vi.resetModules();
     sources = [];
+    gains = [];
     decodeGate = {};
     context = {
       state: 'running',
+      currentTime: 10,
       destination: { node: 'destination' },
+      createGain: vi.fn(() => {
+        const node = { connectedTo: null, gain: fakeParam(1) };
+        node.connect = vi.fn((target) => {
+          node.connectedTo = target;
+          return target;
+        });
+        gains.push(node);
+        return node;
+      }),
       resume: vi.fn(() => Promise.resolve()),
       decodeAudioData: vi.fn(async ({ url }) => {
         if (decodeGate[url]) await decodeGate[url];
@@ -196,7 +221,6 @@ describe('playing a switch sound', () => {
     expect(context.resume).toHaveBeenCalled();
     expect(sources).toHaveLength(1);
     expect(sources[0].buffer.duration).toBe(2.21);
-    expect(sources[0].connectedTo).toBe(context.destination);
     expect(sources[0].started).toBe(true);
 
     await expect(playCrtSound('on')).resolves.toBeCloseTo(2.21, 6);
@@ -371,5 +395,73 @@ describe('playing a switch sound', () => {
     await vi.advanceTimersByTimeAsync(1_000);
     expect(await outcome).toBe('The browser did not let the sound start');
     expect(sources).toHaveLength(0);
+  });
+
+  const db = (n) => 10 ** (n / 20);
+  const rounded = (calls) =>
+    calls.map(([what, ...numbers]) => [what, ...numbers.map((n) => Math.round(n * 1000) / 1000)]);
+
+  it('sends every sound through its own group and one master to the output', async () => {
+    const { playCrtSound, playKeySound, playDialSound, soundGroup } = await load();
+    expect(soundGroup('keys'), 'no mixer before the first sound').toBeNull();
+    await playCrtSound('on');
+    expect(soundGroup('keys').gain.value).toBe(1);
+    expect(soundGroup('camera').gain.value, 'the camera 6 dB under the keys').toBeCloseTo(db(-6), 6);
+    expect(soundGroup('typing').gain.value, 'typing a quiet key').toBeCloseTo(db(-12), 6);
+    await playKeySound('p', 2, 'down');
+    await playDialSound('p', 4);
+    const masters = gains.filter((node) => node.connectedTo === context.destination);
+    expect(masters, 'one gain reaches the output').toHaveLength(1);
+    expect(sources.map((s) => s.connectedTo)).toEqual([
+      soundGroup('switch'),
+      soundGroup('keys'),
+      soundGroup('dials'),
+    ]);
+    for (const name of ['switch', 'keys', 'dials', 'camera', 'drawers', 'typing']) {
+      expect(soundGroup(name).connectedTo, `${name} into the master`).toBe(masters[0]);
+    }
+    expect(() => soundGroup('hum')).toThrow('No such sound group: hum');
+  });
+
+  it('a key or a dial click lowers the camera group 8 dB for 150 ms, with 60 ms ramps', async () => {
+    const { playKeySound, playDialSound, soundGroup, duck } = await load();
+    await playKeySound('p', 1, 'down');
+    const camera = soundGroup('camera');
+    const level = db(-6);
+    const low = level * db(-8);
+    expect(rounded(camera.gain.calls)).toEqual(
+      rounded([
+        ['cancel', 10],
+        ['set', level, 10],
+        ['ramp', low, 10.06],
+        ['set', low, 10.15],
+        ['ramp', level, 10.21],
+      ])
+    );
+    camera.gain.calls.length = 0;
+    camera.gain.value = level;
+    await playDialSound('d', 3);
+    expect(rounded(camera.gain.calls).map(([what]) => what)).toEqual([
+      'cancel',
+      'set',
+      'ramp',
+      'set',
+      'ramp',
+    ]);
+    expect(soundGroup('keys').gain.calls, 'a key lowers nothing else').toEqual([]);
+    expect(() => duck('hum', 8, 150)).toThrow('No such sound group: hum');
+  });
+
+  it('mutes through the master: silent within 20 ms, before or after the first sound', async () => {
+    const { setMuted, playKeySound } = await load();
+    setMuted(true);
+    expect(window.AudioContext, 'muting makes no context of its own').not.toHaveBeenCalled();
+    await playKeySound('p', 1, 'down');
+    const master = gains.find((node) => node.connectedTo === context.destination);
+    expect(master.gain.value, 'a mixer made while muted starts silent').toBe(0);
+    setMuted(false);
+    expect(rounded(master.gain.calls).at(-1)).toEqual(['ramp', 1, 10.02]);
+    setMuted(true);
+    expect(rounded(master.gain.calls).at(-1)).toEqual(['ramp', 0, 10.02]);
   });
 });

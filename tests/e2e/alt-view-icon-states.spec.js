@@ -193,15 +193,17 @@ function markIconButtons() {
 }
 
 /**
- * In the page: decode a picture of one button and measure its ground (the
- * most common color, to 16 levels a channel) and its icon (of the pixels that
- * stand out most from the ground, the middle of the six strongest, so one
- * stray pixel cannot decide), with their contrast; and its edge, the most
- * common color of the border band.
+ * In the page: decode one picture of the screen and measure each button in
+ * it: its ground (the most common color, to 16 levels a channel), its icon
+ * (of the pixels that stand out most from the ground, the middle of the six
+ * strongest, so one stray pixel cannot decide) with their contrast, and its
+ * edge, the most common color of the border band. One picture for every
+ * button keeps the screen captured once a state, which matters where the 3D
+ * view is drawn in software.
  */
-async function readPicture(page, png, inset, band) {
+async function readPictures(page, png, boxes) {
   return page.evaluate(
-    async ({ b64, inset, band }) => {
+    async ({ b64, boxes }) => {
       const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
       const bitmap = await createImageBitmap(
         new Blob([bytes], { type: 'image/png' })
@@ -209,31 +211,13 @@ async function readPicture(page, png, inset, band) {
       const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       ctx.drawImage(bitmap, 0, 0);
-      const { data, width, height } = ctx.getImageData(
-        0,
-        0,
-        bitmap.width,
-        bitmap.height
-      );
+      const { data, width } = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
       const lin = (v) => {
         const s = v / 255;
         return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
       };
       const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
       const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-      const pixels = [];
-      const edgePixels = [];
-      for (let y = 0; y < height; y += 1) {
-        for (let x = 0; x < width; x += 1) {
-          const i = (y * width + x) * 4;
-          const p = [data[i], data[i + 1], data[i + 2]];
-          if (x >= inset && x < width - inset && y >= inset && y < height - inset) {
-            pixels.push(p);
-          } else if (x < band || x >= width - band || y < band || y >= height - band) {
-            edgePixels.push(p);
-          }
-        }
-      }
       const mostCommon = (list) => {
         const buckets = new Map();
         for (const [r, g, b] of list) {
@@ -248,33 +232,66 @@ async function readPicture(page, png, inset, band) {
         const most = [...buckets.values()].sort((a, b) => b.n - a.n)[0];
         return [most.r, most.g, most.b].map((v) => Math.round(v / most.n));
       };
-      const ground = mostCommon(pixels);
-      const groundLum = lum(ground);
-      const strongest = pixels
-        .map((p) => ({ p, c: ratio(lum(p), groundLum) }))
-        .sort((a, b) => b.c - a.c)
-        .slice(0, 6);
-      const middle = strongest[Math.floor(strongest.length / 2)];
       const hex = (p) =>
         '#' + p.map((v) => v.toString(16).padStart(2, '0')).join('');
-      return {
-        ground: hex(ground),
-        icon: hex(middle.p),
-        contrast: Math.round(middle.c * 100) / 100,
-        edge: hex(mostCommon(edgePixels)),
-      };
+      const seen = {};
+      for (const { key, left, top, right, bottom, inset, band } of boxes) {
+        const pixels = [];
+        const edgePixels = [];
+        for (let y = top; y < bottom; y += 1) {
+          for (let x = left; x < right; x += 1) {
+            const i = (y * width + x) * 4;
+            const p = [data[i], data[i + 1], data[i + 2]];
+            if (
+              x >= left + inset &&
+              x < right - inset &&
+              y >= top + inset &&
+              y < bottom - inset
+            ) {
+              pixels.push(p);
+            } else if (
+              x < left + band ||
+              x >= right - band ||
+              y < top + band ||
+              y >= bottom - band
+            ) {
+              edgePixels.push(p);
+            }
+          }
+        }
+        const ground = mostCommon(pixels);
+        const groundLum = lum(ground);
+        const strongest = pixels
+          .map((p) => ({ p, c: ratio(lum(p), groundLum) }))
+          .sort((a, b) => b.c - a.c)
+          .slice(0, 6);
+        const middle = strongest[Math.floor(strongest.length / 2)];
+        seen[key] = {
+          ground: hex(ground),
+          icon: hex(middle.p),
+          contrast: Math.round(middle.c * 100) / 100,
+          edge: hex(mostCommon(edgePixels)),
+        };
+      }
+      return seen;
     },
-    { b64: png.toString('base64'), inset, band }
+    { b64: png.toString('base64'), boxes }
   );
 }
 
 // A forced state draws at once in the Alt View, which turns transitions off;
-// in the standard themes a color eases in over up to 240 ms.
-async function settled(page, button) {
-  await page.locator(`[data-icon-audit="${button.key}"]`).evaluate((el) =>
+// in the standard themes a color eases in over up to 240 ms. An animation
+// that never ends (a spinner) is not waited for.
+async function settled(page) {
+  await page.evaluate(() =>
     Promise.race([
       Promise.allSettled(
-        el.getAnimations({ subtree: true }).map((animation) => animation.finished)
+        [...document.querySelectorAll('[data-icon-audit]')]
+          .flatMap((el) => el.getAnimations({ subtree: true }))
+          .filter((animation) =>
+            Number.isFinite(animation.effect?.getComputedTiming().endTime)
+          )
+          .map((animation) => animation.finished)
       ),
       new Promise((resolve) => setTimeout(resolve, 1_000)),
     ])
@@ -287,13 +304,29 @@ async function settled(page, button) {
   );
 }
 
-async function pictureOf(page, button, scale) {
-  const box = await page
-    .locator(`[data-icon-audit="${button.key}"]`)
-    .boundingBox();
-  const png = await page.screenshot({ clip: box });
-  const border = Math.max(1, Math.ceil(button.border));
-  return readPicture(page, png, (border + 2) * scale, border * scale);
+/** Each button as drawn now, from one picture of the screen. */
+async function picturesOf(page, buttons, scale) {
+  const boxes = await page.evaluate(
+    ({ list, scale }) =>
+      list.map(({ key, border }) => {
+        const r = document
+          .querySelector(`[data-icon-audit="${key}"]`)
+          .getBoundingClientRect();
+        const edge = Math.max(1, Math.ceil(border));
+        return {
+          key,
+          left: Math.round(r.left * scale),
+          top: Math.round(r.top * scale),
+          right: Math.round(r.right * scale),
+          bottom: Math.round(r.bottom * scale),
+          inset: (edge + 2) * scale,
+          band: edge * scale,
+        };
+      }),
+    { list: buttons.map(({ key, border }) => ({ key, border })), scale }
+  );
+  const png = await page.screenshot();
+  return readPictures(page, png, boxes);
 }
 
 const sameColor = (a, b) =>
@@ -331,6 +364,14 @@ for (const device of DEVICES) {
             );
           }
 
+          // The pointer rests on the preview, over no button, or the button
+          // it was left on would be read hovered "at rest".
+          const preview = await page.locator('#previewContainer').boundingBox();
+          await page.mouse.move(
+            preview.x + preview.width / 2,
+            preview.y + preview.height / 2
+          );
+
           // A rule a tag set leaves out is switched on through the options,
           // set before withTags(): withRules() would replace the tags.
           const scan = await new AxeBuilder({ page })
@@ -357,21 +398,33 @@ for (const device of DEVICES) {
           await cdp.send('CSS.enable');
           const { root } = await cdp.send('DOM.getDocument', { depth: 0 });
 
-          const measured = [];
-          const failures = [];
-          const rest = new Map();
+          const nodes = [];
           for (const button of buttons) {
             const { nodeId } = await cdp.send('DOM.querySelector', {
               nodeId: root.nodeId,
               selector: `[data-icon-audit="${button.key}"]`,
             });
-            for (const state of STATES) {
+            nodes.push(nodeId);
+          }
+          const forceAll = async (forced) => {
+            for (const nodeId of nodes) {
               await cdp.send('CSS.forcePseudoState', {
                 nodeId,
-                forcedPseudoClasses: state.forced,
+                forcedPseudoClasses: forced,
               });
-              await settled(page, button);
-              const seen = await pictureOf(page, button, scale);
+            }
+            await settled(page);
+          };
+
+          const measured = [];
+          const failures = [];
+          const rest = new Map();
+          // Every button in one state at once, then one picture of them all.
+          for (const state of STATES) {
+            await forceAll(state.forced);
+            const pictures = await picturesOf(page, buttons, scale);
+            for (const button of buttons) {
+              const seen = pictures[button.key];
               if (state.forced.length === 0) rest.set(button.key, seen);
               measured.push({ button: button.name, state: state.name, ...seen });
               if (seen.contrast < MIN_CONTRAST) {
@@ -380,12 +433,8 @@ for (const device of DEVICES) {
                 );
               }
             }
-            await cdp.send('CSS.forcePseudoState', {
-              nodeId,
-              forcedPseudoClasses: [],
-            });
-            await settled(page, button);
           }
+          await forceAll([]);
 
           if (device.name === 'phone') {
             const tapped = buttons.filter(
@@ -395,8 +444,8 @@ for (const device of DEVICES) {
             for (const button of tapped) {
               await page.locator(`[data-icon-audit="${button.key}"]`).tap();
               await page.waitForTimeout(150);
-              await settled(page, button);
-              const seen = await pictureOf(page, button, scale);
+              await settled(page);
+              const seen = (await picturesOf(page, [button], scale))[button.key];
               const before = rest.get(button.key);
               measured.push({ button: button.name, state: 'after a tap', ...seen });
               if (seen.contrast < MIN_CONTRAST) {
