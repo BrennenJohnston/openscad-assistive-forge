@@ -221,12 +221,16 @@ body[data-ui-mode='classic'] {
   color: var(--color-text-primary);
 }
 
-:root[data-ui-variant='mono'] .btn:hover,
-:root[data-ui-variant='mono'] button:hover {
-  background: var(--color-hover-bg);
-  border-color: var(--color-accent);
-  box-shadow: none;
-  transform: none;
+/* Hover only where a pointer hovers: a tap sets :hover too and leaves it
+   until the next tap, so on a touch screen it would outlive the press. */
+@media (hover: hover) {
+  :root[data-ui-variant='mono'] .btn:hover,
+  :root[data-ui-variant='mono'] button:hover {
+    background: var(--color-hover-bg);
+    border-color: var(--color-accent);
+    box-shadow: none;
+    transform: none;
+  }
 }
 
 :root[data-ui-variant='mono'] .btn:active,
@@ -247,8 +251,39 @@ body[data-ui-mode='classic'] {
  * label to the accent, the same hover-bg/accent pairing the header
  * toggles measure at 14.41:1 (green) and 7.79:1 (amber); icons follow
  * via currentColor. */
-:root[data-ui-variant='mono'] .btn-primary:hover:not(:disabled) {
-  color: var(--color-accent);
+@media (hover: hover) {
+  :root[data-ui-variant='mono'] .btn-primary:hover:not(:disabled) {
+    color: var(--color-accent);
+  }
+}
+
+/* The camera buttons' hover and press in the look, as one pair: the accent
+ * ground with the black icon, 15.3:1 green and 11.5:1 amber. layout.css
+ * pairs them the same way, but the look's hover above takes the ground at
+ * the same weight and left the black icon on #1a4d1a (2.12:1) or #1a1000
+ * (1.12:1). The pan adjust toggle keeps its own pair below: its icon's
+ * stroke is the accent. */
+@media (hover: hover) {
+  :root[data-ui-variant='mono']
+    :is(
+      .camera-btn,
+      .camera-view-btn,
+      .camera-btn-wide,
+      .camera-drawer-btn
+    ):not(.alt-pan-toggle):hover:not(:disabled) {
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    border-color: var(--color-accent);
+  }
+}
+
+:root[data-ui-variant='mono']
+  :is(.camera-btn, .camera-view-btn, .camera-btn-wide, .camera-drawer-btn):not(
+    .alt-pan-toggle
+  ):active:not(:disabled) {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
 }
 
 :root[data-ui-variant='mono'] .btn-icon-svg {
@@ -267,9 +302,11 @@ body[data-ui-mode='classic'] {
   stroke: var(--color-accent);
 }
 
-:root[data-ui-variant='mono'] .alt-view-toggle:hover {
-  background: var(--color-hover-bg);
-  border-color: var(--color-accent);
+@media (hover: hover) {
+  :root[data-ui-variant='mono'] .alt-view-toggle:hover {
+    background: var(--color-hover-bg);
+    border-color: var(--color-accent);
+  }
 }
 
 :root[data-ui-variant='mono'] .alt-view-toggle[aria-pressed='true'] {
@@ -729,8 +766,11 @@ body[data-ui-mode='classic'] {
     box-shadow: none !important;
   }
 
+  /* The ground wins by weight, not !important: an !important ground kept
+     the accent pair's ground away from a hovered, pressed or focused
+     button while the pair's black icon still applied. */
   :root[data-ui-variant='mono'] .camera-drawer-btn {
-    background: var(--color-bg-tertiary) !important;
+    background: var(--color-bg-tertiary);
     border: 1px solid var(--color-border) !important;
     border-radius: 0 !important;
   }
@@ -819,7 +859,14 @@ body[data-ui-mode='classic'] {
   line-height: 1;
 }
 
-:root[data-ui-variant='mono'] .alt-view-stepper-btn:hover {
+@media (hover: hover) {
+  :root[data-ui-variant='mono'] .alt-view-stepper-btn:hover {
+    color: var(--color-accent-text);
+    background: var(--color-accent);
+  }
+}
+
+:root[data-ui-variant='mono'] .alt-view-stepper-btn:active:not(:disabled) {
   color: var(--color-accent-text);
   background: var(--color-accent);
 }
@@ -1096,9 +1143,11 @@ body[data-ui-mode='classic'] {
   stroke: var(--color-accent);
 }
 
-:root[data-ui-variant='mono'] .alt-pan-toggle:hover {
-  background: var(--color-hover-bg);
-  border-color: var(--color-accent);
+@media (hover: hover) {
+  :root[data-ui-variant='mono'] .alt-pan-toggle:hover {
+    background: var(--color-hover-bg);
+    border-color: var(--color-accent);
+  }
 }
 
 :root[data-ui-variant='mono'] .alt-pan-toggle.active,
