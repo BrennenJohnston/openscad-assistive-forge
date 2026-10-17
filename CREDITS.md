@@ -60,6 +60,32 @@ The mono UI variant uses Iosevka Term as its primary display font, self-hosted a
 
 ---
 
+## Sounds
+
+### Switch Sounds
+
+Three short sounds play when the Alt View switches on, changes its look or switches off. They are cut and mixed from six recordings on Freesound, each released under Creative Commons 0 by its author: X3SB, kyles, ProdMultimediasHQI, corkob, loganzsound and dav0r.
+
+- **Files**: `public/sounds/crt-on.wav`, `crt-look.wav`, `crt-off.wav`
+- **License**: CC0 1.0 Universal (public domain dedication)
+- **Details**: each recording is named with its link in `THIRD_PARTY_NOTICES.md`
+
+### Key Sounds
+
+While the Alt View is on, every button press sounds a key of the button's size. The green and amber looks use an IBM Model M sampled key by key by Ico Doornekamp for his bucklespring project (GPL-2.0-or-later); the blue DOS look uses two Retro Terminal keys recorded by G.M_Isaac (Creative Commons 0).
+
+- **Files**: `public/sounds/keys/`
+- **Details**: the keys, sources and licenses are in `THIRD_PARTY_NOTICES.md`
+
+### Dial Clicks
+
+While the Alt View is on, a slider clicks step by step as it is dragged, like a dial. The green and amber looks use a click from "Clicky Knob Turning" by shewbox (Creative Commons Attribution 3.0); the blue DOS look a click from "4-position-rotating-switch" by copyc4t (Creative Commons Attribution 4.0); each is played at seven speeds, the tone telling how fine the slider's steps are.
+
+- **Files**: `public/sounds/dials/`
+- **Details**: the sources, licenses and changes are in `THIRD_PARTY_NOTICES.md`
+
+---
+
 ## Design Inspirations
 
 ### Retrosmart X11 Cursors

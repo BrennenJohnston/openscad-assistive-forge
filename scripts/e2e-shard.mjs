@@ -133,17 +133,21 @@ export const MEASURED_SECONDS = {
   // Six cases, each an upload and a preview: measured 26 locally, booked with room.
   'page-fits-window.spec.js': 40.0,
   'responsive-audit.spec.js': 91.9,
-  'theme-switching.spec.js': 71.4,
+  // One more case (the phone's starting size, about 15 s) on top of the measured 71.4.
+  'theme-switching.spec.js': 90.0,
   // Nine cases, the surfaces read element by element, then a phone width and
   // the system settings: about 84 s locally, booked with room; two slider
   // cases (about 17 s locally) add 30, and the page's height and the echo
   // drawer's three (about 21 s) add 35.
   'alt-view-consistency.spec.js': 185.0,
-  // Two cases, each loading the box: 17.6 s locally; booked at 30.
-  'alt-view-reveal.spec.js': 30.0,
-  // Six cases, each loading the box, most waiting out the key's 5 s arrival
-  // or the tune: about 55 s locally; booked at 80.
-  'alt-view-arrival.spec.js': 80.0,
+  // Two cases, each loading the box: 17.6 s locally; booked at 30; a third
+  // (off and on again, a theme change, about 25 s) adds 30; a fourth (the
+  // sounds, about 20 s) adds 30; a slider drag in the fourth (about 10 s)
+  // adds 10.
+  'alt-view-reveal.spec.js': 100.0,
+  // Eight cases, each loading the box, most waiting out the key's 5 s arrival
+  // or the tune: about 75 s locally; booked at 110.
+  'alt-view-arrival.spec.js': 110.0,
   // One case on the box with WebGL switched off: 4.9 s locally; booked at 15.
   'alt-view-without-webgl.spec.js': 15.0,
   'editor-content-sync.spec.js': 70.4,

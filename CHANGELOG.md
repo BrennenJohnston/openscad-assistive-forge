@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- On a phone held upright, the header's first row holds the Customizer and
+  Main Page arrows, the Simplified/Standard switch, GitHub and Keys; the
+  Customizer opens as a sheet above a one-row bottom bar, and Preview Settings
+  & Info drops from its row, so the preview keeps the top half of the screen
+  while a value changes.
+- On a phone, the camera controls open in a see-through drawer within half the
+  screen, with a picture on each view button; one drawer is open at a time.
+- Full Screen on a phone with a drawer open splits the screen in half, and
+  keeps the button that leaves it.
+- On a phone held sideways, the header and the menu bar each keep to one row,
+  the camera controls open as a column at the right edge, and the Customizer
+  is a column beside the preview.
+
+### Fixed
+
+- The tour keeps its card above the Customizer sheet on a phone, and on a
+  desktop a step whose target is scrolled out of the Customizer is scrolled
+  into view instead of skipped.
+- A phone drawer's toggle no longer says its name twice to a screen reader.
+
 ## [5.6.0] - 2026-10-15
 
 ### Added

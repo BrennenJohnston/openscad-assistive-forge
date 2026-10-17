@@ -142,7 +142,8 @@ body[data-ui-mode='classic'] {
   --crt-scanline-color: rgba(0, 0, 0, 0.12);
   --crt-vignette-color: rgba(0, 0, 0, 0.52);
   --crt-reveal-duration: 1s;
-  --crt-raster-duration: 600ms;
+  --crt-power-on-duration: 0.9s;
+  --crt-power-on-dos-duration: 0.75s;
 
   /* A black drawing turned into the accent with its white details black,
    * for pictures no color property reaches; the grays of its edges stay on
@@ -1677,26 +1678,112 @@ body[data-ui-mode='classic'] {
   visibility: hidden;
 }
 
-/* The first picture in a page rasters in from the top, line by line, in
-   place of the power-on flourish; when the screen is drawing in, it waits
-   for that to finish, so the screen comes first and then the picture. The
-   controller adds the classes once and removes them at the end. */
-@keyframes alt-view-raster-in {
-  from {
-    clip-path: inset(0 0 100% 0);
+/* The picture powers on like a tube once the screen has drawn in: the
+   controller adds the classes at each switch-on and look change and removes
+   them at the end; with the screen drawing in, the picture waits for it.
+   The shape follows the common CRT turn-on of the web and of games: the
+   picture comes up a little small and very bright, swells past full size
+   and settles in a few decaying bounces as the brightness falls to normal,
+   with a flutter of a fraction of a degree. The phosphor looks do it in
+   0.9 s with a soft blur at the start; Classic, the DOS look, in 0.75 s
+   with a vertical-hold bounce instead of the flutter, the monitor of the
+   next decade finding its sync. */
+@keyframes alt-view-power-on {
+  0% {
+    opacity: 0;
+    transform: scale(0.8, 0.8) skew(0deg, 0deg);
+    filter: brightness(4) blur(0.6px);
   }
-  to {
-    clip-path: inset(0 0 0 0);
+  10% {
+    opacity: 1;
+    transform: scale(1.05, 1.06) skew(0deg, 0deg);
+    filter: brightness(2.6) blur(0.3px);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(0.95, 0.94) skew(0.35deg, 0deg);
+    filter: brightness(1.8) blur(0);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.02, 1.03) skew(-0.3deg, 0deg);
+    filter: brightness(1.5) blur(0);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(0.985, 0.98) skew(0.15deg, 0deg);
+    filter: brightness(1.25) blur(0);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.006, 1.008) skew(0deg, 0deg);
+    filter: brightness(1.12) blur(0);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(0.998, 0.997) skew(0deg, 0deg);
+    filter: brightness(1.04) blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1, 1) skew(0deg, 0deg);
+    filter: brightness(1) blur(0);
+  }
+}
+
+@keyframes alt-view-power-on-dos {
+  0% {
+    opacity: 0;
+    transform: scale(0.9, 0.7) translateY(-6%);
+    filter: brightness(6) contrast(0.8);
+  }
+  12% {
+    opacity: 1;
+    transform: scale(1.03, 1.08) translateY(4%);
+    filter: brightness(3) contrast(0.9);
+  }
+  24% {
+    opacity: 1;
+    transform: scale(0.985, 0.95) translateY(-2.5%);
+    filter: brightness(1.9) contrast(1);
+  }
+  36% {
+    opacity: 1;
+    transform: scale(1.01, 1.02) translateY(1.2%);
+    filter: brightness(1.4) contrast(1);
+  }
+  48% {
+    opacity: 1;
+    transform: scale(0.996, 0.99) translateY(-0.5%);
+    filter: brightness(1.15) contrast(1);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.002, 1.004) translateY(0);
+    filter: brightness(1.06) contrast(1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1, 1) translateY(0);
+    filter: brightness(1) contrast(1);
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  :root[data-ui-variant='mono'] .hfm-overlay-canvas.alt-view-raster-in {
-    animation: alt-view-raster-in var(--crt-raster-duration) steps(24, end) both;
+  :root[data-ui-variant='mono'] .hfm-overlay-canvas.alt-view-power-on {
+    animation: alt-view-power-on var(--crt-power-on-duration) ease-out both;
+    transform-origin: center center;
   }
 
   :root[data-ui-variant='mono']
-    .hfm-overlay-canvas.alt-view-raster-in--after-reveal {
+    body[data-ui-mode='classic']
+    .hfm-overlay-canvas.alt-view-power-on {
+    animation-name: alt-view-power-on-dos;
+    animation-duration: var(--crt-power-on-dos-duration);
+  }
+
+  :root[data-ui-variant='mono']
+    .hfm-overlay-canvas.alt-view-power-on--after-reveal {
     animation-delay: var(--crt-reveal-duration);
   }
 }

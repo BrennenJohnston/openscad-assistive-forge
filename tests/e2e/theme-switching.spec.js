@@ -1363,6 +1363,30 @@ test.describe('The Alt View starts with finer characters', () => {
     );
     await expect(page.locator('#_hfmFontScale')).toHaveValue('0.6');
   });
+
+  test('on a phone shows 40% characters when nothing is saved', async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.setViewportSize({ width: 412, height: 915 });
+    await page.goto('/?example=simple-box');
+    await skipWithoutWebGL(page, NEEDS_WEBGL);
+    await page.waitForFunction(() => window.previewManager?.gridHelper, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const toggle = page.locator('#_hfmToggle');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#previewStatusAltAdjust')).toContainText(
+      'SIZE 40%'
+    );
+    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.4');
+  });
 });
 
 // The Alt View shows the model where the ordinary preview does: its bottom

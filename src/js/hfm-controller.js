@@ -14,6 +14,15 @@ import {
 } from './storage-keys.js';
 import { announce, announceImmediate } from './announcer.js';
 import { playUnlockJingle } from './unlock-jingle.js';
+import {
+  playCrtSound,
+  playDialSound,
+  playKeySound,
+  preloadCrtSounds,
+  preloadDialSounds,
+  preloadKeySounds,
+  stopCrtSound,
+} from './crt-sounds.js';
 import { closePhoneDrawer } from './phone-drawers.js';
 
 // ---------------------------------------------------------------------------
@@ -32,8 +41,15 @@ let _hfmContrastScale = _HFM_CONTRAST_RANGE.default;
 let _hfmContrastControls = null;
 
 // The default is finer than the renderer's own 1: at full size the first
-// frame drew the model as a blob with no faces. A saved size wins.
-const _HFM_FONT_SCALE_RANGE = { min: 0.5, max: 2.5, step: 0.05, default: 0.6 };
+// frame drew the model as a blob with no faces. A saved size wins. The
+// floor is where a phone's cell meets the renderer's 3 px font floor (at
+// 30% a 3 x 5 px cell, 16,000 of them on a 398 x 622 preview); below it
+// nothing shrinks.
+const _HFM_FONT_SCALE_RANGE = { min: 0.3, max: 2.5, step: 0.05, default: 0.6 };
+// A phone starts finer: 40% is the finest size whose glyphs still read on a
+// phone's screen. A saved size wins on every device.
+const _HFM_FONT_SCALE_PHONE_DEFAULT = 0.4;
+const _HFM_PHONE_MAX_WIDTH_PX = 768;
 let _hfmFontScale = _HFM_FONT_SCALE_RANGE.default;
 let _hfmFontScaleControls = null;
 
@@ -61,6 +77,28 @@ const _HFM_UNLOCK_SENTENCE = 'A key appeared next to the theme button.';
 const _HFM_UNLOCK_ANNOUNCE_DELAY_MS = 600;
 // With the tune playing, the sentence waits for its end and this pause.
 const _HFM_AFTER_TUNE_MS = 300;
+// The screen draws in once its sound has started, after a quarter second at
+// the most: a sound that cannot start does not hold the picture back.
+const _HFM_SOUND_LEAD_MS = 250;
+let _hfmMomentBegin = null;
+let _hfmMomentTimer = null;
+// Every button pressed while the look is on sounds a key of its size: the
+// band edges in CSS px squared, from a letter key to the space bar.
+const _HFM_KEY_BANDS_PX2 = [1000, 1600, 2500, 4000, 7000, 12000];
+const _HFM_KEY_TARGET =
+  'button, [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="tab"], [role="switch"]';
+let _hfmKeyListeners = null;
+let _hfmKeyDown = null;
+// A slider moved while the look is on clicks as a dial does, its tone by
+// how many steps the slider has: the edges of the seven tones, a slider of
+// eight steps or fewer the lowest, one of more than a hundred the highest.
+// A click comes at most this many times a second, however fast the drag;
+// a step that would click sooner is passed over, never queued, so a fast
+// drag stays a ratchet and not a saw, and release is silence.
+const _HFM_DIAL_STEP_EDGES = [8, 14, 22, 32, 48, 100];
+const _HFM_DIAL_CLICKS_PER_SECOND = 15;
+const _hfmDials = new WeakMap();
+let _hfmDialLastClickAt = -Infinity;
 
 // The key's name says what it is; what it does is said once it is pressed.
 const _HFM_TOGGLE_NAME = 'Alt View';
@@ -107,16 +145,13 @@ const _HFM_GREETING_HOLD_MS = 700;
 // under 4x CPU throttling). This clears it if the animation never runs, as
 // with forced colors.
 const _HFM_REVEAL_FALLBACK_MS = 3000;
-let _hfmRevealPlayed = false;
 let _hfmRevealTimer = null;
-let _hfmGreetingPlayed = false;
 let _hfmGreetingTimer = null;
 let _hfmStatusOverride = null;
-// The first picture rasters in once per page, after the draw-in when that
-// plays; the stylesheet times both. This clears it if it never ends.
-const _HFM_RASTER_FALLBACK_MS = 4000;
-let _hfmRasterPlayed = false;
-let _hfmRasterTimer = null;
+// The picture powers on after the draw-in when that plays; the stylesheet
+// times both. This clears it if it never ends.
+const _HFM_POWER_ON_FALLBACK_MS = 4000;
+let _hfmPowerOnTimer = null;
 
 // Found by the camera sequence, the key drops into its place wearing the Alt
 // View's colors, rests a moment, then redraws itself as the ordinary key. The
@@ -755,6 +790,8 @@ function _loadSavedHfmSettings() {
     parsedFont <= _HFM_FONT_SCALE_RANGE.max
   ) {
     _hfmFontScale = parsedFont;
+  } else if (window.innerWidth < _HFM_PHONE_MAX_WIDTH_PX) {
+    _hfmFontScale = _HFM_FONT_SCALE_PHONE_DEFAULT;
   }
   if (
     Number.isFinite(parsedPersistFade) &&
@@ -778,8 +815,6 @@ function _endAltViewReveal() {
 
 /** @returns {boolean} Whether the draw-in is playing now. */
 function _playAltViewReveal() {
-  if (_hfmRevealPlayed) return false;
-  _hfmRevealPlayed = true;
   if (_prefersReducedMotion()) return false;
   document.body?.addEventListener('animationend', _onAltViewRevealEnd);
   _hfmRevealTimer = setTimeout(_endAltViewReveal, _HFM_REVEAL_FALLBACK_MS);
@@ -787,36 +822,34 @@ function _playAltViewReveal() {
   return true;
 }
 
-function _onRasterInEnd(event) {
-  if (event.animationName === 'alt-view-raster-in') _endRasterIn();
+function _onPowerOnEnd(event) {
+  if (event.animationName.startsWith('alt-view-power-on')) _endPowerOn();
 }
 
-function _endRasterIn() {
-  clearTimeout(_hfmRasterTimer);
-  _hfmRasterTimer = null;
+function _endPowerOn() {
+  clearTimeout(_hfmPowerOnTimer);
+  _hfmPowerOnTimer = null;
   const canvas = document.querySelector('.hfm-overlay-canvas');
   if (!canvas) return;
-  canvas.removeEventListener('animationend', _onRasterInEnd);
+  canvas.removeEventListener('animationend', _onPowerOnEnd);
   canvas.classList.remove(
-    'alt-view-raster-in',
-    'alt-view-raster-in--after-reveal'
+    'alt-view-power-on',
+    'alt-view-power-on--after-reveal'
   );
 }
 
-function _rasterInFirstPicture(afterReveal) {
-  if (_hfmRasterPlayed) return;
-  _hfmRasterPlayed = true;
+// The picture powers on like a monitor (the look's own way, in the styles);
+// when the screen is drawing in, it waits for that to finish.
+function _powerOnPicture(afterReveal) {
   const canvas = document.querySelector('.hfm-overlay-canvas');
   if (!canvas || _prefersReducedMotion()) return;
-  canvas.addEventListener('animationend', _onRasterInEnd);
-  _hfmRasterTimer = setTimeout(_endRasterIn, _HFM_RASTER_FALLBACK_MS);
-  canvas.classList.add('alt-view-raster-in');
-  if (afterReveal) canvas.classList.add('alt-view-raster-in--after-reveal');
+  canvas.addEventListener('animationend', _onPowerOnEnd);
+  _hfmPowerOnTimer = setTimeout(_endPowerOn, _HFM_POWER_ON_FALLBACK_MS);
+  canvas.classList.add('alt-view-power-on');
+  if (afterReveal) canvas.classList.add('alt-view-power-on--after-reveal');
 }
 
 function _typeAltViewGreeting() {
-  if (_hfmGreetingPlayed) return;
-  _hfmGreetingPlayed = true;
   let shown = _prefersReducedMotion() ? _HFM_GREETING.length : 1;
   const step = () => {
     _hfmStatusOverride = _HFM_GREETING.slice(0, shown);
@@ -837,10 +870,211 @@ function _typeAltViewGreeting() {
 
 function _stopAltViewStart() {
   _endAltViewReveal();
-  _endRasterIn();
+  _endPowerOn();
   clearTimeout(_hfmGreetingTimer);
   _hfmGreetingTimer = null;
   _hfmStatusOverride = null;
+  clearTimeout(_hfmMomentTimer);
+  _hfmMomentTimer = null;
+  _hfmMomentBegin = null;
+  stopCrtSound();
+}
+
+// The switch sounds follow Preferences > Play sounds, as the unlock tune
+// does; reduced motion leaves them alone, since sound is not motion.
+// Classic is the blue DOS look and has its own keys.
+function _hfmKeySet() {
+  return document.body?.dataset.uiMode === 'classic' ? 'd' : 'p';
+}
+
+function _hfmKeyBand(el) {
+  const box = el.getBoundingClientRect();
+  const area = box.width * box.height;
+  let band = 1;
+  for (const edge of _HFM_KEY_BANDS_PX2) if (area >= edge) band++;
+  return band;
+}
+
+// The button a press lands on; the look's own key keeps its switch sounds.
+function _hfmKeyTarget(event) {
+  const el = event.target?.closest?.(_HFM_KEY_TARGET);
+  if (!el || el.id === '_hfmToggle' || el.disabled) return null;
+  return el;
+}
+
+function _playKeySound(el, phase) {
+  if (!_soundsOn()) return;
+  playKeySound(_hfmKeySet(), _hfmKeyBand(el), phase).catch((error) => {
+    console.warn(`[Alt View] A key sound did not play:`, error);
+  });
+}
+
+// The slider a press or a move lands on.
+function _hfmDialTarget(event) {
+  const el = event.target;
+  return el instanceof HTMLInputElement && el.type === 'range' && !el.disabled
+    ? el
+    : null;
+}
+
+function _hfmDialVariant(el) {
+  const min = Number(el.min) || 0;
+  const max = Number(el.max) || 100;
+  const step = Number(el.step) || 1;
+  const steps = Math.round(Math.abs(max - min) / step);
+  let variant = 1;
+  for (const edge of _HFM_DIAL_STEP_EDGES) if (steps > edge) variant++;
+  return variant;
+}
+
+// A slider's tone is chosen once and kept, so one drag plays one file.
+function _hfmDial(el) {
+  let dial = _hfmDials.get(el);
+  if (!dial) {
+    dial = { variant: _hfmDialVariant(el), value: NaN };
+    _hfmDials.set(el, dial);
+  }
+  return dial;
+}
+
+function _playDialSound(variant) {
+  if (!_soundsOn()) return;
+  playDialSound(_hfmKeySet(), variant).catch((error) => {
+    console.warn(`[Alt View] A dial click did not play:`, error);
+  });
+}
+
+function _preloadLookSounds() {
+  if (!_soundsOn()) return;
+  const set = _hfmKeySet();
+  preloadKeySounds(set);
+  preloadDialSounds(set);
+}
+
+// The keys and the dials: every button and every slider of the look.
+function _installKeySounds() {
+  if (_hfmKeyListeners) return;
+  _preloadLookSounds();
+  const down = (event) => {
+    const el = _hfmKeyTarget(event);
+    if (!el) return;
+    _hfmKeyDown = el;
+    _playKeySound(el, 'down');
+  };
+  const up = () => {
+    if (!_hfmKeyDown) return;
+    const el = _hfmKeyDown;
+    _hfmKeyDown = null;
+    _playKeySound(el, 'up');
+  };
+  // Enter or Space on a focused button is a press too, once per press.
+  const keydown = (event) => {
+    if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
+    const el = _hfmKeyTarget(event);
+    if (!el || el !== event.target) return;
+    _hfmKeyDown = el;
+    _playKeySound(el, 'down');
+  };
+  const keyup = (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    up();
+  };
+  // A slider taken hold of, by pointer or key: where it stands, so the
+  // first move's steps are counted from there.
+  const dialDown = (event) => {
+    const el = _hfmDialTarget(event);
+    if (el) _hfmDial(el).value = Number(el.value);
+  };
+  // Every move the slider makes: one click when a step was crossed and the
+  // last click is far enough behind; nothing for a move that left the
+  // value where it was.
+  const dialInput = (event) => {
+    const el = _hfmDialTarget(event);
+    if (!el) return;
+    const dial = _hfmDial(el);
+    const value = Number(el.value);
+    const step = Number(el.step) || 1;
+    const crossed = Number.isFinite(dial.value)
+      ? Math.round(Math.abs(value - dial.value) / step)
+      : 1;
+    dial.value = value;
+    if (!crossed) return;
+    const now = performance.now();
+    if (now - _hfmDialLastClickAt < 1000 / _HFM_DIAL_CLICKS_PER_SECOND) return;
+    _hfmDialLastClickAt = now;
+    _playDialSound(dial.variant);
+  };
+  _hfmKeyListeners = [
+    ['pointerdown', down],
+    ['pointerup', up],
+    ['pointercancel', up],
+    ['keydown', keydown],
+    ['keyup', keyup],
+    ['pointerdown', dialDown],
+    ['keydown', dialDown],
+    ['input', dialInput],
+  ];
+  for (const [type, fn] of _hfmKeyListeners) {
+    document.addEventListener(type, fn, true);
+  }
+}
+
+function _removeKeySounds() {
+  if (!_hfmKeyListeners) return;
+  for (const [type, fn] of _hfmKeyListeners) {
+    document.removeEventListener(type, fn, true);
+  }
+  _hfmKeyListeners = null;
+  _hfmKeyDown = null;
+  _hfmDialLastClickAt = -Infinity;
+}
+
+/** @returns {Promise<void>|null} Settles once the sound has started or failed; null when none plays */
+function _playCrtSound(name) {
+  if (!name || !_soundsOn()) return null;
+  return playCrtSound(name).catch((error) => {
+    console.warn(`[Alt View] The ${name} sound did not play:`, error);
+  });
+}
+
+/**
+ * The Alt View's moment: the screen draws in, the picture powers on and,
+ * when asked, the greeting is typed. It plays every time the look comes on
+ * or changes (a theme switch, Classic entered or left), not once per page:
+ * each switch is a screen coming on. A moment still running is ended first,
+ * and the page is laid out in between so the same animation starts again.
+ * The sound first, then the screen: the draw-in waits for the sound to
+ * start (a quarter second at the most). With reduced motion nothing moves
+ * and the greeting shows whole; the sound plays either way.
+ *
+ * @param {{greeting: boolean, sound: 'on'|'look'}} options
+ */
+function _playAltViewMoment({ greeting, sound }) {
+  _stopAltViewStart();
+  const begin = () => {
+    if (_hfmMomentBegin !== begin) return;
+    _hfmMomentBegin = null;
+    clearTimeout(_hfmMomentTimer);
+    _hfmMomentTimer = null;
+    void document.body?.offsetWidth;
+    const revealing = _playAltViewReveal();
+    _powerOnPicture(revealing);
+    if (greeting) _typeAltViewGreeting();
+  };
+  _hfmMomentBegin = begin;
+  const started = _playCrtSound(sound);
+  if (!started) {
+    begin();
+    return;
+  }
+  // While the screen waits, the status line holds blank for the greeting
+  // rather than showing the ordinary line first.
+  if (greeting) {
+    _hfmStatusOverride = '';
+    _updateHfmStatusBar();
+  }
+  _hfmMomentTimer = setTimeout(begin, _HFM_SOUND_LEAD_MS);
+  started.then(begin);
 }
 
 /**
@@ -912,9 +1146,19 @@ async function _enableAltViewWithPreview(toggleBtn) {
 
   // Classic's look carries an accent of its own, so the glyph atlas follows
   // the layout mode as it follows the theme.
-  _hfmModeListener = () => {
+  // Classic is a look of its own (the DOS blue), so entering or leaving it
+  // is a screen coming on; a switch between Simplified and Standard is not.
+  let lastMode = document.body?.dataset.uiMode;
+  _hfmModeListener = (event) => {
     _hfmAltView?.rebuildGlyphs?.();
     _hfmAltView?.invalidate?.();
+    const mode = event?.detail?.mode;
+    const classicCrossed = mode === 'classic' || lastMode === 'classic';
+    lastMode = mode;
+    if (_hfmEnabled && classicCrossed) {
+      _playAltViewMoment({ greeting: true, sound: 'look' });
+      _preloadLookSounds();
+    }
   };
   document.addEventListener('ui-mode-changed', _hfmModeListener);
 
@@ -945,9 +1189,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
   });
   previewManager.applyGridForAltView?.(true);
 
-  const revealing = _playAltViewReveal();
   root.setAttribute('data-ui-variant', 'mono');
-  _rasterInFirstPicture(revealing);
 
   const newTheme = previewManager.detectTheme();
   previewManager.updateTheme(
@@ -962,7 +1204,8 @@ async function _enableAltViewWithPreview(toggleBtn) {
   toggleBtn?.setAttribute('aria-pressed', 'true');
   _hfmEnabled = true;
   _hfmPendingEnable = false;
-  _typeAltViewGreeting();
+  _playAltViewMoment({ greeting: true, sound: 'on' });
+  _installKeySounds();
 
   if (_hfmPanToggleButtons?.desktop)
     _hfmPanToggleButtons.desktop.style.display = 'flex';
@@ -976,6 +1219,8 @@ function _disableAltViewWithPreview(toggleBtn) {
   const root = document.documentElement;
 
   _stopAltViewStart();
+  _playCrtSound('off');
+  _removeKeySounds();
 
   if (_hfmMotionListener) {
     const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -1088,6 +1333,9 @@ function _injectAltToggle() {
   `;
 
   themeToggle.parentElement.insertBefore(toggleBtn, themeToggle.nextSibling);
+  // The key is there: its sounds are fetched now, so the first press is not
+  // waiting on a download.
+  if (_soundsOn()) preloadCrtSounds();
 
   const panToggleBtn = document.createElement('button');
   panToggleBtn.id = '_hfmPanAdjust';
@@ -1160,12 +1408,16 @@ function _injectAltToggle() {
     if (!previewManager) {
       if (!isCurrentlyEnabled) {
         _setAssetsForVariant(true);
-        _playAltViewReveal();
+        // No picture and no status line yet: the draw-in alone.
+        _playAltViewMoment({ greeting: false, sound: 'on' });
+        _installKeySounds();
         root.setAttribute('data-ui-variant', 'mono');
         toggleBtn.setAttribute('aria-pressed', 'true');
         _hfmPendingEnable = true;
       } else {
         _stopAltViewStart();
+        _playCrtSound('off');
+        _removeKeySounds();
         root.removeAttribute('data-ui-variant');
         _setAssetsForVariant(false);
         toggleBtn.setAttribute('aria-pressed', 'false');
@@ -1293,6 +1545,8 @@ export function initHfmController({
       if (_hfmEnabled && _hfmAltView) {
         _hfmAltView.rebuildGlyphs?.();
         _hfmAltView.invalidate?.();
+        // A new look comes on: the screen draws in again.
+        _playAltViewMoment({ greeting: true, sound: 'look' });
       }
     },
 

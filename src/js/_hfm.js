@@ -273,10 +273,10 @@ function _setContrastScale(st, scale) {
 
 function _setFontScale(st, scale) {
   const next = Number.isFinite(scale) ? scale : 1;
-  // Instance floor is 0.05, not the preview slider's 0.5: the City
+  // Instance floor is 0.05, not the preview slider's 0.3: the City
   // Walk asks for characters small enough to disappear into, and
   // _HFM_FONT_SCALE_RANGE in hfm-controller.js still holds the preview's
-  // Alt View to 0.5-2.5. Below ~0.15 the fontSizePx floor takes over and
+  // Alt View to 0.3-2.5. Below ~0.15 the fontSizePx floor takes over and
   // the glyphs stop shrinking.
   // - Max 2.5 → larger chars, lower resolution (more legible)
   st.fontScale = Math.max(0.05, Math.min(2.5, next));
@@ -1628,7 +1628,7 @@ function _paintConverted(
  *   a 4 px cell are normalized back to full opacity, so the picture does not
  *   dim as the characters shrink. The City Walk sets it; the preview's Alt
  *   View does not, and so is unchanged at every setting
- *   its own 0.5-2.5 slider can reach.
+ *   its own 0.3-2.5 slider can reach.
  * @returns {Object} API for controlling the alternate view
  */
 export async function initAltView(previewManager, options = {}) {
@@ -1705,6 +1705,24 @@ export async function initAltView(previewManager, options = {}) {
   }
 
   _recomputeFontForSize(container.clientWidth, container.clientHeight);
+  // The look's style asks for its web font a moment before this measure, so
+  // the measure can see the fallback font and its wider cell, which would
+  // stay until a resize. Once the font has arrived, measure again.
+  const fontArrived = document.fonts?.load?.(`${fontSizePx}px ${fontFamily}`);
+  if (fontArrived) {
+    fontArrived.then(
+      () => {
+        _recomputeFontForSize(container.clientWidth, container.clientHeight);
+        st.dirty = true;
+      },
+      (error) => {
+        console.warn(
+          '[Alt View] The font did not load; its stand-in stays:',
+          error
+        );
+      }
+    );
+  }
 
   st.reducedMotion = _checkReducedMotion();
 

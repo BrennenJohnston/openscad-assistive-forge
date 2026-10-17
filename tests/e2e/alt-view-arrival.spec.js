@@ -9,6 +9,7 @@
 
 import { test, expect } from '@playwright/test';
 import { announcementsSince, recordAnnouncements } from './helpers/invariants.js';
+import { canSound, listenForSound, probeSound } from './helpers/sound.js';
 
 const SENTENCE = 'A key appeared next to the theme button.';
 
@@ -97,44 +98,8 @@ async function playSequence(page) {
   return before;
 }
 
-// Every sound the page starts: when, and how long it lasts.
-async function listenForSound(page) {
-  await page.addInitScript(() => {
-    window.__sounds = [];
-    const start = AudioBufferSourceNode.prototype.start;
-    AudioBufferSourceNode.prototype.start = function (...args) {
-      window.__sounds.push({ at: performance.now(), seconds: this.buffer?.duration ?? null });
-      return start.apply(this, args);
-    };
-  });
-}
-
 const sentences = async (page) =>
   (await announcementsSince(page, 0)).filter((a) => a.text === SENTENCE);
-
-// Whether this browser can start a sound at all: some test machines have no
-// sound device, and an audio context there never starts. The next press on
-// the page tries one of its own; read the answer after it.
-async function probeSound(page) {
-  await page.evaluate(() => {
-    window.__canSound = new Promise((resolve) => {
-      document.addEventListener(
-        'click',
-        () => {
-          const Context = window.AudioContext || window.webkitAudioContext;
-          if (!Context) return resolve(false);
-          const context = new Context();
-          const timer = setTimeout(() => resolve(false), 1_000);
-          context.resume().then(() => {
-            clearTimeout(timer);
-            resolve(context.state === 'running');
-          });
-        },
-        { capture: true, once: true }
-      );
-    });
-  });
-}
 
 test.describe('The key arrives', () => {
   test('it drops into its place, the buttons make room, and it becomes the ordinary key', async ({
@@ -195,6 +160,57 @@ test.describe('The key arrives', () => {
   });
 });
 
+// The same sequence on the keyboard: Up, Up, Down, Down, Left, Right, Left,
+// Right, B, A, typed anywhere outside a text field.
+const KEYS = [
+  'ArrowUp',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowLeft',
+  'ArrowRight',
+  'KeyB',
+  'KeyA',
+];
+
+async function typeSequence(page) {
+  for (const code of KEYS) await page.keyboard.press(code);
+}
+
+test.describe('The key arrives from the keyboard', () => {
+  test('in Classic, with no camera buttons on the page, the ten keys bring it', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await recordAnnouncements(page);
+    await openBox(page);
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+    await watch(page);
+    await typeSequence(page);
+
+    const key = page.locator('#_hfmToggle');
+    await expect(key).toBeVisible({ timeout: 10_000 });
+    await expect(key).not.toHaveAttribute('data-arrival', /.+/, { timeout: 12_000 });
+    const seen = await page.evaluate(() => window.__arrival);
+    expect(seen.states.length, 'the arrival played').toBeGreaterThan(0);
+    await expect.poll(async () => (await sentences(page)).length, { timeout: 10_000 }).toBe(1);
+  });
+
+  test('in Standard, typed with the preview focused, while the arrows also turn the view', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await openBox(page);
+    const box = await page.locator('#previewContainer').boundingBox();
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await typeSequence(page);
+    await expect(page.locator('#_hfmToggle')).toBeVisible({ timeout: 10_000 });
+  });
+});
+
 // A short tune plays as the key drops, unless sounds are turned off in
 // Preferences; the screen reader's sentence waits until it has finished.
 test.describe('The tune', () => {
@@ -208,7 +224,7 @@ test.describe('The tune', () => {
     await probeSound(page);
     const pressed = await playSequence(page);
     test.skip(
-      !(await page.evaluate(() => window.__canSound)),
+      !(await canSound(page)),
       'this browser cannot start a sound here (no sound device)'
     );
 

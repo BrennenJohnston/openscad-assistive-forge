@@ -347,6 +347,92 @@ This project uses modules from the Three.js examples collection (e.g., controls 
 
 ---
 
+## Switch Sounds (CC0-1.0)
+
+Three short sounds play when the Alt View switches on, changes its look or
+switches off: `public/sounds/crt-on.wav`, `crt-look.wav` and `crt-off.wav`.
+Each is cut and mixed from recordings on Freesound, every one released under
+Creative Commons 0 by its author:
+
+- "CRT TV Hum" by X3SB: https://freesound.org/s/818513/
+- "monitor computer CRT on, off" by kyles: https://freesound.org/s/454090/
+- "rotary switch on and off" by ProdMultimediasHQI: https://freesound.org/s/512502/
+- "CRT computer monitor startup" by corkob: https://freesound.org/s/415594/
+- "Apple iMac G3 Screen Turn Off" by loganzsound: https://freesound.org/s/873733/
+- "CRT monitor power on with 15.6kHz Hf Noise" by dav0r: https://freesound.org/s/382312/
+
+**License**: CC0 1.0 Universal (public domain dedication)  
+**Dedication**: https://creativecommons.org/publicdomain/zero/1.0/  
+**Note**: Trimmed, joined with short crossfades, one part filtered and
+pitched, and resampled to 32 kHz mono. CC0 asks for no credit; these are
+given with thanks.
+
+---
+
+## Key Sounds (GPL-2.0-or-later, CC0-1.0)
+
+While the Alt View is on, every button press sounds a key of the button's
+size. Two sets of recordings, under `public/sounds/keys/`:
+
+### bucklespring (GPL-2.0-or-later)
+
+The green and amber looks use the keys of an IBM Model M keyboard as sampled,
+key by key, by Ico Doornekamp for bucklespring, a program that plays that
+keyboard's sound while you type: https://github.com/zevv/bucklespring. The
+files `p1a` to `p7a` (`-down` the press, `-up` the release) are the keys K, L,
+C, S, D, B, Tab, Left Alt, Left Ctrl, Caps Lock, Backspace, Enter, Right Shift
+and Space, each cut to 160 ms with a short fade and resampled to 32 kHz mono.
+
+- **Author**: Ico Doornekamp
+- **Source**: https://github.com/zevv/bucklespring (the `wav/` files)
+- **License**: GNU General Public License version 2 or later, as the Debian
+  package records it. The files are distributed here under version 3 of the
+  license, this project's own (see `LICENSE`), as the "or later" term allows.
+
+### Retro Terminal keys (CC0-1.0)
+
+The blue DOS look uses two recordings by G.M_Isaac on Freesound, each
+released under Creative Commons 0: "Retro Keyboard Keystroke"
+(https://freesound.org/s/860241/, the small key, `d1.wav`) and "Retro Enter
+Key" (https://freesound.org/s/860239/, the wide key, `d2.wav`), their leading
+silence cut and the pair resampled to 32 kHz mono.
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+- **Note**: CC0 asks for no credit; it is given with thanks.
+
+---
+
+## Dial Clicks (CC-BY-3.0, CC-BY-4.0)
+
+While the Alt View is on, a slider clicks once per step as it is dragged,
+like a dial. Each look has one click, cut from a recording on Freesound and
+rendered at seven speeds into the files under `public/sounds/dials/`
+(`p1.wav` to `p7.wav` and `d1.wav` to `d7.wav`, 1 the lowest tone):
+
+### Clicky Knob Turning (CC-BY-3.0)
+
+The green and amber looks use one click of "Clicky Knob Turning.wav" by
+shewbox: https://freesound.org/s/30827/
+
+- **Author**: shewbox
+- **License**: Creative Commons Attribution 3.0 Unported,
+  https://creativecommons.org/licenses/by/3.0/
+- **Changes**: one click of the recording cut out (120 ms, with short fades),
+  played at seven speeds from 0.6 to 1.6, resampled to 32 kHz mono, levelled.
+
+### 4-position-rotating-switch (CC-BY-4.0)
+
+The blue DOS look uses one click of "4-position-rotating-switch.flac" by
+copyc4t: https://freesound.org/s/275958/
+
+- **Author**: copyc4t
+- **License**: Creative Commons Attribution 4.0 International,
+  https://creativecommons.org/licenses/by/4.0/
+- **Changes**: one click of the recording cut out (75 ms, with short fades),
+  played at seven speeds from 0.6 to 1.6, resampled to 32 kHz mono, levelled.
+
+---
+
 ## Iosevka Term (OFL-1.1)
 
 The mono UI variant self-hosts the Iosevka Term Regular WOFF2 font.

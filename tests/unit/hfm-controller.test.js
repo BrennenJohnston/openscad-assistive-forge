@@ -20,6 +20,20 @@ import {
 } from 'three'
 import { PreviewManager } from '../../src/js/preview.js'
 import { announce } from '../../src/js/announcer.js'
+import { STORAGE_KEY_SOUNDS } from '../../src/js/storage-keys.js'
+
+vi.mock('../../src/js/crt-sounds.js', () => ({
+  playCrtSound: vi.fn(async () => 1),
+  stopCrtSound: vi.fn(),
+  preloadCrtSounds: vi.fn(),
+  playKeySound: vi.fn(async () => 0.16),
+  preloadKeySounds: vi.fn(),
+  playDialSound: vi.fn(async () => 0.12),
+  preloadDialSounds: vi.fn(),
+}))
+
+// The screen waits for its sound to start, which the mock settles on a tick.
+const soundStarted = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 vi.mock('../../src/js/_hfm.js', () => ({
   initAltView: vi.fn(async () => ({
@@ -126,6 +140,29 @@ describe('the character size the Alt View starts with', () => {
     const controller2 = await freshController(pm2)
     await controller2.enableAltViewWithPreview(toggle)
     expect((await lastAltView()).setFontScale).toHaveBeenLastCalledWith(1.2)
+    // Off again: a look left on keeps listening to the page in later cases.
+    controller2.disableAltViewWithPreview(toggle)
+  })
+
+  it('on a phone starts at 40% when nothing is saved, and a saved size still wins', async () => {
+    const width = Object.getOwnPropertyDescriptor(window, 'innerWidth')
+    Object.defineProperty(window, 'innerWidth', { value: 412, configurable: true })
+    try {
+      const toggle = document.createElement('button')
+      const controller = await freshController(previewManagerStub())
+      await controller.enableAltViewWithPreview(toggle)
+      expect((await lastAltView()).setFontScale).toHaveBeenLastCalledWith(0.4)
+      controller.disableAltViewWithPreview(toggle)
+
+      localStorage.setItem('openscad-forge-hfm-font-scale', '1.2')
+      const controller2 = await freshController(previewManagerStub())
+      await controller2.enableAltViewWithPreview(toggle)
+      expect((await lastAltView()).setFontScale).toHaveBeenLastCalledWith(1.2)
+      controller2.disableAltViewWithPreview(toggle)
+    } finally {
+      if (width) Object.defineProperty(window, 'innerWidth', width)
+      else delete window.innerWidth
+    }
   })
 })
 
@@ -175,6 +212,7 @@ describe('the glow the Alt View starts with', () => {
     const controller2 = await freshController(previewManagerStub())
     await controller2.enableAltViewWithPreview(toggle)
     expect((await lastAltView()).setPersistFade).toHaveBeenLastCalledWith(0)
+    controller2.disableAltViewWithPreview(toggle)
   })
 
   it('with reduced motion is held at 0, says so, and leaves the saved choice alone', async () => {
@@ -190,6 +228,382 @@ describe('the glow the Alt View starts with', () => {
     expect((await lastAltView()).setPersistFade).toHaveBeenLastCalledWith(0)
     expect(document.getElementById('previewStatusAltAdjust').textContent).toContain('GLOW 0%')
     expect(localStorage.getItem(GLOW_KEY)).toBe('0.4')
+    controller.disableAltViewWithPreview(toggle)
+  })
+})
+
+describe('the Alt View draws in every time', () => {
+  let matchMedia
+
+  beforeEach(() => {
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+    document.documentElement.removeAttribute('data-alt-view-reveal')
+    matchMedia = window.matchMedia
+    window.matchMedia = vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
+  })
+
+  afterEach(() => {
+    window.matchMedia = matchMedia
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+    document.documentElement.removeAttribute('data-alt-view-reveal')
+  })
+
+  it('draws in on each switch-on and on a theme change while on, not once per page', async () => {
+    pageWithHeaderAndDpad()
+    const pm = previewManagerStub()
+    const controller = await freshController(pm)
+    const toggle = document.createElement('button')
+    const root = document.documentElement
+
+    await controller.enableAltViewWithPreview(toggle)
+    await soundStarted()
+    expect(root.hasAttribute('data-alt-view-reveal'), 'the first time').toBe(true)
+
+    controller.disableAltViewWithPreview(toggle)
+    expect(root.hasAttribute('data-alt-view-reveal'), 'ended on switch-off').toBe(false)
+
+    await controller.enableAltViewWithPreview(toggle)
+    await soundStarted()
+    expect(root.hasAttribute('data-alt-view-reveal'), 'the second time').toBe(true)
+
+    root.removeAttribute('data-alt-view-reveal')
+    controller.onThemeChanged()
+    await soundStarted()
+    expect(root.hasAttribute('data-alt-view-reveal'), 'after a theme change').toBe(true)
+
+    controller.disableAltViewWithPreview(toggle)
+    controller.onThemeChanged()
+    await soundStarted()
+    expect(root.hasAttribute('data-alt-view-reveal'), 'not while off').toBe(false)
+  })
+
+  it('after the draw-in the picture powers on: the class on the character canvas, waiting for the reveal', async () => {
+    pageWithHeaderAndDpad()
+    const canvas = document.createElement('canvas')
+    canvas.className = 'hfm-overlay-canvas'
+    document.body.appendChild(canvas)
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    await soundStarted()
+    expect(canvas.classList.contains('alt-view-power-on'), 'the power-on class').toBe(true)
+    expect(canvas.classList.contains('alt-view-power-on--after-reveal'), 'after the draw-in').toBe(true)
+    controller.disableAltViewWithPreview(toggle)
+    expect(canvas.classList.contains('alt-view-power-on'), 'ended on switch-off').toBe(false)
+  })
+
+  it('the sound first, then the screen: the draw-in waits for the sound to start', async () => {
+    pageWithHeaderAndDpad()
+    const controller = await freshController(previewManagerStub())
+    const { playCrtSound } = await import('../../src/js/crt-sounds.js')
+    const root = document.documentElement
+    const toggle = document.createElement('button')
+
+    let started
+    playCrtSound.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          started = resolve
+        })
+    )
+    await controller.enableAltViewWithPreview(toggle)
+    expect(playCrtSound).toHaveBeenCalledWith('on')
+    expect(root.hasAttribute('data-alt-view-reveal'), 'not before the sound').toBe(false)
+    expect(
+      document.getElementById('previewStatusAltAdjust').textContent,
+      'the status line holds blank for the greeting'
+    ).toBe('')
+    started(2.21)
+    await soundStarted()
+    expect(root.hasAttribute('data-alt-view-reveal'), 'once the sound started').toBe(true)
+
+    // Sounds off: nothing to wait for.
+    controller.disableAltViewWithPreview(toggle)
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    await controller.enableAltViewWithPreview(toggle)
+    expect(root.hasAttribute('data-alt-view-reveal'), 'at once with sounds off').toBe(true)
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('waits a quarter second at most: a sound that cannot start does not hold the screen', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      pageWithHeaderAndDpad()
+      const controller = await freshController(previewManagerStub())
+      const { playCrtSound } = await import('../../src/js/crt-sounds.js')
+      const root = document.documentElement
+      playCrtSound.mockImplementationOnce(() => new Promise(() => {}))
+      const toggle = document.createElement('button')
+      await controller.enableAltViewWithPreview(toggle)
+      await vi.advanceTimersByTimeAsync(200)
+      expect(root.hasAttribute('data-alt-view-reveal'), 'still waiting at 200 ms').toBe(false)
+      await vi.advanceTimersByTimeAsync(60)
+      expect(root.hasAttribute('data-alt-view-reveal'), 'begun by 260 ms').toBe(true)
+      controller.disableAltViewWithPreview(toggle)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('fetches the sounds as soon as the key is there, with sounds on', async () => {
+    pageWithHeaderAndDpad()
+    const controller = await freshController(previewManagerStub())
+    const { preloadCrtSounds } = await import('../../src/js/crt-sounds.js')
+    controller.injectAltToggle()
+    expect(document.getElementById('_hfmToggle'), 'the key').not.toBeNull()
+    expect(preloadCrtSounds).toHaveBeenCalledTimes(1)
+
+    document.getElementById('_hfmToggle').remove()
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    controller.injectAltToggle()
+    expect(preloadCrtSounds, 'not with sounds off').toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the Alt View is heard', () => {
+  let matchMedia
+  let reducedMotion
+
+  beforeEach(() => {
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+    reducedMotion = false
+    matchMedia = window.matchMedia
+    window.matchMedia = vi.fn(() => ({
+      matches: reducedMotion,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
+  })
+
+  afterEach(() => {
+    window.matchMedia = matchMedia
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+    document.documentElement.removeAttribute('data-alt-view-reveal')
+  })
+
+  // The sound module this controller got: the registry is reset per controller.
+  const soundsAsked = async () => {
+    const { playCrtSound } = await import('../../src/js/crt-sounds.js')
+    return playCrtSound.mock.calls.map(([name]) => name)
+  }
+
+  it('switch-on is on, a look change is look, switch-off is off; nothing with sounds off', async () => {
+    pageWithHeaderAndDpad()
+    const pm = previewManagerStub()
+    const controller = await freshController(pm)
+    const toggle = document.createElement('button')
+
+    await controller.enableAltViewWithPreview(toggle)
+    expect(await soundsAsked()).toEqual(['on'])
+
+    controller.onThemeChanged()
+    expect(await soundsAsked()).toEqual(['on', 'look'])
+
+    document.dispatchEvent(
+      new CustomEvent('ui-mode-changed', { detail: { mode: 'classic' } })
+    )
+    expect(await soundsAsked(), 'Classic entered').toEqual(['on', 'look', 'look'])
+    document.dispatchEvent(
+      new CustomEvent('ui-mode-changed', { detail: { mode: 'simplified' } })
+    )
+    expect(await soundsAsked(), 'Classic left').toEqual(['on', 'look', 'look', 'look'])
+
+    controller.disableAltViewWithPreview(toggle)
+    expect(await soundsAsked()).toEqual(['on', 'look', 'look', 'look', 'off'])
+    controller.onThemeChanged()
+    expect(await soundsAsked(), 'nothing while off').toHaveLength(5)
+
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    await controller.enableAltViewWithPreview(toggle)
+    controller.onThemeChanged()
+    controller.disableAltViewWithPreview(toggle)
+    expect(await soundsAsked(), 'nothing with sounds off').toHaveLength(5)
+  })
+
+  // A button of the given size on the page, with the box the press reads.
+  function sizedButton(id, width, height) {
+    const button = document.createElement('button')
+    button.id = id
+    button.getBoundingClientRect = () => ({ width, height, left: 0, top: 0, right: width, bottom: height, x: 0, y: 0 })
+    document.body.appendChild(button)
+    return button
+  }
+  const press = (el, type, init = {}) =>
+    el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, ...init }))
+  const keysAsked = async () => {
+    const { playKeySound } = await import('../../src/js/crt-sounds.js')
+    return playKeySound.mock.calls.map((c) => c.join(' '))
+  }
+
+  it('while on, every button press is a key by its size: a press down, then up; not the look\'s own key', async () => {
+    pageWithHeaderAndDpad()
+    const icon = sizedButton('iconBtn', 36, 36)
+    const menuItem = sizedButton('menuBtn', 240, 31)
+    const key = sizedButton('_hfmToggle', 44, 44)
+    const controller = await freshController(previewManagerStub())
+    const { preloadKeySounds } = await import('../../src/js/crt-sounds.js')
+    const toggle = document.createElement('button')
+
+    press(icon, 'pointerdown')
+    expect(await keysAsked(), 'nothing while the look is off').toEqual([])
+
+    await controller.enableAltViewWithPreview(toggle)
+    expect(preloadKeySounds, 'the phosphor keys fetched at switch-on').toHaveBeenCalledWith('p')
+    press(icon, 'pointerdown')
+    press(icon, 'pointerup')
+    press(menuItem, 'pointerdown')
+    press(menuItem, 'pointerup')
+    press(key, 'pointerdown')
+    press(key, 'pointerup')
+    expect(await keysAsked()).toEqual(['p 2 down', 'p 2 up', 'p 6 down', 'p 6 up'])
+
+    // The keyboard: Enter or Space on a focused button, no repeats.
+    icon.focus()
+    icon.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    icon.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', repeat: true, bubbles: true }))
+    icon.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }))
+    icon.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }))
+    expect((await keysAsked()).slice(4)).toEqual(['p 2 down', 'p 2 up'])
+
+    // Classic is the DOS look.
+    document.body.dataset.uiMode = 'classic'
+    press(icon, 'pointerdown')
+    press(icon, 'pointerup')
+    expect((await keysAsked()).slice(6)).toEqual(['d 2 down', 'd 2 up'])
+    delete document.body.dataset.uiMode
+
+    controller.disableAltViewWithPreview(toggle)
+    press(icon, 'pointerdown')
+    expect(await keysAsked(), 'nothing once off').toHaveLength(8)
+
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    await controller.enableAltViewWithPreview(toggle)
+    press(icon, 'pointerdown')
+    expect(await keysAsked(), 'nothing with sounds off').toHaveLength(8)
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  // A slider on the page, with the range a drag moves it over.
+  function slider(id, min, max, step) {
+    const input = document.createElement('input')
+    input.type = 'range'
+    input.id = id
+    input.min = String(min)
+    input.max = String(max)
+    input.step = String(step)
+    input.value = String(min)
+    document.body.appendChild(input)
+    return input
+  }
+  // The page's clock, which the drag's moves advance.
+  let clock = 0
+  // A drag or a key moves the slider to a value, some milliseconds on, and
+  // the browser says input.
+  const slide = (el, value, afterMs = 100) => {
+    clock += afterMs
+    el.value = String(value)
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  const clicksAsked = async () => {
+    const { playDialSound } = await import('../../src/js/crt-sounds.js')
+    return playDialSound.mock.calls.map(([set, tone]) => `${set} ${tone}`)
+  }
+
+  it('while on, a slider clicks as a dial does, one click file per slider by its steps, fifteen a second at most, until it is let go', async () => {
+    pageWithHeaderAndDpad()
+    clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const fine = slider('fine', 0, 3, 0.1)
+    const coarse = slider('coarse', 1, 3, 0.5)
+    const wide = slider('wide', -180, 180, 1)
+    const controller = await freshController(previewManagerStub())
+    const { preloadDialSounds } = await import('../../src/js/crt-sounds.js')
+    const toggle = document.createElement('button')
+
+    press(fine, 'pointerdown')
+    slide(fine, 0.1)
+    expect(await clicksAsked(), 'nothing while the look is off').toEqual([])
+
+    await controller.enableAltViewWithPreview(toggle)
+    expect(preloadDialSounds, 'the phosphor clicks fetched at switch-on').toHaveBeenCalledWith('p')
+    // 30 steps of 0.1: the fourth tone; one click per step, the same file each time.
+    press(fine, 'pointerdown')
+    slide(fine, 0.2)
+    slide(fine, 0.3)
+    slide(fine, 0.3)
+    expect(await clicksAsked(), 'a value that did not change is no click').toEqual(['p 4', 'p 4'])
+    press(fine, 'pointerup')
+    // Four steps of 0.5: the lowest tone.
+    press(coarse, 'pointerdown')
+    slide(coarse, 1.5)
+    slide(coarse, 2)
+    press(coarse, 'pointerup')
+    expect((await clicksAsked()).slice(2)).toEqual(['p 1', 'p 1'])
+    // 360 steps of 1: the highest tone; a jump across many steps is one click.
+    press(wide, 'pointerdown')
+    slide(wide, -170)
+    press(wide, 'pointerup')
+    expect((await clicksAsked()).slice(4)).toEqual(['p 7'])
+    // The ceiling: a step sooner than 67 ms after the last click is passed
+    // over, and the next one counts from the click that played.
+    press(fine, 'pointerdown')
+    slide(fine, 0.4)
+    slide(fine, 0.5, 30)
+    slide(fine, 0.6, 30)
+    expect((await clicksAsked()).slice(5), 'two steps 30 ms apart: one click').toEqual(['p 4'])
+    slide(fine, 0.7, 10)
+    expect((await clicksAsked()).slice(5), '70 ms after the click that played: a click').toEqual(['p 4', 'p 4'])
+    slide(fine, 0.8, 66)
+    expect((await clicksAsked()).slice(5), '66 ms is too soon').toHaveLength(2)
+    press(fine, 'pointerup')
+    // The keyboard: an arrow moves a focused slider one step.
+    fine.focus()
+    fine.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    slide(fine, 0.9)
+    expect((await clicksAsked()).slice(7)).toEqual(['p 4'])
+
+    // Classic is the DOS look; its clicks are fetched when it is entered.
+    document.body.dataset.uiMode = 'classic'
+    document.dispatchEvent(new CustomEvent('ui-mode-changed', { detail: { mode: 'classic' } }))
+    expect(preloadDialSounds).toHaveBeenCalledWith('d')
+    press(coarse, 'pointerdown')
+    slide(coarse, 2.5)
+    press(coarse, 'pointerup')
+    expect((await clicksAsked()).slice(8)).toEqual(['d 1'])
+    delete document.body.dataset.uiMode
+
+    controller.disableAltViewWithPreview(toggle)
+    press(fine, 'pointerdown')
+    slide(fine, 1)
+    expect(await clicksAsked(), 'nothing once off').toHaveLength(9)
+
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    await controller.enableAltViewWithPreview(toggle)
+    press(fine, 'pointerdown')
+    slide(fine, 1.1)
+    expect(await clicksAsked(), 'nothing with sounds off').toHaveLength(9)
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('plays with reduced motion too: sound is not motion', async () => {
+    reducedMotion = true
+    pageWithHeaderAndDpad()
+    const pm = previewManagerStub()
+    const controller = await freshController(pm)
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    expect(document.documentElement.hasAttribute('data-alt-view-reveal'), 'no draw-in').toBe(
+      false
+    )
+    expect(await soundsAsked()).toEqual(['on'])
   })
 })
 
