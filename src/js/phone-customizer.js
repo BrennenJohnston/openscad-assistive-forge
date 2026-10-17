@@ -15,7 +15,7 @@ import {
 } from './storage-keys.js';
 
 /** Its width when nothing is saved, as a share of the screen's width. */
-export const CUSTOMIZER_DEFAULT_SHARE = 0.85;
+export const CUSTOMIZER_DEFAULT_SHARE = 0.75;
 /** Its narrowest: the desktop Customizer's own, so a slider row still fits. */
 export const CUSTOMIZER_MIN_PX = 280;
 /** The strip of the preview it always leaves at its right: one touch target. */
