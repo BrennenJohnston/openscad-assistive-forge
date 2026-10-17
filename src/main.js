@@ -6423,6 +6423,15 @@ async function initApp() {
     const existingWarning = document.getElementById('memoryWarning');
     if (existingWarning) existingWarning.remove();
 
+    // A library: it defines modules or functions and draws nothing itself.
+    // No option is missing, so no guidance to look for one.
+    if (error?.libraryFile) {
+      updateStatus(
+        'This file defines modules or functions and draws nothing on its own. Open a file that uses it to see a shape.'
+      );
+      return true;
+    }
+
     // Extract all toggle hints from OpenSCAD output (there can be multiple).
     const matches = Array.from(
       detailsStr.matchAll(/'([^']+?)'\s+is set to\s+'([^']+?)'/gi)
