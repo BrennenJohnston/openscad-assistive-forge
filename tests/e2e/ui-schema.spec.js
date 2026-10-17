@@ -50,8 +50,6 @@ const MENUS = ['file', 'edit', 'design', 'view', 'window', 'help'];
 // page meets it, the case reports that it passed unexpectedly and its entry
 // comes out. Entries only ever leave this list.
 const NOT_MET_YET = {
-  'S6-popout':
-    'On a phone the Customizer still rises from the bottom as a sheet.',
   'S6-drawers':
     'The phone drawers still keep a shared height, and Full Screen still splits the screen in half.',
   'S5-ascii':
@@ -1216,11 +1214,24 @@ function readPreviewBox() {
   return { width: Math.round(r.width), height: Math.round(r.height) };
 }
 
-/** The phone Customizer pop-out's box and surfaces, read in the page. */
+/**
+ * The phone Customizer pop-out's box and surfaces, read in the page. Its
+ * see-through tint and blur are drawn by a layer behind it when one shows
+ * (a blur on the panel would hold its pop-up lists inside it).
+ */
 function readPopout() {
   const panel = document.getElementById('paramPanel');
   const r = panel.getBoundingClientRect();
-  const cs = getComputedStyle(panel);
+  const glass = document.querySelector('.customizer-glass');
+  const behind =
+    glass &&
+    glass.checkVisibility() &&
+    /rgba?\(0, 0, 0, 0\)|transparent/.test(
+      getComputedStyle(panel).backgroundColor
+    )
+      ? glass
+      : panel;
+  const cs = getComputedStyle(behind);
   const header = panel.querySelector('.panel-header');
   const settings = document.querySelector('.preview-drawer-header');
   const backdrop = cs.backdropFilter || cs.webkitBackdropFilter || '';
@@ -1256,9 +1267,14 @@ function readGrip() {
   };
 }
 
-/** The same project again after a reload, the look as it was. */
+/**
+ * The same project opened again in the same browser, the look as it was: a
+ * new start of the page that keeps what was saved. (The page drops the
+ * example from its address once it opens it, so a plain reload would land
+ * on the Main Page.)
+ */
 async function reloadPhoneProject(page, look) {
-  await page.reload({ timeout: 60_000 });
+  await page.goto('/?example=simple-box', { timeout: 60_000 });
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
     timeout: WASM_READY_TIMEOUT,
@@ -1310,6 +1326,9 @@ function readCustomizerSheet() {
     s.left + s.width / 2,
     scrollTop + 4
   );
+  const params =
+    document.getElementById('paramSearchSection') ||
+    document.getElementById('parametersContainer');
   const focused = document.activeElement ? box(document.activeElement) : null;
   return {
     top: s.top,
@@ -1319,11 +1338,14 @@ function readCustomizerSheet() {
     backdrop: shown(document.getElementById('drawerBackdrop')),
     modal: sheet.getAttribute('aria-modal'),
     role: sheet.getAttribute('role'),
-    // The parameters at the top of what scrolls: right under the sheet's
-    // own header is their search block or a group, not the sections above.
-    atParameters: !!underHeader?.closest(
-      '#paramSearchSection, #parametersContainer'
-    ),
+    // The parameters in view when it opens: at the top of what scrolls when
+    // the panel is short, or in view below the sections above them when the
+    // panel is tall enough to hold both.
+    atParameters:
+      !!underHeader?.closest('#paramSearchSection, #parametersContainer') ||
+      (!!params &&
+        box(params).top >= scrollTop - 1 &&
+        box(params).top <= s.bottom - 44),
     focusInParameters: !!document.activeElement?.closest(
       '#paramSearchSection, #parametersContainer'
     ),

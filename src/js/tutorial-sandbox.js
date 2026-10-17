@@ -4427,6 +4427,17 @@ function updateSpotlightAndPosition() {
     const blocks = (pr, clearance) =>
       intersects(pr, rect) || isBlockedAtCenter() || clearance > 0;
 
+    // With the Customizer open as a column, a target inside it can sit in the
+    // middle of the screen, where a full-height card covers it from either
+    // side. The card then keeps to the room on its own side of the target
+    // and scrolls inside, so it neither covers the target nor folds away.
+    const roomBeside = (side) =>
+      side === 'top'
+        ? rect.top - SPOTLIGHT_PADDING - 8 - (viewport.offsetTop + topOffset)
+        : viewport.height -
+          bottomOffset -
+          (rect.bottom + SPOTLIGHT_PADDING + 8);
+
     const dock = (side) => {
       // Compact floating bubble (not full-width sheet) for portrait usability.
       panel.style.position = 'fixed';
@@ -4449,7 +4460,12 @@ function updateSpotlightAndPosition() {
         160,
         viewport.height - topOffset - bottomOffset - 16
       );
-      panel.style.maxHeight = `${Math.min(available, viewport.height * 0.45)}px`;
+      let cap = Math.min(available, viewport.height * 0.45);
+      if (drawerRect && !sheetAcross) {
+        const room = roomBeside(side);
+        if (room >= 160) cap = Math.min(cap, room);
+      }
+      panel.style.maxHeight = `${cap}px`;
 
       panel.classList.add('tutorial-panel-positioned');
       panel.classList.remove('tutorial-panel-centered');

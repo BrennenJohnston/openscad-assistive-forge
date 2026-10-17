@@ -297,6 +297,14 @@ export const STORAGE_KEY_MODEL_APPEARANCE_ENABLED = getAppPrefKey(
 export const STORAGE_KEY_PARAM_PANEL_COLLAPSED =
   getDrawerStateKey('parameters');
 export const STORAGE_KEY_LAYOUT_SIZES = getAppPrefKey('layout-sizes');
+// The Customizer on a phone held upright: its width as a share of the
+// screen's width, and how solid it is (Preferences > 3D View).
+export const STORAGE_KEY_PHONE_CUSTOMIZER_WIDTH = getAppPrefKey(
+  'phone-customizer-width'
+);
+export const STORAGE_KEY_PHONE_CUSTOMIZER_OPACITY = getAppPrefKey(
+  'phone-customizer-opacity'
+);
 
 // --- Preview settings (preview.js) ---
 export const STORAGE_KEY_MEASUREMENTS = getAppPrefKey('measurements');

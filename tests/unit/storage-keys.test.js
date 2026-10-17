@@ -32,6 +32,9 @@ const EXPECTED_KEYS = {
     'openscad-forge-model-appearance-enabled',
   STORAGE_KEY_PARAM_PANEL_COLLAPSED: 'openscad-drawer-parameters-state',
   STORAGE_KEY_LAYOUT_SIZES: 'openscad-forge-layout-sizes',
+  STORAGE_KEY_PHONE_CUSTOMIZER_WIDTH: 'openscad-forge-phone-customizer-width',
+  STORAGE_KEY_PHONE_CUSTOMIZER_OPACITY:
+    'openscad-forge-phone-customizer-opacity',
 
   // Preview settings (preview.js)
   STORAGE_KEY_MEASUREMENTS: 'openscad-forge-measurements',

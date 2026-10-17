@@ -60,8 +60,8 @@ test.describe('Mobile Drawer', () => {
     await expect(toggle).toBeVisible();
   });
   
-  // The sheet sits above the bottom bar with the preview live above it:
-  // nothing dims or blocks the preview while it is open.
+  // The Customizer comes in from the left over the preview and leaves a
+  // strip of it at the right: nothing dims or blocks the preview there.
   test('drawer opens and closes', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     await loadSampleFile(page);
@@ -73,9 +73,10 @@ test.describe('Mobile Drawer', () => {
     await expect(drawer).toHaveClass(/drawer-open/);
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('#drawerBackdrop')).toBeHidden();
+    await page.waitForTimeout(500);
     const previewReachable = await page.evaluate(() => {
       const r = document.getElementById('previewContainer').getBoundingClientRect();
-      const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      const hit = document.elementFromPoint(r.right - 10, r.y + r.height / 2);
       return !!hit?.closest('#previewContainer');
     });
     expect(previewReachable).toBe(true);
@@ -123,8 +124,8 @@ test.describe('Mobile Drawer', () => {
     await expect(page.locator('#paramPanel')).toHaveClass(/drawer-open/);
   });
 
-  // A drag that starts in the sheet (a slider, a scroll) and ends over the
-  // preview leaves the sheet open.
+  // A drag that starts in the Customizer (a slider, a scroll) and ends over
+  // the preview's strip leaves it open.
   test('drawer stays open when a drag from inside ends on the preview', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     await loadSampleFile(page);
@@ -140,7 +141,7 @@ test.describe('Mobile Drawer', () => {
 
     await page.mouse.move(drawerBox.x + drawerBox.width / 2, drawerBox.y + drawerBox.height / 2);
     await page.mouse.down();
-    await page.mouse.move(previewBox.x + previewBox.width / 2, previewBox.y + previewBox.height / 2);
+    await page.mouse.move(previewBox.x + previewBox.width - 10, previewBox.y + previewBox.height / 2);
     await page.mouse.up();
 
     await expect(drawer).toHaveClass(/drawer-open/);
