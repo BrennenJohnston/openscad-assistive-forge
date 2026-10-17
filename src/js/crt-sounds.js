@@ -64,12 +64,12 @@ const CAMERA_FILES = {
 const START_TIMEOUT_MS = 1000;
 
 // The groups a sound plays in, each at its own level under the master: the
-// camera's sounds 6 dB under the keys, typing a quiet key 12 dB under.
+// camera's sounds 9 dB under the keys, typing a quiet key 12 dB under.
 const GROUP_LEVELS_DB = {
   switch: 0,
   keys: 0,
   dials: 0,
-  camera: -6,
+  camera: -9,
   drawers: 0,
   typing: -12,
 };

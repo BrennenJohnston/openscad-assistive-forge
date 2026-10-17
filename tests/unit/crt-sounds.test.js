@@ -435,7 +435,7 @@ describe('playing a switch sound', () => {
     expect(soundGroup('keys'), 'no mixer before the first sound').toBeNull();
     await playCrtSound('on');
     expect(soundGroup('keys').gain.value).toBe(1);
-    expect(soundGroup('camera').gain.value, 'the camera 6 dB under the keys').toBeCloseTo(db(-6), 6);
+    expect(soundGroup('camera').gain.value, 'the camera 9 dB under the keys').toBeCloseTo(db(-9), 6);
     expect(soundGroup('typing').gain.value, 'typing a quiet key').toBeCloseTo(db(-12), 6);
     await playKeySound('p', 2, 'down');
     await playDialSound('p', 4);
@@ -456,7 +456,7 @@ describe('playing a switch sound', () => {
     const { playKeySound, playDialSound, soundGroup, duck } = await load();
     await playKeySound('p', 1, 'down');
     const camera = soundGroup('camera');
-    const level = db(-6);
+    const level = db(-9);
     const low = level * db(-8);
     expect(rounded(camera.gain.calls)).toEqual(
       rounded([

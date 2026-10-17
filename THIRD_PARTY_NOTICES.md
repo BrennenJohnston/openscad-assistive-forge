@@ -433,29 +433,29 @@ copyc4t: https://freesound.org/s/275958/
 
 ---
 
-## View Ticks (CC-BY-4.0, CC0-1.0)
+## View Ticks (CC-BY-3.0, CC0-1.0)
 
 While the Alt View is on, turning, tilting or zooming the 3D view by hand
 ticks quietly, one sound for each, under `public/sounds/camera/`. Each is one
 event cut from a recording on Freesound, resampled to 32 kHz mono and
 levelled:
 
-### Analog Camera iris wheel 02 (CC-BY-4.0)
+### declicking aperture (CC-BY-3.0)
 
-The zoom's tick, `zoom.wav`, is "Analog Camera iris wheel 02" by Eelke:
-https://freesound.org/s/462825/
+The zoom's tick, `zoom.wav`, is "declicking aperture.wav" by caseymoura:
+https://freesound.org/s/445483/
 
-- **Author**: Eelke
-- **License**: Creative Commons Attribution 4.0 International,
-  https://creativecommons.org/licenses/by/4.0/
-- **Changes**: the click cut out (52 ms, with short fades), resampled to
+- **Author**: caseymoura
+- **License**: Creative Commons Attribution 3.0 Unported,
+  https://creativecommons.org/licenses/by/3.0/
+- **Changes**: the click cut out (18 ms, with short fades), resampled to
   32 kHz mono, levelled.
 
 ### Ratchet and ball catch (CC0-1.0)
 
-The tilt's tick, `tilt.wav`, is cut from "Ratchet_Single_Click.wav" by
-mickyman5000 (https://freesound.org/s/340529/), and the turn's, `turn.wav`,
-from "Ball-bearing latched cupboard door" by wlabarron
+The tilt's tick, `tilt.wav`, is cut from "Single_Ratchet-05.wav" by CallFlan
+(https://freesound.org/s/495238/), and the turn's, `turn.wav`, from
+"Ball-bearing latched cupboard door" by wlabarron
 (https://freesound.org/s/509108/), each released under Creative Commons 0.
 
 - **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
