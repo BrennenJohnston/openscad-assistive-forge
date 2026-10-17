@@ -17242,6 +17242,49 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   display: none;
 }
 
+/* Open before any picture. The header keeps the editor's name and Close;
+   a sentence and Choose a picture take the rest, and nothing that works on
+   a drawing is offered without one. */
+.drawing-editor[data-empty='true'] .drawing-editor-toolbar-row--view,
+.drawing-editor[data-empty='true'] .drawing-editor-toolbar-row--tools,
+.drawing-editor[data-empty='true'] .drawing-editor-more-panel,
+.drawing-editor[data-empty='true'] .drawing-editor-panel-toggle,
+.drawing-editor[data-empty='true'] .drawing-editor-skip,
+.drawing-editor[data-empty='true'] .drawing-editor-statusline,
+.drawing-editor[data-empty='true'] .drawing-editor-body {
+  display: none;
+}
+
+.drawing-editor[data-empty='true'] {
+  background: var(--color-bg-primary);
+}
+
+.drawing-editor-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  text-align: center;
+}
+
+.drawing-editor-empty[hidden] {
+  display: none;
+}
+
+.drawing-editor-empty-sentence {
+  max-width: 40ch;
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+}
+
+.drawing-editor-empty .drawing-editor-empty-choose {
+  min-height: var(--size-touch-target);
+}
+
 /* The skip links are visible on focus and out of the way otherwise: a
    sighted keyboard user needs to SEE where the jump goes. */
 .drawing-editor-skip {

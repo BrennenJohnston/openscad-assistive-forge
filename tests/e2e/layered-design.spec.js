@@ -85,6 +85,7 @@ async function openTheEditor(page, fileParam = 'design_file') {
     }
   }, fileParam);
   const door = page
+    .locator('.svg-prep-status')
     .getByRole('button', { name: 'Open the drawing editor' })
     .first();
   await door.waitFor({ state: 'visible', timeout: 60000 });

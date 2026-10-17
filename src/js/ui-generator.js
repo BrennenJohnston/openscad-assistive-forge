@@ -27,7 +27,10 @@ import {
   DEFAULT_DESIGN_WIDTH_MM,
 } from './svg-limits.js';
 import { cropImageDataRect, imageDataToDataUrl } from './image-crop.js';
-import { EDITOR_STRINGS as EDITOR_S } from './drawing-editor/strings.js';
+import {
+  EDITOR_STRINGS as EDITOR_S,
+  emptyPictureSentence,
+} from './drawing-editor/strings.js';
 import { createTraceRunner, TraceCancelled } from './trace-runner.js';
 import { createTraceProgress } from './trace-progress.js';
 import { createConversionJob, TraceRefused } from './conversion-job.js';
@@ -2940,6 +2943,8 @@ function createFileControl(
 
   function emitFileValue(value, assignments = null, ringEngine = null) {
     const extra = buildEmissionExtra(value, assignments, ringEngine);
+    hasFile = Boolean(value);
+    if (emptyDoor) syncEmptyDoor();
     onChange(param.name, value, extra);
   }
 
@@ -2949,6 +2954,55 @@ function createFileControl(
   statusCard.style.display = 'none';
   statusCard.setAttribute('role', 'status');
   statusCard.setAttribute('aria-live', 'polite');
+
+  // ── The way into the editor before any picture ─────────────────────────
+  // Beside the card rather than in it: the card is a live region, and a
+  // button written into it after Clear would be read out. Shown while the
+  // control has no file and no card; a picture waiting to be converted has
+  // its Crop as the way in.
+  let openAfterChoose = false;
+  let hasFile = Boolean(defaultFileLabel);
+  const emptyDoor = acceptsSvg ? document.createElement('button') : null;
+  if (emptyDoor) {
+    emptyDoor.type = 'button';
+    emptyDoor.className = 'btn btn-ghost svg-prep-empty-door';
+    emptyDoor.textContent = 'Open the drawing editor';
+    emptyDoor.addEventListener('click', async () => {
+      const editor = await getEditor();
+      if (!editor || typeof editor.openEmpty !== 'function') return;
+      editor.openEmpty({
+        sentence: emptyPictureSentence(param.acceptedExtensions || []),
+        onChooseFile: () => {
+          openAfterChoose = true;
+          fileInput.click();
+        },
+        // Closed with nothing chosen: back to the button that opened it.
+        onClose: () => {
+          openAfterChoose = false;
+          emptyDoor.focus();
+        },
+      });
+    });
+    new MutationObserver(syncEmptyDoor).observe(statusCard, {
+      attributes: true,
+      attributeFilter: ['style'],
+    });
+    syncEmptyDoor();
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files?.length) {
+        hasFile = true;
+        syncEmptyDoor();
+      }
+    });
+    // A chooser closed with nothing chosen leaves no file to open later.
+    fileInput.addEventListener('cancel', () => {
+      openAfterChoose = false;
+    });
+  }
+
+  function syncEmptyDoor() {
+    emptyDoor.hidden = hasFile || statusCard.style.display !== 'none';
+  }
 
   // ── Ink controls, for a picture that had to be traced ──────────────────
   // Built only when a raster file arrives, and kept with its pixels so a mode
@@ -4242,6 +4296,8 @@ function createFileControl(
     // editor's opening is handed back to the caller instead of started here,
     // so it opens once the page is live again.
     const requestOpen = (extra) => {
+      // Asked for here, so the empty editor's own request is answered.
+      openAfterChoose = false;
       if (deferOpen) deferredEditorOpen = () => openEditor(extra);
       else openEditor(extra);
     };
@@ -4596,6 +4652,14 @@ function createFileControl(
             fileInfo.textContent = `${file.name} (${formatFileSize(file.size)}). Ready to convert.`;
             fileInfo.title = file.name;
           }
+          // Chosen from the empty editor: a converted picture opens in it,
+          // and one still to convert opens in its crop view, where Save crop
+          // starts the conversion.
+          if (openAfterChoose) {
+            openAfterChoose = false;
+            if (currentRawSvg && currentSvgAnalysis) openEditor();
+            else openEditorOnPicture();
+          }
         } catch (err) {
           fileInfo.textContent = `Conversion failed: ${err.message}`;
           fileInfo.className = 'file-info file-info--error';
@@ -4628,6 +4692,12 @@ function createFileControl(
         cropUndo = null;
         lastCrop = null;
         const processed = processSvgForOpenScad(rawSvgText);
+        // Chosen from the empty editor: it opens on the drawing, whatever
+        // the analysis alone would have done.
+        if (openAfterChoose) {
+          openAfterChoose = false;
+          if (currentSvgAnalysis) openEditor();
+        }
         if (processed !== rawSvgText) {
           uploadedFileObj.data = svgToDataUrl(processed);
           uploadedFileObj.size = processed.length;
@@ -4718,6 +4788,7 @@ function createFileControl(
   fileContainer.appendChild(fileInfo);
   fileContainer.appendChild(clearButton);
   fileContainer.appendChild(statusCard);
+  if (emptyDoor) fileContainer.appendChild(emptyDoor);
   fileContainer.appendChild(fileInput);
 
   container.appendChild(fileContainer);
