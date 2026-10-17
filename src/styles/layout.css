@@ -208,15 +208,19 @@ body {
    matching its :not(:disabled) takes these rules past it.
    The guard is the contrast test, not the selector: if .btn-secondary
    ever leaves this button, that test fails rather than the colour
-   silently regressing. */
-.contrast-toggle.btn-secondary:hover:not(:disabled),
-.classic-toggle.btn-secondary:hover:not(:disabled) {
-  background: var(--color-hover-bg);
-  transform: scale(1.05);
-}
+   silently regressing.
+   Hover only where a pointer hovers: a tap sets :hover too and leaves it
+   until the next tap, so on a touch screen it would outlive the press. */
+@media (hover: hover) {
+  .contrast-toggle.btn-secondary:hover:not(:disabled),
+  .classic-toggle.btn-secondary:hover:not(:disabled) {
+    background: var(--color-hover-bg);
+    transform: scale(1.05);
+  }
 
-.classic-toggle.btn-secondary[aria-pressed='true']:hover:not(:disabled) {
-  background: var(--color-accent-hover);
+  .classic-toggle.btn-secondary[aria-pressed='true']:hover:not(:disabled) {
+    background: var(--color-accent-hover);
+  }
 }
 
 /* Gate: entering Classic needs a desktop-shaped viewport. The gated
@@ -300,32 +304,48 @@ body {
    Ensures readable text on focused/active/selected buttons
    ============================================================================ */
 
-/* High contrast DARK mode: focus and active states */
-:root[data-high-contrast='true'][data-theme='dark'] .theme-toggle:focus,
+/* High contrast DARK mode: focus and active states. Keyboard focus, not
+   any focus: a tap focuses the button, and the fill would stay lit after
+   the finger lifts. */
+:root[data-high-contrast='true'][data-theme='dark'] .theme-toggle:focus-visible,
 :root[data-high-contrast='true'][data-theme='dark'] .theme-toggle:active,
-:root[data-high-contrast='true'][data-theme='dark'] .theme-toggle:hover,
-:root[data-high-contrast='true'][data-theme='dark'] .contrast-toggle:focus,
-:root[data-high-contrast='true'][data-theme='dark'] .contrast-toggle:active,
-:root[data-high-contrast='true'][data-theme='dark'] .contrast-toggle:hover {
+:root[data-high-contrast='true'][data-theme='dark']
+  .contrast-toggle:focus-visible,
+:root[data-high-contrast='true'][data-theme='dark'] .contrast-toggle:active {
   background: var(--color-accent) !important;
   color: var(--color-accent-text) !important;
   border-color: var(--color-accent) !important;
 }
 
 /* High contrast LIGHT mode: focus and active states */
-:root[data-high-contrast='true'][data-theme='light'] .theme-toggle:focus,
+:root[data-high-contrast='true'][data-theme='light']
+  .theme-toggle:focus-visible,
 :root[data-high-contrast='true'][data-theme='light'] .theme-toggle:active,
-:root[data-high-contrast='true'][data-theme='light'] .theme-toggle:hover,
-:root[data-high-contrast='true'][data-theme='light'] .contrast-toggle:focus,
-:root[data-high-contrast='true'][data-theme='light'] .contrast-toggle:active,
-:root[data-high-contrast='true'][data-theme='light'] .contrast-toggle:hover {
+:root[data-high-contrast='true'][data-theme='light']
+  .contrast-toggle:focus-visible,
+:root[data-high-contrast='true'][data-theme='light'] .contrast-toggle:active {
   background: var(--color-accent) !important;
   color: var(--color-accent-text) !important;
   border-color: var(--color-accent) !important;
 }
 
-/* Contrast toggle "selected" state when high contrast is ON */
-:root[data-high-contrast='true'] .contrast-toggle {
+@media (hover: hover) {
+  :root[data-high-contrast='true'][data-theme='dark'] .theme-toggle:hover,
+  :root[data-high-contrast='true'][data-theme='dark'] .contrast-toggle:hover,
+  :root[data-high-contrast='true'][data-theme='light'] .theme-toggle:hover,
+  :root[data-high-contrast='true'][data-theme='light'] .contrast-toggle:hover {
+    background: var(--color-accent) !important;
+    color: var(--color-accent-text) !important;
+    border-color: var(--color-accent) !important;
+  }
+}
+
+/* Contrast toggle "selected" state when high contrast is ON. The Alt View
+   draws the toggle in its own look; elsewhere this outweighs
+   `.btn-secondary:hover:not(:disabled)`, which a tap sets and which would
+   take the ground and leave the accent text on it. */
+:root[data-high-contrast='true']:not([data-ui-variant='mono'])
+  .contrast-toggle {
   background: var(--color-accent);
   color: var(--color-accent-text);
   border-color: var(--color-accent);
@@ -597,9 +617,11 @@ body[data-app-surface='welcome'] #uiModeToggle {
   flex-shrink: 0;
 }
 
-.shortcuts-toggle:hover {
-  background: var(--color-hover-bg);
-  transform: scale(1.05);
+@media (hover: hover) {
+  .shortcuts-toggle:hover {
+    background: var(--color-hover-bg);
+    transform: scale(1.05);
+  }
 }
 
 .shortcuts-toggle:focus,
@@ -650,9 +672,11 @@ body[data-app-surface='welcome'] #uiModeToggle {
   flex-shrink: 0;
 }
 
-.theme-toggle:hover {
-  background: var(--color-hover-bg);
-  transform: scale(1.05);
+@media (hover: hover) {
+  .theme-toggle:hover {
+    background: var(--color-hover-bg);
+    transform: scale(1.05);
+  }
 }
 
 .theme-toggle:focus,
@@ -723,9 +747,11 @@ body[data-app-surface='welcome'] #uiModeToggle {
   display: flex;
 }
 
-.alt-view-toggle:hover {
-  background: var(--color-hover-bg);
-  transform: scale(1.05);
+@media (hover: hover) {
+  .alt-view-toggle:hover {
+    background: var(--color-hover-bg);
+    transform: scale(1.05);
+  }
 }
 
 .alt-view-toggle:focus,
@@ -758,12 +784,19 @@ body[data-app-surface='welcome'] #uiModeToggle {
   border: 2px solid var(--color-border);
 }
 
-:root[data-high-contrast='true'] .alt-view-toggle:focus,
-:root[data-high-contrast='true'] .alt-view-toggle:active,
-:root[data-high-contrast='true'] .alt-view-toggle:hover {
+:root[data-high-contrast='true'] .alt-view-toggle:focus-visible,
+:root[data-high-contrast='true'] .alt-view-toggle:active {
   background: var(--color-accent) !important;
   color: var(--color-accent-text) !important;
   border-color: var(--color-accent) !important;
+}
+
+@media (hover: hover) {
+  :root[data-high-contrast='true'] .alt-view-toggle:hover {
+    background: var(--color-accent) !important;
+    color: var(--color-accent-text) !important;
+    border-color: var(--color-accent) !important;
+  }
 }
 
 /* Found by the camera sequence, the key drops in from the top of the screen
@@ -960,9 +993,11 @@ body[data-app-surface='welcome'] #uiModeToggle {
   min-height: 44px;
 }
 
-.alt-pan-toggle:hover {
-  background: var(--color-hover-bg);
-  transform: scale(1.05);
+@media (hover: hover) {
+  .alt-pan-toggle:hover {
+    background: var(--color-hover-bg);
+    transform: scale(1.05);
+  }
 }
 
 .alt-pan-toggle:focus,
@@ -987,12 +1022,19 @@ body[data-app-surface='welcome'] #uiModeToggle {
   border: 2px solid var(--color-border);
 }
 
-:root[data-high-contrast='true'] .alt-pan-toggle:focus,
-:root[data-high-contrast='true'] .alt-pan-toggle:active,
-:root[data-high-contrast='true'] .alt-pan-toggle:hover {
+:root[data-high-contrast='true'] .alt-pan-toggle:focus-visible,
+:root[data-high-contrast='true'] .alt-pan-toggle:active {
   background: var(--color-accent) !important;
   color: var(--color-accent-text) !important;
   border-color: var(--color-accent) !important;
+}
+
+@media (hover: hover) {
+  :root[data-high-contrast='true'] .alt-pan-toggle:hover {
+    background: var(--color-accent) !important;
+    color: var(--color-accent-text) !important;
+    border-color: var(--color-accent) !important;
+  }
 }
 
 .app-main {
@@ -1209,9 +1251,11 @@ body[data-app-surface='welcome'] #uiModeToggle {
     border-color var(--motion-base) ease;
 }
 
-.drawer-close-btn:hover {
-  background: var(--color-hover-bg);
-  transform: scale(1.05);
+@media (hover: hover) {
+  .drawer-close-btn:hover {
+    background: var(--color-hover-bg);
+    transform: scale(1.05);
+  }
 }
 
 .drawer-close-btn:active {
@@ -2135,10 +2179,12 @@ body[data-app-surface='welcome'] #uiModeToggle {
     /* Sizing provided by .forge-control (square touch target) */
   }
 
-  .btn-collapse-panel:hover {
-    background: var(--color-accent);
-    color: var(--color-accent-text);
-    border-color: var(--color-accent);
+  @media (hover: hover) {
+    .btn-collapse-panel:hover {
+      background: var(--color-accent);
+      color: var(--color-accent-text);
+      border-color: var(--color-accent);
+    }
   }
 
   .btn-collapse-panel:focus-visible {
@@ -2454,7 +2500,19 @@ body[data-app-surface='welcome'] #uiModeToggle {
   min-height: var(--size-touch-target);
 }
 
-.btn.camera-view-btn:hover:not(:disabled) {
+/* A camera button's hover and press are one pair, the accent ground with
+   the accent text, set together so no other rule can split them. Hover
+   only where a pointer hovers; a finger gets the pair for the length of the
+   press and nothing after it. */
+@media (hover: hover) {
+  .btn.camera-view-btn:hover:not(:disabled) {
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    border-color: var(--color-accent);
+  }
+}
+
+.btn.camera-view-btn:active:not(:disabled) {
   background: var(--color-accent);
   color: var(--color-accent-text);
   border-color: var(--color-accent);
@@ -2493,7 +2551,15 @@ body[data-app-surface='welcome'] #uiModeToggle {
     color var(--motion-fast);
 }
 
-.btn.camera-btn:hover:not(:disabled) {
+@media (hover: hover) {
+  .btn.camera-btn:hover:not(:disabled) {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-accent-text);
+  }
+}
+
+.btn.camera-btn:active:not(:disabled) {
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: var(--color-accent-text);
@@ -2558,7 +2624,15 @@ body[data-app-surface='welcome'] #uiModeToggle {
   min-height: var(--size-touch-target);
 }
 
-.btn.camera-btn-wide:hover:not(:disabled) {
+@media (hover: hover) {
+  .btn.camera-btn-wide:hover:not(:disabled) {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-accent-text);
+  }
+}
+
+.btn.camera-btn-wide:active:not(:disabled) {
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: var(--color-accent-text);
@@ -3382,7 +3456,18 @@ body[data-mobile-toolbar='relocated']
     }
   }
 
-  .camera-drawer-btn:hover {
+  /* The pair at .btn-icon:hover's weight and past it, or that rule takes
+     the background and leaves the accent text on a dark ground. A finger
+     gets the pair for the press only. */
+  @media (hover: hover) {
+    .btn.camera-drawer-btn:hover:not(:disabled) {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+      color: var(--color-accent-text);
+    }
+  }
+
+  .btn.camera-drawer-btn:active:not(:disabled) {
     background: var(--color-accent);
     border-color: var(--color-accent);
     color: var(--color-accent-text);
@@ -3635,11 +3720,20 @@ body[data-mobile-toolbar='relocated']
     font-weight: 700;
   }
 
-  :root[data-high-contrast='true'] .camera-drawer-btn:hover,
-  :root[data-high-contrast='true'] .camera-drawer-btn:focus {
+  /* Keyboard focus, not any focus: a tap focuses the button, and the fill
+     would stay lit after the finger lifts. */
+  :root[data-high-contrast='true'] .camera-drawer-btn:focus-visible {
     background: var(--color-accent);
     color: var(--color-accent-text);
     border-color: var(--color-accent);
+  }
+
+  @media (hover: hover) {
+    :root[data-high-contrast='true'] .camera-drawer-btn:hover {
+      background: var(--color-accent);
+      color: var(--color-accent-text);
+      border-color: var(--color-accent);
+    }
   }
 
   /* Asked for less transparency: the drawer's body is solid too (the

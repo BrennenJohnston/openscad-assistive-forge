@@ -150,6 +150,11 @@ export const MEASURED_SECONDS = {
   'alt-view-arrival.spec.js': 110.0,
   // One case on the box with WebGL switched off: 4.9 s locally; booked at 15.
   'alt-view-without-webgl.spec.js': 15.0,
+  // Eighteen cases, each loading the box and picturing every icon button in
+  // four states (the phone cases tap the camera drawer's too): about 430 s
+  // locally; booked at 600 for the Alt View's software drawing on CI.
+  // Chromium only (PROJECT_IGNORES): forcing :hover is a CDP feature.
+  'alt-view-icon-states.spec.js': 600.0,
   'editor-content-sync.spec.js': 70.4,
   'saved-projects.spec.js': 68.5,
   'classic-stow.spec.js': 66.8,
@@ -417,6 +422,13 @@ export const DEFAULT_WEIGHT_S = 60;
  * real-start.spec.js was Chromium only while Edge and Firefox had three
  * shards (booked at the default, it put the Edge lane at 35.2 of its 35
  * minutes). With four shards it runs in every lane.
+ *
+ * alt-view-icon-states.spec.js runs on Chromium only. It forces :hover and
+ * :active through the DevTools protocol, which Firefox does not have (every
+ * case would skip), and Edge draws with Chromium's engine, so it would
+ * measure the same pixels; booked honestly at 600 s it put the Edge lane at
+ * 35.0 of its 35 minutes. Reverse: delete the two entries once the lanes are
+ * re-split.
  */
 export const PROJECT_IGNORES = Object.freeze({
   chromium: [],
@@ -424,12 +436,14 @@ export const PROJECT_IGNORES = Object.freeze({
     'drawing-editor.spec.js',
     'trace-start-cancel.spec.js',
     'potrace-engine.spec.js',
+    'alt-view-icon-states.spec.js',
   ],
   firefox: [
     'wasm-smoke.spec.js',
     'drawing-editor.spec.js',
     'trace-start-cancel.spec.js',
     'potrace-engine.spec.js',
+    'alt-view-icon-states.spec.js',
   ],
 });
 

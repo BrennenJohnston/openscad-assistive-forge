@@ -375,9 +375,15 @@ details.param-group.forge-disclosure[open] > summary::before {
   border: 1px solid var(--color-border);
 }
 
-.btn:hover:not(:disabled) {
-  background-color: var(--color-hover-bg);
-  border-color: var(--color-text-secondary);
+/* Hover only where a pointer hovers. A tap sets :hover too and leaves it
+   until the next tap, so on a touch screen a hover color outlives the press
+   and shows a state the button does not have. The same holds for the
+   secondary, outline and icon hovers below, the classes icon buttons carry. */
+@media (hover: hover) {
+  .btn:hover:not(:disabled) {
+    background-color: var(--color-hover-bg);
+    border-color: var(--color-text-secondary);
+  }
 }
 
 /* WCAG 2.2 SC 2.4.13 Focus Appearance: minimum 2px thickness, 3:1 contrast */
@@ -453,8 +459,10 @@ details.param-group.forge-disclosure[open] > summary::before {
    legible on it, and against --color-border it would not: 4.33:1 in Forge
    light and 3.65:1 in dark. The token is one step along the same scale
    and is defined per theme in semantic-tokens.css. */
-.btn-secondary:hover:not(:disabled) {
-  background-color: var(--color-hover-bg-strong);
+@media (hover: hover) {
+  .btn-secondary:hover:not(:disabled) {
+    background-color: var(--color-hover-bg-strong);
+  }
 }
 
 .btn-sm {
@@ -477,9 +485,11 @@ details.param-group.forge-disclosure[open] > summary::before {
   justify-content: center;
 }
 
-.btn-outline:hover:not(:disabled) {
-  background-color: var(--color-hover-bg);
-  border-color: var(--color-text-primary);
+@media (hover: hover) {
+  .btn-outline:hover:not(:disabled) {
+    background-color: var(--color-hover-bg);
+    border-color: var(--color-text-primary);
+  }
 }
 
 .btn-large {
@@ -513,9 +523,11 @@ details.param-group.forge-disclosure[open] > summary::before {
   min-height: var(--size-touch-target-sm);
 }
 
-.btn-icon:hover:not(:disabled) {
-  background-color: var(--color-bg-secondary);
-  border-color: var(--color-accent);
+@media (hover: hover) {
+  .btn-icon:hover:not(:disabled) {
+    background-color: var(--color-bg-secondary);
+    border-color: var(--color-accent);
+  }
 }
 
 .btn-icon:disabled {
