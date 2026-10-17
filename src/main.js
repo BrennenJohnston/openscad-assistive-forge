@@ -1842,7 +1842,7 @@ async function initApp() {
   let gamepadController = null;
   if (isGamepadSupported()) {
     gamepadController = createGamepadController({
-      cameraSensitivity: 2.0,
+      cameraSensitivity: 1.0,
       parameterSensitivity: 1.0,
       deadzone: 0.15,
     });
@@ -16249,23 +16249,46 @@ if (rounded) {
 
   // ========== Gamepad controller integration ==========
   if (gamepadController) {
-    // Camera controls - use rotateHorizontal/rotateVertical for orbit
+    // The controller says how far to move in each step: degrees to orbit,
+    // and shares of the view to pan and zoom, so the view moves at the same
+    // speed on a large model and a small one. A stick moves the camera the
+    // way it is pushed: right takes the camera right around the model (a
+    // positive angle here), up takes it up.
+    const orthographicCamera = () =>
+      previewManager?.projectionMode === 'orthographic'
+        ? previewManager.orthoCamera
+        : null;
+    // A share of 1, in model millimeters: the camera's distance from what
+    // it looks at, or the height an orthographic view shows.
+    const viewSpan = () => {
+      const ortho = orthographicCamera();
+      if (ortho) return (ortho.top - ortho.bottom) / ortho.zoom;
+      const camera = previewManager?.getActiveCamera?.();
+      const target = previewManager?.controls?.target;
+      return camera && target ? camera.position.distanceTo(target) : 0;
+    };
     gamepadController.on('camera:rotate', ({ x, y }) => {
       if (previewManager) {
-        previewManager.rotateHorizontal(x * 0.02);
-        previewManager.rotateVertical(y * 0.02);
+        previewManager.rotateHorizontal((x * Math.PI) / 180);
+        previewManager.rotateVertical((y * Math.PI) / 180);
       }
     });
 
     gamepadController.on('camera:zoom', ({ delta }) => {
-      if (previewManager) {
-        previewManager.zoomCamera(delta * 0.1);
-      }
+      if (!previewManager) return;
+      // An orthographic view zooms by a factor of 1 + 0.02 for each unit
+      // zoomCamera() takes, rather than by moving: the same share becomes
+      // that factor there.
+      const amount = orthographicCamera()
+        ? (Math.sign(delta) * Math.expm1(Math.abs(delta))) / 0.02
+        : delta * viewSpan();
+      previewManager.zoomCamera(amount);
     });
 
-    gamepadController.on('camera:pan', ({ x }) => {
+    gamepadController.on('camera:pan', ({ x, y }) => {
       if (previewManager) {
-        previewManager.panCamera(x * 0.5, 0);
+        const span = viewSpan();
+        previewManager.panCamera(x * span, y * span);
       }
     });
 

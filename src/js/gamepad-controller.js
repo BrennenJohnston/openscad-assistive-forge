@@ -45,14 +45,29 @@ export const DEFAULT_GAMEPAD_MAPPINGS = {
 };
 
 /**
+ * How fast the sticks and triggers move the view at full deflection, per
+ * second, so a slow frame rate never slows the camera: the orbit in
+ * degrees, the pan and the zoom as a share of the camera's distance from
+ * what it looks at.
+ */
+export const ORBIT_DEG_PER_S = 90;
+export const PAN_SHARE_PER_S = 0.5;
+export const ZOOM_SHARE_PER_S = 1;
+/** The longest step one poll may take, after a pause such as a hidden tab. */
+const MAX_STEP_S = 0.1;
+
+/**
  * Default action bindings
  */
 export const DEFAULT_GAMEPAD_ACTIONS = {
-  // Camera controls (right stick)
+  // Camera controls: the right stick orbits, the left stick pans, the
+  // triggers zoom (left out, right in).
   cameraRotateX: 'rightStickX',
   cameraRotateY: 'rightStickY',
-  cameraZoom: 'leftStickY',
-  cameraPan: 'leftStickX',
+  cameraPanX: 'leftStickX',
+  cameraPanY: 'leftStickY',
+  cameraZoomOut: 'leftTrigger',
+  cameraZoomIn: 'rightTrigger',
 
   // Parameter navigation (d-pad)
   parameterNext: 'dpadDown',
@@ -66,9 +81,10 @@ export const DEFAULT_GAMEPAD_ACTIONS = {
   togglePreview: 'buttonY',
   cancel: 'buttonB',
 
-  // Modifiers (triggers)
-  fineAdjust: 'leftTrigger', // Hold for fine parameter adjustment
-  fastAdjust: 'rightTrigger', // Hold for fast parameter adjustment
+  // Speed modifiers, unbound until a person assigns them: held, they move
+  // the view at 0.3 times or 2 times the usual speed.
+  fineAdjust: null,
+  fastAdjust: null,
 };
 
 /**
@@ -121,6 +137,21 @@ class GamepadState {
     return Math.abs(value) < deadzone ? 0 : value;
   }
 
+  /**
+   * A stick axis past its dead zone, scaled so the dead zone's edge is 0 and
+   * a full push is 1: a small push moves the view slowly, not at once at
+   * 15 percent.
+   * @param {number} index
+   * @param {number} deadzone
+   * @returns {number} -1 to 1
+   */
+  getShapedAxis(index, deadzone = 0.15) {
+    const value = this.axes[index] || 0;
+    const size = Math.abs(value);
+    if (size < deadzone) return 0;
+    return Math.sign(value) * Math.min(1, (size - deadzone) / (1 - deadzone));
+  }
+
   getButtonValue(index) {
     // For analog triggers
     const gamepad = navigator.getGamepads()[this.gamepadIndex];
@@ -147,11 +178,14 @@ export class GamepadController {
     this.pollInterval = options.pollInterval || 16; // ~60fps
     this.deadzone = options.deadzone || 0.15;
 
-    // Sensitivity settings
+    // Sensitivity settings: camera multiplies the per-second view rates
     this.sensitivity = {
-      camera: options.cameraSensitivity || 2.0,
+      camera: options.cameraSensitivity || 1.0,
       parameter: options.parameterSensitivity || 1.0,
     };
+
+    // When the last poll ran, for per-second rates
+    this._lastPollAt = null;
 
     // Bound event handlers
     this._onGamepadConnected = this._onGamepadConnected.bind(this);
@@ -202,6 +236,7 @@ export class GamepadController {
    */
   stop() {
     this.enabled = false;
+    this._lastPollAt = null;
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
@@ -323,8 +358,14 @@ export class GamepadController {
    * Poll gamepads and dispatch actions
    * @private
    */
-  _pollGamepads() {
+  _pollGamepads(now) {
     if (!this.enabled) return;
+    const at = typeof now === 'number' ? now : performance.now();
+    const elapsed =
+      this._lastPollAt === null
+        ? 0
+        : Math.min(MAX_STEP_S, Math.max(0, (at - this._lastPollAt) / 1000));
+    this._lastPollAt = at;
 
     // Get current gamepad state
     const gamepads = navigator.getGamepads();
@@ -336,7 +377,7 @@ export class GamepadController {
     this.state.update(gamepad);
 
     if (this.state.connected) {
-      this._processInput();
+      this._processInput(elapsed);
     }
 
     // Schedule next poll
@@ -344,42 +385,58 @@ export class GamepadController {
   }
 
   /**
-   * Process input and emit actions
+   * Process input and emit actions. The camera's events carry how far to
+   * move in this step: `camera:rotate` degrees (x right, y up),
+   * `camera:pan` and `camera:zoom` shares of the camera's distance (pan x
+   * right and y up; zoom positive in).
+   * @param {number} [elapsed] - seconds since the last poll
    * @private
    */
-  _processInput() {
-    const { state, mappings, actions, deadzone, sensitivity } = this;
+  _processInput(elapsed = 0) {
+    const { state, mappings, actions, deadzone } = this;
+    const pressed = (action) =>
+      actions[action] != null &&
+      state.getButtonValue(mappings[actions[action]]) > 0.5;
+    const axis = (action) =>
+      actions[action] == null
+        ? 0
+        : state.getShapedAxis(mappings[actions[action]], deadzone);
+    const trigger = (action) =>
+      actions[action] == null
+        ? 0
+        : state.getButtonValue(mappings[actions[action]]) || 0;
 
-    // Get modifier states for sensitivity adjustment
-    const fineAdjust = state.getButtonValue(mappings[actions.fineAdjust]) > 0.5;
-    const fastAdjust = state.getButtonValue(mappings[actions.fastAdjust]) > 0.5;
+    let speed = 1;
+    if (pressed('fineAdjust')) speed = 0.3;
+    if (pressed('fastAdjust')) speed = 2;
+    const step = elapsed * speed * this.sensitivity.camera;
 
-    let adjustMultiplier = 1.0;
-    if (fineAdjust) adjustMultiplier = 0.2;
-    if (fastAdjust) adjustMultiplier = 3.0;
-
-    // Camera rotation (right stick)
-    const cameraX = state.getAxis(mappings[actions.cameraRotateX], deadzone);
-    const cameraY = state.getAxis(mappings[actions.cameraRotateY], deadzone);
-    if (cameraX !== 0 || cameraY !== 0) {
+    // The right stick orbits. A stick reads negative when pushed up, so its
+    // vertical axis is turned over: up turns the view up.
+    const orbitX = axis('cameraRotateX');
+    const orbitY = -axis('cameraRotateY');
+    if ((orbitX !== 0 || orbitY !== 0) && step > 0) {
       this.emit('camera:rotate', {
-        x: cameraX * sensitivity.camera * adjustMultiplier,
-        y: cameraY * sensitivity.camera * adjustMultiplier,
+        x: orbitX * ORBIT_DEG_PER_S * step,
+        y: orbitY * ORBIT_DEG_PER_S * step,
       });
     }
 
-    // Camera zoom/pan (left stick)
-    const zoom = state.getAxis(mappings[actions.cameraZoom], deadzone);
-    const pan = state.getAxis(mappings[actions.cameraPan], deadzone);
-    if (zoom !== 0) {
-      this.emit('camera:zoom', {
-        delta: zoom * sensitivity.camera * adjustMultiplier,
+    // The left stick pans, both ways, up moving the view up.
+    const panX = axis('cameraPanX');
+    const panY = -axis('cameraPanY');
+    if ((panX !== 0 || panY !== 0) && step > 0) {
+      this.emit('camera:pan', {
+        x: panX * PAN_SHARE_PER_S * step,
+        y: panY * PAN_SHARE_PER_S * step,
       });
     }
-    if (pan !== 0) {
-      this.emit('camera:pan', {
-        x: pan * sensitivity.camera * adjustMultiplier,
-      });
+
+    // The triggers zoom by how far they are pressed; a trigger that is only
+    // on or off zooms at full speed.
+    const zoom = trigger('cameraZoomIn') - trigger('cameraZoomOut');
+    if (zoom !== 0 && step > 0) {
+      this.emit('camera:zoom', { delta: zoom * ZOOM_SHARE_PER_S * step });
     }
 
     // Parameter navigation (d-pad)
@@ -393,12 +450,12 @@ export class GamepadController {
     // Parameter adjustment (d-pad left/right)
     if (state.isButtonPressed(mappings[actions.parameterIncrease])) {
       this.emit('parameter:change', {
-        delta: sensitivity.parameter * adjustMultiplier,
+        delta: this.sensitivity.parameter * speed,
       });
     }
     if (state.isButtonPressed(mappings[actions.parameterDecrease])) {
       this.emit('parameter:change', {
-        delta: -sensitivity.parameter * adjustMultiplier,
+        delta: -this.sensitivity.parameter * speed,
       });
     }
 
@@ -419,7 +476,8 @@ export class GamepadController {
 
   /**
    * Update sensitivity settings
-   * @param {Object} settings - { camera?: number, parameter?: number }
+   * @param {Object} settings - { camera?: number, parameter?: number };
+   *   camera multiplies the view's per-second rates (1 is 90 degrees a second)
    */
   setSensitivity(settings) {
     if (settings.camera !== undefined) {
