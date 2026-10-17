@@ -266,7 +266,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           'three': ['three'],
-          'ajv': ['ajv'],
         },
       },
     },

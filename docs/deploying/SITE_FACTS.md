@@ -59,7 +59,7 @@ Every response carries this CSP, configured in
 [`public/_headers`](../../public/_headers) — the single line as shipped:
 
 ```
-Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev; worker-src 'self' blob:; child-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
+Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev; worker-src 'self' blob:; child-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
 ```
 
 Each directive, in plain language:
@@ -67,7 +67,7 @@ Each directive, in plain language:
 | Directive | What it does | Why it is set this way |
 |-----------|--------------|------------------------|
 | `default-src 'self'` | Default deny; same-origin only. | Everything else is an explicit relaxation. |
-| `script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'` | Same-origin scripts only. `unsafe-eval` is required by [AJV](https://ajv.js.org/), which compiles JSON Schema validators at runtime; `wasm-unsafe-eval` compiles the OpenSCAD module. | No remote scripts, no `unsafe-inline`. |
+| `script-src 'self' 'wasm-unsafe-eval'` | Same-origin scripts only. `wasm-unsafe-eval` compiles the OpenSCAD module. | No remote scripts, no `unsafe-inline`, no `unsafe-eval`: the app's data checks are written ahead of time by `scripts/build-validators.mjs`, so the page runs no text as code. |
 | `style-src 'self'` | Same-origin stylesheets only. | **No `unsafe-inline`** — CodeMirror's injected `<style>` element is blocked and its rules are re-homed into a constructable stylesheet. Expect exactly one `style-src-elem` console violation, from that blocked element. |
 | `img-src 'self' data: blob:` | Same-origin images plus `data:`/`blob:`. | `blob:` serves in-browser STL/PNG previews; `data:` serves inline icon fallbacks. |
 | `font-src 'self'` | Same-origin fonts only. | Every font, including the OpenSCAD `text()` fonts, is served by the site itself. |

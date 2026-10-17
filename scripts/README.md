@@ -12,6 +12,7 @@ listed below.
 | `import-check.js` | Fails if any `import` resolves to nothing. Required CI gate | `npm run import-check` |
 | `css-variable-audit.js` | Fails if a `--color-*` / `--focus-*` token is missing from the mono block. Required CI gate | `npm run css-variable-audit` |
 | `check-bundle-budget.js` | Fails if a gzipped bundle exceeds its budget. Required CI gate | `npm run check-bundle` |
+| `build-validators.mjs` | Writes the app's data checks from the schemas in `src/js/validation-schema-defs.js` into `src/js/generated/validators.js` (committed), with AJV's own standalone output, so the page compiles no code at run time | `node scripts/build-validators.mjs`, by hand after changing a schema; `tests/unit/validators-written.test.js` fails until it has run |
 | `nvda-tail.mjs` | Appends what NVDA said, and the keys it heard, since the last call to a record file under a step's label; reads NVDA's own log | `npm run nvda-tail -- "<step>"`, by hand during a listening run |
 | `check-mermaid.mjs` | Parses every Mermaid diagram in the tracked Markdown with Mermaid itself, the way GitHub renders them; fails on the first one it rejects | `npm run check-mermaid` |
 | `check-e2e-complete.mjs` | Fails a Playwright run that reports tests which never started, so a run the clock cut short cannot report green | CI only, per browser lane |
