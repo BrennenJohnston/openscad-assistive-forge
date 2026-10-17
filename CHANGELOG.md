@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Preferences > 3D View sets how solid the Customizer is when it opens over
   the preview on a phone.
+- A game controller moves through the interface: the bumpers step from
+  control to control as Tab does, the triggers jump between toolbars, A
+  presses, B goes back, and the D-pad sends the arrow keys.
+- Preferences > Controller, in place of the Axes and Buttons tabs, names the
+  controller, shows its buttons for Xbox, PlayStation, Nintendo or generic
+  layouts, offers two presets, and lets each action take the button you
+  press.
 
 ### Changed
 
@@ -31,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A game controller's right stick turns the view the way it is pushed (up
+  turned it down), at the same speed at any frame rate, and the left stick
+  pans both ways.
 - On a phone the tour's card stays beside the control it points at while the
   Customizer is open, and on a desktop a step whose target is scrolled out of
   the Customizer is scrolled into view instead of skipped.
