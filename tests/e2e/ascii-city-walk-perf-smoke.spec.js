@@ -88,9 +88,9 @@ test.describe('ASCII City Walk — the acceptance path runs', () => {
 
     // Walk, so the street is being rebuilt as well as repainted - a converter
     // that only survives a static frame is not the thing the bar is about.
-    await page.keyboard.down('ArrowUp')
+    await page.keyboard.down('KeyW')
     await waitForConversions(page, 30)
-    await page.keyboard.up('ArrowUp')
+    await page.keyboard.up('KeyW')
 
     const after = await stats(page)
     console.log(

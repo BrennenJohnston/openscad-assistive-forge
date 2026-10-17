@@ -130,11 +130,11 @@ test.describe('ASCII City Walk — street furniture', () => {
       requestAnimationFrame(count)
       game.altView.invalidate()
     })
-    await page.keyboard.down('ArrowUp')
+    await page.keyboard.down('KeyW')
     await page.waitForFunction(() => window.__walkFrames >= 150, null, {
       timeout: 90_000,
     })
-    await page.keyboard.up('ArrowUp')
+    await page.keyboard.up('KeyW')
 
     const after = await page.evaluate(() => {
       const game = window.__cityWalkGame

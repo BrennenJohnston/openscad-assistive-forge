@@ -5,12 +5,14 @@
  * DOM, forces the mono (Alt View) variant on while open, loads a bundled
  * city extract, and renders its own three.js scene through a dedicated
  * instance of the Alt View ASCII converter (initAltView is per-instance).
- * Every action in the city has a key: arrows/WASD walk, Q/E turn, R/F look
- * up and down, V levels the gaze, Shift is faster, M toggles the top-down
- * map view, C and T reach the accessibility toggles the header carries, H
- * help, Escape leaves. Dragging the viewport with a pointer looks around
- * too, and every key also has a button in the bottom toolbar — both are
- * additions for mouse players, never the only way to reach anything.
+ * Every action in the city has a key: W A S D walk, the arrows look (Left
+ * and Right turn, Up and Down look up and down), Q/E and R/F do the same,
+ * V levels the gaze, Shift is faster, M toggles the top-down map view, C
+ * and T reach the accessibility toggles the header carries, H help, Escape
+ * leaves. Dragging the viewport with a pointer looks around too, and every
+ * key also has a button in the bottom toolbar; both are additions for
+ * mouse players, never the only way to reach anything. A game controller
+ * walks with the left stick and looks with the right.
  *
  * The layer is modal: document-level capture focus trap, Escape on the
  * capture phase, focus restored to the launching control on exit. The
@@ -110,6 +112,10 @@ import {
   stepProbePhase,
 } from './size-calibration.js';
 import { createDocumentFocusTrap } from '../focus-trap.js';
+import {
+  GamepadController,
+  gamepadFamilyFromId,
+} from '../gamepad-controller.js';
 import { announce } from '../announcer.js';
 import { themeManager } from '../theme-manager.js';
 import {
@@ -442,6 +448,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // asks, and nothing travels without a second press.
     travel: null,
     themeUnsub: null,
+    // The game's own reading of a game controller, while the layer is open.
+    pad: null,
     refs: {},
   };
 
@@ -469,12 +477,20 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // somewhere else - the system switching schemes under 'auto', say.
     state.themeUnsub = themeManager.addListener(syncThemeButtons);
 
+    // A controller walks and looks here; the app's own use of it stands
+    // down while this layer is shown.
+    state.pad = new GamepadController();
+    state.pad.on('input', handlePadInput);
+    state.pad.init();
+
     announceInLayer('ASCII City Walk opened. Choose a city to start walking.');
   }
 
   function close() {
     unloadCity();
     clearHeldKeys();
+    state.pad?.destroy();
+    state.pad = null;
 
     state.trap?.deactivate();
     layer.removeEventListener('keydown', handleGameKeyDown);
@@ -662,7 +678,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     startIntro.className = 'city-walk-start-intro';
     startIntro.textContent =
       'Walk a real neighborhood drawn entirely in ASCII characters. ' +
-      'Arrow keys or W A S D walk, Q and E turn, Shift is faster, ' +
+      'W A S D walk, the arrow keys look around, Shift is faster, ' +
       'M switches to the map view, Escape leaves.';
     startPanel.appendChild(startIntro);
 
@@ -783,12 +799,18 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const helpList = document.createElement('ul');
     helpList.className = 'city-walk-help-list';
     const helpItems = [
-      'Arrow Up or W: walk forward',
-      'Arrow Down or S: walk backward',
+      'W and S: walk forward and backward',
       'A and D: sidestep left and right',
-      'Arrow Left / Q and Arrow Right / E: turn',
-      'R and F: look up and down',
+      'Arrow keys: look around (Left and Right turn, Up and Down look up and down)',
+      'Q and E: turn, as Left and Right do',
+      'R and F: look up and down, as Up and Down do',
       'V: level the view',
+      // Accessibility-critical strings: the controller's buttons by the
+      // names Xbox prints; a Nintendo pad's printed A and B do the same.
+      'On a controller: the left stick walks and the right stick looks, and the D-pad walks and turns',
+      'On a controller: A opens the map, B closes the map or this help, ' +
+        'Start (Menu) opens this help, LB and RB step through the landmarks, ' +
+        'RT walks to the selected landmark, LT starts auto-walk',
       // Accessibility-critical strings. The help teaches the default first,
       // and the default is drag: hover-follow stays one press away on the
       // Mouse look button.
@@ -796,8 +818,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'The Mouse look button can make the view follow the cursor without ' +
         'dragging, or turn mouse look off',
       'N: auto-walk forward, following the street, until something stops ' +
-        'you; while it walks, Arrow Up and Arrow Down look, and W A S D ' +
-        'take over',
+        'you; W A S D take over',
       // Accessibility-critical string.
       'I: walk to the selected landmark, turn by turn; I again, Escape, ' +
         'or a walk key stops the tour',
@@ -1442,8 +1463,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    * Build the control strip that gives a mouse-only player every key.
    *
    * Every button is its own tab stop rather than carrying the roving
-   * tabindex the toolbar pattern usually does: the arrow keys walk the
-   * player, so they cannot also move focus. Tab is the layer's only focus
+   * tabindex the toolbar pattern usually does: the arrow keys turn the
+   * player and look, so they cannot also move focus. Tab is the layer's only focus
    * mover and the focus trap already owns it.
    */
   function buildToolbar() {
@@ -2666,10 +2687,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   // -------------------------------------------------------------------
 
   const KEY_ACTIONS = new Map([
-    ['ArrowUp', 'forward'],
     ['KeyW', 'forward'],
-    ['ArrowDown', 'back'],
     ['KeyS', 'back'],
+    ['ArrowUp', 'lookUp'],
+    ['ArrowDown', 'lookDown'],
     ['KeyA', 'strafeLeft'],
     ['KeyD', 'strafeRight'],
     ['ArrowLeft', 'turnLeft'],
@@ -2885,23 +2906,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
 
-    // Arrow-look: while auto-walk carries the walking, the vertical
-    // arrows look instead of driving - WASD still walks (and stops the
-    // auto-walk, in the frame loop). The horizontal arrows already turn.
-    if (
-      (state.game.autoWalk || state.game.tour) &&
-      !state.game.mapView &&
-      (event.code === 'ArrowUp' || event.code === 'ArrowDown')
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
-      holdAction(
-        state.keyHeld,
-        event.code === 'ArrowUp' ? 'lookUp' : 'lookDown'
-      );
-      return;
-    }
-
     const action = KEY_ACTIONS.get(event.code);
     if (action) {
       event.preventDefault();
@@ -2936,13 +2940,97 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (event.code === 'PageUp') {
       releaseAction(state.keyHeld, 'zoomIn');
     }
-    // A vertical arrow may have been held as look (auto-walk's
-    // remap) and auto-walk may have ended in between - release both of the
-    // actions the key could be holding; releasing an unheld one is a no-op.
-    if (event.code === 'ArrowUp') releaseAction(state.keyHeld, 'lookUp');
-    if (event.code === 'ArrowDown') releaseAction(state.keyHeld, 'lookDown');
     const action = KEY_ACTIONS.get(event.code);
     if (action) releaseAction(state.keyHeld, action);
+  }
+
+  /**
+   * The City Walk's controller buttons: A the map, B closes (the map, the
+   * help, a question, a tour, auto-walk; never the game), Start the help,
+   * LB and RB the landmarks, RT the walk to the chosen landmark, LT
+   * auto-walk. On a Nintendo pad the printed A and B swap places, as in
+   * the app.
+   * @param {{name: string, repeat: boolean}} event
+   */
+  function handlePadInput({ name, repeat }) {
+    if (repeat) return;
+    const nintendo =
+      gamepadFamilyFromId(state.pad?.getGamepadInfo()?.id) === 'nintendo';
+    const button =
+      nintendo && (name === 'a' || name === 'b')
+        ? name === 'a'
+          ? 'b'
+          : 'a'
+        : name;
+    const dialogOpen = state.travel || state.refs.found?.hidden === false;
+    if (button === 'start') {
+      toggleHelp(!state.helpOpen);
+      return;
+    }
+    if (button === 'b') {
+      padBack();
+      return;
+    }
+    if (button === 'a') {
+      // On the city picker or in a question, A presses the focused button.
+      const focused = document.activeElement;
+      if (
+        (!state.game || dialogOpen) &&
+        focused instanceof HTMLButtonElement &&
+        layer.contains(focused)
+      ) {
+        focused.click();
+        return;
+      }
+      if (state.game) toggleMapView();
+      return;
+    }
+    if (!state.game) return;
+    if (button === 'lb' || button === 'rb') {
+      cycleLandmark(button === 'lb' ? -1 : 1);
+    } else if (button === 'rt') {
+      startTour();
+    } else if (button === 'lt') {
+      if (state.game.tour) stopTour(TOUR_STOPPED_MESSAGE);
+      else toggleAutoWalk();
+    }
+  }
+
+  /** B: close the innermost thing open, as Escape does, but stay in the city. */
+  function padBack() {
+    if (state.refs.found?.hidden === false) {
+      closeFoundDialog();
+    } else if (state.travel) {
+      closeTravelDialog(false);
+    } else if (state.helpOpen) {
+      toggleHelp(false);
+    } else if (state.game?.mapView) {
+      toggleMapView();
+    } else if (state.game?.tour) {
+      stopTour(TOUR_STOPPED_MESSAGE);
+    } else if (state.game?.autoWalk) {
+      setAutoWalk(false, AUTO_WALK_OFF_MESSAGE);
+    }
+  }
+
+  /**
+   * The controller's sticks and D-pad this frame, each -1 to 1: the left
+   * stick walks (up forward) and steps sideways, the right stick turns and
+   * looks (up looks up), the D-pad walks and turns. A small push past the
+   * dead zone moves slowly.
+   */
+  function padAxes() {
+    const pad = state.pad;
+    if (!pad?.state.connected) return null;
+    const s = pad.state;
+    const dz = pad.deadzone;
+    const held = (i) => (s.isButtonPressed(i) ? 1 : 0);
+    return {
+      forward: -s.getShapedAxis(1, dz) + held(12) - held(13),
+      strafe: s.getShapedAxis(0, dz),
+      turn: s.getShapedAxis(2, dz) + held(15) - held(14),
+      pitch: -s.getShapedAxis(3, dz),
+    };
   }
 
   function clearHeldKeys() {
@@ -4749,25 +4837,33 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.altView.invalidate();
     }
 
+    const pad = padAxes();
+    const unit = (n) => Math.max(-1, Math.min(1, n));
+
     if (game.mapView) {
       // Map mode: the movement keys drive the camera, not the
       // player — walking is suspended while the overhead view is open.
+      // The arrows look in the street; here they pan, with W A S D.
       const { viewport } = state.refs;
       const aspect =
         Math.max(1, viewport.clientWidth) / Math.max(1, viewport.clientHeight);
       const { changed } = stepMapCamera(
         game.mapCam,
         {
-          panX:
+          panX: unit(
             (state.keys.has('strafeRight') || state.keys.has('turnRight')
               ? 1
               : 0) -
-            (state.keys.has('strafeLeft') || state.keys.has('turnLeft')
-              ? 1
-              : 0),
-          panY:
-            (state.keys.has('forward') ? 1 : 0) -
-            (state.keys.has('back') ? 1 : 0),
+              (state.keys.has('strafeLeft') || state.keys.has('turnLeft')
+                ? 1
+                : 0) +
+              (pad ? pad.strafe + pad.turn : 0)
+          ),
+          panY: unit(
+            (state.keys.has('forward') || state.keys.has('lookUp') ? 1 : 0) -
+              (state.keys.has('back') || state.keys.has('lookDown') ? 1 : 0) +
+              (pad ? pad.forward + pad.pitch : 0)
+          ),
           zoom:
             (state.keys.has('zoomIn') ? 1 : 0) -
             (state.keys.has('zoomOut') ? 1 : 0),
@@ -4791,17 +4887,27 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     // Raw axes first. Turn and pitch steer the look target below
     // rather than the camera itself; movement still goes through stepWalk.
-    const turnAxis =
+    const turnAxis = unit(
       (state.keys.has('turnRight') ? 1 : 0) -
-      (state.keys.has('turnLeft') ? 1 : 0);
-    const pitchAxis =
-      (state.keys.has('lookUp') ? 1 : 0) - (state.keys.has('lookDown') ? 1 : 0);
+        (state.keys.has('turnLeft') ? 1 : 0) +
+        (pad ? pad.turn : 0)
+    );
+    const pitchAxis = unit(
+      (state.keys.has('lookUp') ? 1 : 0) -
+        (state.keys.has('lookDown') ? 1 : 0) +
+        (pad ? pad.pitch : 0)
+    );
     const input = {
-      forward:
-        (state.keys.has('forward') ? 1 : 0) - (state.keys.has('back') ? 1 : 0),
-      strafe:
+      forward: unit(
+        (state.keys.has('forward') ? 1 : 0) -
+          (state.keys.has('back') ? 1 : 0) +
+          (pad ? pad.forward : 0)
+      ),
+      strafe: unit(
         (state.keys.has('strafeRight') ? 1 : 0) -
-        (state.keys.has('strafeLeft') ? 1 : 0),
+          (state.keys.has('strafeLeft') ? 1 : 0) +
+          (pad ? pad.strafe : 0)
+      ),
       turn: 0,
       pitch: 0,
       fast: state.shiftHeld || state.fastWalk,

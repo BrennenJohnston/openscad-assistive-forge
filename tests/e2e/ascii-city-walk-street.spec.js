@@ -122,7 +122,7 @@ test.describe('ASCII City Walk — trees and parked cars', () => {
       'no parked car with an open approach was found'
     ).not.toBeNull()
 
-    await page.keyboard.down('ArrowUp')
+    await page.keyboard.down('KeyW')
     try {
       // Waiting on frames, never on the clock: a loaded runner renders them
       // slowly, but each frame still advances the walk by up to the 0.1 s step
@@ -143,7 +143,7 @@ test.describe('ASCII City Walk — trees and parked cars', () => {
         })
         .toBeGreaterThan(150)
     } finally {
-      await page.keyboard.up('ArrowUp')
+      await page.keyboard.up('KeyW')
     }
 
     const watch = await page.evaluate(() => {
@@ -885,9 +885,9 @@ test.describe('ASCII City Walk — landmark tracker', () => {
     })
     test.skip(!placed, 'this extract has no landmarks to walk to')
 
-    await page.keyboard.down('ArrowUp')
+    await page.keyboard.down('KeyW')
     await page.waitForTimeout(600)
-    await page.keyboard.up('ArrowUp')
+    await page.keyboard.up('KeyW')
 
     await expect(hud).not.toContainText('landmarks 0/')
     await expect(hud).toContainText(/landmarks [1-9]\d*\//)
@@ -1262,9 +1262,9 @@ test.describe('ASCII City Walk — where you are', () => {
   // Walk one real step so the street lookup, which runs on movement frames,
   // has actually run. Teleporting alone never moves the camera or the HUD.
   const stepOnce = async (page) => {
-    await page.keyboard.down('ArrowUp')
+    await page.keyboard.down('KeyW')
     await page.waitForTimeout(220)
-    await page.keyboard.up('ArrowUp')
+    await page.keyboard.up('KeyW')
     await page.waitForTimeout(260)
   }
 
@@ -1666,7 +1666,7 @@ test.describe('ASCII City Walk — cars are cars', () => {
     })
     expect(setup).not.toBeNull()
 
-    await page.keyboard.down('ArrowUp')
+    await page.keyboard.down('KeyW')
     try {
       // Arrival is a condition, not a frame quota. A dt-clamped software runner
       // covers the 2.5 m in ~17 frames where a 60 fps GPU needs ~100, and a
@@ -1689,7 +1689,7 @@ test.describe('ASCII City Walk — cars are cars', () => {
         })
         .toBeGreaterThan(arrived + 40)
     } finally {
-      await page.keyboard.up('ArrowUp')
+      await page.keyboard.up('KeyW')
       await page.evaluate(() => cancelAnimationFrame(window.__cwPickupTick))
     }
 
@@ -1812,7 +1812,7 @@ test.describe('ASCII City Walk — the kerb', () => {
       window.__cwKerbTick = requestAnimationFrame(tick)
     })
 
-    await page.keyboard.down('ArrowUp')
+    await page.keyboard.down('KeyW')
     try {
       // Arrival is a condition, not a frame quota: the walker is done when they
       // have crossed clear of the roadway, however many frames that took on
@@ -1850,7 +1850,7 @@ test.describe('ASCII City Walk — the kerb', () => {
         window.__cwKerb.stop = true
         cancelAnimationFrame(window.__cwKerbTick)
       })
-      await page.keyboard.up('ArrowUp')
+      await page.keyboard.up('KeyW')
     }
 
     const watch = await page.evaluate(() => window.__cwKerb)

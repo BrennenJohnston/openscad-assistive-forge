@@ -16285,15 +16285,21 @@ if (rounded) {
       const target = previewManager?.controls?.target;
       return camera && target ? camera.position.distanceTo(target) : 0;
     };
+    // While the City Walk runs it reads the controller itself; the preview
+    // behind it must not move.
+    const cityWalkUp = () => {
+      const layer = document.getElementById('cityWalkLayer');
+      return !!layer && !layer.hidden;
+    };
     gamepadController.on('camera:rotate', ({ x, y }) => {
-      if (previewManager) {
+      if (previewManager && !cityWalkUp()) {
         previewManager.rotateHorizontal((x * Math.PI) / 180);
         previewManager.rotateVertical((y * Math.PI) / 180);
       }
     });
 
     gamepadController.on('camera:zoom', ({ delta }) => {
-      if (!previewManager) return;
+      if (!previewManager || cityWalkUp()) return;
       // An orthographic view zooms by a factor of 1 + 0.02 for each unit
       // zoomCamera() takes, rather than by moving: the same share becomes
       // that factor there.
@@ -16304,7 +16310,7 @@ if (rounded) {
     });
 
     gamepadController.on('camera:pan', ({ x, y }) => {
-      if (previewManager) {
+      if (previewManager && !cityWalkUp()) {
         const span = viewSpan();
         previewManager.panCamera(x * span, y * span);
       }
