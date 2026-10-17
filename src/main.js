@@ -172,6 +172,7 @@ import {
   GAMEPAD_ACTIONS,
 } from './js/gamepad-controller.js';
 import { createGamepadNavigator } from './js/gamepad-navigator.js';
+import { requestSwUpdate } from './js/sw-update.js';
 import {
   initKeyboardShortcuts,
   keyboardConfig,
@@ -1380,7 +1381,6 @@ async function initApp() {
       console.log('[PWA] Service Worker registered:', registration.scope);
 
       let waitingWorker = registration.waiting || null;
-      let refreshRequested = false;
       let cacheClearPending = false;
 
       const showUpdateBanner = (worker) => {
@@ -1395,10 +1395,11 @@ async function initApp() {
       };
 
       const requestUpdate = () => {
-        if (!waitingWorker) return;
-        refreshRequested = true;
         updateStatus('Updating app... Reloading soon.');
-        waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+        requestSwUpdate({
+          worker: waitingWorker,
+          button: updateBannerRefreshBtn,
+        });
       };
 
       const CACHE_CLEAR_TIMEOUT = 10000; // 10 seconds before showing recovery dialog
@@ -1585,10 +1586,6 @@ async function initApp() {
         if (clearCacheBtn) {
           clearCacheBtn.disabled = false;
           clearCacheBtn.title = '';
-        }
-        if (refreshRequested) {
-          refreshRequested = false;
-          window.location.reload();
         }
       });
 
