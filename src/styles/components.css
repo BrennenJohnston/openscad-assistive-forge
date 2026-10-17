@@ -5246,6 +5246,7 @@ select:focus-visible {
  * Match OpenSCAD Customizer semantics exactly */
 .preset-selector .preset-actions-group {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-sm);
@@ -14886,8 +14887,11 @@ body.tutorial-body-locked {
   margin-top: var(--space-xs);
 }
 
+/* Never wider than the row: in a narrow Customizer, or larger type, its
+   buttons wrap instead of running past the edge. */
 .preset-actions-row .preset-actions-group {
   flex-shrink: 0;
+  max-width: 100%;
 }
 
 .preset-actions-row > .btn:last-child {
