@@ -23,6 +23,7 @@ Changes to upstream (CMakeLists.txt, then linking):
 -    -fexceptions
 +    -fwasm-exceptions
 -    -sDISABLE_EXCEPTION_CATCHING=0
+-      -sNODEJS_CATCH_EXIT
 + -sSTACK_SIZE=8388608
 
 SHA-256:
