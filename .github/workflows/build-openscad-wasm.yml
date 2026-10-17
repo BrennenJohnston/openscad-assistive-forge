@@ -19,11 +19,11 @@ on:
   workflow_dispatch:
     inputs:
       variant:
-        description: round-to-nearest (the fix) or baseline (upstream unchanged)
+        description: round-to-nearest (the fix), baseline (upstream unchanged) or wasm-exceptions (research)
         required: true
         default: round-to-nearest
         type: choice
-        options: [round-to-nearest, baseline]
+        options: [round-to-nearest, baseline, wasm-exceptions]
   pull_request:
     paths:
       - 'scripts/build-openscad-wasm.sh'
@@ -37,11 +37,13 @@ jobs:
   build:
     name: ${{ inputs.variant || 'round-to-nearest' }} (${{ matrix.wasm_type }})
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # wasm-exceptions builds the libraries' image first, which takes hours.
+    timeout-minutes: ${{ inputs.variant == 'wasm-exceptions' && 350 || 120 }}
     strategy:
       fail-fast: false
       matrix:
-        wasm_type: [web, node]
+        # The research variant is measured in browsers only.
+        wasm_type: ${{ fromJSON(inputs.variant == 'wasm-exceptions' && '["web"]' || '["web", "node"]') }}
     env:
       VARIANT: ${{ inputs.variant || 'round-to-nearest' }}
       WASM_TYPE: ${{ matrix.wasm_type }}
