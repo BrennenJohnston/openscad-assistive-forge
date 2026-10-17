@@ -14,6 +14,7 @@ import {
   previewKeepsPx,
   registerPhoneDrawer,
 } from './phone-drawers.js';
+import { slideDrawer } from './drawer-motion.js';
 
 // Storage key using standardized naming convention
 const STORAGE_KEY_DRAWER_COLLAPSED = getDrawerStateKey('preview-settings');
@@ -33,6 +34,26 @@ export function initPreviewSettingsDrawer(options = {}) {
   }
 
   let isExpanded = false; // Start collapsed, expand() will set proper state
+
+  // The settings slide down out from under the row with the toggle, keeping
+  // their open height, and the drawer's box grows with them: on a phone the
+  // preview below gives way as they come; on a desktop the box lies over it.
+  const content = previewInfoSection.querySelector('.preview-info-content');
+  const row = previewInfoSection.querySelector('.preview-drawer-header');
+  const slideParts = () => {
+    const height = `${content?.offsetHeight ?? 0}px`;
+    return [
+      // A flex item: its height alone would shrink with the growing box.
+      { el: content, hold: { height, minHeight: height } },
+      {
+        el: previewInfoSection,
+        role: 'space',
+        props: {
+          height: [row?.offsetHeight ?? 0, previewInfoSection.offsetHeight],
+        },
+      },
+    ];
+  };
 
   /**
    * Load collapsed state from localStorage
@@ -105,6 +126,7 @@ export function initPreviewSettingsDrawer(options = {}) {
     if (options.onResize) {
       requestAnimationFrame(() => options.onResize());
     }
+    slideDrawer(slideParts(), { from: 'top', open: true });
   };
 
   /**
@@ -113,19 +135,27 @@ export function initPreviewSettingsDrawer(options = {}) {
   const collapse = () => {
     if (!isExpanded) return;
     isExpanded = false;
-    previewInfoSection.classList.add('preview-drawer-collapsed');
-    previewInfoSection.classList.remove('preview-drawer-expanded');
-
-    if (previewPanel) {
-      previewPanel.classList.add('preview-drawer-collapsed');
-    }
     updateToggle(false);
     saveCollapsedState(true);
+    slideDrawer(slideParts(), {
+      from: 'top',
+      open: false,
+      inert: [content],
+      whenClosed: () => {
+        if (isExpanded) return;
+        previewInfoSection.classList.add('preview-drawer-collapsed');
+        previewInfoSection.classList.remove('preview-drawer-expanded');
 
-    // Notify preview manager
-    if (options.onResize) {
-      requestAnimationFrame(() => options.onResize());
-    }
+        if (previewPanel) {
+          previewPanel.classList.add('preview-drawer-collapsed');
+        }
+
+        // Notify preview manager
+        if (options.onResize) {
+          requestAnimationFrame(() => options.onResize());
+        }
+      },
+    });
   };
 
   /**

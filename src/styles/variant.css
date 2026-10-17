@@ -152,6 +152,27 @@ body[data-ui-mode='classic'] {
     saturate(10);
 }
 
+/* The drawers' pace in this look, a desk drawer's: out in 500 ms, back in
+   450, speeding up and slowing to the stop as a hand moves one
+   (drawer-motion.js reads these). Asked for less motion, there is no pace,
+   and a drawer opens and closes at once. */
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-ui-variant='mono'] {
+    --alt-drawer-open: 500ms;
+    --alt-drawer-close: 450ms;
+    --alt-drawer-ease: cubic-bezier(0.42, 0, 0.58, 1);
+  }
+}
+
+/* The phone Customizer and its tint hide the moment they are laid out
+   closed: their stylesheet waits 240 ms for its own slide first, which in
+   this look comes after drawer-motion.js's slide and left the closed sheet
+   in reach of Tab. */
+:root[data-ui-variant='mono'] .param-panel,
+:root[data-ui-variant='mono'] .customizer-glass {
+  transition-delay: 0s !important;
+}
+
 /* ========================================
  * Amber Phosphor Variant (Light Theme)
  * DOS P3 monitor style

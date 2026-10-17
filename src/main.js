@@ -162,6 +162,7 @@ import { startTutorial } from './js/tutorial-sandbox.js';
 import { initWelcomeSpotlight } from './js/welcome-spotlight.js';
 import { initTourNudge } from './js/tour-nudge.js';
 import { initDrawerController } from './js/drawer-controller.js';
+import { sidePanelParts, slideDrawer, stripWidth } from './js/drawer-motion.js';
 import { initPreviewSettingsDrawer } from './js/preview-settings-drawer.js';
 import { initCameraPanelController } from './js/camera-panel-controller.js';
 import { initSequenceDetector } from './js/_seq.js';
@@ -9922,6 +9923,10 @@ if (rounded) {
 
   // Declare toggleParamPanel at module scope so it can be referenced by Split.js code
   let toggleParamPanel = null;
+  // The splitter's part in the panel opening and closing, set where the
+  // splitter is built: built before an opening panel is measured, taken down
+  // once a closing one has slid shut, so its width and gutter never jump.
+  let paramPanelLayout = null;
 
   if (collapseParamPanelBtn && paramPanel && paramPanelBody) {
     // Load saved collapsed state (desktop only)
@@ -9964,7 +9969,6 @@ if (rounded) {
         const isFocusInBody = paramPanelBody.contains(activeElement);
 
         // Collapse panel
-        paramPanel.classList.add('collapsed');
         collapseParamPanelBtn.setAttribute('aria-expanded', 'false');
         collapseParamPanelBtn.setAttribute(
           'aria-label',
@@ -9976,15 +9980,32 @@ if (rounded) {
         if (isFocusInBody) {
           collapseParamPanelBtn.focus();
         }
+        slideDrawer(sidePanelParts(paramPanel, 'left'), {
+          from: 'left',
+          open: false,
+          keep: stripWidth(),
+          inert: [paramPanelBody],
+          whenClosed: () => {
+            if (!isCollapsed) return;
+            paramPanel.classList.add('collapsed');
+            paramPanelLayout?.(false);
+          },
+        });
       } else {
         // Expand panel
         paramPanel.classList.remove('collapsed');
+        paramPanelLayout?.(true);
         collapseParamPanelBtn.setAttribute('aria-expanded', 'true');
         collapseParamPanelBtn.setAttribute(
           'aria-label',
           'Collapse customizer panel'
         );
         collapseParamPanelBtn.title = 'Collapse panel';
+        slideDrawer(sidePanelParts(paramPanel, 'left'), {
+          from: 'left',
+          open: true,
+          keep: stripWidth(),
+        });
       }
 
       // Persist state
@@ -11851,30 +11872,10 @@ if (rounded) {
     // Call on load
     initMobileDetailsCollapse();
 
-    // Re-initialize/destroy split when collapse state changes
-    const originalToggleParamPanel = toggleParamPanel;
-    if (typeof originalToggleParamPanel === 'function') {
-      toggleParamPanel = function () {
-        const wasCollapsed = paramPanel.classList.contains('collapsed');
-        originalToggleParamPanel.call(this);
-
-        if (wasCollapsed) {
-          // Built at once, so the panel opens straight to the width it had
-          // instead of opening wider or narrower and then jumping.
-          initSplit();
-        } else {
-          // Just collapsed - destroy split
-          destroySplit();
-        }
-      };
-
-      // Re-bind the event listener
-      collapseParamPanelBtn.removeEventListener(
-        'click',
-        originalToggleParamPanel
-      );
-      collapseParamPanelBtn.addEventListener('click', toggleParamPanel);
-    }
+    // The split is built the moment the panel opens, so it opens straight to
+    // the width it had instead of opening wider or narrower and then jumping,
+    // and taken down once it has closed.
+    paramPanelLayout = (open) => (open ? initSplit() : destroySplit());
 
     // Handle window resize - destroy/reinit split on mobile
     let splitResizeTimeout;
