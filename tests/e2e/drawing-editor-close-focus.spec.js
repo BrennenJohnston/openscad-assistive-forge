@@ -54,7 +54,9 @@ test('Close returns focus to "Open the drawing editor"', async ({ page }) => {
   const control = page.locator('.param-control--file', {
     has: page.locator('#param-design_file'),
   })
-  const door = control.getByRole('button', { name: 'Open the drawing editor' })
+  const door = control
+    .locator('.svg-prep-status')
+    .getByRole('button', { name: 'Open the drawing editor' })
   await door.waitFor({ state: 'visible', timeout: 60_000 })
   await door.focus()
   await expect(door).toBeFocused()

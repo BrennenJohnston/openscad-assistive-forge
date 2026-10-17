@@ -611,6 +611,9 @@ export class RenderController {
           const error = new Error(payload.message);
           error.code = payload.code;
           error.details = payload.details;
+          // A file that only defines modules and functions (the worker
+          // read its top level).
+          error.libraryFile = payload.libraryFile === true;
           this.currentRequest.reject(error);
           this.currentRequest = null;
         } else if (payload.requestId === 'init' && this.readyReject) {

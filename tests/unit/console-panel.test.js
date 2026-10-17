@@ -121,7 +121,9 @@ describe('the console log, as a screen reader meets it', () => {
     const p = new ConsolePanel({ container, badge: document.createElement('span') })
     container.checkVisibility = () => false
     p.addOutput('WARNING: out of sight')
-    expect(announceImmediate).toHaveBeenCalledWith('WARNING: out of sight')
+    expect(announceImmediate).toHaveBeenCalledWith('WARNING: out of sight', {
+      source: 'console',
+    })
   })
 
   it('leaves an error line to the failed run, which says it once', () => {

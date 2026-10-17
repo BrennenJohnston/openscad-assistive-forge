@@ -3609,8 +3609,10 @@ export function createSvgPrepWorkspace(containerEl) {
         svgSizedInMm(currentResult, currentDesignWidthMm()),
         fileName
       );
-      liveRegion.textContent = `Saved ${fileName}`;
+      // A host told of the Save says it, in its own words; two sentences for
+      // one Save were both read out.
       if (currentCallbacks.onSave) currentCallbacks.onSave(fileName);
+      else liveRegion.textContent = `Saved ${fileName}`;
     } else if (btn.dataset.action === 'save-dxf') {
       if (!currentResult || !currentCallbacks.onSaveDxf) return;
       // The host owns the conversion: it is the only layer with an engine.

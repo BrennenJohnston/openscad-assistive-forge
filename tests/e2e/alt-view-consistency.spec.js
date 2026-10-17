@@ -672,7 +672,11 @@ test.describe('The Alt View keeps to its tokens', () => {
       '#param-design_file',
       'tests/fixtures/svg-edit/two-papers.svg'
     );
-    await page.getByRole('button', { name: 'Open the drawing editor' }).first().click();
+    await page
+      .locator('.svg-prep-status')
+      .getByRole('button', { name: 'Open the drawing editor' })
+      .first()
+      .click();
     await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible({
       timeout: 90_000,
     });

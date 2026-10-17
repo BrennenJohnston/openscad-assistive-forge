@@ -3,7 +3,9 @@
 # See: https://developers.cloudflare.com/pages/configuration/headers/
 
 # All routes: cross-origin isolation + security + CSP
-# 'unsafe-eval' in script-src is required because AJV compiles JSON schemas at runtime via new Function().
+# No 'unsafe-eval' in script-src: the page runs no text as code. Its data checks
+# are written ahead of time (scripts/build-validators.mjs). 'wasm-unsafe-eval'
+# stays: the browser compiles the OpenSCAD engine's WebAssembly with it.
 # 'unsafe-inline' is NOT needed in style-src. CodeMirror injects its CSS in a
 # <style> element, which this policy blocks; src/js/codemirror-csp-styles.js
 # re-homes those rules into a constructable stylesheet, which CSP does not
@@ -16,7 +18,7 @@
   X-Content-Type-Options: nosniff
   X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev; worker-src 'self' blob:; child-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev; worker-src 'self' blob:; child-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
 
 # Cache static assets aggressively
 /assets/*

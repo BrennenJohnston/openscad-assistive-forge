@@ -111,11 +111,16 @@ function pageWithHeaderAndDpad() {
 
 describe('the character size the Alt View starts with', () => {
   beforeEach(() => {
+    // Fake timers: turning the Alt View on with no glow saved queues a
+    // delayed save of the default glow, and a real one fired into the glow
+    // cases' storage below when the machine was busy.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     localStorage.clear()
     document.documentElement.removeAttribute('data-ui-variant')
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     localStorage.clear()
     document.documentElement.removeAttribute('data-ui-variant')
   })

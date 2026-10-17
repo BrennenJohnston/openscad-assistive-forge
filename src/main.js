@@ -172,6 +172,7 @@ import {
   GAMEPAD_ACTIONS,
 } from './js/gamepad-controller.js';
 import { createGamepadNavigator } from './js/gamepad-navigator.js';
+import { requestSwUpdate } from './js/sw-update.js';
 import {
   initKeyboardShortcuts,
   keyboardConfig,
@@ -181,7 +182,6 @@ import { applyAriaKeyshortcuts } from './js/keyboard-shortcuts-binder.js';
 import {
   isEnabled as _isEnabled,
   debugFlags,
-  setUserPreference,
   FLAGS as _FLAGS,
 } from './js/feature-flags.js';
 import { initSearchableCombobox } from './js/searchable-combobox.js';
@@ -1033,12 +1033,8 @@ async function initApp() {
     // Apply conservative settings for recovery mode:
     // - Auto-preview OFF (no automatic renders)
     // - Quality set to fast (minimum quality settings)
-    // - CodeMirror disabled (use textarea only — less memory overhead)
     localStorage.setItem(STORAGE_KEY_AUTO_PREVIEW_ENABLED, 'false');
     localStorage.setItem(STORAGE_KEY_PREVIEW_QUALITY, 'fast');
-    // Disable CodeMirror in recovery mode to reduce memory footprint.
-    // The user can re-enable it manually from settings after recovery.
-    setUserPreference('codemirror_editor', false);
 
     // Clean up crash detection flags
     localStorage.removeItem(STORAGE_KEY_WASM_INIT_STARTED);
@@ -1380,7 +1376,6 @@ async function initApp() {
       console.log('[PWA] Service Worker registered:', registration.scope);
 
       let waitingWorker = registration.waiting || null;
-      let refreshRequested = false;
       let cacheClearPending = false;
 
       const showUpdateBanner = (worker) => {
@@ -1395,10 +1390,11 @@ async function initApp() {
       };
 
       const requestUpdate = () => {
-        if (!waitingWorker) return;
-        refreshRequested = true;
         updateStatus('Updating app... Reloading soon.');
-        waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+        requestSwUpdate({
+          worker: waitingWorker,
+          button: updateBannerRefreshBtn,
+        });
       };
 
       const CACHE_CLEAR_TIMEOUT = 10000; // 10 seconds before showing recovery dialog
@@ -1585,10 +1581,6 @@ async function initApp() {
         if (clearCacheBtn) {
           clearCacheBtn.disabled = false;
           clearCacheBtn.title = '';
-        }
-        if (refreshRequested) {
-          refreshRequested = false;
-          window.location.reload();
         }
       });
 
@@ -6426,6 +6418,15 @@ async function initApp() {
     const existingWarning = document.getElementById('memoryWarning');
     if (existingWarning) existingWarning.remove();
 
+    // A library: it defines modules or functions and draws nothing itself.
+    // No option is missing, so no guidance to look for one.
+    if (error?.libraryFile) {
+      updateStatus(
+        'This file defines modules or functions and draws nothing on its own. Open a file that uses it to see a shape.'
+      );
+      return true;
+    }
+
     // Extract all toggle hints from OpenSCAD output (there can be multiple).
     const matches = Array.from(
       detailsStr.matchAll(/'([^']+?)'\s+is set to\s+'([^']+?)'/gi)
@@ -6864,6 +6865,27 @@ async function initApp() {
           autoPreviewEnabled,
           autoPreviewEnabled ? null : 'user'
         );
+        // setEnabled() catches up a preview gone out of date; a file opened
+        // while it was off has never been drawn, so it is drawn now.
+        const state = stateManager.getState();
+        if (
+          autoPreviewEnabled &&
+          state.uploadedFile &&
+          autoPreviewController.state === PREVIEW_STATE.IDLE
+        ) {
+          autoPreviewController
+            .forcePreview(state.parameters)
+            .catch((error) => {
+              console.error(
+                '[AutoPreview] Preview on turning on failed:',
+                error
+              );
+              showErrorToast({
+                title: 'Preview Failed',
+                message: error.message,
+              });
+            });
+        }
       }
     });
   }
@@ -7893,6 +7915,20 @@ async function initApp() {
   // Import shared validation schemas (FILE_SIZE_LIMITS is imported at top of initApp() to avoid TDZ)
   ({ validateFileUpload } = await import('./js/validation-schemas.js'));
 
+  // A file's offer of a place in Saved Projects waits for the kept-draft
+  // question, so the two never open at once. A draft restored in answer has
+  // replaced the file the offer was for, and then nothing is offered.
+  const savedProjectsUIForFiles = {
+    ...savedProjectsUI,
+    showSaveProjectPrompt: async (fileData, options) => {
+      await draftQuestionSettled;
+      if (stateManager.getState().uploadedFile !== fileData.uploadedFile) {
+        return { saved: false };
+      }
+      return savedProjectsUI.showSaveProjectPrompt(fileData, options);
+    },
+  };
+
   // Initialize file handler controller
   fileHandler = initFileHandler({
     getPreviewManager: () => previewManager,
@@ -7918,7 +7954,7 @@ async function initApp() {
     getDisplayOptionsCtrl: getDisplayOptionsController,
     getCompanionFilesCtrl: () => companionFilesCtrl,
     getHfmCtrl: () => hfmCtrl,
-    getSavedProjectsUI: () => savedProjectsUI,
+    getSavedProjectsUI: () => savedProjectsUIForFiles,
     getFileActionsController: () => fileActionsController,
     getLibraryManager: () => libraryManager,
     getPreviewContainer: () => previewContainer,
@@ -8196,7 +8232,9 @@ async function initApp() {
     // Debounce progress-style updates (percent text) to avoid announcement spam.
     if (announce) {
       const shouldDebounce = /\d+%/.test(message);
-      stateManager.announceChange(message, shouldDebounce);
+      stateManager.announceChange(message, shouldDebounce, {
+        source: 'status',
+      });
     }
   }
 
@@ -15297,7 +15335,9 @@ if (rounded) {
       summary.push(`${warnCount} warning${warnCount > 1 ? 's' : ''}`);
     if (echoCount > 0)
       summary.push(`${echoCount} echo message${echoCount > 1 ? 's' : ''}`);
-    announceImmediate(`Model has ${summary.join(', ')}`);
+    announceImmediate(`Model has ${summary.join(', ')}`, {
+      source: 'messages',
+    });
   }
 
   /**

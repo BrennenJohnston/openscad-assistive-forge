@@ -38,6 +38,7 @@ import {
   buildDefineArgs,
 } from '../js/scad-param-formatter.js';
 import { validateSVGOutput } from './svg-validation.js';
+import { isLibraryOnlySource } from './library-file.js';
 import { postProcessDXF } from './dxf-postprocess.js';
 import { parseOffTriangleCount } from './mesh-stats.js';
 import { generateMissingFileWarnings } from './missing-file-warnings.js';
@@ -2145,6 +2146,15 @@ async function render(payload) {
       callMainInvoked: _callMainInvoked,
     });
 
+    // An empty top level in a file that only defines modules and functions:
+    // a library, which draws nothing until another file uses it.
+    const libraryFile =
+      Boolean(openscadConsoleOutput) &&
+      /Current top level object is empty|top-level object is empty/.test(
+        openscadConsoleOutput
+      ) &&
+      isLibraryOnlySource(scadContent);
+
     self.postMessage({
       type: 'ERROR',
       payload: {
@@ -2154,6 +2164,7 @@ async function render(payload) {
         details,
         consoleOutput: openscadConsoleOutput || '',
         needsRestart,
+        libraryFile,
       },
     });
   }

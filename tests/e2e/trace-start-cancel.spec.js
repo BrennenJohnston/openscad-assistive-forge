@@ -454,14 +454,14 @@ test.describe('Start, a bar that moves, and Cancel', () => {
       .poll(
         async () => {
           const heard = await page.evaluate(() => window.__heard ?? []);
-          return heard.filter((t) => /^Converted: \d+ shapes?$/.test(t)).length;
+          return heard.filter((t) => /(^|\. )Converted: \d+ shapes?(\.|$)/.test(t)).length;
         },
         { timeout: 15_000, intervals: [200, 400, 800] }
       )
       .toBeGreaterThanOrEqual(1);
 
     const heard = await page.evaluate(() => window.__heard ?? []);
-    const completions = heard.filter((t) => /^Converted: \d+ shapes?$/.test(t));
+    const completions = heard.filter((t) => /(^|\. )Converted: \d+ shapes?(\.|$)/.test(t));
     expect(completions.length, `heard: ${heard.join(' | ')}`).toBe(1);
     // The stages are VISIBLE, never spoken: one action, one announcement.
     expect(
@@ -798,7 +798,9 @@ test.describe('a changed setting waits for the press where the picture is not qu
     await expect(p.note).toContainText('Convert again when you are ready.');
     const heard = await page.evaluate(() => window.__heard ?? []);
     expect(
-      heard.some((t) => /^Colors\. .*Convert again when you are ready\.$/.test(t)),
+      // The sentence may share its message with one that waited beside it
+      // (the last conversion's own completion): it is whole either way.
+      heard.some((t) => /(^|\. )Colors\. .*Convert again when you are ready\.( |$)/.test(t)),
       `heard: ${heard.join(' | ')}`
     ).toBe(true);
 
@@ -978,15 +980,15 @@ test.describe('the shape gate, and a Cancel that lands', () => {
     let heard = [];
     while (Date.now() < deadline) {
       heard = await page.evaluate(() => window.__heard ?? []);
-      if (heard.some((t) => t.startsWith('This picture traced into'))) break;
+      if (heard.some((t) => t.includes('This picture traced into'))) break;
       await page.waitForTimeout(300);
     }
     expect(
-      heard.filter((t) => t.startsWith('This picture traced into')).length,
+      heard.filter((t) => t.includes('This picture traced into')).length,
       `heard: ${heard.join(' | ')}`
     ).toBe(1);
     expect(
-      heard.filter((t) => t.startsWith('Converted: ')),
+      heard.filter((t) => t.includes('Converted: ')),
       `heard: ${heard.join(' | ')}`
     ).toEqual([]);
   });

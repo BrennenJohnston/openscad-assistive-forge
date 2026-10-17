@@ -680,7 +680,19 @@ export function createDrawingEditor({
   const statusLine = document.createElement('div');
   statusLine.className = 'drawing-editor-statusline';
   statusLine.append(status);
-  root.append(skipToTable, toolbar, statusLine, body);
+  // The editor opened before any picture: a sentence saying what it takes,
+  // and the button that chooses one. The header keeps the name and Close.
+  const emptyState = document.createElement('div');
+  emptyState.className = 'drawing-editor-empty';
+  emptyState.hidden = true;
+  const emptySentence = document.createElement('p');
+  emptySentence.className = 'drawing-editor-empty-sentence';
+  const emptyChoose = document.createElement('button');
+  emptyChoose.type = 'button';
+  emptyChoose.className = 'btn btn-primary drawing-editor-empty-choose';
+  emptyChoose.textContent = S.choosePicture;
+  emptyState.append(emptySentence, emptyChoose);
+  root.append(skipToTable, toolbar, statusLine, emptyState, body);
   // Whatever else is in the element is an editor nobody destroyed;
   // the surface owns the element and there is one editor in it.
   surfaceEl
@@ -803,6 +815,9 @@ export function createDrawingEditor({
   stage.appendChild(legend);
 
   let isOpen = false;
+  /** Open before any picture: the empty state on screen. */
+  let empty = false;
+  let chooseFile = null;
   let purpose = 'relief';
   /** 'drawing' or 'charm'. Back to the drawing on every open. */
   let view = 'drawing';
@@ -891,6 +906,7 @@ export function createDrawingEditor({
     delete root.dataset.cropFirst;
     resetView();
     status.textContent = '';
+    leaveEmpty();
     if (typeof onClose === 'function') onClose(surfaceEl);
     if (fullscreen && previousFocus?.focus) previousFocus.focus();
     previousFocus = null;
@@ -938,7 +954,76 @@ export function createDrawingEditor({
    *   plus `purpose` ('relief' | 'stencil'), `openedSentence` and
    *   `initialPlan` (a saved plan, laid back over the regions found).
    */
+  /** The empty state off, whatever replaces it. */
+  function leaveEmpty() {
+    empty = false;
+    chooseFile = null;
+    delete root.dataset.empty;
+    emptyState.hidden = true;
+  }
+
+  emptyChoose.addEventListener('click', () => {
+    if (typeof chooseFile === 'function') chooseFile();
+  });
+
+  /** Tab stays inside a full-screen editor, and Escape is the way out. */
+  function startFullscreenTrap(initialFocus) {
+    trap = createDocumentFocusTrap(root, {
+      // A row's menu is the smallest thing open, so it is the first thing
+      // Escape shuts. Without this, one press with a menu open left the
+      // editor entirely - a long way further than anybody meant to go.
+      onEscape: () => {
+        if (cropPanel.isOpen()) {
+          cropPanel.cancel();
+          return;
+        }
+        if (closeToolbarMore()) return;
+        if (workspace.closeOpenMenu?.()) return;
+        leave();
+      },
+    });
+    trap.activate({ initialFocus, initialFocusDelay: 0 });
+  }
+
+  /**
+   * Open the editor before any picture. It says what it takes (the host
+   * builds the sentence from the file types its control accepts) and offers
+   * to choose a file; the host opens the editor on the file chosen. Close
+   * and Escape close it as any editor.
+   *
+   * @param {object} options
+   * @param {string} options.sentence - what to choose, said once (A11Y)
+   * @param {() => void} options.onChooseFile - opens the file chooser
+   * @param {() => void} [options.onClose] - the editor closed with nothing
+   */
+  function openEmpty({
+    sentence = '',
+    onChooseFile = null,
+    onClose: closed,
+  } = {}) {
+    if (isOpen) return;
+    callbacks = typeof closed === 'function' ? { onClose: closed } : {};
+    resetView();
+    empty = true;
+    chooseFile = onChooseFile;
+    root.dataset.empty = 'true';
+    emptySentence.textContent = sentence;
+    emptyState.hidden = false;
+    isOpen = true;
+    show();
+    // Said by the host's announcer, not the status line: the sentence is on
+    // screen already, and the status line would show it twice.
+    if (typeof announce === 'function' && sentence) announce(sentence);
+    if (typeof onOpen === 'function') onOpen(surfaceEl);
+    previousFocus = document.activeElement;
+    if (fullscreen) startFullscreenTrap(title);
+    title.focus();
+  }
+
   function open(svgString, analysis, options = {}) {
+    // A drawing chosen from the empty editor opens in it.
+    const fromEmpty = empty;
+    if (fromEmpty) leaveEmpty();
     const {
       purpose: askedPurpose,
       openedSentence,
@@ -1033,35 +1118,22 @@ export function createDrawingEditor({
       }
     }
 
-    if (reopening) return;
-    if (typeof onOpen === 'function') onOpen(surfaceEl);
-    previousFocus = document.activeElement;
     // The crop view's first row is where a Crop first opening lands.
     const cropTop = cropPanel.element.querySelector(
       'input[type="range"][data-inset="top"]'
     );
+    if (reopening) {
+      // From the empty editor focus was on its button, which is gone now.
+      if (fromEmpty) (cropFirst && cropTop ? cropTop : title).focus();
+      return;
+    }
+    if (typeof onOpen === 'function') onOpen(surfaceEl);
+    previousFocus = document.activeElement;
     if (fullscreen) {
       // The screen is the editor now, so Tab stays inside it and Escape is
       // the way out. Over the preview there is no trap: the customizer is
       // one Tab away on purpose.
-      trap = createDocumentFocusTrap(root, {
-        // A row's menu is the smallest thing open, so it is the first thing
-        // Escape shuts. Without this, one press with a menu open left the
-        // editor entirely - a long way further than anybody meant to go.
-        onEscape: () => {
-          if (cropPanel.isOpen()) {
-            cropPanel.cancel();
-            return;
-          }
-          if (closeToolbarMore()) return;
-          if (workspace.closeOpenMenu?.()) return;
-          leave();
-        },
-      });
-      trap.activate({
-        initialFocus: cropFirst && cropTop ? cropTop : title,
-        initialFocusDelay: 0,
-      });
+      startFullscreenTrap(cropFirst && cropTop ? cropTop : title);
     }
     // After the host's own open hook: at phone width the customizer drawer
     // stands aside for the editor and moves focus to its toggle as
@@ -2373,6 +2445,7 @@ export function createDrawingEditor({
 
   return {
     open,
+    openEmpty,
     close: () => leave(),
     dismiss: dismissSurface,
     setCount,

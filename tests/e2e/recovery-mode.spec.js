@@ -167,6 +167,28 @@ test.describe('Recovery Mode after an interrupted start', () => {
     ).toBe(false)
   })
 
+  test('its button draws a file that was opened and never drawn', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await startInterrupted(page)
+    await page.waitForTimeout(1500)
+    await openAFile(page)
+    const indicator = page.locator('.preview-state-indicator')
+    await expect(indicator).not.toHaveClass(/state-current/)
+    expect(
+      await page.evaluate(() => Boolean(window.previewManager?.mesh)),
+      'nothing drawn while automatic preview is off'
+    ).toBe(false)
+
+    const banner = page.getByRole('region', { name: 'Recovery Mode' })
+    await banner
+      .getByRole('button', { name: 'Turn automatic preview back on' })
+      .click()
+    // No value changed: the file waiting since it was opened is drawn now.
+    await expect(indicator).toHaveClass(/state-current/, { timeout: 60000 })
+  })
+
   test('Dismiss puts the notice away, keeps focus on the page, and leaves automatic preview off', async ({
     page,
   }) => {

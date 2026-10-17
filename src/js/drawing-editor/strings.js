@@ -10,6 +10,56 @@
  * @license GPL-3.0-or-later
  */
 
+/** The file types a picture control names, as people say them. */
+const DRAWING_FORMATS = { svg: 'SVG', dxf: 'DXF' };
+const PHOTO_FORMATS = {
+  png: 'PNG',
+  jpg: 'JPG',
+  jpeg: 'JPG',
+  webp: 'WebP',
+  gif: 'GIF',
+  bmp: 'BMP',
+};
+
+/** "an" before a format said with a vowel sound (SVG, an "es"), else "a". */
+const article = (word) => (/^[AEFHILMNORSX]/.test(word) ? 'an' : 'a');
+
+/** "PNG", "PNG or JPG", "PNG, JPG or WebP". */
+const orList = (words) =>
+  words.length <= 1
+    ? words[0] || ''
+    : `${words.slice(0, -1).join(', ')} or ${words[words.length - 1]}`;
+
+/**
+ * The empty editor's sentence, from the file types the control accepts:
+ * "Choose a picture to draw with: an SVG drawing, or a PNG or JPG photo."
+ * A11Y.
+ * @param {string[]} extensions - as the parameter declares them
+ * @returns {string}
+ */
+export function emptyPictureSentence(extensions = []) {
+  const exts = extensions.map((e) =>
+    String(e).trim().toLowerCase().replace(/^\./, '')
+  );
+  const unique = (list) => [...new Set(list)];
+  const drawings = unique(
+    exts.filter((e) => DRAWING_FORMATS[e]).map((e) => DRAWING_FORMATS[e])
+  );
+  const photos = unique(
+    exts.filter((e) => PHOTO_FORMATS[e]).map((e) => PHOTO_FORMATS[e])
+  );
+  const parts = [];
+  if (drawings.length) {
+    parts.push(`${article(drawings[0])} ${orList(drawings)} drawing`);
+  }
+  if (photos.length) {
+    parts.push(`${article(photos[0])} ${orList(photos)} photo`);
+  }
+  return parts.length
+    ? `Choose a picture to draw with: ${parts.join(', or ')}.`
+    : 'Choose a picture to draw with.';
+}
+
 /** "1 region" or "N regions", and the same for anything else countable. */
 export const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
@@ -349,6 +399,9 @@ export const EDITOR_STRINGS = Object.freeze({
   cropFirstViewOpen:
     'Crop view open on your picture. Four sliders take an edge off; Save crop starts the conversion.',
   cropFirstCanceled: 'Crop canceled. Nothing was converted.',
+
+  /** The empty editor's button, opened before any picture. A11Y. */
+  choosePicture: 'Choose a picture',
 
   /**
    * A reopen whose stored result is trusted, so Apply is ready at once and

@@ -112,6 +112,7 @@ test.describe('the Drawing / Charm switch', () => {
       }
     })
     const door = page
+      .locator('.svg-prep-status')
       .getByRole('button', { name: 'Open the drawing editor' })
       .first()
     await door.waitFor({ state: 'visible', timeout: 60000 })
@@ -447,6 +448,7 @@ test.describe('the toolbar on the charm host', () => {
       }
     })
     const door = page
+      .locator('.svg-prep-status')
       .getByRole('button', { name: 'Open the drawing editor' })
       .first()
     await door.waitFor({ state: 'visible', timeout: 60000 })
@@ -716,7 +718,9 @@ test.describe('the toolbar on the charm host', () => {
     const badge = control.locator('.svg-prep-status-badge')
     await expect(badge).toBeVisible({ timeout: 30000 })
     await expect(badge).toHaveText(/shapes/)
-    const door = control.getByRole('button', { name: 'Open the drawing editor' })
+    const door = control
+      .locator('.svg-prep-status')
+      .getByRole('button', { name: 'Open the drawing editor' })
     await expect(door).toBeVisible({ timeout: 30000 })
 
     // And it goes back in.
@@ -1074,7 +1078,9 @@ test.describe('the too-thin check on the charm host', () => {
       timeout: 120000,
     })
     // A traced picture never opens the editor by itself; the card's door does.
-    const door = control.getByRole('button', { name: 'Open the drawing editor' })
+    const door = control
+      .locator('.svg-prep-status')
+      .getByRole('button', { name: 'Open the drawing editor' })
     await expect(door).toBeVisible({ timeout: 30000 })
     await door.scrollIntoViewIfNeeded()
     await door.click()
@@ -1814,7 +1820,9 @@ test.describe('the editor reopens where it was left', () => {
 
     // Reopen: no "Combining N shapes" wait (a full combine is 14.7 s at 200
     // shapes), and Apply is ready at once.
-    const door = control.getByRole('button', { name: 'Open the drawing editor' })
+    const door = control
+      .locator('.svg-prep-status')
+      .getByRole('button', { name: 'Open the drawing editor' })
     await door.scrollIntoViewIfNeeded()
     await door.click()
     await expect(editor).toBeVisible({ timeout: 60000 })
@@ -1878,7 +1886,9 @@ test.describe('the editor reopens where it was left', () => {
       { timeout: 240000 }
     )
     const door = () =>
-      control().getByRole('button', { name: 'Open the drawing editor' })
+      control()
+      .locator('.svg-prep-status')
+      .getByRole('button', { name: 'Open the drawing editor' })
     await expect(door()).toBeVisible({ timeout: 30000 })
     await expect(page.locator('.preview-state-indicator')).toHaveText(
       /Preview ready|Preview \(cached\)/,
@@ -2029,7 +2039,9 @@ test.describe('the offset thickens a drawn line', () => {
     const control = page.locator('.param-control--file', {
       has: page.locator('#param-design_file'),
     })
-    const door = control.getByRole('button', { name: 'Open the drawing editor' })
+    const door = control
+      .locator('.svg-prep-status')
+      .getByRole('button', { name: 'Open the drawing editor' })
     // A small picture starts converting by itself on a quick machine; a slow
     // one waits for the press (a CI runner can call this 0.36 MP grid "a few
     // seconds" and offer Start, so the door never comes). The trace is the
@@ -2165,5 +2177,94 @@ test.describe('Reset puts the Layer column back and says so', () => {
     ).toEqual([])
     await editor.locator('.drawing-editor-close').click()
     await expect(editor).toBeHidden({ timeout: 30000 })
+  })
+})
+
+/**
+ * The editor before any picture. The door is on the picture's control from
+ * the start; behind it the editor says what it takes and offers to choose a
+ * file, and the file chosen opens in it.
+ */
+test.describe('the drawing editor without a picture', () => {
+  const STAR = path.join(
+    process.cwd(),
+    'public',
+    'examples',
+    'q-charm',
+    'star.svg'
+  )
+
+  test('the door is there before a picture; the editor asks for one, and the one chosen opens in it', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    })
+    await page.goto('/')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      timeout: 240000,
+    })
+    await page.selectOption('#charmVariantSelect', 'q-charm')
+    await page.click('#openCharmMakerBtn')
+    await page.waitForFunction(
+      () =>
+        Object.keys(window.stateManager?.getState()?.parameters || {}).length >
+        0,
+      null,
+      { timeout: 120000 }
+    )
+    for (let i = 0; i < 2; i++) {
+      const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+      if (await notNow.isVisible().catch(() => false)) {
+        await notNow.click()
+        await page.waitForTimeout(300)
+      }
+    }
+    await page.evaluate(() => {
+      let d = document.querySelector('#param-design_file')?.closest('details')
+      while (d) {
+        d.open = true
+        d = d.parentElement?.closest('details')
+      }
+    })
+
+    const control = page.locator('.file-upload-container', {
+      has: page.locator('#param-design_file'),
+    })
+    const door = control.getByRole('button', {
+      name: 'Open the drawing editor',
+    })
+    await expect(door).toBeVisible({ timeout: 60000 })
+    await door.scrollIntoViewIfNeeded()
+    await door.click()
+
+    await expect(surface(page)).toBeVisible({ timeout: 60000 })
+    await expect(surface(page).locator('.drawing-editor-empty p')).toHaveText(
+      'Choose a picture to draw with: an SVG or DXF drawing, or a PNG or JPG photo.'
+    )
+    // Escape closes it like any editor, and focus is back on the door.
+    await page.keyboard.press('Escape')
+    await expect(surface(page)).toBeHidden({ timeout: 30000 })
+    await expect(door).toBeFocused()
+    await door.click()
+    await expect(surface(page)).toBeVisible({ timeout: 60000 })
+    const choose = surface(page).getByRole('button', {
+      name: 'Choose a picture',
+    })
+    await expect(choose).toBeVisible()
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      choose.click(),
+    ])
+    await chooser.setFiles(STAR)
+
+    await expect(
+      page.locator('.svg-prep-result-pane svg').first()
+    ).toBeVisible({ timeout: 90000 })
+    await expect(surface(page).locator('.drawing-editor-empty')).toBeHidden()
+    // With a drawing in it, the control's own door is the card's again.
+    await expect(door).toHaveCount(1)
   })
 })

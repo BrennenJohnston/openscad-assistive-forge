@@ -519,15 +519,14 @@ export class StateManager {
    * Delegates to shared announcer.js utility for consistent behavior.
    * @param {string} message
    * @param {boolean} debounce - Whether to debounce (for rapid updates like sliders)
+   * @param {Object} [options] - As announce() takes them (its source)
    */
-  announceChange(message, debounce = false) {
-    if (debounce) {
-      // Debounced: use announce() with default 350ms debounce
-      announce(message);
-    } else {
-      // Immediate: use announceImmediate() for discrete actions
-      announceImmediate(message);
-    }
+  announceChange(message, debounce = false, options) {
+    // Debounced (default 350 ms) for rapid updates; immediate for discrete
+    // actions. Options only when given: most callers name no source.
+    const say = debounce ? announce : announceImmediate;
+    if (options) say(message, options);
+    else say(message);
   }
 }
 
