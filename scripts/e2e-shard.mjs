@@ -142,8 +142,9 @@ export const MEASURED_SECONDS = {
   'alt-view-consistency.spec.js': 185.0,
   // Two cases, each loading the box: 17.6 s locally; booked at 30; a third
   // (off and on again, a theme change, about 25 s) adds 30; a fourth (the
-  // sounds, about 20 s) adds 30.
-  'alt-view-reveal.spec.js': 90.0,
+  // sounds, about 20 s) adds 30; a slider drag in the fourth (about 10 s)
+  // adds 10.
+  'alt-view-reveal.spec.js': 100.0,
   // Eight cases, each loading the box, most waiting out the key's 5 s arrival
   // or the tune: about 75 s locally; booked at 110.
   'alt-view-arrival.spec.js': 110.0,

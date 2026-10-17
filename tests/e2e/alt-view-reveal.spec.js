@@ -8,6 +8,8 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { skipWithoutWebGL } from './helpers/webgl.js';
 import { canSound, listenForSound, probeSound } from './helpers/sound.js';
 
@@ -16,6 +18,15 @@ const GREETING = 'ALT VIEW ONLINE';
 const ON_SECONDS = 2.21;
 const LOOK_SECONDS = 0.8;
 const OFF_SECONDS = 2.17;
+// The phosphor look's fifth dial click, in seconds: the file's data bytes
+// over two (16-bit mono) over its rate. The browser decodes it at its own
+// rate, so a played click is known by its length to a couple of
+// milliseconds (the neighbouring tones are 15 ms longer and shorter).
+const P5_SECONDS =
+  readFileSync(fileURLToPath(new URL('../../public/sounds/dials/p5.wav', import.meta.url)))
+    .readUInt32LE(40) /
+  2 /
+  32000;
 
 async function openBox(page) {
   await page.addInitScript(() => {
@@ -241,14 +252,16 @@ test.describe('The Alt View is heard', () => {
       !(await canSound(page)),
       'this browser cannot start a sound here (no sound device)'
     );
-    // The long sounds in order, and the key presses (each about 0.16 s)
-    // counted apart, since a press's take varies.
+    // The long sounds in order, the key presses (each about 0.16 s) counted
+    // apart, since a press's take varies, and the dial clicks (under 0.13 s)
+    // by their length, which tells one click file from another.
     const heard = () =>
       page.evaluate(() => {
-        const all = window.__sounds.map((s) => Number(s.seconds.toFixed(2)));
+        const all = window.__sounds.map((s) => s.seconds);
         return {
-          long: all.filter((s) => s > 0.5),
+          long: all.filter((s) => s > 0.5).map((s) => Number(s.toFixed(2))),
           keys: all.filter((s) => s >= 0.13 && s <= 0.2).length,
+          clicks: all.filter((s) => s < 0.13).map((s) => Number(s.toFixed(4))),
         };
       });
 
@@ -262,6 +275,47 @@ test.describe('The Alt View is heard', () => {
     // A button in the look: a key goes down, then up.
     await page.locator('#cameraPanelToggle').click();
     await expect.poll(async () => (await heard()).keys, { timeout: 5_000 }).toBe(2);
+
+    // A slider in the look, dragged: a click per step crossed, the same file
+    // every time (the Characters slider's steps give it the fifth tone, the
+    // file p5.wav), and silence once it is let go.
+    const characters = page.locator('#_hfmFontScale');
+    await expect(characters).toBeVisible();
+    await characters.scrollIntoViewIfNeeded();
+    const box = await characters.boundingBox();
+    const thumbX = box.x + (box.width * (0.6 - 0.3)) / (2.5 - 0.3);
+    const y = box.y + box.height / 2;
+    await page.mouse.move(thumbX, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++) await page.mouse.move(thumbX + i * 6, y);
+    await page.mouse.up();
+    // The drag's clicks, once they have all started (each waits its turn on
+    // the decoder): the count is read every half second until it holds.
+    let lastCount = -1;
+    await expect
+      .poll(
+        async () => {
+          const count = (await heard()).clicks.length;
+          const held = count === lastCount;
+          lastCount = count;
+          return held && count >= 3;
+        },
+        { timeout: 10_000, intervals: [500] }
+      )
+      .toBe(true);
+    const dragged = await heard();
+    expect(new Set(dragged.clicks).size, 'one click file for the whole drag').toBe(1);
+    expect(Math.abs(dragged.clicks[0] - P5_SECONDS), 'the fifth tone').toBeLessThan(0.002);
+    expect(dragged.keys, 'a slider is not a key').toBe(2);
+    await page.waitForTimeout(500);
+    expect((await heard()).clicks.length, 'silence once let go').toBe(dragged.clicks.length);
+    // The keyboard: an arrow is a step, so a click.
+    await characters.focus();
+    await page.keyboard.press('ArrowLeft');
+    await expect
+      .poll(async () => (await heard()).clicks.length, { timeout: 5_000 })
+      .toBe(dragged.clicks.length + 1);
+    expect((await heard()).clicks.at(-1), 'the same file').toBe(dragged.clicks[0]);
     await page.locator('#cameraPanelToggle').click();
     await expect.poll(async () => (await heard()).keys, { timeout: 5_000 }).toBe(4);
 
@@ -286,6 +340,9 @@ test.describe('The Alt View is heard', () => {
       .toEqual([ON_SECONDS, LOOK_SECONDS, OFF_SECONDS]);
     // Nothing else follows: the moment is over, and the key made no key sound.
     await page.waitForTimeout(1_500);
-    expect(await heard()).toEqual({ long: [ON_SECONDS, LOOK_SECONDS, OFF_SECONDS], keys: 6 });
+    const last = await heard();
+    expect(last.long).toEqual([ON_SECONDS, LOOK_SECONDS, OFF_SECONDS]);
+    expect(last.keys).toBe(6);
+    expect(last.clicks.length).toBe(dragged.clicks.length + 1);
   });
 });

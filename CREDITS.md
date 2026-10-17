@@ -77,6 +77,13 @@ While the Alt View is on, every button press sounds a key of the button's size. 
 - **Files**: `public/sounds/keys/`
 - **Details**: the keys, sources and licenses are in `THIRD_PARTY_NOTICES.md`
 
+### Dial Clicks
+
+While the Alt View is on, a slider clicks step by step as it is dragged, like a dial. The green and amber looks use a click from "Clicky Knob Turning" by shewbox (Creative Commons Attribution 3.0); the blue DOS look a click from "4-position-rotating-switch" by copyc4t (Creative Commons Attribution 4.0); each is played at seven speeds, the tone telling how fine the slider's steps are.
+
+- **Files**: `public/sounds/dials/`
+- **Details**: the sources, licenses and changes are in `THIRD_PARTY_NOTICES.md`
+
 ---
 
 ## Design Inspirations

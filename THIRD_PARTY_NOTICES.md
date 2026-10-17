@@ -402,6 +402,37 @@ silence cut and the pair resampled to 32 kHz mono.
 
 ---
 
+## Dial Clicks (CC-BY-3.0, CC-BY-4.0)
+
+While the Alt View is on, a slider clicks once per step as it is dragged,
+like a dial. Each look has one click, cut from a recording on Freesound and
+rendered at seven speeds into the files under `public/sounds/dials/`
+(`p1.wav` to `p7.wav` and `d1.wav` to `d7.wav`, 1 the lowest tone):
+
+### Clicky Knob Turning (CC-BY-3.0)
+
+The green and amber looks use one click of "Clicky Knob Turning.wav" by
+shewbox: https://freesound.org/s/30827/
+
+- **Author**: shewbox
+- **License**: Creative Commons Attribution 3.0 Unported,
+  https://creativecommons.org/licenses/by/3.0/
+- **Changes**: one click of the recording cut out (120 ms, with short fades),
+  played at seven speeds from 0.6 to 1.6, resampled to 32 kHz mono, levelled.
+
+### 4-position-rotating-switch (CC-BY-4.0)
+
+The blue DOS look uses one click of "4-position-rotating-switch.flac" by
+copyc4t: https://freesound.org/s/275958/
+
+- **Author**: copyc4t
+- **License**: Creative Commons Attribution 4.0 International,
+  https://creativecommons.org/licenses/by/4.0/
+- **Changes**: one click of the recording cut out (75 ms, with short fades),
+  played at seven speeds from 0.6 to 1.6, resampled to 32 kHz mono, levelled.
+
+---
+
 ## Iosevka Term (OFL-1.1)
 
 The mono UI variant self-hosts the Iosevka Term Regular WOFF2 font.

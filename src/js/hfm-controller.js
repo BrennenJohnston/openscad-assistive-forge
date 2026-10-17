@@ -16,8 +16,10 @@ import { announce, announceImmediate } from './announcer.js';
 import { playUnlockJingle } from './unlock-jingle.js';
 import {
   playCrtSound,
+  playDialSound,
   playKeySound,
   preloadCrtSounds,
+  preloadDialSounds,
   preloadKeySounds,
   stopCrtSound,
 } from './crt-sounds.js';
@@ -87,6 +89,15 @@ const _HFM_KEY_TARGET =
   'button, [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="tab"], [role="switch"]';
 let _hfmKeyListeners = null;
 let _hfmKeyDown = null;
+// A slider moved while the look is on clicks once per step crossed, as a
+// dial does, its tone by how many steps the slider has: the edges of the
+// seven tones, a slider of eight steps or fewer the lowest, one of more
+// than a hundred the highest. A drag that jumps several steps at once plays
+// at most four clicks, a few milliseconds apart.
+const _HFM_DIAL_STEP_EDGES = [8, 14, 22, 32, 48, 100];
+const _HFM_DIAL_CLICKS_MAX = 4;
+const _HFM_DIAL_CLICK_GAP_S = 0.012;
+const _hfmDials = new WeakMap();
 
 // The key's name says what it is; what it does is said once it is pressed.
 const _HFM_TOGGLE_NAME = 'Alt View';
@@ -897,9 +908,52 @@ function _playKeySound(el, phase) {
   });
 }
 
+// The slider a press or a move lands on.
+function _hfmDialTarget(event) {
+  const el = event.target;
+  return el instanceof HTMLInputElement && el.type === 'range' && !el.disabled
+    ? el
+    : null;
+}
+
+function _hfmDialVariant(el) {
+  const min = Number(el.min) || 0;
+  const max = Number(el.max) || 100;
+  const step = Number(el.step) || 1;
+  const steps = Math.round(Math.abs(max - min) / step);
+  let variant = 1;
+  for (const edge of _HFM_DIAL_STEP_EDGES) if (steps > edge) variant++;
+  return variant;
+}
+
+// A slider's tone is chosen once and kept, so one drag plays one file.
+function _hfmDial(el) {
+  let dial = _hfmDials.get(el);
+  if (!dial) {
+    dial = { variant: _hfmDialVariant(el), value: NaN };
+    _hfmDials.set(el, dial);
+  }
+  return dial;
+}
+
+function _playDialSound(variant, delaySeconds) {
+  if (!_soundsOn()) return;
+  playDialSound(_hfmKeySet(), variant, delaySeconds).catch((error) => {
+    console.warn(`[Alt View] A dial click did not play:`, error);
+  });
+}
+
+function _preloadLookSounds() {
+  if (!_soundsOn()) return;
+  const set = _hfmKeySet();
+  preloadKeySounds(set);
+  preloadDialSounds(set);
+}
+
+// The keys and the dials: every button and every slider of the look.
 function _installKeySounds() {
   if (_hfmKeyListeners) return;
-  if (_soundsOn()) preloadKeySounds(_hfmKeySet());
+  _preloadLookSounds();
   const down = (event) => {
     const el = _hfmKeyTarget(event);
     if (!el) return;
@@ -924,12 +978,38 @@ function _installKeySounds() {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     up();
   };
+  // A slider taken hold of, by pointer or key: where it stands, so the
+  // first move's steps are counted from there.
+  const dialDown = (event) => {
+    const el = _hfmDialTarget(event);
+    if (el) _hfmDial(el).value = Number(el.value);
+  };
+  // Every move the slider makes: a click per step crossed, nothing for a
+  // move that left the value where it was.
+  const dialInput = (event) => {
+    const el = _hfmDialTarget(event);
+    if (!el) return;
+    const dial = _hfmDial(el);
+    const value = Number(el.value);
+    const step = Number(el.step) || 1;
+    const crossed = Number.isFinite(dial.value)
+      ? Math.round(Math.abs(value - dial.value) / step)
+      : 1;
+    dial.value = value;
+    const clicks = Math.min(crossed, _HFM_DIAL_CLICKS_MAX);
+    for (let i = 0; i < clicks; i++) {
+      _playDialSound(dial.variant, i * _HFM_DIAL_CLICK_GAP_S);
+    }
+  };
   _hfmKeyListeners = [
     ['pointerdown', down],
     ['pointerup', up],
     ['pointercancel', up],
     ['keydown', keydown],
     ['keyup', keyup],
+    ['pointerdown', dialDown],
+    ['keydown', dialDown],
+    ['input', dialInput],
   ];
   for (const [type, fn] of _hfmKeyListeners) {
     document.addEventListener(type, fn, true);
@@ -1073,7 +1153,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
     lastMode = mode;
     if (_hfmEnabled && classicCrossed) {
       _playAltViewMoment({ greeting: true, sound: 'look' });
-      if (_soundsOn()) preloadKeySounds(_hfmKeySet());
+      _preloadLookSounds();
     }
   };
   document.addEventListener('ui-mode-changed', _hfmModeListener);

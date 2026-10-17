@@ -1,11 +1,13 @@
 /**
  * The Alt View's sounds: a screen coming on, a look changing and a screen
- * going off, each a short recording played whole; and the keys, a keyboard's
+ * going off, each a short recording played whole; the keys, a keyboard's
  * press and release for every button of the look, chosen by the button's
- * size (the recordings and their makers are named in THIRD_PARTY_NOTICES.md).
- * A file is fetched ahead or the first time it is wanted, decoded once and
- * kept. The switch sounds play one at a time, the newest one asked for
- * winning; the keys play as pressed, over each other if need be.
+ * size; and the dial clicks a slider makes step by step, one click per look
+ * at seven speeds (the recordings and their makers are named in
+ * THIRD_PARTY_NOTICES.md). A file is fetched ahead or the first time it is
+ * wanted, decoded once and kept. The switch sounds play one at a time, the
+ * newest one asked for winning; the keys and the clicks play as pressed,
+ * over each other if need be.
  * @license GPL-3.0-or-later
  */
 
@@ -43,6 +45,11 @@ const KEY_SETS = {
     },
   },
 };
+// The dial clicks, by the look: one recording each, rendered at seven speeds
+// into seven files, variant 1 the lowest tone (a slider of few steps) to 7
+// the highest (one of many).
+const DIAL_SETS = ['p', 'd'];
+const DIAL_VARIANTS = 7;
 // A browser that has not let the page make sound yet leaves the audio
 // context waiting; past this the sound is given up.
 const START_TIMEOUT_MS = 1000;
@@ -133,8 +140,9 @@ function _fetchAhead(urls, what) {
   _armContext();
 }
 
-// Waits for the context to run, a second at most, then starts the buffer.
-async function _start(context, running, buffer) {
+// Waits for the context to run, a second at most, then starts the buffer,
+// now or after the delay given, on the context's own clock.
+async function _start(context, running, buffer, delaySeconds = 0) {
   let timer = null;
   await Promise.race([
     running,
@@ -148,7 +156,8 @@ async function _start(context, running, buffer) {
   const source = context.createBufferSource();
   source.buffer = buffer;
   source.connect(context.destination);
-  source.start();
+  if (delaySeconds > 0) source.start(context.currentTime + delaySeconds);
+  else source.start();
   return source;
 }
 
@@ -186,6 +195,24 @@ function _keyUrl(set, take, phase) {
   return KEY_SETS[set].phases
     ? `/sounds/keys/${take}-${phase}.wav`
     : `/sounds/keys/${take}.wav`;
+}
+
+/**
+ * Fetch a look's seven dial clicks now, once, so the first step is not
+ * waiting.
+ * @param {'p'|'d'} set
+ */
+export function preloadDialSounds(set) {
+  if (!DIAL_SETS.includes(set)) throw new Error(`No such dial set: ${set}`);
+  const urls = [];
+  for (let variant = 1; variant <= DIAL_VARIANTS; variant++) {
+    urls.push(_dialUrl(set, variant));
+  }
+  _fetchAhead(urls, 'dial');
+}
+
+function _dialUrl(set, variant) {
+  return `/sounds/dials/${set}${variant}.wav`;
 }
 
 /** Ends the switch sound playing now, if any. */
@@ -247,5 +274,24 @@ export async function playKeySound(set, band, phase) {
   const running = context.resume();
   const buffer = await _bufferFor(_keyUrl(set, take, phase), context);
   await _start(context, running, buffer);
+  return buffer.duration;
+}
+
+/**
+ * Play a dial click for a slider's step: the look's one click, at the
+ * speed of the variant, now or a few milliseconds on (a drag that jumps
+ * several steps plays its clicks a little apart).
+ * @param {'p'|'d'} set - The look's dial set
+ * @param {number} variant - The tone, 1 (lowest) to 7 (highest)
+ * @param {number} [delaySeconds] - How long after now the click starts
+ * @returns {Promise<number>} The click's length in seconds once it is queued
+ */
+export async function playDialSound(set, variant, delaySeconds = 0) {
+  if (!DIAL_SETS.includes(set)) throw new Error(`No such dial set: ${set}`);
+  const tone = Math.max(1, Math.min(DIAL_VARIANTS, Math.round(variant)));
+  const context = _audioContext();
+  const running = context.resume();
+  const buffer = await _bufferFor(_dialUrl(set, tone), context);
+  await _start(context, running, buffer, delaySeconds);
   return buffer.duration;
 }

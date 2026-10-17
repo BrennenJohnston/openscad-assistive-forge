@@ -85,6 +85,44 @@ describe('the key sound files', () => {
   });
 });
 
+// The dial clicks: one click per look at seven speeds, 1 the lowest tone.
+const DIALS_DIR = join(SOUNDS_DIR, 'dials');
+const DIAL_FILES = ['p', 'd'].flatMap((set) => [1, 2, 3, 4, 5, 6, 7].map((v) => `${set}${v}.wav`));
+
+describe('the dial click files', () => {
+  it.each(DIAL_FILES)(
+    '%s is a 32 kHz mono 16-bit WAV under 0.25 s with its peak at or under -1 dBFS',
+    (file) => {
+      const bytes = readFileSync(join(DIALS_DIR, file));
+      const header = wavHeader(bytes);
+      expect(header.riff).toBe('RIFF');
+      expect(header.channels).toBe(1);
+      expect(header.rate).toBe(32000);
+      expect(header.bits).toBe(16);
+      expect(header.dataBytes / 2 / 32000).toBeLessThan(0.25);
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      let peak = 0;
+      for (let at = 44; at + 1 < bytes.length; at += 2) peak = Math.max(peak, Math.abs(view.getInt16(at, true)));
+      expect(peak / 32768).toBeLessThanOrEqual(10 ** (-1 / 20));
+    }
+  );
+
+  it('each look\'s seven run from the longest, the lowest tone, to the shortest, the highest', () => {
+    for (const set of ['p', 'd']) {
+      const seconds = [1, 2, 3, 4, 5, 6, 7].map(
+        (v) => wavHeader(readFileSync(join(DIALS_DIR, `${set}${v}.wav`))).dataBytes / 2 / 32000
+      );
+      for (let v = 1; v < seconds.length; v++) expect(seconds[v], `${set}${v + 1} shorter than ${set}${v}`).toBeLessThan(seconds[v - 1]);
+    }
+  });
+
+  it('the fourteen files weigh under 120 KB together', () => {
+    const total = DIAL_FILES.reduce((n, f) => n + statSync(join(DIALS_DIR, f)).size, 0);
+    expect(total).toBeGreaterThan(0);
+    expect(total).toBeLessThan(120_000);
+  });
+});
+
 describe('playing a switch sound', () => {
   let context;
   let sources;
@@ -98,6 +136,7 @@ describe('playing a switch sound', () => {
     decodeGate = {};
     context = {
       state: 'running',
+      currentTime: 10,
       destination: { node: 'destination' },
       resume: vi.fn(() => Promise.resolve()),
       decodeAudioData: vi.fn(async ({ url }) => {
@@ -285,6 +324,39 @@ describe('playing a switch sound', () => {
     expect(urls).toContain('/sounds/keys/p7a-up.wav');
     preloadKeySounds('d');
     expect(globalThis.fetch).toHaveBeenCalledTimes(30);
+  });
+
+  it('plays a dial click by its look and variant, now or a moment later, over whatever else plays', async () => {
+    const { playDialSound, playCrtSound } = await load();
+    const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
+    await playCrtSound('on');
+    await expect(playDialSound('p', 4)).resolves.toBeGreaterThan(0);
+    expect(urls().at(-1)).toBe('/sounds/dials/p4.wav');
+    expect(sources[1].start).toHaveBeenCalledWith();
+    expect(sources[0].stopped, 'a click does not cut the switch sound').toBe(false);
+    await playDialSound('p', 4, 0.012);
+    expect(sources[2].start, 'a later click is timed on the context\'s clock').toHaveBeenCalledWith(10.012);
+    expect(globalThis.fetch, 'one fetch for the two').toHaveBeenCalledTimes(2);
+    await playDialSound('d', 7);
+    expect(urls().at(-1)).toBe('/sounds/dials/d7.wav');
+    await playDialSound('d', 0);
+    expect(urls().at(-1), 'a variant under 1 is 1').toBe('/sounds/dials/d1.wav');
+    await playDialSound('d', 12);
+    expect(globalThis.fetch, 'a variant past 7 is 7, already fetched').toHaveBeenCalledTimes(4);
+    expect(sources).toHaveLength(6);
+    expect(sources.slice(1).every((s) => s.started && !s.stopped)).toBe(true);
+    await expect(playDialSound('x', 1)).rejects.toThrow('No such dial set: x');
+  });
+
+  it('fetches a look\'s seven clicks ahead, once', async () => {
+    const { preloadDialSounds } = await load();
+    preloadDialSounds('d');
+    preloadDialSounds('d');
+    const urls = globalThis.fetch.mock.calls.map(([url]) => url);
+    expect(urls).toEqual([1, 2, 3, 4, 5, 6, 7].map((v) => `/sounds/dials/d${v}.wav`));
+    preloadDialSounds('p');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(14);
+    expect(() => preloadDialSounds('q')).toThrow('No such dial set: q');
   });
 
   it('gives up after a second when the browser will not start sound', async () => {
