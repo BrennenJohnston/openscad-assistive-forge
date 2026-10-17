@@ -146,6 +146,13 @@ if [ "$VARIANT" = "wasm-exceptions" ]; then
     exit 1
   fi
   sed -i '/-sDISABLE_EXCEPTION_CATCHING=0/d' "$SRC/CMakeLists.txt"
+  # The node build's -sNODEJS_CATCH_EXIT is gone from this Emscripten ("No
+  # longer supported"); the web build never sets it.
+  if [ "$(grep -c -- '-sNODEJS_CATCH_EXIT$' "$SRC/CMakeLists.txt")" != "1" ]; then
+    echo "OpenSCAD's CMakeLists.txt does not set -sNODEJS_CATCH_EXIT exactly once; upstream changed." >&2
+    exit 1
+  fi
+  sed -i '/-sNODEJS_CATCH_EXIT$/d' "$SRC/CMakeLists.txt"
 fi
 
 if [ "$VARIANT" != "baseline" ]; then
