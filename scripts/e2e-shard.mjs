@@ -151,16 +151,17 @@ export const MEASURED_SECONDS = {
   // One case on the box with WebGL switched off: 4.9 s locally; booked at 15.
   'alt-view-without-webgl.spec.js': 15.0,
   // Eighteen cases, each loading the box and picturing every icon button in
-  // four states, one picture a state (the phone cases tap the camera
-  // drawer's buttons too): 225 s locally. One picture per button per state
-  // took 430 s locally and about 40 test-minutes on CI's software drawing,
-  // two cases out of time, so this is booked at 600 until a CI run measures
-  // it.
+  // four states, one picture a state; the phone cases also tap one camera
+  // drawer button of each kind: 186 s locally. The version that tapped every
+  // drawer button ran 225 s locally and 699 s on a pull request's Chromium
+  // shard (2026-10-17), so this is booked at 580 until CI measures it. One
+  // picture per button per state had taken about 40 test-minutes on CI.
   // Chromium only (PROJECT_IGNORES): forcing :hover is a CDP feature.
-  'alt-view-icon-states.spec.js': 600.0,
-  // Four cases, each loading the box and turning the look on: 32 s locally;
-  // booked at 70 for the look's software drawing on CI.
-  'alt-view-sounds.spec.js': 70.0,
+  'alt-view-icon-states.spec.js': 580.0,
+  // Five cases, each loading the box and turning the look on (one drags the
+  // view for a second and a half): 45 s locally; booked at 100 for the
+  // look's software drawing on CI.
+  'alt-view-sounds.spec.js': 100.0,
   'editor-content-sync.spec.js': 70.4,
   'saved-projects.spec.js': 68.5,
   'classic-stow.spec.js': 66.8,

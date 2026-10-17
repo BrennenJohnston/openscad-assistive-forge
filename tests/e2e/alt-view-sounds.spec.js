@@ -194,6 +194,51 @@ test.describe('The sounds button', () => {
     expect(await page.evaluate(() => window.__sounds.length), 'one key').toBe(1);
   });
 
+  test('a drag of the view ticks as it turns, without sawing; a camera button sounds only its key', async ({
+    page,
+  }) => {
+    await listenForSound(page);
+    await openBox(page);
+    await probeSound(page);
+    await setLook(page, true);
+    test.skip(
+      !(await canSound(page)),
+      'this machine has no sound device, so no sound can start'
+    );
+    const panel = page.locator('#cameraPanelToggle');
+    if ((await panel.getAttribute('aria-expanded')) !== 'true') await panel.click();
+    await page.waitForTimeout(500);
+    const started = () => page.evaluate(() => window.__sounds.map((s) => s.at));
+
+    // A slow drag across the view: about two turns' worth of ticks.
+    const view = await page.locator('#previewContainer').boundingBox();
+    const y = view.y + view.height / 2;
+    const from = view.x + view.width * 0.3;
+    await page.waitForTimeout(500);
+    const before = (await started()).length;
+    await page.mouse.move(from, y);
+    await page.mouse.down();
+    for (let n = 1; n <= 30; n++) {
+      await page.mouse.move(from + n * 8, y);
+      await page.waitForTimeout(30);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(1_500);
+    const ticks = (await started()).slice(before);
+    expect(ticks.length, 'ticks while turning').toBeGreaterThanOrEqual(2);
+    const gaps = ticks.slice(1).map((at, n) => at - ticks[n]);
+    expect(Math.min(...gaps), 'never closer than the ceiling allows, ms').toBeGreaterThanOrEqual(
+      60
+    );
+
+    // Rotate left, pressed: its key's press and release, and no tick.
+    await page.waitForTimeout(500);
+    const beforeButton = (await started()).length;
+    await page.locator('#cameraRotateLeft').click();
+    await page.waitForTimeout(800);
+    expect((await started()).length - beforeButton, 'the key, down and up').toBe(2);
+  });
+
   test.describe('on a phone', () => {
     // No isMobile: Firefox rejects it when the browser context is created.
     test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });

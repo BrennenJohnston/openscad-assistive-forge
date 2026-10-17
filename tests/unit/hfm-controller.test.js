@@ -32,6 +32,8 @@ vi.mock('../../src/js/crt-sounds.js', () => ({
   preloadDialSounds: vi.fn(),
   setMuted: vi.fn(),
   duck: vi.fn(),
+  playCameraSound: vi.fn(async () => 0.06),
+  preloadCameraSounds: vi.fn(),
 }))
 
 // The screen waits for its sound to start, which the mock settles on a tick.
@@ -644,6 +646,195 @@ describe('the Alt View is heard', () => {
     expect(said).toEqual([false, true, false])
     document.removeEventListener('sounds-setting-change', listen)
     controller.disableAltViewWithPreview(toggle)
+  })
+
+  // The view's camera, placed around the model by its turn and tilt in
+  // degrees and its distance; the orbit controls tell of a drag's start,
+  // each change and its end.
+  function viewWithControls(pm) {
+    const camera = new PerspectiveCamera()
+    const target = new Vector3(0, 0, 0)
+    const listeners = {}
+    const controls = {
+      target,
+      addEventListener: vi.fn((type, fn) => {
+        ;(listeners[type] ??= new Set()).add(fn)
+      }),
+      removeEventListener: vi.fn((type, fn) => listeners[type]?.delete(fn)),
+      fire: (type) => [...(listeners[type] ?? [])].forEach((fn) => fn({ type })),
+      listening: (type) => listeners[type]?.size ?? 0,
+    }
+    const canvas = document.createElement('canvas')
+    document.body.appendChild(canvas)
+    Object.assign(pm, {
+      controls,
+      renderer: { domElement: canvas },
+      projectionMode: 'perspective',
+      getActiveCamera: () => camera,
+    })
+    const place = (turn, tilt, distance = 100) => {
+      const t = (turn * Math.PI) / 180
+      const e = (tilt * Math.PI) / 180
+      camera.position.set(
+        distance * Math.cos(e) * Math.cos(t),
+        distance * Math.cos(e) * Math.sin(t),
+        distance * Math.sin(e)
+      )
+      controls.fire('change')
+    }
+    return { controls, canvas, place }
+  }
+  const cameraAsked = async () => {
+    const { playCameraSound } = await import('../../src/js/crt-sounds.js')
+    return playCameraSound.mock.calls.map(([kind]) => kind)
+  }
+
+  it('the 3D view ticks for a direct move: a bearing per 15 degrees turned, a ratchet per 10 tilted, a lens detent per 5 % zoomed', async () => {
+    pageWithHeaderAndDpad()
+    clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const pm = previewManagerStub()
+    const { controls, place } = viewWithControls(pm)
+    const controller = await freshController(pm)
+    const { preloadCameraSounds } = await import('../../src/js/crt-sounds.js')
+    const toggle = document.createElement('button')
+    place(0, 20)
+
+    controls.fire('start')
+    for (let turn = 1; turn <= 10; turn++) place(turn, 20)
+    controls.fire('end')
+    expect(await cameraAsked(), 'nothing while the look is off').toEqual([])
+
+    await controller.enableAltViewWithPreview(toggle)
+    expect(preloadCameraSounds, 'the camera ticks fetched at switch-on').toHaveBeenCalled()
+    place(0, 20)
+    // A drag of 45 degrees, a degree a frame: three bearing ticks.
+    controls.fire('start')
+    for (let turn = 1; turn <= 45; turn++) {
+      clock += 20
+      place(turn, 20)
+    }
+    controls.fire('end')
+    expect(await cameraAsked()).toEqual(['turn', 'turn', 'turn'])
+
+    // A tilt of 20 degrees: two ratchet ticks; the damping's glide after the
+    // drag ends still counts.
+    controls.fire('start')
+    for (let tilt = 21; tilt <= 35; tilt++) {
+      clock += 20
+      place(45, tilt)
+    }
+    controls.fire('end')
+    for (let tilt = 36; tilt <= 40; tilt++) {
+      clock += 20
+      place(45, tilt)
+    }
+    expect((await cameraAsked()).slice(3)).toEqual(['tilt', 'tilt'])
+
+    // The wheel: three notches of 5 % closer, each a lens detent.
+    for (const distance of [95, 90.25, 85.7]) {
+      clock += 100
+      controls.fire('start')
+      place(45, 40, distance)
+      controls.fire('end')
+    }
+    expect((await cameraAsked()).slice(5)).toEqual(['zoom', 'zoom', 'zoom'])
+
+    // A jitter back and forth of under a step says nothing.
+    controls.fire('start')
+    for (const turn of [44, 46, 44, 46, 45]) {
+      clock += 100
+      place(turn, 40, 85.7)
+    }
+    controls.fire('end')
+    expect(await cameraAsked(), 'a jitter').toHaveLength(8)
+    controller.disableAltViewWithPreview(toggle)
+    expect(controls.listening('change'), 'let go once off').toBe(0)
+  })
+
+  it('the 3D view ticks fourteen times a second at most, however fast it turns', async () => {
+    pageWithHeaderAndDpad()
+    clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const pm = previewManagerStub()
+    const { controls, place } = viewWithControls(pm)
+    const controller = await freshController(pm)
+    await controller.enableAltViewWithPreview(document.createElement('button'))
+    place(0, 20)
+    controls.fire('start')
+    // Twenty steps of 15 degrees in one second: twenty ticks asked.
+    for (let n = 1; n <= 20; n++) {
+      clock += 50
+      place(n * 15, 20)
+    }
+    controls.fire('end')
+    const ticks = await cameraAsked()
+    expect(ticks.length).toBeGreaterThan(0)
+    expect(ticks.length).toBeLessThanOrEqual(14)
+  })
+
+  it('a move a button, a view or View All made plays no camera tick; the arrow keys on the preview and a controller stick do', async () => {
+    pageWithHeaderAndDpad()
+    clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const pm = previewManagerStub()
+    const { place } = viewWithControls(pm)
+    const container = document.createElement('div')
+    container.tabIndex = 0
+    document.body.appendChild(container)
+    pm.container = container
+    const rotate = document.getElementById('cameraPanUp')
+    const controller = await freshController(pm)
+    await controller.enableAltViewWithPreview(document.createElement('button'))
+    place(0, 20)
+
+    // A camera button pressed: its move is the button's, heard as its key.
+    clock += 100
+    press(rotate, 'pointerdown')
+    place(45, 20)
+    press(rotate, 'pointerup')
+    rotate.click()
+    clock += 100
+    place(90, 20)
+    // A view chosen from a menu or a shortcut: no drag, no tick.
+    clock += 100
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '4', ctrlKey: true, bubbles: true }))
+    place(180, -30)
+    expect(await cameraAsked(), 'buttons, views and View All').toEqual([])
+
+    // The arrow keys on the focused preview turn it directly.
+    container.focus()
+    for (let n = 1; n <= 3; n++) {
+      clock += 100
+      container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
+      place(180 + n * 15, -30)
+    }
+    expect(await cameraAsked(), 'the arrow keys').toEqual(['turn', 'turn', 'turn'])
+
+    // A controller's stick pushed past its dead zone turns it directly too.
+    const hadGamepads = navigator.getGamepads
+    navigator.getGamepads = () => [
+      { axes: [0, 0, 0.8, 0], buttons: [] },
+    ]
+    try {
+      clock += 1000
+      document.body.focus()
+      document.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      clock += 100
+      place(240, -30)
+      expect((await cameraAsked()).slice(3), 'a stick').toEqual(['turn'])
+    } finally {
+      navigator.getGamepads = hadGamepads
+    }
+
+    // Sounds off: nothing at all.
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    container.focus()
+    clock += 100
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
+    place(300, -30)
+    expect(await cameraAsked(), 'sounds off').toHaveLength(4)
+    controller.disableAltViewWithPreview(document.createElement('button'))
   })
 
   it('a page that starts with sounds off starts muted', async () => {

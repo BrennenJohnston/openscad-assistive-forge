@@ -17,7 +17,9 @@ import { playUnlockJingle } from './unlock-jingle.js';
 import {
   playCrtSound,
   playDialSound,
+  playCameraSound,
   playKeySound,
+  preloadCameraSounds,
   preloadCrtSounds,
   preloadDialSounds,
   preloadKeySounds,
@@ -100,6 +102,32 @@ const _HFM_DIAL_STEP_EDGES = [8, 14, 22, 32, 48, 100];
 const _HFM_DIAL_CLICKS_PER_SECOND = 15;
 const _hfmDials = new WeakMap();
 let _hfmDialLastClickAt = -Infinity;
+// The 3D view's own ticks while the look is on: a bearing for every 15
+// degrees it turns, a ratchet for every 10 it tilts, a lens detent for every
+// 5 % it zooms (a wheel notch). Only for a move made directly: a drag, the
+// wheel or a pinch on the view, the arrow keys on the focused preview, a
+// controller's stick or trigger. A move a button, a view or View All made is
+// heard as that button's key. A tick comes at most every 70 ms, a step that
+// would tick sooner is passed over, and turning back after a tick takes a
+// step and a little more, so a jitter is silent.
+const _HFM_CAMERA_STEPS = { turn: 15, tilt: 10, zoom: Math.log(1.05) };
+const _HFM_CAMERA_DEAD_BAND = { turn: 1, tilt: 1, zoom: Math.log(1.01) };
+const _HFM_CAMERA_TICK_GAP_MS = 70;
+// A drag's damping glides on after the pointer lifts; a key moves at once.
+const _HFM_CAMERA_GLIDE_MS = 1500;
+const _HFM_CAMERA_KEY_MS = 400;
+const _HFM_CAMERA_KEYS = new Set([
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  '+',
+  '=',
+  '-',
+]);
+// The controller's own dead zone (gamepad-controller.js).
+const _HFM_STICK_DEAD_ZONE = 0.15;
+let _hfmCamera = null;
 
 // The key's name says what it is; what it does is said once it is pressed.
 const _HFM_TOGGLE_NAME = 'Alt View';
@@ -967,6 +995,156 @@ function _preloadLookSounds() {
   const set = _hfmKeySet();
   preloadKeySounds(set);
   preloadDialSounds(set);
+  preloadCameraSounds();
+}
+
+// Where the camera is, seen from what it looks at: its turn and tilt in
+// degrees, and how far away as a logarithm, so in and out count alike (an
+// orthographic view zooms without moving).
+function _hfmCameraPose(previewManager) {
+  const camera = previewManager.getActiveCamera?.();
+  const target = previewManager.controls?.target;
+  if (!camera || !target) return null;
+  const x = camera.position.x - target.x;
+  const y = camera.position.y - target.y;
+  const z = camera.position.z - target.z;
+  const distance = Math.hypot(x, y, z);
+  if (distance < 1e-6) return null;
+  const ortho =
+    previewManager.projectionMode === 'orthographic'
+      ? previewManager.orthoCamera
+      : null;
+  return {
+    turn: (Math.atan2(y, x) * 180) / Math.PI,
+    tilt: (Math.asin(Math.max(-1, Math.min(1, z / distance))) * 180) / Math.PI,
+    zoom: Math.log(ortho ? 1 / ortho.zoom : distance),
+  };
+}
+
+function _hfmStickPushed() {
+  for (const pad of navigator.getGamepads?.() ?? []) {
+    if (!pad) continue;
+    if (pad.axes?.some((value) => Math.abs(value) >= _HFM_STICK_DEAD_ZONE)) {
+      return true;
+    }
+    // The standard layout's triggers zoom.
+    if (
+      [6, 7].some(
+        (index) => (pad.buttons?.[index]?.value ?? 0) >= _HFM_STICK_DEAD_ZONE
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function _installCameraTicks(previewManager) {
+  const controls = previewManager?.controls;
+  if (_hfmCamera || !controls?.addEventListener) return;
+  const cam = {
+    from: null,
+    way: { turn: 0, tilt: 0, zoom: 0 },
+    dragging: false,
+    directUntil: 0,
+    lastTickAt: -Infinity,
+  };
+  const direct = () =>
+    cam.dragging || performance.now() < cam.directUntil || _hfmStickPushed();
+  const onStart = () => {
+    cam.dragging = true;
+  };
+  const onEnd = () => {
+    cam.dragging = false;
+    cam.directUntil = performance.now() + _HFM_CAMERA_GLIDE_MS;
+  };
+  const onChange = () => {
+    const pose = _hfmCameraPose(previewManager);
+    if (!pose) return;
+    if (!cam.from || !direct()) {
+      cam.from = pose;
+      return;
+    }
+    let kind = null;
+    for (const name of ['turn', 'tilt', 'zoom']) {
+      let moved = pose[name] - cam.from[name];
+      if (name === 'turn') moved = (((moved % 360) + 540) % 360) - 180;
+      const sign = Math.sign(moved);
+      const reach =
+        _HFM_CAMERA_STEPS[name] +
+        (sign === -cam.way[name] ? _HFM_CAMERA_DEAD_BAND[name] : 0);
+      // A whisker of slack: a pose read back through the trigonometry
+      // lands a hair under an exact step.
+      const size = Math.abs(moved) + 1e-6;
+      if (size < reach) continue;
+      const steps = Math.floor(size / _HFM_CAMERA_STEPS[name]);
+      cam.from[name] += sign * steps * _HFM_CAMERA_STEPS[name];
+      cam.way[name] = sign;
+      kind ??= name;
+    }
+    const now = performance.now();
+    if (!kind || now - cam.lastTickAt < _HFM_CAMERA_TICK_GAP_MS) return;
+    cam.lastTickAt = now;
+    if (!_soundsOn()) return;
+    playCameraSound(kind).catch((error) => {
+      console.warn('[Alt View] A camera tick did not play:', error);
+    });
+  };
+  // Any other press is not a direct move of the view: what it moves, it
+  // moves as a button, a menu or a shortcut does.
+  const elsewhere = (event) => {
+    const canvas = previewManager.renderer?.domElement;
+    if (
+      canvas &&
+      event.target instanceof Node &&
+      canvas.contains(event.target)
+    ) {
+      return;
+    }
+    cam.directUntil = 0;
+  };
+  const onKey = (event) => {
+    const focused = document.activeElement;
+    const onPreview =
+      !!focused &&
+      (previewManager.container?.contains(focused) ||
+        focused === previewManager.renderer?.domElement);
+    const plain = !event.ctrlKey && !event.altKey && !event.metaKey;
+    cam.directUntil =
+      onPreview && plain && _HFM_CAMERA_KEYS.has(event.key)
+        ? performance.now() + _HFM_CAMERA_KEY_MS
+        : 0;
+  };
+  cam.controls = controls;
+  cam.controlListeners = [
+    ['start', onStart],
+    ['change', onChange],
+    ['end', onEnd],
+  ];
+  cam.pageListeners = [
+    ['pointerdown', elsewhere],
+    ['click', elsewhere],
+    ['keydown', onKey],
+  ];
+  for (const [type, fn] of cam.controlListeners) {
+    controls.addEventListener(type, fn);
+  }
+  for (const [type, fn] of cam.pageListeners) {
+    document.addEventListener(type, fn, true);
+  }
+  _hfmCamera = cam;
+}
+
+function _removeCameraTicks() {
+  if (!_hfmCamera) return;
+  const { controls, controlListeners, pageListeners } = _hfmCamera;
+  for (const [type, fn] of controlListeners) {
+    controls.removeEventListener(type, fn);
+  }
+  for (const [type, fn] of pageListeners) {
+    document.removeEventListener(type, fn, true);
+  }
+  _hfmCamera = null;
 }
 
 // The keys and the dials: every button and every slider of the look.
@@ -1224,6 +1402,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
   _hfmPendingEnable = false;
   _playAltViewMoment({ greeting: true, sound: 'on' });
   _installKeySounds();
+  _installCameraTicks(previewManager);
 
   if (_hfmPanToggleButtons?.desktop)
     _hfmPanToggleButtons.desktop.style.display = 'flex';
@@ -1237,6 +1416,7 @@ function _disableAltViewWithPreview(toggleBtn) {
   _stopAltViewStart();
   _playCrtSound('off');
   _removeKeySounds();
+  _removeCameraTicks();
 
   if (_hfmMotionListener) {
     const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');

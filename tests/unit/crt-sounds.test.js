@@ -136,6 +136,35 @@ function fakeParam(value) {
   return param;
 }
 
+// The 3D view's ticks: a lens detent, a bearing and a ratchet, one file each.
+const CAMERA_DIR = join(SOUNDS_DIR, 'camera');
+const CAMERA_FILES = ['zoom.wav', 'turn.wav', 'tilt.wav'];
+
+describe('the camera tick files', () => {
+  it.each(CAMERA_FILES)(
+    '%s is a 32 kHz mono 16-bit WAV under 0.3 s with its peak at or under -1 dBFS',
+    (file) => {
+      const bytes = readFileSync(join(CAMERA_DIR, file));
+      const header = wavHeader(bytes);
+      expect(header.riff).toBe('RIFF');
+      expect(header.channels).toBe(1);
+      expect(header.rate).toBe(32000);
+      expect(header.bits).toBe(16);
+      expect(header.dataBytes / 2 / 32000).toBeLessThan(0.3);
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      let peak = 0;
+      for (let at = 44; at + 1 < bytes.length; at += 2) peak = Math.max(peak, Math.abs(view.getInt16(at, true)));
+      expect(peak / 32768).toBeLessThanOrEqual(10 ** (-1 / 20));
+    }
+  );
+
+  it('the three weigh under 40 KB together', () => {
+    const total = CAMERA_FILES.reduce((n, f) => n + statSync(join(CAMERA_DIR, f)).size, 0);
+    expect(total).toBeGreaterThan(0);
+    expect(total).toBeLessThan(40_000);
+  });
+});
+
 describe('playing a switch sound', () => {
   let context;
   let sources;
@@ -450,6 +479,21 @@ describe('playing a switch sound', () => {
     ]);
     expect(soundGroup('keys').gain.calls, 'a key lowers nothing else').toEqual([]);
     expect(() => duck('hum', 8, 150)).toThrow('No such sound group: hum');
+  });
+
+  it('plays a camera tick by its kind in the camera group, which it does not lower itself', async () => {
+    const { playCameraSound, preloadCameraSounds, soundGroup } = await load();
+    const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
+    await expect(playCameraSound('turn')).resolves.toBeGreaterThan(0);
+    expect(urls()).toEqual(['/sounds/camera/turn.wav']);
+    expect(sources[0].connectedTo).toBe(soundGroup('camera'));
+    await playCameraSound('tilt');
+    await playCameraSound('zoom');
+    expect(urls().slice(1)).toEqual(['/sounds/camera/tilt.wav', '/sounds/camera/zoom.wav']);
+    expect(soundGroup('camera').gain.calls, 'a tick does not duck its own group').toEqual([]);
+    await expect(playCameraSound('pan')).rejects.toThrow('No such camera sound: pan');
+    preloadCameraSounds();
+    expect(globalThis.fetch, 'the three fetched once').toHaveBeenCalledTimes(3);
   });
 
   it('mutes through the master: silent within 20 ms, before or after the first sound', async () => {

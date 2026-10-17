@@ -7,8 +7,10 @@
  *
  * A tap leaves the browser's hover state on the button until the next tap,
  * so a hover color on a phone is a highlight that outlives the press: it
- * shows a state the button does not have. The camera drawer's buttons are
- * tapped one by one and must be back at rest once the finger lifts.
+ * shows a state the button does not have. One camera drawer button of each
+ * kind (a pad arrow, a pad's center, a zoom button, a view) is tapped and
+ * must be back at rest once the finger lifts; the buttons of a kind share
+ * their rules.
  *
  * Colors are read from a picture of each button, not from computed styles:
  * an icon may be a stroke, a fill, a background image or a text glyph, and
@@ -186,6 +188,13 @@ function markIconButtons() {
       name: (el.getAttribute('aria-label') || el.title || el.id || text).slice(0, 40),
       toggle: el.hasAttribute('aria-pressed') || el.hasAttribute('aria-expanded'),
       inCameraDrawer: !!el.closest('.camera-drawer'),
+      kind: el.matches('.camera-view-btn')
+        ? 'view'
+        : el.matches('.dpad-center')
+          ? 'center'
+          : el.closest('.camera-drawer-zoom-controls')
+            ? 'zoom'
+            : 'pad',
       border: parseFloat(getComputedStyle(el).borderTopWidth) || 0,
     });
   }
@@ -437,10 +446,16 @@ for (const device of DEVICES) {
           await forceAll([]);
 
           if (device.name === 'phone') {
-            const tapped = buttons.filter(
-              (button) => button.inCameraDrawer && !button.toggle
+            const tapped = ['pad', 'center', 'zoom', 'view'].map((kind) =>
+              buttons.find(
+                (button) =>
+                  button.inCameraDrawer && !button.toggle && button.kind === kind
+              )
             );
-            expect(tapped.length, 'camera drawer buttons to tap').toBeGreaterThan(10);
+            expect(
+              tapped.map((button) => button?.kind),
+              'one camera drawer button of each kind to tap'
+            ).toEqual(['pad', 'center', 'zoom', 'view']);
             for (const button of tapped) {
               await page.locator(`[data-icon-audit="${button.key}"]`).tap();
               await page.waitForTimeout(150);

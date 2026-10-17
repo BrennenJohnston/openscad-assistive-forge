@@ -2,8 +2,9 @@
  * The Alt View's sounds: a screen coming on, a look changing and a screen
  * going off, each a short recording played whole; the keys, a keyboard's
  * press and release for every button of the look, chosen by the button's
- * size; and the dial clicks a slider makes step by step, one click per look
- * at seven speeds (the recordings and their makers are named in
+ * size; the dial clicks a slider makes step by step, one click per look at
+ * seven speeds; and the 3D view's ticks as it is turned, tilted or zoomed
+ * by hand (the recordings and their makers are named in
  * THIRD_PARTY_NOTICES.md). A file is fetched ahead or the first time it is
  * wanted, decoded once and kept. The switch sounds play one at a time, the
  * newest one asked for winning; the keys and the clicks play as pressed,
@@ -51,6 +52,13 @@ const KEY_SETS = {
 // the highest (one of many).
 const DIAL_SETS = ['p', 'd'];
 const DIAL_VARIANTS = 7;
+// The 3D view's ticks, the same in every look: a lens detent for a zoom
+// step, a bearing for a turn, a ratchet for a tilt.
+const CAMERA_FILES = {
+  zoom: '/sounds/camera/zoom.wav',
+  turn: '/sounds/camera/turn.wav',
+  tilt: '/sounds/camera/tilt.wav',
+};
 // A browser that has not let the page make sound yet leaves the audio
 // context waiting; past this the sound is given up.
 const START_TIMEOUT_MS = 1000;
@@ -312,6 +320,26 @@ export function preloadDialSounds(set) {
 
 function _dialUrl(set, variant) {
   return `/sounds/dials/${set}${variant}.wav`;
+}
+
+/** Fetch the 3D view's three ticks now, once. */
+export function preloadCameraSounds() {
+  _fetchAhead(Object.values(CAMERA_FILES), 'camera');
+}
+
+/**
+ * Play one of the 3D view's ticks in the camera group, which keys and dial
+ * clicks lower for a moment.
+ * @param {'zoom'|'turn'|'tilt'} kind
+ * @returns {Promise<number>} The tick's length in seconds once it has begun
+ */
+export async function playCameraSound(kind) {
+  if (!CAMERA_FILES[kind]) throw new Error(`No such camera sound: ${kind}`);
+  const context = _audioContext();
+  const running = context.resume();
+  const buffer = await _bufferFor(CAMERA_FILES[kind], context);
+  await _start(context, running, buffer, 'camera');
+  return buffer.duration;
 }
 
 /** Ends the switch sound playing now, if any. */

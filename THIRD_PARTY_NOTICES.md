@@ -433,6 +433,36 @@ copyc4t: https://freesound.org/s/275958/
 
 ---
 
+## View Ticks (CC-BY-4.0, CC0-1.0)
+
+While the Alt View is on, turning, tilting or zooming the 3D view by hand
+ticks quietly, one sound for each, under `public/sounds/camera/`. Each is one
+event cut from a recording on Freesound, resampled to 32 kHz mono and
+levelled:
+
+### Analog Camera iris wheel 02 (CC-BY-4.0)
+
+The zoom's tick, `zoom.wav`, is "Analog Camera iris wheel 02" by Eelke:
+https://freesound.org/s/462825/
+
+- **Author**: Eelke
+- **License**: Creative Commons Attribution 4.0 International,
+  https://creativecommons.org/licenses/by/4.0/
+- **Changes**: the click cut out (52 ms, with short fades), resampled to
+  32 kHz mono, levelled.
+
+### Ratchet and ball catch (CC0-1.0)
+
+The tilt's tick, `tilt.wav`, is cut from "Ratchet_Single_Click.wav" by
+mickyman5000 (https://freesound.org/s/340529/), and the turn's, `turn.wav`,
+from "Ball-bearing latched cupboard door" by wlabarron
+(https://freesound.org/s/509108/), each released under Creative Commons 0.
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+- **Note**: CC0 asks for no credit; it is given with thanks.
+
+---
+
 ## Iosevka Term (OFL-1.1)
 
 The mono UI variant self-hosts the Iosevka Term Regular WOFF2 font.
