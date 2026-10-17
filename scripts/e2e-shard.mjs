@@ -152,12 +152,11 @@ export const MEASURED_SECONDS = {
   'alt-view-without-webgl.spec.js': 15.0,
   // Eighteen cases, each loading the box and picturing every icon button in
   // four states, one picture a state; the phone cases also tap one camera
-  // drawer button of each kind: 186 s locally. The version that tapped every
-  // drawer button ran 225 s locally and 699 s on a pull request's Chromium
-  // shard (2026-10-17), so this is booked at 580 until CI measures it. One
-  // picture per button per state had taken about 40 test-minutes on CI.
+  // drawer button of each kind: 186 s locally, 748 s on a pull request's
+  // Chromium shard (the sum of its cases, 2026-10-17). One picture per
+  // button per state had taken about 40 test-minutes on CI.
   // Chromium only (PROJECT_IGNORES): forcing :hover is a CDP feature.
-  'alt-view-icon-states.spec.js': 580.0,
+  'alt-view-icon-states.spec.js': 748.0,
   // Five cases, each loading the box and turning the look on (one drags the
   // view for a second and a half): 45 s locally; booked at 100 for the
   // look's software drawing on CI.
