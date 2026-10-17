@@ -1464,6 +1464,24 @@ for (const height of [915, 810]) {
             `it ends at the bar (${Math.round(pop.bottom)} and ${Math.round(c.barTop)})`
           )
           .toBeLessThanOrEqual(1);
+        // Every control fits inside it at the width it opens at, the Presets
+        // open: the preset buttons ran off its right edge in the Alt View.
+        const spill = await page.evaluate(() => {
+          const panel = document.getElementById('paramPanel')
+          const presets = document.getElementById('presetControls')
+          const wasOpen = presets?.open
+          if (presets) presets.open = true
+          const edge = panel.getBoundingClientRect().right
+          const out = [...panel.querySelectorAll('button, select, input')]
+            .filter((el) => el.checkVisibility())
+            .filter((el) => el.getBoundingClientRect().right > edge + 0.5)
+            .map((el) => `${el.id || el.getAttribute('aria-label') || el.tagName} ends at ${Math.round(el.getBoundingClientRect().right)}`)
+          if (presets) presets.open = wasOpen
+          return { edge: Math.round(edge), out }
+        })
+        expect
+          .soft(spill.out, `S6: nothing past the Customizer's right edge at x ${spill.edge}`)
+          .toEqual([])
         const after = await page.evaluate(readPreviewBox);
         expect
           .soft(

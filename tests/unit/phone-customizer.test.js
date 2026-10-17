@@ -46,20 +46,20 @@ describe('the phone Customizer width', () => {
     expect(customizerWidthBounds(320)).toEqual({ min: 276, max: 276 });
   });
 
-  it('opens at 85% of the width when nothing is kept, and within bounds', () => {
-    expect(CUSTOMIZER_DEFAULT_SHARE).toBe(0.85);
-    expect(customizerWidthPx(0.85, 412)).toBe(350);
-    expect(customizerWidthPx(Number.NaN, 412)).toBe(350);
+  it('opens at 75% of the width when nothing is kept, and within bounds', () => {
+    expect(CUSTOMIZER_DEFAULT_SHARE).toBe(0.75);
+    expect(customizerWidthPx(0.75, 412)).toBe(309);
+    expect(customizerWidthPx(Number.NaN, 412)).toBe(309);
     expect(customizerWidthPx(0.1, 412)).toBe(280);
     expect(customizerWidthPx(1, 412)).toBe(368);
   });
 
   it('keeps the width as a share of the screen, and ignores a bad value', () => {
-    expect(loadCustomizerShare()).toBe(0.85);
+    expect(loadCustomizerShare()).toBe(0.75);
     localStorage.setItem(WIDTH_KEY, '0.7');
     expect(loadCustomizerShare()).toBe(0.7);
     localStorage.setItem(WIDTH_KEY, 'wide');
-    expect(loadCustomizerShare()).toBe(0.85);
+    expect(loadCustomizerShare()).toBe(0.75);
   });
 
   it("the grip's keys move it as the desktop divider's do, and the width is kept", () => {
@@ -67,6 +67,8 @@ describe('the phone Customizer width', () => {
       '<div id="paramPanel"></div><div id="customizerWidthGrip" tabindex="0"></div>';
     const panel = document.getElementById('paramPanel');
     const grip = document.getElementById('customizerWidthGrip');
+    // A width kept from before, so the steps below start from 85%.
+    localStorage.setItem(WIDTH_KEY, '0.85');
     initPhoneCustomizer({ panel, grip });
     expect(rootVar('--phone-customizer-width')).toBe('350px');
     expect(grip.getAttribute('aria-valuenow')).toBe('85');
