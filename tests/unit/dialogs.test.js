@@ -46,7 +46,11 @@ beforeEach(() => {
   vi.spyOn(window, 'alert')
 })
 
-afterEach(() => {
+afterEach(async () => {
+  // A closed dialog gives focus back again 50 ms later (modal-manager.js).
+  // Let that run while this file's document still exists: after the last
+  // case it could fire once the environment was torn down.
+  await new Promise((resolve) => setTimeout(resolve, 60))
   vi.restoreAllMocks()
   globalThis.requestAnimationFrame = originalRaf
   if (originalClipboard) {
