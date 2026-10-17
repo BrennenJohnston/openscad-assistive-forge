@@ -16928,6 +16928,111 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   color: var(--color-text-tertiary);
 }
 
+/* Controller tab. */
+.preferences-select-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) 0;
+  min-height: var(--size-touch-target);
+}
+
+.preferences-select-row label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.preferences-select-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The picture's units are CSS pixels at its widest, so its words take the
+   type scale's sizes; on a narrow screen it shrinks as a whole. */
+.gamepad-diagram {
+  display: block;
+  width: min(100%, 20rem);
+  height: auto;
+  margin: var(--space-xs) 0;
+}
+
+.gamepad-diagram-body,
+.gamepad-diagram-part {
+  fill: var(--color-bg-secondary);
+  stroke: var(--color-text-secondary);
+  stroke-width: 1.5;
+}
+
+.gamepad-diagram-body {
+  fill: var(--color-bg-tertiary);
+}
+
+.gamepad-diagram text {
+  fill: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-2xs);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.gamepad-diagram .gamepad-diagram-end {
+  text-anchor: end;
+}
+
+.gamepad-diagram .gamepad-diagram-start {
+  text-anchor: start;
+}
+
+@media (forced-colors: active) {
+  .gamepad-diagram-body,
+  .gamepad-diagram-part {
+    fill: Canvas;
+    stroke: CanvasText;
+  }
+
+  .gamepad-diagram text {
+    fill: CanvasText;
+  }
+}
+
+.gamepad-assignments {
+  width: 100%;
+  margin: var(--space-xs) 0;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.gamepad-assignments th,
+.gamepad-assignments td {
+  padding: var(--space-2xs) var(--space-xs);
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-primary);
+  text-align: start;
+}
+
+.gamepad-assignments thead th {
+  color: var(--color-text-secondary);
+}
+
+.gamepad-assignments tbody th {
+  font-weight: normal;
+}
+
+/* The flex box sits inside the cell: a table cell made a flex container
+   stops being a cell to some screen readers. */
+.gamepad-assignment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+}
+
+.gamepad-assignments .gamepad-change,
+.preferences-check-row .gamepad-reset {
+  min-height: var(--size-touch-target);
+  min-width: var(--size-touch-target);
+}
+
 /* Editor tab: label, number field, unit. The unit is a visible word rather
    than a suffix inside the field, so it is read as part of the row and not
    swallowed by the input's value. */

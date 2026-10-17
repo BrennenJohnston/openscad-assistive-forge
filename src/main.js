@@ -167,11 +167,9 @@ import { initCameraPanelController } from './js/camera-panel-controller.js';
 import { initSequenceDetector } from './js/_seq.js';
 import {
   createGamepadController,
+  createGamepadMapping,
   isGamepadSupported,
-  DEFAULT_GAMEPAD_PRESET,
-  DPAD_DIRECTION_NAMES,
-  GAMEPAD_BUTTON_NAMES,
-  GAMEPAD_PRESETS,
+  GAMEPAD_ACTIONS,
 } from './js/gamepad-controller.js';
 import { createGamepadNavigator } from './js/gamepad-navigator.js';
 import {
@@ -1853,6 +1851,11 @@ async function initApp() {
     });
     console.log('[Input] Gamepad controller initialized');
   }
+  // The person's controller assignments (Preferences > Controller); the
+  // layout follows the plugged-in pad until one is chosen.
+  const gamepadMapping = createGamepadMapping({
+    getPadId: () => gamepadController?.getGamepadInfo()?.id ?? '',
+  });
 
   // Storage UI - Update storage display
   const formatStorageUsage = (usage) => {
@@ -4431,8 +4434,16 @@ async function initApp() {
               padName:
                 gamepadController?.getGamepadInfo?.()?.id?.split(' (')[0] ??
                 null,
-              deadZone: gamepadController?.deadzone ?? null,
             }),
+            gamepad: {
+              mapping: gamepadMapping,
+              capture: (ms) =>
+                gamepadController
+                  ? gamepadController.captureNextInput(ms)
+                  : Promise.resolve(null),
+              cancelCapture: () => gamepadController?.cancelCapture(),
+              announce: (text) => announceImmediate(text),
+            },
             getEditorPrefs: () => loadEditorPrefs(),
             onEditorPrefChange: (name, value) => {
               // The preference owner clamps and persists; whatever it stored
@@ -16306,8 +16317,6 @@ if (rounded) {
     const gamepadNavigator = createGamepadNavigator({
       onUnhandledBack: () => getToolbarMenuController().closeAll(),
     });
-    const gamepadPreset = GAMEPAD_PRESETS[DEFAULT_GAMEPAD_PRESET];
-    gamepadController.setActions(gamepadPreset.actions);
     const gamepadCommands = {
       previous: gamepadNavigator.previous,
       next: gamepadNavigator.next,
@@ -16315,22 +16324,38 @@ if (rounded) {
       nextRegion: gamepadNavigator.nextRegion,
       activate: gamepadNavigator.activate,
       back: gamepadNavigator.back,
+      up: () => gamepadNavigator.arrow('up'),
+      down: () => gamepadNavigator.arrow('down'),
+      left: () => gamepadNavigator.arrow('left'),
+      right: () => gamepadNavigator.arrow('right'),
       fullScreen: gamepadNavigator.fullScreen,
       keys: gamepadNavigator.keys,
       resetView: resetViewCommand,
       viewAll: viewAllCommand,
     };
-    for (const name of GAMEPAD_BUTTON_NAMES) {
-      gamepadController.on(`button:${name}`, () => {
-        if (gamepadNavigator.isPaused()) return;
-        gamepadCommands[gamepadPreset.buttons[name]]?.();
-      });
-    }
-    for (const direction of DPAD_DIRECTION_NAMES) {
-      gamepadController.on(`dpad:${direction}`, () =>
-        gamepadNavigator.arrow(direction)
-      );
-    }
+    const repeatingActions = new Set(
+      GAMEPAD_ACTIONS.filter((a) => a.repeats).map((a) => a.id)
+    );
+    // Each input's action, from the saved assignments; read again whenever
+    // they change, and when a pad is plugged in (its layout may differ).
+    let actionByInput = {};
+    const applyGamepadMapping = () => {
+      const { assignments } = gamepadMapping.get();
+      gamepadController.setAssignments(assignments);
+      actionByInput = {};
+      for (const [action, input] of Object.entries(assignments)) {
+        if (input) actionByInput[input] = action;
+      }
+    };
+    applyGamepadMapping();
+    gamepadMapping.subscribe(applyGamepadMapping);
+    gamepadController.on('connected', applyGamepadMapping);
+    gamepadController.on('input', ({ name, repeat }) => {
+      if (gamepadNavigator.isPaused()) return;
+      const action = actionByInput[name];
+      if (!action || (repeat && !repeatingActions.has(action))) return;
+      gamepadCommands[action]?.();
+    });
 
     // Gamepad connection feedback
     gamepadController.on('connected', (info) => {

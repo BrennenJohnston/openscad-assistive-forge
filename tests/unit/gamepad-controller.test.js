@@ -7,9 +7,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   GamepadController,
-  GAMEPAD_PRESETS,
-  DPAD_REPEAT_DELAY_S,
-  DPAD_REPEAT_S,
+  presetAssignments,
+  INPUT_REPEAT_DELAY_S,
+  INPUT_REPEAT_S,
 } from '../../src/js/gamepad-controller.js';
 
 /** A standard-mapping pad whose axes and button values a case sets. */
@@ -103,7 +103,7 @@ describe('the controller moves the view', () => {
   });
 
   it('zooms with the triggers, the right in and the left out, by how far each is pressed', () => {
-    controller.setActions(GAMEPAD_PRESETS.camera.actions);
+    controller.setAssignments(presetAssignments('camera', 'xbox'));
     pad.buttons[7] = { pressed: true, touched: true, value: 1 };
     const zoomIn = step(controller, pad, 1).find(
       (e) => e.name === 'camera:zoom'
@@ -138,7 +138,7 @@ describe('the controller moves the view', () => {
   });
 });
 
-describe('the controller tells its buttons', () => {
+describe('the controller tells its inputs', () => {
   let pad;
   let controller;
   let heard;
@@ -148,12 +148,9 @@ describe('the controller tells its buttons', () => {
     controller = new GamepadController();
     controller.state.gamepadIndex = 0;
     heard = [];
-    for (const name of ['rb', 'lt', 'a', 'b', 'start']) {
-      controller.on(`button:${name}`, () => heard.push(name));
-    }
-    for (const dir of ['up', 'down', 'left', 'right']) {
-      controller.on(`dpad:${dir}`, () => heard.push(`dpad ${dir}`));
-    }
+    controller.on('input', ({ name, repeat }) =>
+      heard.push(repeat ? `${name} again` : name)
+    );
   });
 
   afterEach(() => {
@@ -171,11 +168,10 @@ describe('the controller tells its buttons', () => {
     pad.buttons[index] = { pressed: false, touched: false, value: 0 };
   };
 
-  it("a press is told once, by the button's name, however long it is held", () => {
+  it("a press is told once by the button's name, then again only while it is held", () => {
     press(5);
     poll(0.016);
     poll(0.016);
-    poll(0.5);
     expect(heard).toEqual(['rb']);
     release(5);
     poll(0.016);
@@ -184,27 +180,35 @@ describe('the controller tells its buttons', () => {
     expect(heard).toEqual(['rb', 'rb']);
   });
 
-  it('a trigger pulled is a button press too', () => {
+  it('a trigger pulled is a press too', () => {
     press(6, 0.9);
     poll(0.016);
     expect(heard).toEqual(['lt']);
   });
 
-  it('a held D-pad repeats after a wait, as a held arrow key does', () => {
+  it('a stick pushed past halfway is a press of that direction', () => {
+    pad.axes = [0, 0.3, 0, 0];
+    poll(0.016);
+    expect(heard).toEqual([]);
+    pad.axes = [0, 0.7, 0, 0];
+    poll(0.016);
+    expect(heard).toEqual(['ls-down']);
+  });
+
+  it('a held input repeats after a wait, as a held key does', () => {
     press(13);
     poll(0.016);
-    expect(heard).toEqual(['dpad down']);
+    expect(heard).toEqual(['down']);
     // Steps of 50 ms up to just short of the wait: no repeat yet.
-    const steps = Math.floor((DPAD_REPEAT_DELAY_S - 0.01) / 0.05);
+    const steps = Math.floor((INPUT_REPEAT_DELAY_S - 0.01) / 0.05);
     for (let i = 0; i < steps; i++) poll(0.05);
-    expect(heard).toEqual(['dpad down']);
+    expect(heard).toEqual(['down']);
     poll(0.05);
-    expect(heard).toEqual(['dpad down', 'dpad down']);
-    const more = Math.ceil(DPAD_REPEAT_S / 0.05);
+    expect(heard).toEqual(['down', 'down again']);
+    const more = Math.ceil(INPUT_REPEAT_S / 0.05);
     for (let i = 0; i < more; i++) poll(0.05);
-    expect(heard).toEqual(['dpad down', 'dpad down', 'dpad down']);
+    expect(heard).toEqual(['down', 'down again', 'down again']);
     release(13);
-    poll(0.05);
     for (let i = 0; i < 20; i++) poll(0.05);
     expect(heard).toHaveLength(3);
   });

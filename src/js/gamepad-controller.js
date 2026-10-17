@@ -1,8 +1,18 @@
 /**
  * Gamepad Controller
- * Provides gamepad support for 3D navigation and parameter control
+ * Reads a game controller through the Gamepad API: the sticks and the zoom
+ * inputs move the view, and every button press or stick push is told as an
+ * `input` event the app turns into an action by the person's assignments.
+ * The assignments, their presets, the families' button names and the saved
+ * mapping live here too.
  * @license GPL-3.0-or-later
  */
+
+import {
+  STORAGE_KEY_GAMEPAD_MAPPING,
+  safeGetItem,
+  safeSetItem,
+} from './storage-keys.js';
 
 /**
  * Default gamepad button mappings (Standard Gamepad Layout)
@@ -77,59 +87,108 @@ export const GAMEPAD_BUTTON_NAMES = [
   'home',
 ];
 
-/** The D-pad's buttons in the standard mapping, and their directions. */
-const DPAD_DIRECTIONS = [
-  [12, 'up'],
-  [13, 'down'],
-  [14, 'left'],
-  [15, 'right'],
+/** Each stick push a person can assign: its axis and its direction. */
+const STICK_INPUTS = {
+  'ls-up': [1, -1],
+  'ls-down': [1, 1],
+  'ls-left': [0, -1],
+  'ls-right': [0, 1],
+  'rs-up': [3, -1],
+  'rs-down': [3, 1],
+  'rs-left': [2, -1],
+  'rs-right': [2, 1],
+};
+
+/** Every input a person can assign: the buttons, then the stick pushes. */
+export const GAMEPAD_INPUT_NAMES = [
+  ...GAMEPAD_BUTTON_NAMES,
+  ...Object.keys(STICK_INPUTS),
 ];
 
-/** The D-pad's directions, as its `dpad:<direction>` events name them. */
-export const DPAD_DIRECTION_NAMES = DPAD_DIRECTIONS.map(([, d]) => d);
+/** A stick pushed this far counts as a press of that direction. */
+const STICK_PRESS = 0.5;
 
 /**
- * A held D-pad direction repeats, as a held arrow key does: once at the
- * press, again after the wait, then at the interval. The wait keeps a slow
- * press from stepping twice.
+ * A held input repeats, as a held key does: once at the press, again after
+ * the wait, then at the interval. The wait keeps a slow press from stepping
+ * twice.
  */
-export const DPAD_REPEAT_DELAY_S = 0.5;
-export const DPAD_REPEAT_S = 0.15;
+export const INPUT_REPEAT_DELAY_S = 0.5;
+export const INPUT_REPEAT_S = 0.15;
 
 /**
- * The presets: which inputs move the view (`actions`) and what each button
- * does (`buttons`, a button's name to a command the app runs). The D-pad
- * sends the arrow keys in both.
+ * The actions a person can assign, in the Controller tab's order. `repeats`:
+ * a held input repeats the action; `held`: the action lasts as long as the
+ * input is held (the zoom), so it has no command of its own.
+ */
+export const GAMEPAD_ACTIONS = [
+  { id: 'previous', name: 'Previous control', repeats: true },
+  { id: 'next', name: 'Next control', repeats: true },
+  { id: 'previousRegion', name: 'Previous toolbar' },
+  { id: 'nextRegion', name: 'Next toolbar' },
+  { id: 'activate', name: 'Activate' },
+  { id: 'back', name: 'Back' },
+  { id: 'up', name: 'Up', repeats: true },
+  { id: 'down', name: 'Down', repeats: true },
+  { id: 'left', name: 'Left', repeats: true },
+  { id: 'right', name: 'Right', repeats: true },
+  { id: 'zoomIn', name: 'Zoom in', held: true },
+  { id: 'zoomOut', name: 'Zoom out', held: true },
+  { id: 'fullScreen', name: 'Full Screen' },
+  { id: 'keys', name: 'Keyboard shortcuts' },
+  { id: 'resetView', name: 'Reset View' },
+  { id: 'viewAll', name: 'View All' },
+];
+
+/**
+ * The presets: each action's input.
  * - "Menus first": the bumpers step from control to control as Tab does,
  *   the triggers jump between the window's parts, X and Y zoom.
  * - "Camera first": the triggers zoom by how far they are pressed; X resets
  *   the view and Y fits the model in it.
+ * The D-pad sends the arrow keys in both; the sticks always orbit and pan.
  */
 export const GAMEPAD_PRESETS = {
   menus: {
-    actions: { cameraZoomOut: 'buttonX', cameraZoomIn: 'buttonY' },
-    buttons: {
-      lb: 'previous',
-      rb: 'next',
-      lt: 'previousRegion',
-      rt: 'nextRegion',
-      a: 'activate',
-      b: 'back',
-      start: 'fullScreen',
-      select: 'keys',
+    name: 'Menus first',
+    assignments: {
+      previous: 'lb',
+      next: 'rb',
+      previousRegion: 'lt',
+      nextRegion: 'rt',
+      activate: 'a',
+      back: 'b',
+      up: 'up',
+      down: 'down',
+      left: 'left',
+      right: 'right',
+      zoomIn: 'y',
+      zoomOut: 'x',
+      fullScreen: 'start',
+      keys: 'select',
+      resetView: null,
+      viewAll: null,
     },
   },
   camera: {
-    actions: { cameraZoomOut: 'leftTrigger', cameraZoomIn: 'rightTrigger' },
-    buttons: {
-      lb: 'previous',
-      rb: 'next',
-      a: 'activate',
-      b: 'back',
-      x: 'resetView',
-      y: 'viewAll',
-      start: 'fullScreen',
-      select: 'keys',
+    name: 'Camera first',
+    assignments: {
+      previous: 'lb',
+      next: 'rb',
+      previousRegion: null,
+      nextRegion: null,
+      activate: 'a',
+      back: 'b',
+      up: 'up',
+      down: 'down',
+      left: 'left',
+      right: 'right',
+      zoomIn: 'rt',
+      zoomOut: 'lt',
+      fullScreen: 'start',
+      keys: 'select',
+      resetView: 'x',
+      viewAll: 'y',
     },
   },
 };
@@ -137,9 +196,346 @@ export const GAMEPAD_PRESETS = {
 /** The preset a person starts with. */
 export const DEFAULT_GAMEPAD_PRESET = 'menus';
 
+/** The controller families whose button names the Controller tab uses. */
+export const GAMEPAD_FAMILIES = [
+  { id: 'xbox', name: 'Xbox' },
+  { id: 'playstation', name: 'PlayStation' },
+  { id: 'nintendo', name: 'Nintendo' },
+  { id: 'generic', name: 'Generic' },
+];
+
+/** Names every family shares. */
+const COMMON_LABELS = {
+  l3: 'Left stick press',
+  r3: 'Right stick press',
+  up: 'D-pad up',
+  down: 'D-pad down',
+  left: 'D-pad left',
+  right: 'D-pad right',
+  'ls-up': 'Left stick up',
+  'ls-down': 'Left stick down',
+  'ls-left': 'Left stick left',
+  'ls-right': 'Left stick right',
+  'rs-up': 'Right stick up',
+  'rs-down': 'Right stick down',
+  'rs-left': 'Right stick left',
+  'rs-right': 'Right stick right',
+};
+
 /**
- * Default action bindings: the inputs that move the view, as the default
- * preset sets them.
+ * Each family's names for the buttons, by position in the standard mapping.
+ * Nintendo prints A on the right button and B on the bottom one, the other
+ * way round from Xbox.
+ */
+const FAMILY_LABELS = {
+  xbox: {
+    a: 'A',
+    b: 'B',
+    x: 'X',
+    y: 'Y',
+    lb: 'LB',
+    rb: 'RB',
+    lt: 'LT',
+    rt: 'RT',
+    select: 'View',
+    start: 'Menu',
+    home: 'Xbox button',
+  },
+  playstation: {
+    a: 'Cross',
+    b: 'Circle',
+    x: 'Square',
+    y: 'Triangle',
+    lb: 'L1',
+    rb: 'R1',
+    lt: 'L2',
+    rt: 'R2',
+    select: 'Create',
+    start: 'Options',
+    l3: 'L3',
+    r3: 'R3',
+    home: 'PS button',
+  },
+  nintendo: {
+    a: 'B',
+    b: 'A',
+    x: 'Y',
+    y: 'X',
+    lb: 'L',
+    rb: 'R',
+    lt: 'ZL',
+    rt: 'ZR',
+    select: 'Minus',
+    start: 'Plus',
+    home: 'Home',
+  },
+  generic: {
+    a: 'Bottom button',
+    b: 'Right button',
+    x: 'Left button',
+    y: 'Top button',
+    lb: 'Left bumper',
+    rb: 'Right bumper',
+    lt: 'Left trigger',
+    rt: 'Right trigger',
+    select: 'Left center button',
+    start: 'Right center button',
+    home: 'Center button',
+  },
+};
+
+/**
+ * The short words on the Controller tab's picture of a controller, by part.
+ * The picture is hidden from assistive technology: the list of actions
+ * beside it names every button in full.
+ */
+const DIAGRAM_LABELS = {
+  xbox: {
+    a: 'A',
+    b: 'B',
+    x: 'X',
+    y: 'Y',
+    lb: 'LB',
+    rb: 'RB',
+    lt: 'LT',
+    rt: 'RT',
+    select: 'View',
+    start: 'Menu',
+  },
+  playstation: {
+    a: '✕',
+    b: '○',
+    x: '□',
+    y: '△',
+    lb: 'L1',
+    rb: 'R1',
+    lt: 'L2',
+    rt: 'R2',
+    select: 'Create',
+    start: 'Options',
+  },
+  nintendo: {
+    a: 'B',
+    b: 'A',
+    x: 'Y',
+    y: 'X',
+    lb: 'L',
+    rb: 'R',
+    lt: 'ZL',
+    rt: 'ZR',
+    select: '−',
+    start: '+',
+  },
+  generic: {
+    a: '',
+    b: '',
+    x: '',
+    y: '',
+    lb: 'Bumper',
+    rb: 'Bumper',
+    lt: 'Trigger',
+    rt: 'Trigger',
+    select: '',
+    start: '',
+  },
+};
+
+/**
+ * The family a pad belongs to, from the name and maker the browser reports
+ * (Microsoft 045e, Sony 054c, Nintendo 057e).
+ * @param {string} [id] - the pad's `id`
+ * @returns {'xbox'|'playstation'|'nintendo'|'generic'}
+ */
+export function gamepadFamilyFromId(id) {
+  const text = String(id || '').toLowerCase();
+  if (/xbox|xinput|vendor: 045e|^045e-/.test(text)) return 'xbox';
+  if (/dualsense|dualshock|playstation|vendor: 054c|^054c-/.test(text)) {
+    return 'playstation';
+  }
+  if (/nintendo|pro controller|joy-con|vendor: 057e|^057e-/.test(text)) {
+    return 'nintendo';
+  }
+  return 'generic';
+}
+
+/**
+ * An input's name as its family prints it.
+ * @param {string|null} input
+ * @param {string} family
+ * @returns {string}
+ */
+export function gamepadInputLabel(input, family) {
+  if (!input) return 'Not assigned';
+  return (
+    FAMILY_LABELS[family]?.[input] ??
+    COMMON_LABELS[input] ??
+    FAMILY_LABELS.generic[input] ??
+    input
+  );
+}
+
+/**
+ * The short word on the controller picture's part.
+ * @param {string} part
+ * @param {string} family
+ * @returns {string}
+ */
+export function gamepadDiagramLabel(part, family) {
+  return (DIAGRAM_LABELS[family] ?? DIAGRAM_LABELS.generic)[part] ?? '';
+}
+
+/**
+ * A preset's assignments for a family. On a Nintendo pad the button printed
+ * A activates and the one printed B goes back, as Nintendo's own menus do.
+ * @param {string} presetId
+ * @param {string} family
+ * @returns {Object<string, string|null>} action id to input
+ */
+export function presetAssignments(presetId, family) {
+  const preset =
+    GAMEPAD_PRESETS[presetId] ?? GAMEPAD_PRESETS[DEFAULT_GAMEPAD_PRESET];
+  const table = { ...preset.assignments };
+  if (family === 'nintendo') {
+    for (const [action, input] of Object.entries(table)) {
+      if (input === 'a') table[action] = 'b';
+      else if (input === 'b') table[action] = 'a';
+    }
+  }
+  return table;
+}
+
+const ACTION_IDS = GAMEPAD_ACTIONS.map((a) => a.id);
+const FAMILY_IDS = GAMEPAD_FAMILIES.map((f) => f.id);
+
+/**
+ * A person's own table, when every action in it names a known input (or
+ * none) and no input is used twice; anything else is not kept.
+ * @param {unknown} table
+ * @returns {Object<string, string|null>|null}
+ */
+function validAssignments(table) {
+  if (!table || typeof table !== 'object') return null;
+  const seen = new Set();
+  const out = {};
+  for (const id of ACTION_IDS) {
+    const input = table[id] ?? null;
+    if (input !== null) {
+      if (!GAMEPAD_INPUT_NAMES.includes(input) || seen.has(input)) return null;
+      seen.add(input);
+    }
+    out[id] = input;
+  }
+  return out;
+}
+
+/**
+ * The saved controller mapping: the preset, the family when a person chose
+ * one (else it follows the pad), and a person's own assignments when they
+ * changed any.
+ * @param {{getPadId?: () => string}} [options]
+ */
+export function createGamepadMapping({ getPadId = () => '' } = {}) {
+  const listeners = new Set();
+  let saved = read();
+
+  function read() {
+    const raw = safeGetItem(STORAGE_KEY_GAMEPAD_MAPPING);
+    let data = null;
+    if (raw) {
+      try {
+        data = JSON.parse(raw);
+      } catch (error) {
+        // A damaged value starts over from the default preset; the next
+        // change writes a good one.
+        console.warn(
+          '[Gamepad] The saved controller mapping is unreadable:',
+          error
+        );
+      }
+    }
+    return {
+      preset: GAMEPAD_PRESETS[data?.preset]
+        ? data.preset
+        : DEFAULT_GAMEPAD_PRESET,
+      family: FAMILY_IDS.includes(data?.family) ? data.family : null,
+      custom: validAssignments(data?.custom),
+    };
+  }
+
+  function write() {
+    safeSetItem(STORAGE_KEY_GAMEPAD_MAPPING, JSON.stringify(saved));
+    for (const listener of listeners) listener();
+  }
+
+  function get() {
+    const family = saved.family ?? gamepadFamilyFromId(getPadId());
+    return {
+      preset: saved.preset,
+      family,
+      familyChosen: saved.family !== null,
+      assignments: saved.custom ?? presetAssignments(saved.preset, family),
+    };
+  }
+
+  return {
+    get,
+
+    /**
+     * Give an action an input. An action that had the input takes this
+     * action's old one, so every action stays reachable.
+     * @param {string} actionId
+     * @param {string} input
+     * @returns {{swappedWith: string|null}}
+     */
+    assign(actionId, input) {
+      if (!ACTION_IDS.includes(actionId)) return { swappedWith: null };
+      if (!GAMEPAD_INPUT_NAMES.includes(input)) return { swappedWith: null };
+      const current = get().assignments;
+      const next = { ...current };
+      let swappedWith = null;
+      for (const [id, held] of Object.entries(current)) {
+        if (id !== actionId && held === input) {
+          next[id] = current[actionId];
+          swappedWith = id;
+        }
+      }
+      next[actionId] = input;
+      saved = { ...saved, custom: next };
+      write();
+      return { swappedWith };
+    },
+
+    /** Start from a preset's own table. */
+    setPreset(presetId) {
+      if (!GAMEPAD_PRESETS[presetId]) return;
+      saved = { ...saved, preset: presetId, custom: null };
+      write();
+    },
+
+    /** Name the buttons as a family does; a person's own table is kept. */
+    setFamily(family) {
+      if (!FAMILY_IDS.includes(family)) return;
+      saved = { ...saved, family };
+      write();
+    },
+
+    /** Drop a person's changes: the preset's table again. */
+    reset() {
+      saved = { ...saved, custom: null };
+      write();
+    },
+
+    /** @param {() => void} listener @returns {() => void} unsubscribe */
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+}
+
+/**
+ * Default action bindings: the inputs that move the view. The zoom inputs
+ * follow the default preset's assignments.
  */
 export const DEFAULT_GAMEPAD_ACTIONS = {
   // The right stick orbits, the left stick pans.
@@ -147,15 +543,13 @@ export const DEFAULT_GAMEPAD_ACTIONS = {
   cameraRotateY: 'rightStickY',
   cameraPanX: 'leftStickX',
   cameraPanY: 'leftStickY',
-  cameraZoomOut: null,
-  cameraZoomIn: null,
+  cameraZoomIn: GAMEPAD_PRESETS[DEFAULT_GAMEPAD_PRESET].assignments.zoomIn,
+  cameraZoomOut: GAMEPAD_PRESETS[DEFAULT_GAMEPAD_PRESET].assignments.zoomOut,
 
   // Speed modifiers, unbound until a person assigns them: held, they move
   // the view at 0.3 times or 2 times the usual speed.
   fineAdjust: null,
   fastAdjust: null,
-
-  ...GAMEPAD_PRESETS[DEFAULT_GAMEPAD_PRESET].actions,
 };
 
 /**
@@ -258,8 +652,11 @@ export class GamepadController {
     // When the last poll ran, for per-second rates
     this._lastPollAt = null;
 
-    // Seconds until each held D-pad direction repeats (null: not held)
-    this._dpadRepeatIn = { up: null, down: null, left: null, right: null };
+    // Seconds until each held input repeats (absent: not held)
+    this._repeatIn = {};
+
+    // The pending capture of one input, while the Controller tab waits
+    this._capture = null;
 
     // Bound event handlers
     this._onGamepadConnected = this._onGamepadConnected.bind(this);
@@ -268,12 +665,41 @@ export class GamepadController {
   }
 
   /**
-   * Choose which inputs move the view, over the defaults: a preset's
-   * `actions`, or a person's own.
-   * @param {Object} actions - action name to input name (null unbinds)
+   * Follow a person's assignments: the zoom actions read their inputs. The
+   * other actions are the app's to run from `input` events.
+   * @param {Object<string, string|null>} assignments - action id to input
    */
-  setActions(actions = {}) {
-    this.actions = { ...DEFAULT_GAMEPAD_ACTIONS, ...actions };
+  setAssignments(assignments = {}) {
+    this.actions = {
+      ...this.actions,
+      cameraZoomIn: assignments.zoomIn ?? null,
+      cameraZoomOut: assignments.zoomOut ?? null,
+    };
+  }
+
+  /**
+   * Wait for the next button pressed or stick pushed, and tell nothing else
+   * about it. A button already held when the wait starts does not count.
+   * @param {number} [timeoutMs]
+   * @returns {Promise<string|null>} the input's name, or null after the
+   *   time limit or a cancel
+   */
+  captureNextInput(timeoutMs = 5000) {
+    this.cancelCapture();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => finish(null), timeoutMs);
+      const finish = (input) => {
+        clearTimeout(timer);
+        if (this._capture?.finish === finish) this._capture = null;
+        resolve(input);
+      };
+      this._capture = { finish };
+    });
+  }
+
+  /** Stop waiting for an input; the wait resolves with null. */
+  cancelCapture() {
+    this._capture?.finish(null);
   }
 
   /**
@@ -332,6 +758,7 @@ export class GamepadController {
    */
   destroy() {
     this.stop();
+    this.cancelCapture();
     window.removeEventListener('gamepadconnected', this._onGamepadConnected);
     window.removeEventListener(
       'gamepaddisconnected',
@@ -468,15 +895,59 @@ export class GamepadController {
   }
 
   /**
+   * Whether an input is pressed: a button down, or a stick pushed past
+   * halfway in that direction.
+   * @param {string} name
+   * @returns {boolean}
+   * @private
+   */
+  _inputDown(name) {
+    const stick = STICK_INPUTS[name];
+    if (stick) {
+      const [axis, direction] = stick;
+      return (this.state.axes[axis] || 0) * direction > STICK_PRESS;
+    }
+    return this.state.isButtonPressed(GAMEPAD_BUTTON_NAMES.indexOf(name));
+  }
+
+  /**
+   * How far an input is pressed, 0 to 1: a trigger by its depth, a digital
+   * button 0 or 1, a stick push past its dead zone.
+   * @param {string|null} name
+   * @returns {number}
+   * @private
+   */
+  _inputValue(name) {
+    if (!name) return 0;
+    const stick = STICK_INPUTS[name];
+    if (stick) {
+      const [axis, direction] = stick;
+      return Math.max(
+        0,
+        this.state.getShapedAxis(axis, this.deadzone) * direction
+      );
+    }
+    const index = GAMEPAD_BUTTON_NAMES.indexOf(name);
+    if (index < 0) return 0;
+    const value = this.state.getButtonValue(index);
+    if (typeof value === 'number' && value > 0) return value;
+    return this.state.isButtonPressed(index) ? 1 : 0;
+  }
+
+  /**
    * Process input and emit actions. The camera's events carry how far to
    * move in this step: `camera:rotate` degrees (x right, y up),
    * `camera:pan` and `camera:zoom` shares of the camera's distance (pan x
-   * right and y up; zoom positive in).
+   * right and y up; zoom positive in). Each press of a button or push of a
+   * stick is told as `input` ({ name, repeat }), and again while held.
+   * While a capture waits, the first new press goes to it and nothing else
+   * is told.
    * @param {number} [elapsed] - seconds since the last poll
    * @private
    */
   _processInput(elapsed = 0) {
     const { state, mappings, actions, deadzone } = this;
+    const capturing = this._capture !== null;
     const pressed = (action) =>
       actions[action] != null &&
       state.getButtonValue(mappings[actions[action]]) > 0.5;
@@ -484,15 +955,11 @@ export class GamepadController {
       actions[action] == null
         ? 0
         : state.getShapedAxis(mappings[actions[action]], deadzone);
-    const trigger = (action) =>
-      actions[action] == null
-        ? 0
-        : state.getButtonValue(mappings[actions[action]]) || 0;
 
     let speed = 1;
     if (pressed('fineAdjust')) speed = 0.3;
     if (pressed('fastAdjust')) speed = 2;
-    const step = elapsed * speed * this.sensitivity.camera;
+    const step = capturing ? 0 : elapsed * speed * this.sensitivity.camera;
 
     // The right stick orbits. A stick reads negative when pushed up, so its
     // vertical axis is turned over: up turns the view up.
@@ -515,38 +982,33 @@ export class GamepadController {
       });
     }
 
-    // The triggers zoom by how far they are pressed; a trigger that is only
-    // on or off zooms at full speed.
-    const zoom = trigger('cameraZoomIn') - trigger('cameraZoomOut');
+    // The zoom inputs zoom by how far they are pressed; a button that is
+    // only on or off zooms at full speed.
+    const zoom =
+      this._inputValue(actions.cameraZoomIn) -
+      this._inputValue(actions.cameraZoomOut);
     if (zoom !== 0 && step > 0) {
       this.emit('camera:zoom', { delta: zoom * ZOOM_SHARE_PER_S * step });
     }
 
-    // Every other button tells its press once, by name (`button:a`); what
-    // it does is the preset's to say.
-    GAMEPAD_BUTTON_NAMES.forEach((name, index) => {
-      if (index >= 12 && index <= 15) return;
-      if (state.isButtonJustPressed(index)) {
-        this.emit(`button:${name}`, { name });
-      }
-    });
-
-    // The D-pad tells a press at once (`dpad:up`), and a held direction
-    // again after the wait, then at the interval.
-    for (const [index, direction] of DPAD_DIRECTIONS) {
-      if (!state.isButtonPressed(index)) {
-        this._dpadRepeatIn[direction] = null;
+    for (const name of GAMEPAD_INPUT_NAMES) {
+      if (!this._inputDown(name)) {
+        delete this._repeatIn[name];
         continue;
       }
-      if (this._dpadRepeatIn[direction] === null) {
-        this._dpadRepeatIn[direction] = DPAD_REPEAT_DELAY_S;
-        this.emit(`dpad:${direction}`, { direction, repeat: false });
+      if (this._repeatIn[name] === undefined) {
+        this._repeatIn[name] = INPUT_REPEAT_DELAY_S;
+        if (this._capture) {
+          this._capture.finish(name);
+        } else if (!capturing) {
+          this.emit('input', { name, repeat: false });
+        }
         continue;
       }
-      this._dpadRepeatIn[direction] -= elapsed;
-      if (this._dpadRepeatIn[direction] <= 1e-9) {
-        this._dpadRepeatIn[direction] += DPAD_REPEAT_S;
-        this.emit(`dpad:${direction}`, { direction, repeat: true });
+      this._repeatIn[name] -= elapsed;
+      if (this._repeatIn[name] <= 1e-9) {
+        this._repeatIn[name] += INPUT_REPEAT_S;
+        if (!capturing) this.emit('input', { name, repeat: true });
       }
     }
   }
@@ -571,32 +1033,6 @@ export class GamepadController {
    */
   setDeadzone(value) {
     this.deadzone = Math.max(0, Math.min(1, value));
-  }
-
-  /**
-   * Remap a button or axis
-   * @param {string} action - Action to remap
-   * @param {string} input - New input binding
-   */
-  remap(action, input) {
-    if (this.actions[action] !== undefined) {
-      this.actions[action] = input;
-    }
-  }
-
-  /**
-   * Get current mappings
-   * @returns {Object}
-   */
-  getMappings() {
-    return { ...this.actions };
-  }
-
-  /**
-   * Reset to default mappings
-   */
-  resetMappings() {
-    this.actions = { ...DEFAULT_GAMEPAD_ACTIONS };
   }
 }
 
