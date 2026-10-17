@@ -136,6 +136,13 @@ if [ "$VARIANT" = "wasm-exceptions" ]; then
     exit 1
   fi
   sed -i 's/-fexceptions/-fwasm-exceptions/' "$SRC/CMakeLists.txt"
+  # The JavaScript way of catching exceptions; Emscripten refuses it beside
+  # -fwasm-exceptions at the link.
+  if [ "$(grep -c -- '-sDISABLE_EXCEPTION_CATCHING=0' "$SRC/CMakeLists.txt")" != "1" ]; then
+    echo "OpenSCAD's CMakeLists.txt does not set -sDISABLE_EXCEPTION_CATCHING=0 exactly once; upstream changed." >&2
+    exit 1
+  fi
+  sed -i '/-sDISABLE_EXCEPTION_CATCHING=0/d' "$SRC/CMakeLists.txt"
 fi
 
 if [ "$VARIANT" != "baseline" ]; then
