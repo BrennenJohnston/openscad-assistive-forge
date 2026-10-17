@@ -2,7 +2,7 @@
 
 Things we know about but haven't fixed yet, along with workarounds you can use in the meantime. If you hit something not listed here, please [open an issue](https://github.com/BrennenJohnston/openscad-assistive-forge/issues).
 
-**Last updated**: 2026-07-05
+**Last updated**: 2026-10-17
 
 ---
 
@@ -124,6 +124,20 @@ against either editor.
 - `localStorage.setItem('openscad-forge-debug-desktop-quality', '1')` — use desktop-equivalent quality for preview
 - `localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')` — disable CSG color injection
 - `localStorage.setItem('openscad-forge-debug-source-overrides', '1')` — bake parameters into source
+
+---
+
+#### KI-013: Very Deep Models Stop with "Model Too Deep"
+
+**Status**: Documented  
+**Affected**: All browsers, Chrome most  
+**Severity**: Low
+
+**Description**: A model that repeats a module or function inside itself many times can stop with "Model Too Deep" where desktop OpenSCAD renders it. How deep the browser goes depends on the model: a module that moves and turns at each level renders 200 levels deep in Chrome and Firefox and 400 in Safari; the TurtleSCAD spiral renders 400 levels deep in all three. Since 5.7.0 the engine is built with WebAssembly's own exceptions, which more than doubled how deep Chrome goes.
+
+**Workaround**: Lower the setting that sets how many times the model repeats, or render it in desktop OpenSCAD.
+
+**Root Cause**: Each level of a repeated module takes some of the browser's own stack for WebAssembly, which is smaller than desktop OpenSCAD's.
 
 ---
 

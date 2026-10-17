@@ -1,17 +1,17 @@
 {
   "version": "1.0",
-  "generated": "2026-10-10T00:00:00Z",
-  "build": "OpenSCAD-2026.04.03+forge.2 (98d891340e, CGAL_ALWAYS_ROUND_TO_NEAREST, 8 MiB stack)",
-  "source": "scripts/build-openscad-wasm.sh, round-to-nearest variant (8 MiB stack), from https://github.com/openscad/openscad at commit 98d891340e6007524e69f399162016f9b22584ff (GitHub Actions run 38078524115)",
+  "generated": "2026-10-17T00:00:00Z",
+  "build": "OpenSCAD-2026.04.03+forge.3 (98d891340e, CGAL_ALWAYS_ROUND_TO_NEAREST, 8 MiB stack, WebAssembly exceptions)",
+  "source": "scripts/build-openscad-wasm.sh, wasm-exceptions variant (8 MiB stack, Emscripten 6.0.5, the libraries built from openscad-wasm dc2ff913), from https://github.com/openscad/openscad at commit 98d891340e6007524e69f399162016f9b22584ff (GitHub Actions run 39031127652; run 39038452955 gave the same bytes)",
   "archive": "openscad-official.zip",
   "files": {
     "openscad.js": {
-      "sha256": "7eafd0290148572ddd57b3c9b5bdb8118fb70f4e59386242045bd6d81cf6af4c",
-      "size": 100183
+      "sha256": "e1809a0baa40d8b93a6eb72df5579dfe25fd18bc266b54131622f4ca299af36d",
+      "size": 77044
     },
     "openscad.wasm": {
-      "sha256": "291ca5910c5d8c86dae52b2a675c1ba7ac87516445d3ef0b3b0f8d1d047facb5",
-      "size": 10715351
+      "sha256": "071ae3485eb934327c7d967668256a89c48cfa7cac1de9e0c8eef1675b46cd3f",
+      "size": 9305090
     }
   },
   "engines": {
@@ -20,8 +20,8 @@
     "fastCsg": true
   },
   "previousBuild": {
-    "build": "OpenSCAD-2026.04.03+forge.1 (98d891340e, CGAL_ALWAYS_ROUND_TO_NEAREST)",
-    "reason": "Emscripten's default 64 KiB stack: a model that repeats a module a few dozen to a few hundred levels deep ran past it and damaged memory instead of stopping, and OpenSCAD's own recursion guard, which assumes 8 MiB on Emscripten, never fired. This build links the engine with an 8 MiB stack and changes nothing else."
+    "build": "OpenSCAD-2026.04.03+forge.2 (98d891340e, CGAL_ALWAYS_ROUND_TO_NEAREST, 8 MiB stack)",
+    "reason": "Built with Emscripten's JavaScript-based exceptions, every call that could throw went through JavaScript, and Chrome's own script stack stopped a module repeated about 110 levels deep (Model Too Deep). Built with WebAssembly's own exceptions, Chrome follows about twice as deep and every model renders 10 to 45 percent faster (measured 2026-10-17)."
   },
   "knownIssues": [
     "projection() triggers CGAL assertion failure (openscad-wasm#6, CGAL#7560)",
@@ -29,5 +29,5 @@
     "Performance 6x slower than native CLI (openscad-wasm#19)",
     "lazy-union may produce incorrect geometry (disabled by default)"
   ],
-  "nextUpdate": "When OpenSCAD's own build sets CGAL_ALWAYS_ROUND_TO_NEAREST for Emscripten, compare its snapshot with this build and move back to the official one"
+  "nextUpdate": "When browsers drop WebAssembly's older exception instructions (Firefox already warns), rebuild with the newer ones (try_table); and when OpenSCAD's own build sets CGAL_ALWAYS_ROUND_TO_NEAREST for Emscripten, compare its snapshot with this build"
 }

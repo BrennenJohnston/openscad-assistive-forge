@@ -3,8 +3,8 @@ name: Build OpenSCAD wasm
 # OpenSCAD's WebAssembly engine is built here from one pinned upstream commit,
 # so the app can say exactly what went into the engine it ships and anybody
 # can reproduce it by running this workflow. The recipe is
-# scripts/build-openscad-wasm.sh; its header says what the round-to-nearest
-# variant changes and why.
+# scripts/build-openscad-wasm.sh; its header says what each variant changes
+# and why.
 #
 # It runs on request, and on a pull request that touches the recipe or the
 # engine Forge ships. The output is an artifact; a session downloads it,
@@ -19,11 +19,11 @@ on:
   workflow_dispatch:
     inputs:
       variant:
-        description: round-to-nearest (the fix), baseline (upstream unchanged) or wasm-exceptions (research)
+        description: wasm-exceptions (the engine Forge ships), round-to-nearest (the one before it) or baseline (upstream unchanged)
         required: true
-        default: round-to-nearest
+        default: wasm-exceptions
         type: choice
-        options: [round-to-nearest, baseline, wasm-exceptions]
+        options: [wasm-exceptions, round-to-nearest, baseline]
   pull_request:
     paths:
       - 'scripts/build-openscad-wasm.sh'
@@ -35,17 +35,16 @@ permissions:
 
 jobs:
   build:
-    name: ${{ inputs.variant || 'round-to-nearest' }} (${{ matrix.wasm_type }})
+    name: ${{ inputs.variant || 'wasm-exceptions' }} (${{ matrix.wasm_type }})
     runs-on: ubuntu-latest
-    # wasm-exceptions builds the libraries' image first, which takes hours.
-    timeout-minutes: ${{ inputs.variant == 'wasm-exceptions' && 350 || 120 }}
+    # wasm-exceptions builds the libraries' image first (about 20 minutes).
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        # The research variant is measured in browsers only.
-        wasm_type: ${{ fromJSON(inputs.variant == 'wasm-exceptions' && '["web"]' || '["web", "node"]') }}
+        wasm_type: [web, node]
     env:
-      VARIANT: ${{ inputs.variant || 'round-to-nearest' }}
+      VARIANT: ${{ inputs.variant || 'wasm-exceptions' }}
       WASM_TYPE: ${{ matrix.wasm_type }}
       # The example-manifest commit that holds the Plug Puller 0.13.0 with
       # its minkowski() edges. Later copies round their edges another way
@@ -68,7 +67,8 @@ jobs:
       # The model that showed the problem. Its rounded edges were minkowski()
       # with a sphere; with the baseline engine the two-sided file prints
       # "Minkowski failed" and takes about a minute, and the one-sided file
-      # does so some of the time. The round-to-nearest build must render both
+      # does so some of the time. The round-to-nearest and wasm-exceptions
+      # builds must render both
       # without falling back, and the baseline build must still fall back on
       # the two-sided file, or this check has stopped testing anything.
       - name: Render the Plug Puller 0.13.0 with Forge's flags
@@ -99,7 +99,7 @@ jobs:
               grep -v '^ECHO:' "$out/$f.log" | tail -40
               echo "::endgroup::"
             fi
-            if [ "$VARIANT" = "round-to-nearest" ] && [ "$fallback" != "0" ]; then failed=1; fi
+            if [ "$VARIANT" != "baseline" ] && [ "$fallback" != "0" ]; then failed=1; fi
             if [ "$VARIANT" = "baseline" ] && [ "$f" = "Plug_Puller_Two_Sided_SingleFile" ] && [ "$fallback" = "0" ]; then
               echo "::error::The baseline engine no longer falls back on $f, so this check proves nothing."
               failed=1
@@ -108,14 +108,18 @@ jobs:
           cat "$summary"
           exit $failed
 
-      # INTEGRITY.json names the build Forge ships; a name that carries the
-      # macro is the round-to-nearest variant, any other is upstream's own.
+      # INTEGRITY.json names the build Forge ships: one built with WebAssembly
+      # exceptions is the wasm-exceptions variant, one that carries the macro
+      # only is round-to-nearest, any other is upstream's own.
       - name: Compare with the engine Forge ships
         if: matrix.wasm_type == 'web'
         run: |
           out="build/openscad-wasm/${VARIANT}-web"
           integrity=public/wasm/openscad-official/INTEGRITY.json
-          if jq -r '.build' "$integrity" | grep -q 'CGAL_ALWAYS_ROUND_TO_NEAREST'; then
+          build_name=$(jq -r '.build' "$integrity")
+          if echo "$build_name" | grep -q 'WebAssembly exceptions'; then
+            shipped=wasm-exceptions
+          elif echo "$build_name" | grep -q 'CGAL_ALWAYS_ROUND_TO_NEAREST'; then
             shipped=round-to-nearest
           else
             shipped=baseline

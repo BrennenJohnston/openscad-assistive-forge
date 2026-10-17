@@ -25,24 +25,27 @@
 # Emscripten, so with the default it never fires. "baseline" builds upstream
 # unchanged, for comparison.
 #
-# "wasm-exceptions" is research, never shipped as it stands: the
-# round-to-nearest changes, built with WebAssembly's own exception handling
-# (-fwasm-exceptions) in place of Emscripten's JavaScript-based one
-# (-fexceptions), to measure whether it lets Chrome run deeper recursion. The
-# libraries in the pinned image were compiled with -fexceptions and cannot
-# be linked with it, so this variant first builds the libraries' image
-# itself, from openscad-wasm's own recipe at a pinned commit, with the flag
-# and without the line that rewrites Boost's -fwasm-exceptions back to
-# -fexceptions, on the same Emscripten as the pinned image. OpenSCAD's
-# CMakeLists.txt sets -fexceptions for Emscripten twice (compiling,
-# linking); both become -fwasm-exceptions.
+# "wasm-exceptions" is the engine Forge ships: the round-to-nearest changes,
+# built with WebAssembly's own exception handling (-fwasm-exceptions) in place
+# of Emscripten's JavaScript-based one (-fexceptions). Measured on 2026-10-17,
+# Chrome follows a model's recursion about twice as deep with it (a module
+# repeated 200 levels deep renders; with -fexceptions it stopped near 110),
+# and every model renders faster, by 10 to 45 percent. The libraries in the
+# pinned image were compiled with -fexceptions and cannot be linked with it,
+# so this variant first builds the libraries' image itself, from
+# openscad-wasm's own recipe at a pinned commit, with the flag and without
+# the line that rewrites Boost's -fwasm-exceptions back to -fexceptions, on
+# the Emscripten that recipe names (6.0.5; the pinned image has 4.0.10).
+# OpenSCAD's CMakeLists.txt sets -fexceptions for Emscripten twice
+# (compiling, linking); both become -fwasm-exceptions, and the link's
+# -sDISABLE_EXCEPTION_CATCHING=0, which belongs to the JavaScript way, goes.
 #
 # It needs git and Docker. The repeatable way to run it is the "Build OpenSCAD
 # wasm" workflow in .github/workflows, which uploads the output as an
 # artifact. The output never goes into public/wasm/ on its own: replacing the
 # vendored engine is a separate, reviewed change.
 #
-#   VARIANT=round-to-nearest WASM_TYPE=web ./scripts/build-openscad-wasm.sh
+#   VARIANT=wasm-exceptions WASM_TYPE=web ./scripts/build-openscad-wasm.sh
 #
 # Output: build/openscad-wasm/<variant>-<wasm type>/
 #   openscad.js, openscad.wasm (web only; the node build is one file)
@@ -57,12 +60,12 @@ OPENSCAD_VERSION="${OPENSCAD_VERSION:-2026.04.03}"
 # openscad/wasm-base-release, the image OpenSCAD's snapshot builds use, pinned
 # by digest (measured 2026-09-28: emcc 4.0.10) so "reproducible" is a fact.
 IMAGE="${IMAGE:-openscad/wasm-base-release@sha256:f73d33d5f2fd4c7ae4d3aaacb1e2e2deb193b878b38bb80c8235c933ac340c66}"
-VARIANT="${VARIANT:-round-to-nearest}"
+VARIANT="${VARIANT:-wasm-exceptions}"
 WASM_TYPE="${WASM_TYPE:-web}"
 # wasm-exceptions only: openscad-wasm's recipe for the libraries' image
 # (its main branch on 2026-10-17), and the Emscripten that recipe pins
 # (6.0.5, by digest). Its Dockerfile needs a newer pip than the 4.0.10 image
-# has, so the research engine differs from the shipped one in Emscripten too.
+# has.
 OPENSCAD_WASM_COMMIT="${OPENSCAD_WASM_COMMIT:-dc2ff913b4193b1ebfef863da3f7e84f8fbc1e11}"
 EMSDK_IMAGE="${EMSDK_IMAGE:-emscripten/emsdk:6.0.5@sha256:76a44fff907397784decc435115d07fcb9587a4f1504977f39f3745e538e3a1e}"
 # The round-to-nearest engine's stack in bytes: what OpenSCAD's recursion guard

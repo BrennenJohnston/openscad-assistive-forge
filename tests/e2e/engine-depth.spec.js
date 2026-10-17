@@ -1,8 +1,11 @@
 /**
  * E2E tests for how deep a model the browser engine can follow: a module
- * that calls itself 80 times, which desktop OpenSCAD renders at once and
- * which ran past the engine's old 64 KiB stack in every browser (it stopped
- * near 50). With the 8 MiB stack Firefox and Safari render it.
+ * that calls itself 150 times, which desktop OpenSCAD renders at once. The
+ * engine's old 64 KiB stack stopped it near 50 in every browser; with the
+ * 8 MiB stack Firefox and Safari rendered 80, and Chrome's own script stack
+ * still stopped it near 45. Built with WebAssembly's own exceptions, the
+ * engine renders it in all three (measured in Chrome: 200 levels render,
+ * 300 do not).
  *
  * @license GPL-3.0-or-later
  */
@@ -10,7 +13,7 @@
 import { test, expect } from '@playwright/test'
 import { Buffer } from 'node:buffer'
 
-const DEPTH = 80
+const DEPTH = 150
 
 const DEEP_MODEL = {
   name: `deep-${DEPTH}.scad`,
@@ -34,11 +37,7 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test(`a model ${DEPTH} levels deep previews`, async ({ page, browserName }) => {
-  test.skip(
-    browserName === 'chromium',
-    "Chromium's own script stack stops this model near 45 levels, whatever the engine's stack"
-  )
+test(`a model ${DEPTH} levels deep previews`, async ({ page }) => {
   test.setTimeout(240_000)
   await page.goto('/')
   await page.waitForSelector('body[data-wasm-ready="true"]', {
