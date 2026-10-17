@@ -182,7 +182,6 @@ import { applyAriaKeyshortcuts } from './js/keyboard-shortcuts-binder.js';
 import {
   isEnabled as _isEnabled,
   debugFlags,
-  setUserPreference,
   FLAGS as _FLAGS,
 } from './js/feature-flags.js';
 import { initSearchableCombobox } from './js/searchable-combobox.js';
@@ -1034,12 +1033,8 @@ async function initApp() {
     // Apply conservative settings for recovery mode:
     // - Auto-preview OFF (no automatic renders)
     // - Quality set to fast (minimum quality settings)
-    // - CodeMirror disabled (use textarea only — less memory overhead)
     localStorage.setItem(STORAGE_KEY_AUTO_PREVIEW_ENABLED, 'false');
     localStorage.setItem(STORAGE_KEY_PREVIEW_QUALITY, 'fast');
-    // Disable CodeMirror in recovery mode to reduce memory footprint.
-    // The user can re-enable it manually from settings after recovery.
-    setUserPreference('codemirror_editor', false);
 
     // Clean up crash detection flags
     localStorage.removeItem(STORAGE_KEY_WASM_INIT_STARTED);
