@@ -60,9 +60,11 @@ IMAGE="${IMAGE:-openscad/wasm-base-release@sha256:f73d33d5f2fd4c7ae4d3aaacb1e2e2
 VARIANT="${VARIANT:-round-to-nearest}"
 WASM_TYPE="${WASM_TYPE:-web}"
 # wasm-exceptions only: openscad-wasm's recipe for the libraries' image
-# (its main branch on 2026-10-17), and the Emscripten the pinned image has.
+# (its main branch on 2026-10-17), and the Emscripten that recipe pins
+# (6.0.5, by digest). Its Dockerfile needs a newer pip than the 4.0.10 image
+# has, so the research engine differs from the shipped one in Emscripten too.
 OPENSCAD_WASM_COMMIT="${OPENSCAD_WASM_COMMIT:-dc2ff913b4193b1ebfef863da3f7e84f8fbc1e11}"
-EMSDK_IMAGE="${EMSDK_IMAGE:-emscripten/emsdk:4.0.10}"
+EMSDK_IMAGE="${EMSDK_IMAGE:-emscripten/emsdk:6.0.5@sha256:76a44fff907397784decc435115d07fcb9587a4f1504977f39f3745e538e3a1e}"
 # The round-to-nearest engine's stack in bytes: what OpenSCAD's recursion guard
 # assumes on Emscripten.
 STACK_SIZE=8388608
