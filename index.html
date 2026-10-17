@@ -4703,6 +4703,24 @@
               </div>
             </div>
           </div>
+          <!-- On a phone held upright the Customizer lies over the preview,
+               see-through. This layer behind it tints and blurs the model; a
+               blur on the panel itself would hold its pop-up lists and
+               tooltips inside it. -->
+          <div class="customizer-glass" aria-hidden="true"></div>
+          <!-- The Customizer's width on a phone held upright. A splitter has
+               no native element: role="separator" with tabindex is the ARIA
+               pattern for one, as on the desktop divider. -->
+          <div
+            id="customizerWidthGrip"
+            class="customizer-width-grip"
+            role="separator"
+            tabindex="0"
+            aria-orientation="vertical"
+            aria-controls="paramPanel"
+            aria-label="Resize the Customizer"
+            hidden
+          ></div>
           <div
             class="preview-panel"
             id="previewPanel"
@@ -5545,9 +5563,8 @@
                   </svg>
                   <span class="camera-drawer-label">ASCII</span>
                 </button>
-                <!-- Filled when the page starts: the Alt View's sliders, then
-                     copies of the status strip's Characters and Edges
-                     controls, so their words live in one place. -->
+                <!-- Filled when the page starts with the Alt View's three
+                     sliders. -->
                 <div
                   class="camera-drawer-body ascii-drawer-body"
                   id="asciiDrawerBody"
@@ -7826,9 +7843,9 @@
             </p>
             <h4>Adjust with the pan arrows</h4>
             <p>
-              The adjust button sits beside the projection button in the camera
-              panel; on a phone it is the center of the Pan D-pad. It switches
-              the Pan D-pad between two jobs:
+              On a desktop window the adjust button sits beside the projection
+              button in the camera panel (a phone has the three sliders
+              instead). It switches the Pan D-pad between two jobs:
             </p>
             <ul class="features-list">
               <li>
@@ -8451,6 +8468,30 @@
                 >Adjust grid line visibility from 10 to 100 percent</span
               >
             </fieldset>
+            <div class="preview-setting customizer-opacity-setting">
+              <label for="prefsCustomizerOpacity"
+                >Customizer background on a phone</label
+              >
+              <div class="slider-container">
+                <input
+                  type="range"
+                  id="prefsCustomizerOpacity"
+                  min="65"
+                  max="100"
+                  step="5"
+                  value="90"
+                  aria-describedby="prefsCustomizerOpacityHelp"
+                />
+                <span class="slider-value" id="prefsCustomizerOpacityValue"
+                  >90%</span
+                >
+              </div>
+            </div>
+            <p id="prefsCustomizerOpacityHelp" class="preferences-field-note">
+              How solid the Customizer is where it opens over the preview on a
+              phone. Below 90%, its gray help text is harder to read over a very
+              bright or very dark model.
+            </p>
           </div>
           <div
             role="tabpanel"

@@ -928,9 +928,7 @@ test.describe('The Alt View and pan adjust speak plainly', () => {
     await key.click();
     await expect(key).toHaveAttribute('aria-pressed', 'false');
     await page.waitForTimeout(600);
-    expect(await spoken(page, mark)).toEqual([
-      'Alt View off.',
-    ]);
+    expect(await spoken(page, mark)).toEqual(['Alt View off.']);
   });
 
   test('pan adjust: one name, one sentence per state, each value plainly', async ({
@@ -982,9 +980,7 @@ test.describe('The Alt View and pan adjust speak plainly', () => {
     mark = await announcementMark(page);
     await page.locator('#cameraPanUp').click();
     await page.waitForTimeout(600);
-    expect(await spoken(page, mark)).toEqual([
-      'Edges 105%',
-    ]);
+    expect(await spoken(page, mark)).toEqual(['Edges 105%']);
 
     mark = await announcementMark(page);
     await adjust.click();
@@ -1213,14 +1209,14 @@ test.describe('The Edges control beside the status line', () => {
   });
 });
 
-// On a phone the Characters steps and the Edges levels sit in the Alt
-// View's ASCII drawer, off the preview, and change the one size and the one
-// level the strip shows on a desktop window.
+// On a phone the Alt View's ASCII drawer holds its three sliders and
+// nothing else; they change the one size and the one level the strip shows
+// on a desktop window, and the minus and equals keys still step the size.
 test.describe('The Alt View controls in the phone ASCII drawer', () => {
   // No isMobile: Firefox rejects it when the browser context is created.
   test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
 
-  test('step the size and set the level the strip shows, off the preview', async ({
+  test('the three sliders only, the size the strip shows, and the keys still step it', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -1247,38 +1243,34 @@ test.describe('The Alt View controls in the phone ASCII drawer', () => {
     await page.locator('#asciiDrawerToggle').click();
     const section = page.locator('#asciiDrawerBody');
     await expect(section).toBeVisible();
-    const smaller = section.getByRole('button', { name: 'Smaller characters' });
-    const larger = section.getByRole('button', { name: 'Larger characters' });
-    const value = page.locator('#altViewCharactersValueMobile');
+    await expect(section.locator('input[type="range"]')).toHaveCount(3);
+    await expect(section.locator('button')).toHaveCount(0);
+    await expect(section.locator('.alt-view-stepper')).toHaveCount(0);
+
     const stripValue = page.locator('#altViewCharactersValue');
     const slider = page.locator('#_hfmFontScaleMobile');
-
     await slider.evaluate((el) => {
       el.value = '0.6';
       el.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    await expect(value).toHaveText('Normal');
+    await expect(stripValue).toHaveText('Normal');
+    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.6');
 
-    await smaller.click();
-    await expect(value).toHaveText('Fine');
+    // The minus key steps the size down to the next named step, from the
+    // preview as from anywhere outside a text field.
+    await page.locator('#previewContainer').click();
+    await page.keyboard.press('-');
     await expect(stripValue).toHaveText('Fine');
-    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.5');
-    await larger.click();
-    await expect(value).toHaveText('Normal');
-    await expect(larger).toHaveAttribute('aria-keyshortcuts', '=');
+    await expect(slider).toHaveValue('0.5');
+    await page.keyboard.press('=');
+    await expect(stripValue).toHaveText('Normal');
 
-    const sharp = page
-      .locator('#altViewEdgesMobile')
-      .getByRole('button', { name: 'Sharp' });
-    await sharp.click();
-    await expect(sharp).toHaveAttribute('aria-pressed', 'true');
-    await expect(
-      page.locator('#altViewEdges .alt-view-level-btn[data-level="sharp"]')
-    ).toHaveAttribute('aria-pressed', 'true');
+    const edges = page.locator('#_hfmContrastMobile');
+    await edges.evaluate((el) => {
+      el.value = '1.6';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     await expect(page.locator('#_hfmContrast')).toHaveValue('1.6');
-
-    // The pan arrows' adjust button sits in the same section.
-    await expect(section.locator('#_hfmPanAdjustMobile')).toBeVisible();
   });
 });
 
@@ -1364,7 +1356,9 @@ test.describe('The Alt View starts with finer characters', () => {
     await expect(page.locator('#_hfmFontScale')).toHaveValue('0.6');
   });
 
-  test('on a phone shows 40% characters when nothing is saved', async ({ page }) => {
+  test('on a phone shows 40% characters when nothing is saved', async ({
+    page,
+  }) => {
     test.setTimeout(240_000);
     await page.setViewportSize({ width: 412, height: 915 });
     await page.goto('/?example=simple-box');

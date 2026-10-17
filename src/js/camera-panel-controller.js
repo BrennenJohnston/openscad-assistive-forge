@@ -641,25 +641,9 @@ function initPhoneDrawer({
 }
 
 /**
- * A drawer body's height with its content and nothing else, open or not:
- * a closed drawer is opened and closed again within one task, so nothing
- * is drawn in between.
- * @param {{drawer: HTMLElement, body: HTMLElement}} d
- * @returns {number}
- */
-function naturalHeight({ drawer, body }) {
-  const wasCollapsed = drawer.classList.contains('collapsed');
-  body.style.removeProperty('min-height');
-  if (wasCollapsed) drawer.classList.remove('collapsed');
-  const height = body.getBoundingClientRect().height;
-  if (wasCollapsed) drawer.classList.add('collapsed');
-  return height;
-}
-
-/**
  * The phone's bottom drawers: the camera drawer, and in the Alt View the
- * ASCII drawer beside it, both opening from the bottom bar into the same
- * space, one at a time.
+ * ASCII drawer beside it, both opening from the bottom bar, one at a time,
+ * each as tall as its controls.
  */
 function initMobileCameraDrawer() {
   const previewPanel = document.querySelector('.preview-panel');
@@ -690,28 +674,28 @@ function initMobileCameraDrawer() {
     );
   };
 
-  // In the Alt View the two drawers open into the same space, at the taller
-  // one's height (never past half the screen), so the preview keeps one
-  // size whichever is open.
-  const matchHeights = () => {
-    const shown = drawers.filter((d) => !d.drawer.hidden);
-    if (shown.length < 2) {
-      drawers.forEach((d) => d.body.style.removeProperty('min-height'));
+  // How far the open drawer reaches up from the screen's foot. In Full
+  // Screen the preview runs down to it (layout.css), so a short drawer
+  // leaves the preview more than half.
+  const syncReach = () => {
+    const open = drawers.find((d) => d.isOpen());
+    const root = document.documentElement.style;
+    if (!open) {
+      root.removeProperty('--phone-drawer-reach');
       return;
     }
-    const height = Math.min(
-      Math.max(...shown.map(naturalHeight)),
-      window.innerHeight / 2
+    const top = open.body.getBoundingClientRect().top;
+    root.setProperty(
+      '--phone-drawer-reach',
+      `${Math.max(0, Math.round(window.innerHeight - top))}px`
     );
-    shown.forEach((d) => d.body.style.setProperty('min-height', `${height}px`));
   };
+  const scheduleReach = () => requestAnimationFrame(syncReach);
 
   const onChange = (opened) => {
-    if (opened) {
-      placeDrawerColumnTop();
-      matchHeights();
-    }
+    if (opened) placeDrawerColumnTop();
     syncPreviewPadding();
+    scheduleReach();
   };
 
   for (const cfg of [
@@ -737,12 +721,27 @@ function initMobileCameraDrawer() {
   }
   syncPreviewPadding();
 
+  // Full Screen coming or going, and a drawer's controls changing (the Alt
+  // View fills its drawer when it starts), move the open drawer's top.
+  const mainInterface = document.getElementById('mainInterface');
+  if (mainInterface) {
+    new MutationObserver(scheduleReach).observe(mainInterface, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+  }
+  if (typeof ResizeObserver === 'function') {
+    const bodies = new ResizeObserver(scheduleReach);
+    drawers.forEach((d) => bodies.observe(d.body));
+  }
+
   let resizeTimeout;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
       syncPreviewPadding({ checkWidth: true });
       if (drawers.some((d) => d.isOpen())) placeDrawerColumnTop();
+      syncReach();
     }, 150);
   });
 }

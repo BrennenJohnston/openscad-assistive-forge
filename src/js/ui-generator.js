@@ -1285,6 +1285,44 @@ export function getModifiedParameterCount() {
 }
 
 /**
+ * How many characters a parameter's longest value needs in its number box:
+ * its minimum, maximum and default written at the decimals its step uses, a
+ * sign where the range goes below zero, and the wider range when limits are
+ * unlocked. The box is sized to this, so the slider beside it keeps the rest
+ * of the row.
+ * @param {{minimum?: number, maximum?: number, default?: number|string, step?: number|string}} param
+ * @param {{unlocked?: boolean}} [options]
+ * @returns {number} characters, at least 2
+ */
+export function numberBoxChars(param, { unlocked = false } = {}) {
+  const decimalsOf = (v) => {
+    const s = String(v ?? '');
+    const dot = s.indexOf('.');
+    return dot < 0 ? 0 : s.length - dot - 1;
+  };
+  const min = Number(param.minimum);
+  const max = Number(param.maximum);
+  const values = [param.default, param.minimum, param.maximum]
+    .map(Number)
+    .filter(Number.isFinite);
+  if (unlocked && Number.isFinite(min) && Number.isFinite(max)) {
+    const span = max - min;
+    values.push(min - span, max + span);
+  }
+  const decimals = Math.max(
+    decimalsOf(param.step),
+    decimalsOf(param.default),
+    decimalsOf(param.minimum),
+    decimalsOf(param.maximum)
+  );
+  const longest = values.reduce(
+    (most, v) => Math.max(most, v.toFixed(decimals).length),
+    0
+  );
+  return Math.max(2, longest);
+}
+
+/**
  * Create a range slider control with editable spinbox
  * Users need to enter precise pixel values (0-10000 range)
  * Sliders alone make it impossible to enter discrete values accurately.
@@ -1342,6 +1380,10 @@ function createSliderControl(param, onChange) {
   // For floats: step="any" so user can type precise decimal values (e.g., 3.14 for [0:0.5:10])
   spinbox.step = param.type === 'integer' ? 1 : 'any';
   spinbox.value = param.default;
+  spinbox.style.setProperty(
+    '--value-chars',
+    String(numberBoxChars(param, { unlocked: limitsUnlocked }))
+  );
   spinbox.setAttribute(
     'inputmode',
     param.type === 'integer' ? 'numeric' : 'decimal'
@@ -1583,6 +1625,10 @@ function createNumberInput(param, onChange) {
   input.type = 'number';
   input.id = `param-${param.name}`;
   input.value = param.default;
+  input.style.setProperty(
+    '--value-chars',
+    String(numberBoxChars(param, { unlocked: limitsUnlocked }))
+  );
   input.setAttribute(
     'aria-label',
     `Enter ${formatParamName(param)}${param.unit ? ' in ' + param.unit : ''}`

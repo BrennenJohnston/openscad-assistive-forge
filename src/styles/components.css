@@ -4052,6 +4052,72 @@ body.high-contrast .param-tooltip {
   }
 }
 
+/* The Customizer's rows: each number box is as wide as its parameter's
+   longest value (ui-generator.js sets --value-chars), at least a touch
+   target, and the slider beside it takes the rest of the row, never less
+   than three touch targets; where the row cannot hold both, the box and its
+   unit move to the line below. Where a mouse can reach it, the browser
+   keeps room inside a number field for its spin buttons even while they
+   are hidden; a touch-only phone draws none. These
+   outrank the plain input[type='number'] rule, which would stretch the box
+   to the whole row. */
+.param-control .slider-container {
+  flex-wrap: wrap;
+}
+
+.param-control .slider-container input[type='range'] {
+  flex: 1 1 0;
+  min-width: calc(var(--size-touch-target) * 3);
+  order: 0;
+}
+
+.param-control .slider-container .slider-spinbox,
+.param-control .number-input-container input[type='number'] {
+  --spin-room: 0px;
+  flex: 0 0 auto;
+  width: calc(
+    var(--value-chars, 6) * 1ch + 2 * var(--space-sm) + 4px + var(--spin-room)
+  );
+  min-width: var(--size-touch-target);
+  order: 0;
+}
+
+.param-control .slider-container .slider-unit {
+  order: 0;
+}
+
+@media (any-pointer: fine) {
+  .param-control .slider-container .slider-spinbox,
+  .param-control .number-input-container input[type='number'] {
+    --spin-room: 1.5em;
+  }
+}
+
+/* Where a finger is the main pointer the spin buttons are too small to use
+   and take room from the value: the field types, the arrow keys step it, and
+   the slider beside it moves it. */
+@media (pointer: coarse) {
+  .param-control .slider-container .slider-spinbox,
+  .param-control .slider-container .slider-spinbox:hover,
+  .param-control .slider-container .slider-spinbox:focus,
+  .param-control .number-input-container input[type='number'] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+
+  .param-control .slider-container .slider-spinbox::-webkit-inner-spin-button,
+  .param-control .slider-container .slider-spinbox::-webkit-outer-spin-button,
+  .param-control
+    .number-input-container
+    input[type='number']::-webkit-inner-spin-button,
+  .param-control
+    .number-input-container
+    input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
 /* Number Input Container with Unit */
 .number-input-container {
   display: flex;
@@ -5175,6 +5241,7 @@ select:focus-visible {
  * Match OpenSCAD Customizer semantics exactly */
 .preset-selector .preset-actions-group {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-sm);
@@ -14815,8 +14882,11 @@ body.tutorial-body-locked {
   margin-top: var(--space-xs);
 }
 
+/* Never wider than the row: in a narrow Customizer, or larger type, its
+   buttons wrap instead of running past the edge. */
 .preset-actions-row .preset-actions-group {
   flex-shrink: 0;
+  max-width: 100%;
 }
 
 .preset-actions-row > .btn:last-child {

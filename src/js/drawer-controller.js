@@ -1,9 +1,10 @@
 /**
- * The Customizer on a phone: a sheet.
+ * The Customizer on a phone.
  *
- * Held upright it sits above the bottom bar, and the preview keeps half the
- * screen above it, drawn in that half, so a value changed in the sheet is
- * seen changing in the model. Held sideways it is a column at the left, at
+ * Held upright it comes in from the left over the preview, the way it opens
+ * beside the preview on a desktop, see-through so a value changed in it is
+ * seen changing in the model behind it; the grip on its right edge sets its
+ * width (phone-customizer.js). Held sideways it is a column at the left, at
  * most half the width, with the preview beside it. It is not a dialog: the
  * preview and the bar stay usable while it is open, and closed it is out of
  * the way of Tab and of a screen reader (layout.css hides it).
@@ -20,10 +21,10 @@ import {
   isPhoneLayout,
   isSidewaysPhone,
   placeDrawerColumnTop,
-  previewKeepsPx,
   registerPhoneDrawer,
   SIDEWAYS_PHONE_QUERY,
 } from './phone-drawers.js';
+import { initPhoneCustomizer } from './phone-customizer.js';
 
 /** Input types a phone answers with its on-screen keyboard. */
 const TYPED_INPUTS = new Set([
@@ -45,10 +46,13 @@ export function initDrawerController() {
   const toggleBtn = document.getElementById('mobileDrawerToggle');
   const closeBtn = document.getElementById('drawerCloseBtn');
   const previewPanel = document.querySelector('.preview-panel');
+  const grip = document.getElementById('customizerWidthGrip');
 
   if (!drawer || !toggleBtn) {
     return;
   }
+
+  const width = initPhoneCustomizer({ panel: drawer, grip });
 
   let isOpen = false;
   let triggerEl = null;
@@ -93,45 +97,16 @@ export function initDrawerController() {
     }
   }
 
-  /** Upright the sheet rises from the bar; sideways it comes in from the left. */
-  function syncTravel() {
-    toggleBtn.dataset.travelOpen = isSidewaysPhone() ? 'right' : 'up';
-  }
-
   /**
-   * Upright, the sheet begins where the preview's half of the screen ends,
-   * and the preview ends there too (layout.css reads both lines). On a
-   * phone too short for that, the sheet still keeps its header and one row
-   * of controls, no more, and the preview has the rest. Sideways, the
-   * column starts below the preview's own row.
+   * The panel runs from the foot of the Preview Settings row down to the bar.
+   * Held upright it is as wide as the person chose and its grip shows on its
+   * right edge while it is open; held sideways it is the column beside the
+   * preview, without a grip.
    */
-  function placeSheet() {
+  function placePanel() {
     placeDrawerColumnTop();
-    const section = document.getElementById('previewCanvasSection');
-    const bar = document.getElementById('actionsBar');
-    const header = drawer.querySelector('.panel-header');
-    const token = (name) =>
-      parseFloat(
-        getComputedStyle(document.documentElement).getPropertyValue(name)
-      ) || 0;
-    const barTop = bar ? bar.getBoundingClientRect().top : window.innerHeight;
-    // The header, one row, and the sheet's own borders around them.
-    const floor =
-      (header ? header.offsetHeight : 0) +
-      token('--size-touch-target') +
-      (drawer.offsetHeight - drawer.clientHeight);
-    const top = Math.ceil(
-      Math.min(
-        (section ? section.getBoundingClientRect().top : 0) + previewKeepsPx(),
-        barTop - floor
-      )
-    );
-    const root = document.documentElement.style;
-    root.setProperty('--phone-sheet-top', `${top}px`);
-    root.setProperty(
-      '--phone-sheet-reserve',
-      `${Math.max(0, window.innerHeight - top)}px`
-    );
+    width.apply();
+    if (grip) grip.hidden = !(isOpen && !isSidewaysPhone());
   }
 
   /**
@@ -209,8 +184,7 @@ export function initDrawerController() {
     drawer.classList.add('drawer-open');
     previewPanel?.classList.add('customizer-sheet-open');
     closeBtn?.classList.remove('hidden');
-    // Measured open: its Close button makes the header taller.
-    placeSheet();
+    placePanel();
 
     if (initialFocus) {
       initialFocus.focus();
@@ -267,6 +241,7 @@ export function initDrawerController() {
     drawer.classList.remove('drawer-open');
     previewPanel?.classList.remove('customizer-sheet-open');
     closeBtn?.classList.add('hidden');
+    if (grip) grip.hidden = true;
 
     if (triggerEl) {
       if (restoreFocus) triggerEl.focus();
@@ -309,6 +284,7 @@ export function initDrawerController() {
   toggleBtn.addEventListener('click', toggle);
   toggleBtn.addEventListener('keydown', closeOnEscape);
   drawer.addEventListener('keydown', closeOnEscape);
+  grip?.addEventListener('keydown', closeOnEscape);
 
   // Entering Classic while the sheet is open would leave it placed over a
   // panel Classic has re-parented into the normal flow, so it closes
@@ -330,18 +306,16 @@ export function initDrawerController() {
   }
 
   registerPhoneDrawer('customizer', { isOpen: () => isOpen, close });
-  syncTravel();
 
-  // A turned phone or a resized window moves the sheet's lines, or, at a
-  // desktop width, ends the sheet: the Customizer is a column there.
+  // A turned phone or a resized window moves the panel's lines and width,
+  // or, at a desktop width, closes it: the Customizer is a column there.
   let resizeTimeout;
   const onViewportChange = () => {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
-      syncTravel();
       if (!isOpen) return;
       if (isPhoneLayout()) {
-        placeSheet();
+        placePanel();
       } else {
         close({ restoreFocus: false });
       }

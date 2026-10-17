@@ -1248,35 +1248,36 @@ body[data-app-surface='welcome'] #uiModeToggle {
     flex-direction: column;
   }
 
-  /* The Customizer is a sheet above the bottom bar. drawer-controller.js
-     sets --phone-sheet-top where the preview's half of the screen ends.
-     Closed, it slides under the bar and is hidden from Tab and from a
-     screen reader. */
+  /* The Customizer comes in from the left, over the preview, from the foot
+     of the Preview Settings row down to the bottom bar (drawer-controller.js
+     sets --phone-drawer-top). Held upright it is as wide as the person chose
+     (phone-customizer.js keeps --phone-customizer-width) and see-through;
+     held sideways it is a column beside the preview (further down). Closed,
+     it slides out to the left and is hidden from Tab and from a screen
+     reader. */
   .param-panel {
     position: fixed;
-    top: var(--phone-sheet-top, 50vh);
+    top: var(--phone-drawer-top, 0px);
     bottom: var(--actions-bar-reserved, var(--actions-bar-collapsed-offset));
     left: 0;
-    right: 0;
-    width: auto;
+    right: auto;
+    width: var(--phone-customizer-width, 85vw);
     min-height: 0;
     max-height: none;
-    transform: translateY(100%);
+    transform: translateX(-100%);
     visibility: hidden;
     transition:
       transform var(--motion-slow) ease-out,
       visibility 0s linear var(--motion-slow);
     /* Under the bar, so it slides away beneath it */
     z-index: var(--z-index-modal-backdrop);
-    border-top: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
     box-shadow: var(--shadow-lg);
-    /* Ensure opaque background */
     background-color: var(--color-bg-primary);
     overflow-y: auto;
     overscroll-behavior: contain;
     /* Safe-area support for notched devices */
     padding-left: env(safe-area-inset-left, 0px);
-    padding-right: env(safe-area-inset-right, 0px);
   }
 
   .param-panel.drawer-open {
@@ -1285,12 +1286,6 @@ body[data-app-surface='welcome'] #uiModeToggle {
     transition:
       transform var(--motion-slow) ease-out,
       visibility 0s;
-  }
-
-  /* The preview ends where the sheet begins, so the model is drawn in the
-     half of the screen that stays in view. */
-  .preview-panel.customizer-sheet-open {
-    padding-bottom: var(--phone-sheet-reserve);
   }
 
   /* Preview Settings & Info drops from its row in the page's flow, as tall
@@ -1351,6 +1346,149 @@ body[data-app-surface='welcome'] #uiModeToggle {
   /* Hide horizontal gutter on mobile */
   .gutter.gutter-horizontal {
     display: none;
+  }
+}
+
+/* Shown only for a phone held upright (below). */
+.customizer-glass {
+  display: none;
+}
+
+/* ============================================================================
+   The Customizer on a phone held upright
+   ============================================================================
+   Under 768 px and not a phone turned sideways: the Customizer lies over the
+   preview and lets the model show through. A layer behind it tints and blurs
+   what it covers; the blur is on that layer, not on the panel, because a
+   blur on the panel would hold its pop-up lists and tooltips inside it. The
+   panel's sticky header stays solid, so controls scrolled under it never
+   read through the title, and fields, selects and buttons keep their own
+   surfaces. How solid the layer is comes from Preferences
+   (--customizer-opacity, phone-customizer.js). The grip on the panel's right
+   edge sets its width. High contrast and a request for reduced transparency
+   keep it solid. Classic lays the Customizer out as a pane of its own.
+   ============================================================================ */
+@media (max-width: 767px) and (not ((orientation: landscape) and (pointer: coarse) and (max-height: 500px))) {
+  :root body:not([data-ui-mode='classic']) .param-panel {
+    background-color: transparent;
+  }
+
+  :root
+    body:not([data-ui-mode='classic'])
+    .param-panel
+    :is(.forge-disclosure, .param-search-section, .output-format-section) {
+    background-color: transparent;
+  }
+
+  :root body:not([data-ui-mode='classic']) .customizer-glass {
+    display: block;
+    position: fixed;
+    top: var(--phone-drawer-top, 0px);
+    bottom: var(--actions-bar-reserved, var(--actions-bar-collapsed-offset));
+    left: 0;
+    width: var(--phone-customizer-width, 85vw);
+    z-index: calc(var(--z-index-modal-backdrop) - 1);
+    background-color: color-mix(
+      in srgb,
+      var(--color-bg-primary) var(--customizer-opacity, 90%),
+      transparent
+    );
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    pointer-events: none;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform var(--motion-slow) ease-out,
+      visibility 0s linear var(--motion-slow);
+  }
+
+  :root
+    body:not([data-ui-mode='classic'])
+    .param-panel.drawer-open
+    ~ .customizer-glass {
+    transform: none;
+    visibility: visible;
+    transition:
+      transform var(--motion-slow) ease-out,
+      visibility 0s;
+  }
+
+  :root
+    body:not([data-ui-mode='classic'])
+    .customizer-width-grip:not([hidden]) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: calc(
+      var(--phone-customizer-grip-top, 50vh) - var(--size-touch-target) / 2
+    );
+    left: calc(
+      var(--phone-customizer-width, 85vw) - var(--size-touch-target) / 2
+    );
+    width: var(--size-touch-target);
+    height: var(--size-touch-target);
+    z-index: calc(var(--z-index-modal-backdrop) + 1);
+    border-radius: var(--border-radius-md);
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  /* The grip's mark: a short bar on the edge; the rest of its box is where
+     a finger takes hold. */
+  :root body:not([data-ui-mode='classic']) .customizer-width-grip::before {
+    content: '';
+    width: var(--space-xs);
+    height: calc(var(--size-touch-target) * 0.75);
+    border-radius: var(--border-radius-sm);
+    background-color: var(--color-text-secondary);
+  }
+
+  :root
+    body:not([data-ui-mode='classic'])
+    .customizer-width-grip:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  :root[data-high-contrast='true']
+    body:not([data-ui-mode='classic'])
+    .param-panel {
+    background-color: var(--color-bg-primary);
+  }
+
+  :root[data-high-contrast='true']
+    body:not([data-ui-mode='classic'])
+    .customizer-glass {
+    background-color: var(--color-bg-primary);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  :root[data-high-contrast='true']
+    body:not([data-ui-mode='classic'])
+    .customizer-width-grip::before {
+    background-color: var(--color-text-primary);
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    :root body:not([data-ui-mode='classic']) .param-panel,
+    :root body:not([data-ui-mode='classic']) .customizer-glass {
+      background-color: var(--color-bg-primary);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root body:not([data-ui-mode='classic']) .customizer-glass,
+    :root
+      body:not([data-ui-mode='classic'])
+      .param-panel.drawer-open
+      ~ .customizer-glass {
+      transition: none;
+    }
   }
 }
 
@@ -3331,9 +3469,8 @@ body[data-mobile-toolbar='relocated']
   }
 
   /* The Alt View's ASCII drawer, beside the camera drawer and only while
-     the Alt View is on: its sliders, then the Characters steps, then the
-     Edges levels with the pan adjust button at the row's end. Hidden, it
-     stays hidden in Full Screen too. */
+     the Alt View is on: its three sliders. Hidden, it stays hidden in Full
+     Screen too. */
   #asciiDrawer[hidden] {
     display: none !important;
   }
@@ -3343,19 +3480,6 @@ body[data-mobile-toolbar='relocated']
     flex-direction: column;
     align-items: stretch;
     gap: var(--space-xs);
-  }
-
-  .ascii-drawer-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-sm);
-  }
-
-  .ascii-drawer-row .alt-pan-toggle {
-    width: 44px;
-    height: 44px;
   }
 
   /* Each slider on one row, its title, the slider and its value, where a
@@ -4109,10 +4233,9 @@ body[data-mobile-toolbar='relocated']
      Mobile Portrait Camera Focus Mode
      ============================================================================
      Full Screen with a bottom drawer open (Camera, or the Alt View's ASCII
-     drawer) on a phone held upright splits the screen in two: the preview in
-     the top half and the drawer in the bottom half, the bar at its foot. The
-     line is the one the sheets keep, half the screen and a small sliver, so
-     the preview never measures under half.
+     drawer) on a phone held upright gives the drawer its controls' height
+     above the bar, never more than half the screen, and the preview
+     everything above it.
      - Header, workflow progress, and other UI are hidden/overlaid
      - A floating Exit button leaves Full Screen
      ============================================================================ */
@@ -4132,7 +4255,9 @@ body[data-mobile-toolbar='relocated']
     top: 0 !important;
     left: 0 !important;
     right: 0 !important;
-    bottom: calc(50% - var(--space-sm)) !important;
+    /* Down to the open drawer's top (camera-panel-controller.js measures
+       how far the drawer reaches up from the screen's foot). */
+    bottom: var(--phone-drawer-reach, calc(50% - var(--space-sm))) !important;
     display: flex !important;
     flex-direction: column !important;
     border: none !important;
@@ -4184,18 +4309,16 @@ body[data-mobile-toolbar='relocated']
     display: flex !important;
   }
 
-  /* The open drawer takes the bottom half, down to the bar; its controls
-     keep their place at its top. Beats the shared height the two drawers
-     are given when both exist. */
+  /* The open drawer is as tall as its controls, above the bar, never more
+     than half the screen; the preview has the rest. */
   .main-interface.focus-mode.camera-focus-mode
     .camera-drawer:not(.collapsed)
     .camera-drawer-body,
   .main-interface.focus-mode.camera-focus-mode
     .ascii-drawer:not(.collapsed)
     .ascii-drawer-body {
-    top: calc(50% + var(--space-sm)) !important;
+    top: auto !important;
     min-height: 0 !important;
-    max-height: none !important;
     align-content: start;
   }
 
@@ -4449,6 +4572,7 @@ body[data-mobile-toolbar='relocated']
     transform: translateX(-100%);
     border-top: none;
     border-right: 1px solid var(--color-border);
+    background-color: var(--color-bg-primary);
   }
 
   .preview-panel.customizer-sheet-open {

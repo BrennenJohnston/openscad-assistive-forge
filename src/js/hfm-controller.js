@@ -262,10 +262,7 @@ function _updateHfmStatusBar() {
 }
 
 function _syncHfmPanToggleUi() {
-  const btns = [
-    _hfmPanToggleButtons?.desktop,
-    _hfmPanToggleButtons?.mobile,
-  ].filter(Boolean);
+  const btns = [_hfmPanToggleButtons?.desktop].filter(Boolean);
 
   btns.forEach((btn) => {
     btn.setAttribute('aria-pressed', _hfmPanAdjustEnabled ? 'true' : 'false');
@@ -468,10 +465,10 @@ function _buildHfmSliderControls({
     inputId: idBase,
   });
 
-  // The phone's ASCII drawer, above the steps.
+  // The phone's ASCII drawer holds these three and nothing else.
   buildSection({
     container: document.getElementById('asciiDrawerBody'),
-    insertBefore: document.getElementById('altViewCharactersMobile'),
+    insertBefore: null,
     sectionClass: `camera-drawer-section hfm-slider-section ${idBase}-drawer-section`,
     titleClass: 'camera-drawer-section-title',
     inputId: `${idBase}Mobile`,
@@ -534,50 +531,22 @@ function _stepHfmCharacters(direction) {
 }
 
 /**
- * The phone's ASCII drawer holds copies of the status strip's Characters and
- * Edges controls, made from the strip so their words live in one place: each
- * id gains "Mobile", and the Edges levels sit in the row that ends with the
- * pan adjust button. Safe to call more than once.
- */
-function _buildAsciiDrawerTwins() {
-  const body = document.getElementById('asciiDrawerBody');
-  if (!body || document.getElementById('altViewCharactersMobile')) return;
-  const twin = (id) => {
-    const source = document.getElementById(id);
-    if (!source) return null;
-    const copy = source.cloneNode(true);
-    for (const el of [copy, ...copy.querySelectorAll('[id]')]) {
-      el.id = `${el.id}Mobile`;
-    }
-    return copy;
-  };
-  const characters = twin('altViewCharacters');
-  const edges = twin('altViewEdges');
-  if (!characters || !edges) return;
-  const row = document.createElement('div');
-  row.className = 'ascii-drawer-row';
-  row.appendChild(edges);
-  body.append(characters, row);
-}
-
-/**
- * The Characters stepper in the preview's status strip, and its twin in the
- * phone's camera drawer: Smaller and Larger move to the next named step; the
- * value shows the step's name, or the percentage when the size was set
- * between steps elsewhere. Both read the one size.
- * @returns {{ sync: (scale: number) => void }|null} null when neither is on
+ * The Characters stepper in the preview's status strip (a desktop window;
+ * on a phone the ASCII drawer has the slider alone): Smaller and Larger move
+ * to the next named step; the value shows the step's name, or the percentage
+ * when the size was set between steps elsewhere.
+ * @returns {{ sync: (scale: number) => void }|null} null when it is not on
  *   the page
  */
 function _initHfmCharacterStepper() {
   if (_hfmCharacterStepper) return _hfmCharacterStepper;
-  _buildAsciiDrawerTwins();
-  const sets = ['', 'Mobile']
-    .map((suffix) => ({
-      smaller: document.getElementById(`altViewCharactersSmaller${suffix}`),
-      larger: document.getElementById(`altViewCharactersLarger${suffix}`),
-      valueEl: document.getElementById(`altViewCharactersValue${suffix}`),
-    }))
-    .filter((set) => set.smaller && set.larger && set.valueEl);
+  const sets = [
+    {
+      smaller: document.getElementById('altViewCharactersSmaller'),
+      larger: document.getElementById('altViewCharactersLarger'),
+      valueEl: document.getElementById('altViewCharactersValue'),
+    },
+  ].filter((set) => set.smaller && set.larger && set.valueEl);
   if (!sets.length) return null;
 
   for (const { smaller, larger } of sets) {
@@ -600,20 +569,17 @@ function _initHfmCharacterStepper() {
 }
 
 /**
- * The Edges level buttons in the preview's status strip, and their twins in
- * the phone's camera drawer: each sets its level's scale and says it; the
- * buttons whose level the current scale matches read pressed, none when the
- * slider sits between levels.
- * @returns {{ sync: (scale: number) => void }|null} null when neither set is
+ * The Edges level buttons in the preview's status strip (a desktop window):
+ * each sets its level's scale and says it; the button whose level the
+ * current scale matches reads pressed, none when the slider sits between
+ * levels.
+ * @returns {{ sync: (scale: number) => void }|null} null when they are not
  *   on the page
  */
 function _initHfmEdgeLevels() {
   if (_hfmEdgeLevels) return _hfmEdgeLevels;
-  _buildAsciiDrawerTwins();
   const buttons = [
-    ...document.querySelectorAll(
-      '#altViewEdges .alt-view-level-btn, #altViewEdgesMobile .alt-view-level-btn'
-    ),
+    ...document.querySelectorAll('#altViewEdges .alt-view-level-btn'),
   ];
   if (!buttons.length) return null;
 
@@ -1209,8 +1175,6 @@ async function _enableAltViewWithPreview(toggleBtn) {
 
   if (_hfmPanToggleButtons?.desktop)
     _hfmPanToggleButtons.desktop.style.display = 'flex';
-  if (_hfmPanToggleButtons?.mobile)
-    _hfmPanToggleButtons.mobile.style.display = 'flex';
   _setHfmPanAdjustEnabled(false);
 }
 
@@ -1258,8 +1222,6 @@ function _disableAltViewWithPreview(toggleBtn) {
   _hfmPanAdjustEnabled = false;
   if (_hfmPanToggleButtons?.desktop)
     _hfmPanToggleButtons.desktop.style.display = 'none';
-  if (_hfmPanToggleButtons?.mobile)
-    _hfmPanToggleButtons.mobile.style.display = 'none';
   _setHfmSlidersEnabled(false);
 
   _updateHfmStatusBar();
@@ -1357,22 +1319,8 @@ function _injectAltToggle() {
   // D-pad's center belongs to View All.
   document.getElementById('projectionToggle')?.after(panToggleBtn);
 
-  const mobilePanToggleBtn = panToggleBtn.cloneNode(true);
-  mobilePanToggleBtn.id = '_hfmPanAdjustMobile';
-  mobilePanToggleBtn.className =
-    'btn btn-sm btn-icon camera-drawer-btn alt-pan-toggle';
-
-  // In the phone's ASCII drawer, at the end of the Edges row, which has
-  // the room.
-  _buildAsciiDrawerTwins();
-  document
-    .querySelector('#asciiDrawerBody .ascii-drawer-row')
-    ?.appendChild(mobilePanToggleBtn);
-
-  _hfmPanToggleButtons = {
-    desktop: panToggleBtn,
-    mobile: mobilePanToggleBtn,
-  };
+  // A desktop window's only: on a phone the ASCII drawer has the sliders.
+  _hfmPanToggleButtons = { desktop: panToggleBtn };
   _setHfmPanAdjustEnabled(false);
 
   const handlePanToggleClick = () => {
@@ -1391,8 +1339,6 @@ function _injectAltToggle() {
   };
   panToggleBtn.addEventListener('click', handlePanToggleClick);
   panToggleBtn.addEventListener('dblclick', handlePanToggleDblClick);
-  mobilePanToggleBtn.addEventListener('click', handlePanToggleClick);
-  mobilePanToggleBtn.addEventListener('dblclick', handlePanToggleDblClick);
 
   toggleBtn.addEventListener('click', async () => {
     _endKeyArrival();
@@ -1445,8 +1391,6 @@ function _injectAltToggle() {
     _setHfmSlidersEnabled(true);
     if (_hfmPanToggleButtons?.desktop)
       _hfmPanToggleButtons.desktop.style.display = 'flex';
-    if (_hfmPanToggleButtons?.mobile)
-      _hfmPanToggleButtons.mobile.style.display = 'flex';
     _setHfmPanAdjustEnabled(false);
   }
 }
