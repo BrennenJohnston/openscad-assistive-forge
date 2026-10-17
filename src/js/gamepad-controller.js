@@ -56,35 +56,106 @@ export const ZOOM_SHARE_PER_S = 1;
 /** The longest step one poll may take, after a pause such as a hidden tab. */
 const MAX_STEP_S = 0.1;
 
+/** Each button's short name, by its index in the standard mapping. */
+export const GAMEPAD_BUTTON_NAMES = [
+  'a',
+  'b',
+  'x',
+  'y',
+  'lb',
+  'rb',
+  'lt',
+  'rt',
+  'select',
+  'start',
+  'l3',
+  'r3',
+  'up',
+  'down',
+  'left',
+  'right',
+  'home',
+];
+
+/** The D-pad's buttons in the standard mapping, and their directions. */
+const DPAD_DIRECTIONS = [
+  [12, 'up'],
+  [13, 'down'],
+  [14, 'left'],
+  [15, 'right'],
+];
+
+/** The D-pad's directions, as its `dpad:<direction>` events name them. */
+export const DPAD_DIRECTION_NAMES = DPAD_DIRECTIONS.map(([, d]) => d);
+
 /**
- * Default action bindings
+ * A held D-pad direction repeats, as a held arrow key does: once at the
+ * press, again after the wait, then at the interval. The wait keeps a slow
+ * press from stepping twice.
+ */
+export const DPAD_REPEAT_DELAY_S = 0.5;
+export const DPAD_REPEAT_S = 0.15;
+
+/**
+ * The presets: which inputs move the view (`actions`) and what each button
+ * does (`buttons`, a button's name to a command the app runs). The D-pad
+ * sends the arrow keys in both.
+ * - "Menus first": the bumpers step from control to control as Tab does,
+ *   the triggers jump between the window's parts, X and Y zoom.
+ * - "Camera first": the triggers zoom by how far they are pressed; X resets
+ *   the view and Y fits the model in it.
+ */
+export const GAMEPAD_PRESETS = {
+  menus: {
+    actions: { cameraZoomOut: 'buttonX', cameraZoomIn: 'buttonY' },
+    buttons: {
+      lb: 'previous',
+      rb: 'next',
+      lt: 'previousRegion',
+      rt: 'nextRegion',
+      a: 'activate',
+      b: 'back',
+      start: 'fullScreen',
+      select: 'keys',
+    },
+  },
+  camera: {
+    actions: { cameraZoomOut: 'leftTrigger', cameraZoomIn: 'rightTrigger' },
+    buttons: {
+      lb: 'previous',
+      rb: 'next',
+      a: 'activate',
+      b: 'back',
+      x: 'resetView',
+      y: 'viewAll',
+      start: 'fullScreen',
+      select: 'keys',
+    },
+  },
+};
+
+/** The preset a person starts with. */
+export const DEFAULT_GAMEPAD_PRESET = 'menus';
+
+/**
+ * Default action bindings: the inputs that move the view, as the default
+ * preset sets them.
  */
 export const DEFAULT_GAMEPAD_ACTIONS = {
-  // Camera controls: the right stick orbits, the left stick pans, the
-  // triggers zoom (left out, right in).
+  // The right stick orbits, the left stick pans.
   cameraRotateX: 'rightStickX',
   cameraRotateY: 'rightStickY',
   cameraPanX: 'leftStickX',
   cameraPanY: 'leftStickY',
-  cameraZoomOut: 'leftTrigger',
-  cameraZoomIn: 'rightTrigger',
-
-  // Parameter navigation (d-pad)
-  parameterNext: 'dpadDown',
-  parameterPrev: 'dpadUp',
-  parameterIncrease: 'dpadRight',
-  parameterDecrease: 'dpadLeft',
-
-  // Actions (face buttons)
-  render: 'buttonA',
-  download: 'buttonX',
-  togglePreview: 'buttonY',
-  cancel: 'buttonB',
+  cameraZoomOut: null,
+  cameraZoomIn: null,
 
   // Speed modifiers, unbound until a person assigns them: held, they move
   // the view at 0.3 times or 2 times the usual speed.
   fineAdjust: null,
   fastAdjust: null,
+
+  ...GAMEPAD_PRESETS[DEFAULT_GAMEPAD_PRESET].actions,
 };
 
 /**
@@ -187,10 +258,22 @@ export class GamepadController {
     // When the last poll ran, for per-second rates
     this._lastPollAt = null;
 
+    // Seconds until each held D-pad direction repeats (null: not held)
+    this._dpadRepeatIn = { up: null, down: null, left: null, right: null };
+
     // Bound event handlers
     this._onGamepadConnected = this._onGamepadConnected.bind(this);
     this._onGamepadDisconnected = this._onGamepadDisconnected.bind(this);
     this._pollGamepads = this._pollGamepads.bind(this);
+  }
+
+  /**
+   * Choose which inputs move the view, over the defaults: a preset's
+   * `actions`, or a person's own.
+   * @param {Object} actions - action name to input name (null unbinds)
+   */
+  setActions(actions = {}) {
+    this.actions = { ...DEFAULT_GAMEPAD_ACTIONS, ...actions };
   }
 
   /**
@@ -439,38 +522,32 @@ export class GamepadController {
       this.emit('camera:zoom', { delta: zoom * ZOOM_SHARE_PER_S * step });
     }
 
-    // Parameter navigation (d-pad)
-    if (state.isButtonJustPressed(mappings[actions.parameterNext])) {
-      this.emit('parameter:next', {});
-    }
-    if (state.isButtonJustPressed(mappings[actions.parameterPrev])) {
-      this.emit('parameter:prev', {});
-    }
+    // Every other button tells its press once, by name (`button:a`); what
+    // it does is the preset's to say.
+    GAMEPAD_BUTTON_NAMES.forEach((name, index) => {
+      if (index >= 12 && index <= 15) return;
+      if (state.isButtonJustPressed(index)) {
+        this.emit(`button:${name}`, { name });
+      }
+    });
 
-    // Parameter adjustment (d-pad left/right)
-    if (state.isButtonPressed(mappings[actions.parameterIncrease])) {
-      this.emit('parameter:change', {
-        delta: this.sensitivity.parameter * speed,
-      });
-    }
-    if (state.isButtonPressed(mappings[actions.parameterDecrease])) {
-      this.emit('parameter:change', {
-        delta: -this.sensitivity.parameter * speed,
-      });
-    }
-
-    // Action buttons
-    if (state.isButtonJustPressed(mappings[actions.render])) {
-      this.emit('action:render', {});
-    }
-    if (state.isButtonJustPressed(mappings[actions.download])) {
-      this.emit('action:download', {});
-    }
-    if (state.isButtonJustPressed(mappings[actions.togglePreview])) {
-      this.emit('action:togglePreview', {});
-    }
-    if (state.isButtonJustPressed(mappings[actions.cancel])) {
-      this.emit('action:cancel', {});
+    // The D-pad tells a press at once (`dpad:up`), and a held direction
+    // again after the wait, then at the interval.
+    for (const [index, direction] of DPAD_DIRECTIONS) {
+      if (!state.isButtonPressed(index)) {
+        this._dpadRepeatIn[direction] = null;
+        continue;
+      }
+      if (this._dpadRepeatIn[direction] === null) {
+        this._dpadRepeatIn[direction] = DPAD_REPEAT_DELAY_S;
+        this.emit(`dpad:${direction}`, { direction, repeat: false });
+        continue;
+      }
+      this._dpadRepeatIn[direction] -= elapsed;
+      if (this._dpadRepeatIn[direction] <= 1e-9) {
+        this._dpadRepeatIn[direction] += DPAD_REPEAT_S;
+        this.emit(`dpad:${direction}`, { direction, repeat: true });
+      }
     }
   }
 

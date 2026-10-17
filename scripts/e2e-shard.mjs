@@ -306,6 +306,8 @@ export const MEASURED_SECONDS = {
   'link-failure-notice.spec.js': 30.0,
   // Measured locally; CI reads its own on the first run.
   'layout-rework-number-box.spec.js': 60.0,
+  // Three cases, each loading the simple box: 19.9 s locally; booked at 40.
+  'gamepad-navigation.spec.js': 40.0,
   // The shared checks' self-test: small pages served on a routed host, no app
   // and no engine. Nine cases in 3.8 s locally; booked at 10, the rounding
   // potrace-engine carries.

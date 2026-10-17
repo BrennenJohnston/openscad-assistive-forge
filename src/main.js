@@ -168,7 +168,12 @@ import { initSequenceDetector } from './js/_seq.js';
 import {
   createGamepadController,
   isGamepadSupported,
+  DEFAULT_GAMEPAD_PRESET,
+  DPAD_DIRECTION_NAMES,
+  GAMEPAD_BUTTON_NAMES,
+  GAMEPAD_PRESETS,
 } from './js/gamepad-controller.js';
+import { createGamepadNavigator } from './js/gamepad-navigator.js';
 import {
   initKeyboardShortcuts,
   keyboardConfig,
@@ -16006,12 +16011,13 @@ if (rounded) {
   // modal, "Toggle Customizer panel", and run the same command.
   keyboardConfig.on('toggleParameters', () => toggleCustomizerPanel());
 
-  keyboardConfig.on('resetView', () => {
+  const resetViewCommand = () => {
     if (previewManager) {
       previewManager.resetCamera();
       announceImmediate('View reset to default');
     }
-  });
+  };
+  keyboardConfig.on('resetView', resetViewCommand);
 
   // Camera view presets (Ctrl+numpad to match OpenSCAD desktop)
   keyboardConfig.on('viewTop', () => {
@@ -16190,12 +16196,13 @@ if (rounded) {
   );
 
   // Display action shortcuts
-  keyboardConfig.on('viewAll', () => {
+  const viewAllCommand = () => {
     if (previewManager?.mesh) {
       previewManager.viewAllCamera();
       announceImmediate('View fitted to model');
     }
-  });
+  };
+  keyboardConfig.on('viewAll', viewAllCommand);
   // Ctrl+] / Ctrl+[. The menu, the camera bar and these share one step, so
   // every surface moves the camera by the same amount.
   keyboardConfig.on('zoomIn', () => {
@@ -16292,22 +16299,38 @@ if (rounded) {
       }
     });
 
-    // Action buttons
-    gamepadController.on('action:render', () => {
-      const state = stateManager.getState();
-      if (state.uploadedFile && !primaryActionBtn.disabled) {
-        primaryActionBtn.click();
-      }
+    // The buttons drive the interface by the preset: focus steps as Tab
+    // does, A presses, B does what Escape does (a render's Cancel
+    // included), the D-pad sends the arrow keys. The navigator stands down
+    // while the City Walk runs.
+    const gamepadNavigator = createGamepadNavigator({
+      onUnhandledBack: () => getToolbarMenuController().closeAll(),
     });
-
-    gamepadController.on('action:download', () => {
-      const state = stateManager.getState();
-      if (state.stl && primaryActionBtn.dataset.action === 'download') {
-        primaryActionBtn.click();
-      }
-    });
-
-    gamepadController.on('action:cancel', cancelGenerate);
+    const gamepadPreset = GAMEPAD_PRESETS[DEFAULT_GAMEPAD_PRESET];
+    gamepadController.setActions(gamepadPreset.actions);
+    const gamepadCommands = {
+      previous: gamepadNavigator.previous,
+      next: gamepadNavigator.next,
+      previousRegion: gamepadNavigator.previousRegion,
+      nextRegion: gamepadNavigator.nextRegion,
+      activate: gamepadNavigator.activate,
+      back: gamepadNavigator.back,
+      fullScreen: gamepadNavigator.fullScreen,
+      keys: gamepadNavigator.keys,
+      resetView: resetViewCommand,
+      viewAll: viewAllCommand,
+    };
+    for (const name of GAMEPAD_BUTTON_NAMES) {
+      gamepadController.on(`button:${name}`, () => {
+        if (gamepadNavigator.isPaused()) return;
+        gamepadCommands[gamepadPreset.buttons[name]]?.();
+      });
+    }
+    for (const direction of DPAD_DIRECTION_NAMES) {
+      gamepadController.on(`dpad:${direction}`, () =>
+        gamepadNavigator.arrow(direction)
+      );
+    }
 
     // Gamepad connection feedback
     gamepadController.on('connected', (info) => {

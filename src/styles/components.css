@@ -31,12 +31,17 @@
  * `:root[data-high-contrast='true']` and by the `prefers-contrast: more`
  * block, and that media query's own `*:focus-visible { outline-width: 4px
  * !important }` would lose anyway: it sits at (0,1,0) and
- * `button:focus-visible` here is (0,1,1). */
+ * `button:focus-visible` here is (0,1,1).
+ *
+ * A control the game controller moved focus to is marked
+ * `data-focus-source="gamepad"`: a focus a script gives an input or a list
+ * box may not count as `:focus-visible`, and the ring must show. */
 a:focus,
 button:focus,
 summary:focus,
 [role='button']:focus,
 [tabindex]:focus,
+[data-focus-source='gamepad']:focus,
 a:focus-visible,
 button:focus-visible,
 summary:focus-visible,
