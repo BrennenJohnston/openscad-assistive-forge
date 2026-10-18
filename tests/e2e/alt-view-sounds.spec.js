@@ -318,16 +318,24 @@ test.describe('The sounds button', () => {
       await page.evaluate(() => {
         window.__sounds = [];
       });
-      const at = await page.evaluate(() => performance.now());
+      // Timed from the press as the page has it, which the drawer's slide
+      // starts from.
+      await page.evaluate(() => {
+        document.addEventListener(
+          'click',
+          () => {
+            window.__pressAt = performance.now();
+          },
+          { capture: true, once: true }
+        );
+      });
       await press();
       await page.waitForTimeout(1_200);
-      return page.evaluate(
-        (from) =>
-          window.__sounds.map((s) => ({
-            plays: s.at - from + s.delay * 1000,
-            seconds: s.seconds,
-          })),
-        at
+      return page.evaluate(() =>
+        window.__sounds.map((s) => ({
+          plays: s.at - window.__pressAt + s.delay * 1000,
+          seconds: s.seconds,
+        }))
       );
     };
 
@@ -343,10 +351,10 @@ test.describe('The sounds button', () => {
       'latch-close',
     ]);
     const [grip, roll, thump, latch] = closing.map((s) => s.plays);
-    expect(grip, 'the grip with the press, ms').toBeLessThan(300);
+    expect(grip, 'the grip with the press, ms').toBeLessThan(150);
     expect(Math.abs(roll - grip), 'together, ms').toBeLessThan(15);
-    expect(thump - roll, 'the thump as the slide ends, ms').toBeGreaterThan(420);
-    expect(thump - roll, 'the thump as the slide ends, ms').toBeLessThan(480);
+    expect(thump, 'the thump as the 450 ms slide ends, ms').toBeGreaterThan(430);
+    expect(thump, 'the thump as the 450 ms slide ends, ms').toBeLessThan(480);
     expect(latch - thump, 'the release after the thump, ms').toBeGreaterThan(105);
     expect(latch - thump, 'the release after the thump, ms').toBeLessThan(135);
     // Open: the latch and the roll with the press, the thump as the drawer
@@ -358,9 +366,10 @@ test.describe('The sounds button', () => {
       'stop-open',
     ]);
     const [letGo, rollOut, stop] = opening.map((s) => s.plays);
+    expect(letGo, 'the latch with the press, ms').toBeLessThan(150);
     expect(Math.abs(rollOut - letGo), 'together, ms').toBeLessThan(15);
-    expect(stop - letGo, 'the thump at the stop, ms').toBeGreaterThan(370);
-    expect(stop - letGo, 'the thump at the stop, ms').toBeLessThan(430);
+    expect(stop, 'the thump at the stop, 400 ms in, ms').toBeGreaterThan(380);
+    expect(stop, 'the thump at the stop, 400 ms in, ms').toBeLessThan(430);
 
     const menu = await heard(() => page.locator('#editMenuBtn').click());
     expect(menu.length, 'the key, down and up, and the latch').toBe(3);

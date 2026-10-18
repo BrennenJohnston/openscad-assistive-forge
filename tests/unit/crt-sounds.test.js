@@ -656,7 +656,18 @@ describe('playing a switch sound', () => {
     expect(seconds, 'until the thump has rung out').toBeCloseTo(0.66, 6);
     await expect(playDrawerSound('camera', 'slam')).rejects.toThrow('No such drawer phase: slam');
     globalThis.fetch.mockClear();
+    context.decodeAudioData.mockClear();
     preloadDrawerSounds();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(
+      context.decodeAudioData.mock.calls.map(([bytes]) => bytes.url),
+      'the four not played yet decoded ahead, the page having its context'
+    ).toEqual([
+      '/sounds/drawers/grip-close.wav',
+      '/sounds/drawers/slide-close.wav',
+      '/sounds/drawers/stop-close.wav',
+      '/sounds/drawers/latch-close.wav',
+    ]);
     expect(urls(), 'the other four, the three played already kept').toEqual([
       '/sounds/drawers/grip-close.wav',
       '/sounds/drawers/slide-close.wav',

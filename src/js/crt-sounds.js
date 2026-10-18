@@ -428,9 +428,20 @@ function _drawerUrl(part) {
   return `/sounds/drawers/${part}.wav`;
 }
 
-/** Fetch the drawer's parts now, once. */
+/**
+ * Fetch the drawer's parts now, once, and decode them too once the page
+ * has its audio context: a drawer's parts are timed to its slide, and a
+ * part decoded only when first wanted can miss its moment.
+ */
 export function preloadDrawerSounds() {
-  _fetchAhead(Object.keys(DRAWER_LEVELS_DB).map(_drawerUrl), 'drawer');
+  const urls = Object.keys(DRAWER_LEVELS_DB).map(_drawerUrl);
+  _fetchAhead(urls, 'drawer');
+  if (!_context || _context.state === 'closed') return;
+  for (const url of urls) {
+    _bufferFor(url, _context).catch((error) => {
+      console.warn('[Alt View] A drawer sound was not decoded ahead:', error);
+    });
+  }
 }
 
 /** Fetch the switches', selectors' and latches' sounds now, once. */
