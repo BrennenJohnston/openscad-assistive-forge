@@ -27,6 +27,7 @@ import {
   stopCrtSound,
 } from './crt-sounds.js';
 import { closePhoneDrawer } from './phone-drawers.js';
+import { openLookDrawers, setLookDrawer } from './drawer-motion.js';
 
 // ---------------------------------------------------------------------------
 // HFM / Alt View state (module-level singleton)
@@ -197,6 +198,15 @@ let _hfmStatusOverride = null;
 // times both. This clears it if it never ends.
 const _HFM_POWER_ON_FALLBACK_MS = 4000;
 let _hfmPowerOnTimer = null;
+/** Waiting for the picture to finish powering on. */
+let _hfmPowerOnWaiters = [];
+// The look comes on with its drawers shut: the ones that were open shut at
+// once before the screen draws in, and once the picture has powered on they
+// open again one at a time, left to right, the pause of a hand moving from
+// one drawer to the next between them.
+const _HFM_DRAWER_PAUSE_MS = 300;
+/** @type {{names: string[], stopped: boolean}|null} */
+let _hfmDrawerStaging = null;
 
 // Found by the camera sequence, the key drops into its place wearing the Alt
 // View's colors, rests a moment, then redraws itself as the ordinary key. The
@@ -872,6 +882,9 @@ function _onPowerOnEnd(event) {
 function _endPowerOn() {
   clearTimeout(_hfmPowerOnTimer);
   _hfmPowerOnTimer = null;
+  const waiters = _hfmPowerOnWaiters;
+  _hfmPowerOnWaiters = [];
+  waiters.forEach((done) => done());
   const canvas = document.querySelector('.hfm-overlay-canvas');
   if (!canvas) return;
   canvas.removeEventListener('animationend', _onPowerOnEnd);
@@ -890,6 +903,70 @@ function _powerOnPicture(afterReveal) {
   _hfmPowerOnTimer = setTimeout(_endPowerOn, _HFM_POWER_ON_FALLBACK_MS);
   canvas.classList.add('alt-view-power-on');
   if (afterReveal) canvas.classList.add('alt-view-power-on--after-reveal');
+}
+
+/** @returns {Promise<void>} once the picture has powered on, or would have */
+function _poweredOn() {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(
+      done,
+      _HFM_SOUND_LEAD_MS + _HFM_POWER_ON_FALLBACK_MS
+    );
+    _hfmPowerOnWaiters.push(done);
+  });
+}
+
+/**
+ * Shut the open drawers at once, quietly and without remembering it, and
+ * say which they were, left to right. With reduced motion they stay open.
+ * @returns {string[]}
+ */
+function _shutDrawersForDrawIn() {
+  if (_prefersReducedMotion()) return [];
+  const names = openLookDrawers();
+  const how = { instant: true, quiet: true, remember: false };
+  names.forEach((name) => setLookDrawer(name, false, how));
+  return names;
+}
+
+/** Open the shut drawers again once the picture is on, one at a time. */
+async function _openDrawersAfterDrawIn(names) {
+  if (!names.length) return;
+  const staging = { names: [...names], stopped: false };
+  _hfmDrawerStaging = staging;
+  // While they come back the page says so, for anything that waits on them.
+  document.documentElement.dataset.altViewDrawers = 'returning';
+  await _poweredOn();
+  while (staging.names.length && !staging.stopped) {
+    const slide = setLookDrawer(staging.names.shift(), true, {
+      quiet: true,
+      remember: false,
+    });
+    if (slide) await slide;
+    if (staging.names.length && !staging.stopped) {
+      await new Promise((resolve) => setTimeout(resolve, _HFM_DRAWER_PAUSE_MS));
+    }
+  }
+  if (_hfmDrawerStaging === staging) {
+    _hfmDrawerStaging = null;
+    delete document.documentElement.dataset.altViewDrawers;
+  }
+}
+
+/** Leaving the look in the middle: what is still shut opens at once. */
+function _endDrawerStaging() {
+  const staging = _hfmDrawerStaging;
+  if (!staging) return;
+  _hfmDrawerStaging = null;
+  delete document.documentElement.dataset.altViewDrawers;
+  staging.stopped = true;
+  const how = { instant: true, quiet: true, remember: false };
+  staging.names.forEach((name) => setLookDrawer(name, true, how));
+  staging.names = [];
 }
 
 function _typeAltViewGreeting() {
@@ -1386,6 +1463,9 @@ async function _enableAltViewWithPreview(toggleBtn) {
   previewManager.applyGridForAltView?.(true);
 
   root.setAttribute('data-ui-variant', 'mono');
+  // In the same task as the look comes on, so no frame of it shows a drawer
+  // open, and under the look's own rules, so nothing eases shut.
+  const shut = _shutDrawersForDrawIn();
 
   const newTheme = previewManager.detectTheme();
   previewManager.updateTheme(
@@ -1403,6 +1483,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
   _playAltViewMoment({ greeting: true, sound: 'on' });
   _installKeySounds();
   _installCameraTicks(previewManager);
+  _openDrawersAfterDrawIn(shut);
 
   if (_hfmPanToggleButtons?.desktop)
     _hfmPanToggleButtons.desktop.style.display = 'flex';
@@ -1413,6 +1494,7 @@ function _disableAltViewWithPreview(toggleBtn) {
   const previewManager = _getPreviewManager();
   const root = document.documentElement;
 
+  _endDrawerStaging();
   _stopAltViewStart();
   _playCrtSound('off');
   _removeKeySounds();

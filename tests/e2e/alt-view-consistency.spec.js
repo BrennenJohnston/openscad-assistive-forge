@@ -13,6 +13,7 @@
 
 import { test, expect } from '@playwright/test';
 import { skipWithoutWebGL } from './helpers/webgl.js';
+import { drawersBack } from './helpers/alt-view.js';
 
 test.describe.configure({ mode: 'serial', timeout: 240_000 });
 
@@ -83,6 +84,7 @@ async function altViewOn(page) {
       )
     )
     .toBe('mono');
+  await drawersBack(page);
   await page.waitForTimeout(1_000);
 }
 

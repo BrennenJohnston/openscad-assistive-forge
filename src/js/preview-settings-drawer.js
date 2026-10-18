@@ -14,7 +14,7 @@ import {
   previewKeepsPx,
   registerPhoneDrawer,
 } from './phone-drawers.js';
-import { slideDrawer } from './drawer-motion.js';
+import { registerLookDrawer, slideDrawer } from './drawer-motion.js';
 
 // Storage key using standardized naming convention
 const STORAGE_KEY_DRAWER_COLLAPSED = getDrawerStateKey('preview-settings');
@@ -105,8 +105,9 @@ export function initPreviewSettingsDrawer(options = {}) {
 
   /**
    * Expand the drawer to show all settings (auto-sized)
+   * @param {import('./drawer-motion.js').DrawerHow} [how]
    */
-  const expand = () => {
+  const expand = ({ instant = false, remember = true } = {}) => {
     if (isExpanded) return;
     // On a phone one drawer is open at a time.
     closeOtherPhoneDrawers('preview-settings');
@@ -120,26 +121,28 @@ export function initPreviewSettingsDrawer(options = {}) {
     }
 
     updateToggle(true);
-    saveCollapsedState(false);
+    if (remember) saveCollapsedState(false);
 
     // Notify preview manager
     if (options.onResize) {
       requestAnimationFrame(() => options.onResize());
     }
-    slideDrawer(slideParts(), { from: 'top', open: true });
+    return slideDrawer(slideParts(), { from: 'top', open: true, instant });
   };
 
   /**
    * Collapse the drawer to show only the toggle button
+   * @param {import('./drawer-motion.js').DrawerHow} [how]
    */
-  const collapse = () => {
+  const collapse = ({ instant = false, remember = true } = {}) => {
     if (!isExpanded) return;
     isExpanded = false;
     updateToggle(false);
-    saveCollapsedState(true);
-    slideDrawer(slideParts(), {
+    if (remember) saveCollapsedState(true);
+    return slideDrawer(slideParts(), {
       from: 'top',
       open: false,
+      instant,
       inert: [content],
       whenClosed: () => {
         if (isExpanded) return;
@@ -177,6 +180,12 @@ export function initPreviewSettingsDrawer(options = {}) {
   registerPhoneDrawer('preview-settings', {
     isOpen: () => isExpanded,
     close: () => collapse(),
+  });
+  registerLookDrawer('preview-settings', {
+    place: () => previewInfoSection,
+    isOpen: () => isExpanded && previewInfoSection.offsetHeight > 0,
+    open: expand,
+    close: collapse,
   });
 
   // Set initial state - check saved preference first, then default based on screen size

@@ -22,6 +22,7 @@ import {
 } from './phone-drawers.js';
 import {
   drawerPace,
+  registerLookDrawer,
   restingRect,
   sidePanelParts,
   slideDrawer,
@@ -83,39 +84,55 @@ export function initCameraPanelController(options = {}) {
 
   /**
    * Expand the panel
+   * @param {import('./drawer-motion.js').DrawerHow} [how]
+   * @returns {Promise<boolean>|null|undefined} its slide
    */
-  function expand() {
+  function expand({ instant = false, remember = true } = {}) {
     if (!isCollapsed) return;
     isCollapsed = false;
     panel.classList.remove('collapsed');
     updateToggleAria(false);
-    saveCollapsedState(false);
-    slideDrawer(sidePanelParts(panel, 'right'), {
+    if (remember) saveCollapsedState(false);
+    return slideDrawer(sidePanelParts(panel, 'right'), {
       from: 'right',
       open: true,
       keep: stripWidth(),
+      instant,
     });
   }
 
   /**
    * Collapse the panel
+   * @param {import('./drawer-motion.js').DrawerHow} [how]
+   * @returns {Promise<boolean>|null|undefined} its slide
    */
-  function collapse() {
+  function collapse({ instant = false, remember = true } = {}) {
     if (isCollapsed) return;
     isCollapsed = true;
     shortcutsPopout?.close();
     updateToggleAria(true);
-    saveCollapsedState(true);
-    slideDrawer(sidePanelParts(panel, 'right'), {
+    if (remember) saveCollapsedState(true);
+    return slideDrawer(sidePanelParts(panel, 'right'), {
       from: 'right',
       open: false,
       keep: stripWidth(),
+      instant,
       inert: [panel.querySelector('.camera-panel-body')],
       whenClosed: () => {
         if (isCollapsed) panel.classList.add('collapsed');
       },
     });
   }
+
+  registerLookDrawer('camera', {
+    place: () => panel,
+    isOpen: () =>
+      !isCollapsed &&
+      document.body.dataset.uiMode !== 'classic' &&
+      panel.offsetWidth > 0,
+    open: expand,
+    close: collapse,
+  });
 
   /**
    * Toggle between expanded and collapsed states
@@ -635,28 +652,31 @@ function initPhoneDrawer({
   // at the right edge and comes in from there.
   const edge = () => (isSidewaysPhone() ? 'right' : 'bottom');
 
-  function expand() {
+  /** @param {import('./drawer-motion.js').DrawerHow} [how] */
+  function expand({ instant = false, remember = true } = {}) {
     if (!collapsed) return;
     // Open before the others close, so a drawer opening in another's place
     // is already counted when the preview's room is decided.
     collapsed = false;
     closeOtherPhoneDrawers(name);
     apply();
-    if (storageKey) safeSetItem(storageKey, 'false');
-    onChange?.(true);
-    slideDrawer([{ el: body }], { from: edge(), open: true });
+    if (storageKey && remember) safeSetItem(storageKey, 'false');
+    onChange?.(true, { instant });
+    return slideDrawer([{ el: body }], { from: edge(), open: true, instant });
   }
 
-  function collapse() {
+  /** @param {import('./drawer-motion.js').DrawerHow} [how] */
+  function collapse({ instant = false, remember = true } = {}) {
     if (collapsed) return;
     collapsed = true;
     onCollapse?.();
     nameToggle();
-    if (storageKey) safeSetItem(storageKey, 'true');
-    onChange?.(false);
-    slideDrawer([{ el: body }], {
+    if (storageKey && remember) safeSetItem(storageKey, 'true');
+    onChange?.(false, { instant });
+    return slideDrawer([{ el: body }], {
       from: edge(),
       open: false,
+      instant,
       inert: [body],
       whenClosed: () => {
         if (collapsed) drawer.classList.add('collapsed');
@@ -675,6 +695,12 @@ function initPhoneDrawer({
   registerPhoneDrawer(name, {
     isOpen: () => !collapsed,
     close: () => collapse(),
+  });
+  registerLookDrawer(`phone-${name}`, {
+    place: () => body,
+    isOpen: () => !collapsed && body.offsetHeight > 0,
+    open: expand,
+    close: collapse,
   });
   apply();
   return { drawer, body, isOpen: () => !collapsed };
@@ -714,7 +740,7 @@ function initMobileCameraDrawer() {
   let roomMove = null;
   const padding = () =>
     parseFloat(getComputedStyle(previewPanel).paddingBottom) || 0;
-  const syncPreviewPadding = ({ checkWidth = false } = {}) => {
+  const syncPreviewPadding = ({ checkWidth = false, instant = false } = {}) => {
     if (!previewPanel) return;
     const want =
       (!checkWidth || isPhoneLayout()) && drawers.some((d) => d.isOpen());
@@ -741,7 +767,7 @@ function initMobileCameraDrawer() {
       {
         from: 'bottom',
         open: want,
-        instant: checkWidth,
+        instant: checkWidth || instant,
         whenClosed: () => {
           if (!roomOpen) previewPanel.classList.remove('camera-drawer-open');
         },
@@ -772,9 +798,9 @@ function initMobileCameraDrawer() {
   };
   const scheduleReach = () => requestAnimationFrame(syncReach);
 
-  const onChange = (opened) => {
+  const onChange = (opened, { instant = false } = {}) => {
     if (opened) placeDrawerColumnTop();
-    syncPreviewPadding();
+    syncPreviewPadding({ instant });
     scheduleReach();
   };
 
