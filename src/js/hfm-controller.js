@@ -102,15 +102,15 @@ const _HFM_DIAL_STEP_EDGES = [8, 14, 22, 32, 48, 100];
 const _HFM_DIAL_CLICKS_PER_SECOND = 15;
 const _hfmDials = new WeakMap();
 let _hfmDialLastClickAt = -Infinity;
-// The 3D view's own ticks while the look is on: a bearing for every 30
-// degrees it turns, a ratchet for every 20 it tilts, a lens detent for every
-// 10 % it zooms (two wheel notches). Only for a move made directly: a drag, the
+// The 3D view's own ticks while the look is on: a bearing for every 15
+// degrees it turns, a ratchet for every 10 it tilts, a lens detent for every
+// 5 % it zooms (a wheel notch). Only for a move made directly: a drag, the
 // wheel or a pinch on the view, the arrow keys on the focused preview, a
 // controller's stick or trigger. A move a button, a view or View All made is
 // heard as that button's key. A tick comes at most every 70 ms, a step that
 // would tick sooner is passed over, and turning back after a tick takes a
 // step and a little more, so a jitter is silent.
-const _HFM_CAMERA_STEPS = { turn: 30, tilt: 20, zoom: Math.log(1.1) };
+const _HFM_CAMERA_STEPS = { turn: 15, tilt: 10, zoom: Math.log(1.05) };
 const _HFM_CAMERA_DEAD_BAND = { turn: 1, tilt: 1, zoom: Math.log(1.01) };
 const _HFM_CAMERA_TICK_GAP_MS = 70;
 // A drag's damping glides on after the pointer lifts; a key moves at once.

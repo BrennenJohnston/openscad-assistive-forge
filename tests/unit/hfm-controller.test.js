@@ -689,7 +689,7 @@ describe('the Alt View is heard', () => {
     return playCameraSound.mock.calls.map(([kind]) => kind)
   }
 
-  it('the 3D view ticks for a direct move: a bearing per 30 degrees turned, a ratchet per 20 tilted, a lens detent per 10 % zoomed', async () => {
+  it('the 3D view ticks for a direct move: a bearing per 15 degrees turned, a ratchet per 10 tilted, a lens detent per 5 % zoomed', async () => {
     pageWithHeaderAndDpad()
     clock = 0
     vi.spyOn(performance, 'now').mockImplementation(() => clock)
@@ -708,43 +708,43 @@ describe('the Alt View is heard', () => {
     await controller.enableAltViewWithPreview(toggle)
     expect(preloadCameraSounds, 'the camera ticks fetched at switch-on').toHaveBeenCalled()
     place(0, 20)
-    // A drag of 90 degrees, a degree a frame: three bearing ticks.
+    // A drag of 45 degrees, a degree a frame: three bearing ticks.
     controls.fire('start')
-    for (let turn = 1; turn <= 90; turn++) {
+    for (let turn = 1; turn <= 45; turn++) {
       clock += 20
       place(turn, 20)
     }
     controls.fire('end')
     expect(await cameraAsked()).toEqual(['turn', 'turn', 'turn'])
 
-    // A tilt of 40 degrees: two ratchet ticks; the damping's glide after the
+    // A tilt of 20 degrees: two ratchet ticks; the damping's glide after the
     // drag ends still counts.
     controls.fire('start')
-    for (let tilt = 21; tilt <= 50; tilt++) {
+    for (let tilt = 21; tilt <= 35; tilt++) {
       clock += 20
-      place(90, tilt)
+      place(45, tilt)
     }
     controls.fire('end')
-    for (let tilt = 51; tilt <= 60; tilt++) {
+    for (let tilt = 36; tilt <= 40; tilt++) {
       clock += 20
-      place(90, tilt)
+      place(45, tilt)
     }
     expect((await cameraAsked()).slice(3)).toEqual(['tilt', 'tilt'])
 
-    // The wheel: three notches of 10 % closer, each a lens detent.
-    for (const distance of [90, 81, 72.9]) {
+    // The wheel: three notches of 5 % closer, each a lens detent.
+    for (const distance of [95, 90.25, 85.7]) {
       clock += 100
       controls.fire('start')
-      place(90, 60, distance)
+      place(45, 40, distance)
       controls.fire('end')
     }
     expect((await cameraAsked()).slice(5)).toEqual(['zoom', 'zoom', 'zoom'])
 
     // A jitter back and forth of under a step says nothing.
     controls.fire('start')
-    for (const turn of [89, 91, 89, 91, 90]) {
+    for (const turn of [44, 46, 44, 46, 45]) {
       clock += 100
-      place(turn, 60, 72.9)
+      place(turn, 40, 85.7)
     }
     controls.fire('end')
     expect(await cameraAsked(), 'a jitter').toHaveLength(8)
@@ -762,10 +762,10 @@ describe('the Alt View is heard', () => {
     await controller.enableAltViewWithPreview(document.createElement('button'))
     place(0, 20)
     controls.fire('start')
-    // Twenty steps of 30 degrees in one second: twenty ticks asked.
+    // Twenty steps of 15 degrees in one second: twenty ticks asked.
     for (let n = 1; n <= 20; n++) {
       clock += 50
-      place(n * 30, 20)
+      place(n * 15, 20)
     }
     controls.fire('end')
     const ticks = await cameraAsked()
@@ -807,7 +807,7 @@ describe('the Alt View is heard', () => {
     for (let n = 1; n <= 3; n++) {
       clock += 100
       container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
-      place(180 + n * 30, -30)
+      place(180 + n * 15, -30)
     }
     expect(await cameraAsked(), 'the arrow keys').toEqual(['turn', 'turn', 'turn'])
 
@@ -821,7 +821,7 @@ describe('the Alt View is heard', () => {
       document.body.focus()
       document.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
       clock += 100
-      place(300, -30)
+      place(240, -30)
       expect((await cameraAsked()).slice(3), 'a stick').toEqual(['turn'])
     } finally {
       navigator.getGamepads = hadGamepads
@@ -832,7 +832,7 @@ describe('the Alt View is heard', () => {
     container.focus()
     clock += 100
     container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
-    place(360, -30)
+    place(300, -30)
     expect(await cameraAsked(), 'sounds off').toHaveLength(4)
     controller.disableAltViewWithPreview(document.createElement('button'))
   })
