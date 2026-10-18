@@ -273,11 +273,13 @@ test.describe('The Alt View is heard', () => {
     expect(onLead, 'switch-on: the screen right after it').toBeLessThan(SOUND_LEAD_MAX_MS);
     expect((await heard()).keys, 'the look\'s own key makes no key sound').toBe(0);
 
-    // The drawers the look opens again, and the camera panel opened by its own
-    // button, are heard as drawers (a latch among them is a key's length), so
-    // the keys are counted from here.
+    // The drawers the look opens again, and the camera panel and the Lens
+    // drawer opened by their own buttons, are heard as drawers (a latch among
+    // them is a key's length), so the keys are counted from here.
     await drawersBack(page);
     await page.locator('#cameraPanelToggle').click();
+    await page.waitForTimeout(1_200);
+    await page.locator('#lensDrawerToggle').click();
     await page.waitForTimeout(1_200);
     const keysFrom = (await heard()).keys;
 

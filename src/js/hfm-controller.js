@@ -180,6 +180,7 @@ const _HFM_SOUNDING_DRAWERS = new Set([
   'phone-camera',
   'phone-ascii',
   'preview-settings',
+  'lens',
   'classic-customizer',
   'classic-right-top',
   'classic-right-bottom',
@@ -193,6 +194,7 @@ const _HFM_DRAWER_BUTTONS = [
   '#collapseParamPanelBtn',
   '#cameraPanelToggle',
   '#previewDrawerToggle',
+  '#lensDrawerToggle',
   '#mobileDrawerToggle',
   '#drawerCloseBtn',
   '#cameraDrawerToggle',
@@ -322,17 +324,6 @@ const _HFM_CHARACTER_STEPS = [
   { name: 'Bold', scale: 1 },
 ];
 const _HFM_STEP_TOLERANCE = 0.001;
-let _hfmCharacterStepper = null;
-
-// The edge levels a person chooses by name from the status strip; the slider
-// still moves in 5% steps between them. The curve itself is unchanged.
-const _HFM_EDGE_LEVELS = [
-  { level: 'soft', scale: 0.7 },
-  { level: 'normal', scale: 1 },
-  { level: 'sharp', scale: 1.6 },
-];
-let _hfmEdgeLevels = null;
-
 // The first Alt View in a page draws in from the top and the status line
 // types a greeting before its ordinary line; later ones start at once. The
 // line is not live, so the greeting is for the eye only.
@@ -545,21 +536,28 @@ function _updateHfmStatusBar() {
   if (!statusBar || !altAdjustEl) return;
   delete altAdjustEl.dataset.notice;
 
-  // The strip's controls, and the phone's ASCII drawer that holds their
-  // twins; the drawer closes before it hides.
-  const controls = document.getElementById('altViewControls');
+  // The desktop's Lens drawer (its toggle and title at the left of the
+  // actions bar) and the phone's, which hold the sliders; each closes
+  // before it hides.
+  const lensToggle = document.getElementById('actionsLens');
+  const lens = document.getElementById('lensDrawer');
   const asciiDrawer = document.getElementById('asciiDrawer');
   if (!isMono || !_hfmEnabled) {
     statusBar.classList.remove('has-alt-adjust');
     altAdjustEl.textContent = '';
-    if (controls) controls.hidden = true;
+    if (lens && !lens.hidden) {
+      setLookDrawer('lens', false, { instant: true });
+      lens.hidden = true;
+    }
+    if (lensToggle) lensToggle.hidden = true;
     if (asciiDrawer && !asciiDrawer.hidden) {
       closePhoneDrawer('ascii');
       asciiDrawer.hidden = true;
     }
     return;
   }
-  if (controls) controls.hidden = false;
+  if (lensToggle) lensToggle.hidden = false;
+  if (lens) lens.hidden = false;
   if (asciiDrawer) asciiDrawer.hidden = false;
 
   let displayText;
@@ -643,7 +641,6 @@ function _applyHfmContrastScale(scale) {
   }
 
   _hfmContrastControls?.sync?.(clamped);
-  _initHfmEdgeLevels()?.sync(clamped);
   _syncHfmVectorLook();
   _syncHfmPanToggleUi();
   _debouncedSave(STORAGE_KEY_HFM_CONTRAST_SCALE, clamped);
@@ -668,7 +665,6 @@ function _applyHfmFontScale(scale) {
   }
 
   _hfmFontScaleControls?.sync?.(clamped);
-  _initHfmCharacterStepper()?.sync(clamped);
   _syncHfmVectorLook();
   _syncHfmPanToggleUi();
   _debouncedSave(STORAGE_KEY_HFM_FONT_SCALE, clamped);
@@ -875,14 +871,16 @@ function _buildHfmSliderControls({
     });
   };
 
-  // The camera panel keeps an area of its own under its controls for these.
+  // On a desktop the Lens drawer, risen from the actions bar's row, holds
+  // these sliders and nothing else: a slider's note is its description
+  // there, read but not shown.
   buildSection({
-    container: document.getElementById('cameraPanelExtras'),
+    container: document.getElementById('lensDrawerBody'),
     insertBefore: null,
-    sectionClass: `camera-control-section hfm-slider-section ${idBase}-section`,
-    titleClass: 'camera-control-section-title',
+    sectionClass: `lens-drawer-section hfm-slider-section ${idBase}-section`,
+    titleClass: 'lens-drawer-section-title',
     inputId: idBase,
-    noteVisible: true,
+    noteVisible: false,
   });
 
   // The phone's ASCII drawer holds these sliders and nothing else: a
@@ -968,86 +966,6 @@ function _stepHfmCharacters(direction) {
   const next = _applyHfmFontScale(target);
   announceImmediate(_hfmSizeWords(next));
   return next;
-}
-
-/**
- * The Characters stepper in the preview's status strip (a desktop window;
- * on a phone the ASCII drawer has the slider alone): Smaller and Larger move
- * to the next named step; the value shows the step's name, or the percentage
- * when the size was set between steps elsewhere.
- * @returns {{ sync: (scale: number) => void }|null} null when it is not on
- *   the page
- */
-function _initHfmCharacterStepper() {
-  if (_hfmCharacterStepper) return _hfmCharacterStepper;
-  const sets = [
-    {
-      smaller: document.getElementById('altViewCharactersSmaller'),
-      larger: document.getElementById('altViewCharactersLarger'),
-      valueEl: document.getElementById('altViewCharactersValue'),
-    },
-  ].filter((set) => set.smaller && set.larger && set.valueEl);
-  if (!sets.length) return null;
-
-  for (const { smaller, larger } of sets) {
-    smaller.addEventListener('click', () => _stepHfmCharacters(-1));
-    larger.addEventListener('click', () => _stepHfmCharacters(1));
-  }
-
-  _hfmCharacterStepper = {
-    sync(scale) {
-      const step = _HFM_CHARACTER_STEPS.find(
-        (s) => Math.abs(s.scale - scale) < _HFM_STEP_TOLERANCE
-      );
-      for (const { valueEl } of sets) {
-        valueEl.textContent = step ? step.name : _formatPercent(scale);
-      }
-    },
-  };
-  _hfmCharacterStepper.sync(_hfmFontScale);
-  return _hfmCharacterStepper;
-}
-
-/**
- * The Edges level buttons in the preview's status strip (a desktop window):
- * each sets its level's scale and says it; the button whose level the
- * current scale matches reads pressed, none when the slider sits between
- * levels.
- * @returns {{ sync: (scale: number) => void }|null} null when they are not
- *   on the page
- */
-function _initHfmEdgeLevels() {
-  if (_hfmEdgeLevels) return _hfmEdgeLevels;
-  const buttons = [
-    ...document.querySelectorAll('#altViewEdges .alt-view-level-btn'),
-  ];
-  if (!buttons.length) return null;
-
-  buttons.forEach((button) => {
-    const level = _HFM_EDGE_LEVELS.find(
-      (entry) => entry.level === button.dataset.level
-    );
-    if (!level) return;
-    button.addEventListener('click', () => {
-      const next = _applyHfmContrastScale(level.scale);
-      announceImmediate(`Edges ${_formatPercent(next)}`);
-    });
-  });
-
-  _hfmEdgeLevels = {
-    sync(scale) {
-      buttons.forEach((button) => {
-        const level = _HFM_EDGE_LEVELS.find(
-          (entry) => entry.level === button.dataset.level
-        );
-        const pressed =
-          Boolean(level) && Math.abs(level.scale - scale) < _HFM_STEP_TOLERANCE;
-        button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
-      });
-    },
-  };
-  _hfmEdgeLevels.sync(_hfmContrastScale);
-  return _hfmEdgeLevels;
 }
 
 function _initHfmContrastControls() {

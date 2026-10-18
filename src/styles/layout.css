@@ -2090,6 +2090,80 @@ body[data-app-surface='welcome'] #uiModeToggle {
   display: flex;
 }
 
+/* The Alt View's Lens drawer on a desktop: risen from the actions bar's
+   row, over the bottom of the preview, as tall as its four sliders, each
+   on a row of its own as in the phone's Lens drawer. Closed, nothing of it
+   shows; hidden (the Alt View off), it is hidden in Full Screen too. */
+.lens-drawer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Over the status strip and the echo drawer, which sit at the bottom too. */
+  z-index: var(--z-index-dropdown);
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.lens-drawer.collapsed,
+.lens-drawer[hidden],
+.actions-lens[hidden] {
+  display: none !important;
+}
+
+/* The toggle and its title at the left of the bar, as Preview Settings &
+   Info's sit at the left of their row above; Generate keeps the right. */
+.actions-lens {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.lens-drawer-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.lens-drawer-body .hfm-slider-section {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.lens-drawer-body .lens-drawer-section-title {
+  flex: 0 0 7.5em;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.lens-drawer-body .hfm-slider-section .slider-container {
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.lens-drawer-body .hfm-slider-section input[type='range'] {
+  flex: 1 1 auto;
+  order: 0;
+  min-width: 0;
+}
+
+/* On a phone the bar's own Lens drawer serves. */
+@media (max-width: 767px) {
+  .actions-lens,
+  .lens-drawer {
+    display: none !important;
+  }
+}
+
 /* Hide vertical gutter - not used with the overlay approach */
 .gutter.gutter-vertical {
   display: none !important;
@@ -2355,17 +2429,6 @@ body[data-app-surface='welcome'] #uiModeToggle {
 
   #cameraPanel .camera-section-tools .camera-shortcuts-btn {
     margin-left: auto;
-  }
-
-  #cameraPanel .camera-panel-extras {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
-  }
-
-  /* Empty outside the Alt View, it would still take a gap of its own. */
-  #cameraPanel .camera-panel-extras:empty {
-    display: none;
   }
 
   /* The projection button shows the projection that is showing: a box whose

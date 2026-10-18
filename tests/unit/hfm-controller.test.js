@@ -105,7 +105,7 @@ function pageWithHeaderAndDpad() {
     <div id="cameraPanelBody">
       <div class="camera-control-dpad"><button id="cameraPanUp"></button></div>
       <div class="camera-shortcuts-help"><button id="projectionToggle"></button></div>
-      <div id="cameraPanelExtras"></div>
+      <div id="actionsLens" hidden><button id="lensDrawerToggle"></button></div><div id="lensDrawer" class="lens-drawer collapsed" hidden><div id="lensDrawerBody"></div></div>
     </div>
     <div id="previewStatusBar"><span id="previewStatusAltAdjust"></span></div>
   `

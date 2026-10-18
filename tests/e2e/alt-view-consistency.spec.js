@@ -763,14 +763,14 @@ test.describe("The Alt View's sliders keep the touch target", () => {
     await seed(page, { unlock: true, theme: 'dark' });
   });
 
-  test('on a desktop window: the Customizer and the camera panel', async ({
+  test('on a desktop window: the Customizer and the Lens drawer', async ({
     page,
   }) => {
     test.setTimeout(300_000);
     await page.setViewportSize({ width: 1280, height: 720 });
     await openProject(page);
     await altViewOn(page);
-    const toggle = page.locator('#cameraPanelToggle');
+    const toggle = page.locator('#lensDrawerToggle');
     if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
       await toggle.click();
     }

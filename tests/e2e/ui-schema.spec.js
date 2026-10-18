@@ -33,6 +33,7 @@ const TRAVEL = {
   '#cameraPanelToggle': 'left',
   '#previewDrawerToggle': 'down',
   '#echoDrawerToggle': 'up',
+  '#lensDrawerToggle': 'up',
 };
 
 // Every drawer toggle the rules cover. A toggle added later is found by its

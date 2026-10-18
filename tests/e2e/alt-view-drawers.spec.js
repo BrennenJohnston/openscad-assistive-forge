@@ -302,6 +302,17 @@ test.describe('Drawers in the Alt View', () => {
     expectDrawerMove(await pressAndWatch(page, camera), { name: 'Camera closing', from: 'right', opening: false, edge: WINDOW });
     expectDrawerMove(await pressAndWatch(page, settings), { name: 'Preview Settings opening', from: 'top', opening: true, edge: header });
     expectDrawerMove(await pressAndWatch(page, settings), { name: 'Preview Settings closing', from: 'top', opening: false, edge: header });
+    // The Lens drawer rises from the actions bar's row and never over it.
+    // The drawer slides up as one piece, its sliders riding in it.
+    const lens = {
+      press: '#lensDrawerToggle',
+      box: '#lensDrawer',
+      inside: '#lensDrawerBody input',
+      frame: '#actionsBar',
+    };
+    const bar = { name: 'the actions bar', at: (s) => s.frame.y };
+    expectDrawerMove(await pressAndWatch(page, lens), { name: 'Lens opening', from: 'bottom', opening: true, edge: bar });
+    expectDrawerMove(await pressAndWatch(page, lens), { name: 'Lens closing', from: 'bottom', opening: false, edge: bar });
 
     await reduceMotion(page);
     expectTodaysMotion(await pressAndWatch(page, camera), { name: 'Camera under reduced motion', ms: 0 });

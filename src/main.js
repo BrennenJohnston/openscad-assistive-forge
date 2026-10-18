@@ -169,6 +169,7 @@ import {
   stripWidth,
 } from './js/drawer-motion.js';
 import { initPreviewSettingsDrawer } from './js/preview-settings-drawer.js';
+import { initLensDrawer } from './js/lens-drawer.js';
 import { initCameraPanelController } from './js/camera-panel-controller.js';
 import { initSequenceDetector } from './js/_seq.js';
 import {
@@ -11787,6 +11788,9 @@ if (rounded) {
         }
       },
     });
+
+    // The Alt View's Lens drawer on a desktop, risen from the actions bar.
+    initLensDrawer();
 
     // Initialize camera panel controller (right-side drawer)
     cameraPanelController = initCameraPanelController({
