@@ -178,6 +178,11 @@ export const MEASURED_SECONDS = {
   // drawn as lines at five sizes and read pixel by pixel, and turned: 25 s
   // locally; booked at 90 for the look's software drawing on CI.
   'alt-view-vector.spec.js': 90.0,
+  // Four cases, each loading the box and reading the computed cursor of the
+  // page, a button and a field in one look (the fourth under forced colors):
+  // 11.8 s locally, 30.5 s on a pull request's Chromium shard (the sum of
+  // its cases, 2026-10-18); booked at 35.
+  'alt-view-cursors.spec.js': 35.0,
   'editor-content-sync.spec.js': 70.4,
   'saved-projects.spec.js': 68.5,
   'classic-stow.spec.js': 66.8,
@@ -452,6 +457,13 @@ export const DEFAULT_WEIGHT_S = 60;
  * measure the same pixels; booked honestly at 600 s it put the Edge lane at
  * 35.0 of its 35 minutes. Reverse: delete the two entries once the lanes are
  * re-split.
+ *
+ * alt-view-cursors.spec.js runs on Chromium only. It reads the computed
+ * cursor of three elements in each look, a cascade fact every engine
+ * resolves the same way, and the Edge lane projected to 35.0 of its 35
+ * minutes before the file existed (booked at its measured 35 s it put the
+ * lane at 35.1; at 15 s, 35.02). Reverse: delete the two entries once the
+ * lanes are re-measured or re-split.
  */
 export const PROJECT_IGNORES = Object.freeze({
   chromium: [],
@@ -460,6 +472,7 @@ export const PROJECT_IGNORES = Object.freeze({
     'trace-start-cancel.spec.js',
     'potrace-engine.spec.js',
     'alt-view-icon-states.spec.js',
+    'alt-view-cursors.spec.js',
   ],
   firefox: [
     'wasm-smoke.spec.js',
@@ -467,6 +480,7 @@ export const PROJECT_IGNORES = Object.freeze({
     'trace-start-cancel.spec.js',
     'potrace-engine.spec.js',
     'alt-view-icon-states.spec.js',
+    'alt-view-cursors.spec.js',
   ],
 });
 
