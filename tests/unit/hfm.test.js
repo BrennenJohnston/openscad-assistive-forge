@@ -491,17 +491,18 @@ describe('initAltView — API surface', () => {
     }
   })
 
-  it('leaves the preview Alt View slider range at 0.3-2.5', () => {
-    // The instance font-scale floor is 0.05, for the game. The
-    // preview's own control must keep refusing anything below 0.3, or the
-    // main app silently gains sizes nobody benchmarked. _HFM_FONT_SCALE_RANGE
-    // is module-private, so this guard reads the declaration itself.
+  it('leaves the preview Alt View slider range at 0-2.5', () => {
+    // The instance font-scale floor is 0.05, for the game. The preview's
+    // slider goes to 0, but under 0.3 it draws lines, never characters
+    // (hfm-controller.test.js holds the characters at 0.3), so the main app
+    // gains no sizes nobody benchmarked. _HFM_FONT_SCALE_RANGE is
+    // module-private, so this guard reads the declaration itself.
     const src = readFileSync(
       join(process.cwd(), 'src', 'js', 'hfm-controller.js'),
       'utf8'
     )
     expect(src).toContain(
-      'const _HFM_FONT_SCALE_RANGE = { min: 0.3, max: 2.5, step: 0.05, default: 0.6 };'
+      'const _HFM_FONT_SCALE_RANGE = { min: 0, max: 2.5, step: 0.05, default: 0.6 };'
     )
   })
 })

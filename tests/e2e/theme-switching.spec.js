@@ -1209,14 +1209,14 @@ test.describe('The Edges control beside the status line', () => {
   });
 });
 
-// On a phone the Alt View's ASCII drawer holds its three sliders and
+// On a phone the Alt View's ASCII drawer holds its four sliders and
 // nothing else; they change the one size and the one level the strip shows
 // on a desktop window, and the minus and equals keys still step the size.
 test.describe('The Alt View controls in the phone ASCII drawer', () => {
   // No isMobile: Firefox rejects it when the browser context is created.
   test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
 
-  test('the three sliders only, the size the strip shows, and the keys still step it', async ({
+  test('the four sliders only, the size the strip shows, and the keys still step it', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -1243,7 +1243,7 @@ test.describe('The Alt View controls in the phone ASCII drawer', () => {
     await page.locator('#asciiDrawerToggle').click();
     const section = page.locator('#asciiDrawerBody');
     await expect(section).toBeVisible();
-    await expect(section.locator('input[type="range"]')).toHaveCount(3);
+    await expect(section.locator('input[type="range"]')).toHaveCount(4);
     await expect(section.locator('button')).toHaveCount(0);
     await expect(section.locator('.alt-view-stepper')).toHaveCount(0);
 

@@ -10,20 +10,37 @@ import {
   STORAGE_KEY_HFM_CONTRAST_SCALE,
   STORAGE_KEY_HFM_FONT_SCALE,
   STORAGE_KEY_HFM_PERSIST_FADE,
+  STORAGE_KEY_HFM_SURFACES,
   STORAGE_KEY_SOUNDS,
+  STORAGE_KEY_SOUND_KINDS_OFF,
 } from './storage-keys.js';
 import { announce, announceImmediate } from './announcer.js';
 import { playUnlockJingle } from './unlock-jingle.js';
 import {
+  playControlSound,
   playCrtSound,
   playDialSound,
+  playCameraSound,
+  playDrawerSound,
   playKeySound,
+  playTypingSound,
+  preloadCameraSounds,
+  preloadControlSounds,
+  playScrollSound,
+  preloadScrollSounds,
   preloadCrtSounds,
   preloadDialSounds,
+  preloadDrawerSounds,
   preloadKeySounds,
+  setMuted,
   stopCrtSound,
 } from './crt-sounds.js';
 import { closePhoneDrawer } from './phone-drawers.js';
+import {
+  onDrawerMove,
+  openLookDrawers,
+  setLookDrawer,
+} from './drawer-motion.js';
 
 // ---------------------------------------------------------------------------
 // HFM / Alt View state (module-level singleton)
@@ -41,11 +58,32 @@ let _hfmContrastScale = _HFM_CONTRAST_RANGE.default;
 let _hfmContrastControls = null;
 
 // The default is finer than the renderer's own 1: at full size the first
-// frame drew the model as a blob with no faces. A saved size wins. The
-// floor is where a phone's cell meets the renderer's 3 px font floor (at
-// 30% a 3 x 5 px cell, 16,000 of them on a 398 x 622 preview); below it
-// nothing shrinks.
-const _HFM_FONT_SCALE_RANGE = { min: 0.3, max: 2.5, step: 0.05, default: 0.6 };
+// frame drew the model as a blob with no faces. A saved size wins. At 30%
+// a phone's cell meets the renderer's 3 px font floor (a 3 x 5 px cell,
+// 16,000 of them on a 398 x 622 preview), so below it the characters give
+// way to the vector look.
+const _HFM_FONT_SCALE_RANGE = { min: 0, max: 2.5, step: 0.05, default: 0.6 };
+// Under 30% the model is drawn as its edges, the way a vector monitor's beam
+// drew lines. The line's width follows the size: 1 px at 0%, 0.6 px wider for
+// every 5%, 4 px at 25% (CSS px, the same on every screen).
+const _HFM_VECTOR_BELOW = 0.3;
+const _HFM_VECTOR_WIDTH_AT_0 = 1;
+const _HFM_VECTOR_WIDTH_PER_SCALE = 12;
+// In the vector look the Edges slider chooses which creases are lines: its
+// named levels at 30, 15 and 5 degrees, its ends at 40 and 1, straight lines
+// between.
+const _HFM_VECTOR_CREASE = [
+  [0.5, 40],
+  [0.7, 30],
+  [1, 15],
+  [1.6, 5],
+  [4, 1],
+];
+// How solid the vector look draws the model's surfaces: faint by default, so
+// the lines read as a wireframe.
+const _HFM_SURFACE_RANGE = { min: 0.01, max: 1, step: 0.01, default: 0.01 };
+let _hfmSurfaceOpacity = _HFM_SURFACE_RANGE.default;
+let _hfmSurfaceControls = null;
 // A phone starts finer: 40% is the finest size whose glyphs still read on a
 // phone's screen. A saved size wins on every device.
 const _HFM_FONT_SCALE_PHONE_DEFAULT = 0.4;
@@ -86,9 +124,77 @@ let _hfmMomentTimer = null;
 // band edges in CSS px squared, from a letter key to the space bar.
 const _HFM_KEY_BANDS_PX2 = [1000, 1600, 2500, 4000, 7000, 12000];
 const _HFM_KEY_TARGET =
-  'button, [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="tab"], [role="switch"]';
+  'button, summary, a[href], [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="tab"]';
+// A switch, a checkbox or a radio button snaps on and off instead.
+const _HFM_SNAP_TARGET =
+  'input[type="checkbox"], input[type="radio"], [role="switch"], [role="checkbox"], [role="radio"]';
+// A press that came with no press of its own first, a screen reader's in
+// browse mode or a controller's, plays its key's press and release this far
+// apart.
+const _HFM_KEY_TAP_MS = 60;
 let _hfmKeyListeners = null;
 let _hfmKeyDown = null;
+/** The last control a press sounded for, so its click does not sound again. */
+let _hfmKeyHeard = null;
+// Typing into a field is a quiet key per keystroke, at most this many a
+// second; a keystroke that would sound sooner is passed over.
+const _HFM_TYPING_PER_SECOND = 15;
+const _HFM_TYPED_INPUTS = new Set([
+  'text',
+  'search',
+  'url',
+  'email',
+  'tel',
+  'password',
+  'number',
+]);
+let _hfmTypingLastAt = -Infinity;
+/** When each field was last typed into, so a typed number is not a step. */
+const _hfmTypedAt = new WeakMap();
+// A grip moved by hand ticks for every 2 % of the window it travels, at most
+// as often as a dial clicks, at the dial's middle tone.
+const _HFM_GRIP_TARGET = '[role="separator"][tabindex], .gutter';
+const _HFM_GRIP_STEP = 0.02;
+const _HFM_GRIP_TONE = 4;
+let _hfmGrip = null;
+let _hfmGripLastAt = -Infinity;
+// What a latch opens and closes: a dialog or a menu by its aria-hidden, a
+// pop-out list by its hidden.
+const _HFM_LATCH_BY_ARIA_HIDDEN = '[role="dialog"], .toolbar-menu-modal';
+const _HFM_LATCH_BY_HIDDEN = '.camera-shortcuts-panel, [role="menu"]';
+let _hfmLatches = null;
+// The look's drawers that sound, by the names they move by: the
+// Customizer, camera, ASCII and Preview Settings drawers, and Classic's
+// Customizer, editor and console and the fields that hold them. Each is the
+// same drawer: a latch, a roll, a stop.
+const _HFM_SOUNDING_DRAWERS = new Set([
+  'customizer',
+  'phone-customizer',
+  'camera',
+  'phone-camera',
+  'phone-ascii',
+  'preview-settings',
+  'classic-customizer',
+  'classic-right-top',
+  'classic-right-bottom',
+  'classic-editor',
+  'classic-left',
+  'classic-console',
+]);
+// A drawer's own buttons, which open and shut it: their press is heard as
+// the drawer itself, not as a key.
+const _HFM_DRAWER_BUTTONS = [
+  '#collapseParamPanelBtn',
+  '#cameraPanelToggle',
+  '#previewDrawerToggle',
+  '#mobileDrawerToggle',
+  '#drawerCloseBtn',
+  '#cameraDrawerToggle',
+  '#asciiDrawerToggle',
+  '#classicEditorCloseBtn',
+  '#classicCustomizerCloseBtn',
+  '.classic-stow-btn',
+].join(', ');
 // A slider moved while the look is on clicks as a dial does, its tone by
 // how many steps the slider has: the edges of the seven tones, a slider of
 // eight steps or fewer the lowest, one of more than a hundred the highest.
@@ -99,9 +205,96 @@ const _HFM_DIAL_STEP_EDGES = [8, 14, 22, 32, 48, 100];
 const _HFM_DIAL_CLICKS_PER_SECOND = 15;
 const _hfmDials = new WeakMap();
 let _hfmDialLastClickAt = -Infinity;
+// The 3D view's own ticks while the look is on: a bearing for every 15
+// degrees it turns, a ratchet for every 10 it tilts, a lens detent for every
+// 5 % it zooms (a wheel notch). Only for a move made directly: a drag, the
+// wheel or a pinch on the view, the arrow keys on the focused preview, a
+// controller's stick or trigger. A move a pan button, a view or View All made
+// is heard as that button's key. A tick comes at most every 70 ms, a step
+// that would tick sooner is passed over, and turning back after a tick takes
+// a step and a little more, so a jitter is silent.
+const _HFM_CAMERA_STEPS = { turn: 15, tilt: 10, zoom: Math.log(1.05) };
+const _HFM_CAMERA_DEAD_BAND = { turn: 1, tilt: 1, zoom: Math.log(1.01) };
+const _HFM_CAMERA_TICK_GAP_MS = 70;
+// A drag's damping glides on after the pointer lifts; a key moves at once.
+const _HFM_CAMERA_GLIDE_MS = 1500;
+const _HFM_CAMERA_KEY_MS = 400;
+const _HFM_CAMERA_KEYS = new Set([
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  '+',
+  '=',
+  '-',
+]);
+// The controller's own dead zone (gamepad-controller.js).
+const _HFM_STICK_DEAD_ZONE = 0.15;
+// The camera's rotate and zoom buttons, in the panel, the phone's drawer and
+// Classic's 3D view toolbar: each press moves the view one step, heard as the
+// view's own tick for that move instead of a key, a turn by its way (left -1,
+// right 1), a tilt (down -1, up 1), a zoom (out -1, in 1).
+const _HFM_CAMERA_BUTTONS = new Map([
+  ['cameraRotateLeft', ['turn', -1]],
+  ['cameraRotateRight', ['turn', 1]],
+  ['mobileCameraRotateLeft', ['turn', -1]],
+  ['mobileCameraRotateRight', ['turn', 1]],
+  ['cameraRotateUp', ['tilt', 1]],
+  ['cameraRotateDown', ['tilt', -1]],
+  ['mobileCameraRotateUp', ['tilt', 1]],
+  ['mobileCameraRotateDown', ['tilt', -1]],
+  ['cameraZoomIn', ['zoom', 1]],
+  ['cameraZoomOut', ['zoom', -1]],
+  ['mobileCameraZoomIn', ['zoom', 1]],
+  ['mobileCameraZoomOut', ['zoom', -1]],
+  ['classicZoomInBtn', ['zoom', 1]],
+  ['classicZoomOutBtn', ['zoom', -1]],
+]);
+// Scrolling by hand ticks a line at a time, as paper turns through a
+// typewriter's platen: a tick for every 40 px a list moves, going down a
+// little lower and up a little higher, at most every 70 ms (a line that
+// would tick sooner is passed over), and the end of the list once as it is
+// reached. Only a scroll by hand: the wheel, a finger, the scrollbar or a
+// key that scrolls, and the glide after them; a scroll the page makes (a
+// field brought into view, a jump to a group) is silent.
+const _HFM_SCROLL_LINE_PX = 40;
+const _HFM_SCROLL_TICK_GAP_MS = 70;
+const _HFM_SCROLL_HAND_MS = 1000;
+const _HFM_SCROLL_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'PageUp',
+  'PageDown',
+  'Home',
+  'End',
+  ' ',
+]);
+let _hfmScrollHandUntil = 0;
+let _hfmScrollTickAt = -Infinity;
+const _hfmScrolls = new WeakMap();
+let _hfmScrollListeners = null;
+let _hfmCamera = null;
+// When the view last ticked, by hand or by a camera button.
+let _hfmCameraTickAt = -Infinity;
 
 // The key's name says what it is; what it does is said once it is pressed.
 const _HFM_TOGGLE_NAME = 'Alt View';
+// The sounds button beside it: its pressed state is whether sounds are on,
+// the same setting as Preferences > Play sounds.
+const _HFM_SOUNDS_NAME = 'Sounds';
+const _HFM_SOUNDS_ICON_ON = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 9h4l5-4v14l-5-4H4z" />
+      <path d="M16.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M19 6a8.5 8.5 0 0 1 0 12" />
+    </svg>
+  `;
+const _HFM_SOUNDS_ICON_OFF = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 9h4l5-4v14l-5-4H4z" />
+      <path d="M3 3l18 18" />
+    </svg>
+  `;
 const _HFM_ON_SENTENCE =
   'Alt View on. The preview is drawn with characters and the interface follows.';
 const _HFM_OFF_SENTENCE = 'Alt View off.';
@@ -152,6 +345,15 @@ let _hfmStatusOverride = null;
 // times both. This clears it if it never ends.
 const _HFM_POWER_ON_FALLBACK_MS = 4000;
 let _hfmPowerOnTimer = null;
+/** Waiting for the picture to finish powering on. */
+let _hfmPowerOnWaiters = [];
+// The look comes on with its drawers shut: the ones that were open shut at
+// once before the screen draws in, and once the picture has powered on they
+// open again one at a time, left to right, the pause of a hand moving from
+// one drawer to the next between them.
+const _HFM_DRAWER_PAUSE_MS = 300;
+/** @type {{names: string[], stopped: boolean}|null} */
+let _hfmDrawerStaging = null;
 
 // Found by the camera sequence, the key drops into its place wearing the Alt
 // View's colors, rests a moment, then redraws itself as the ordinary key. The
@@ -192,6 +394,116 @@ function _soundsOn() {
   } catch (_) {
     return true;
   }
+}
+
+// The kinds of sound a person can turn off one by one (Preferences ▸
+// Advanced ▸ Sounds in Alt View), each the sounds of one set of controls;
+// the look's own switch sounds follow Play sounds alone.
+const _HFM_SOUND_KINDS = [
+  'keys',
+  'dials',
+  'camera',
+  'drawers',
+  'switches',
+  'menus',
+  'typing',
+  'scroll',
+];
+const _hfmKindsOff = _readKindsOff();
+
+function _readKindsOff() {
+  let raw = null;
+  try {
+    raw = localStorage.getItem(STORAGE_KEY_SOUND_KINDS_OFF);
+  } catch (_) {
+    return new Set();
+  }
+  if (!raw) return new Set();
+  try {
+    const list = JSON.parse(raw);
+    return new Set(
+      Array.isArray(list)
+        ? list.filter((kind) => _HFM_SOUND_KINDS.includes(kind))
+        : []
+    );
+  } catch (error) {
+    console.warn(
+      '[Alt View] The sound kinds setting could not be read:',
+      error
+    );
+    return new Set();
+  }
+}
+
+// Whether a kind of sound plays: the sounds on, and this kind not turned
+// off.
+function _soundOn(kind) {
+  return _soundsOn() && !_hfmKindsOff.has(kind);
+}
+
+/**
+ * The kinds of sound turned off, in the order they are listed.
+ * @returns {string[]}
+ */
+export function soundKindsOff() {
+  return _HFM_SOUND_KINDS.filter((kind) => _hfmKindsOff.has(kind));
+}
+
+/**
+ * Turn one kind of sound off or on: the setting is kept, and anything
+ * showing it listens for `sound-kinds-change` on the document.
+ * @param {'keys'|'dials'|'camera'|'drawers'|'switches'|'menus'|'typing'|'scroll'} kind
+ * @param {boolean} off
+ */
+export function setSoundKindOff(kind, off) {
+  if (!_HFM_SOUND_KINDS.includes(kind)) {
+    throw new Error(`No such kind of sound: ${kind}`);
+  }
+  if (off) _hfmKindsOff.add(kind);
+  else _hfmKindsOff.delete(kind);
+  try {
+    localStorage.setItem(
+      STORAGE_KEY_SOUND_KINDS_OFF,
+      JSON.stringify(soundKindsOff())
+    );
+  } catch (error) {
+    console.warn('[Alt View] Could not save the sound kinds setting:', error);
+  }
+  document.dispatchEvent(
+    new CustomEvent('sound-kinds-change', { detail: { off: soundKindsOff() } })
+  );
+}
+
+function _syncSoundsButton(on) {
+  const button = document.getElementById('_hfmSounds');
+  if (!button) return;
+  button.setAttribute('aria-pressed', String(on));
+  button.innerHTML = on ? _HFM_SOUNDS_ICON_ON : _HFM_SOUNDS_ICON_OFF;
+}
+
+/**
+ * Turn the sounds on or off: the setting Preferences > Play sounds shows,
+ * the mute, and the look's sounds button, together. Anything else showing
+ * the setting listens for `sounds-setting-change` on the document.
+ * @param {boolean} on
+ */
+export function setSoundsOn(on) {
+  const value = Boolean(on);
+  try {
+    localStorage.setItem(STORAGE_KEY_SOUNDS, value ? 'true' : 'false');
+  } catch (error) {
+    console.warn('[Alt View] Could not save the sounds setting:', error);
+  }
+  setMuted(!value);
+  _syncSoundsButton(value);
+  // Turned on with the key there: its sounds are fetched now.
+  if (value && _hfmUnlocked) {
+    preloadCrtSounds();
+    if (_hfmEnabled) _preloadLookSounds();
+  }
+  document.dispatchEvent(
+    new CustomEvent('sounds-setting-change', { detail: { on: value } })
+  );
 }
 
 function _formatPercent(value) {
@@ -253,8 +565,9 @@ function _updateHfmStatusBar() {
   } else {
     const edge = _formatPercent(_hfmContrastScale);
     const size = _formatPercent(_hfmFontScale);
+    const sizeWord = _hfmIsVector() ? 'LINES' : 'SIZE';
     const glow = _formatPercent(_prefersReducedMotion() ? 0 : _hfmPersistFade);
-    displayText = `[ALT VIEW] EDGE ${edge} \u00B7 SIZE ${size} \u00B7 GLOW ${glow}`;
+    displayText = `[ALT VIEW] EDGE ${edge} \u00B7 ${sizeWord} ${size} \u00B7 GLOW ${glow}`;
   }
 
   altAdjustEl.textContent = displayText;
@@ -281,6 +594,7 @@ function _setHfmPanAdjustEnabled(enabled) {
     _initHfmContrastControls().setEnabled(!_hfmPanAdjustEnabled);
     _initHfmFontScaleControls().setEnabled(!_hfmPanAdjustEnabled);
     _initHfmPersistFadeControls().setEnabled(!_hfmPanAdjustEnabled);
+    _initHfmSurfaceControls().setEnabled(!_hfmPanAdjustEnabled);
   }
 
   _syncHfmPanToggleUi();
@@ -291,12 +605,14 @@ function _resetHfmSettings() {
     localStorage.removeItem(STORAGE_KEY_HFM_CONTRAST_SCALE);
     localStorage.removeItem(STORAGE_KEY_HFM_FONT_SCALE);
     localStorage.removeItem(STORAGE_KEY_HFM_PERSIST_FADE);
+    localStorage.removeItem(STORAGE_KEY_HFM_SURFACES);
   } catch (_) {
     // Storage unavailable
   }
   _applyHfmContrastScale(_HFM_CONTRAST_RANGE.default);
   _applyHfmFontScale(_HFM_FONT_SCALE_RANGE.default);
   _applyHfmPersistFade(_HFM_PERSIST_FADE_RANGE.default);
+  _applyHfmSurfaceOpacity(_HFM_SURFACE_RANGE.default);
   if (import.meta.env.DEV) {
     console.log('[Alt View] Settings reset to defaults');
   }
@@ -322,6 +638,7 @@ function _applyHfmContrastScale(scale) {
 
   _hfmContrastControls?.sync?.(clamped);
   _initHfmEdgeLevels()?.sync(clamped);
+  _syncHfmVectorLook();
   _syncHfmPanToggleUi();
   _debouncedSave(STORAGE_KEY_HFM_CONTRAST_SCALE, clamped);
 
@@ -337,16 +654,94 @@ function _applyHfmFontScale(scale) {
   );
   _hfmFontScale = clamped;
 
+  // The characters themselves never go under 30%: there they are lines, and
+  // a look whose lines cannot load keeps its 30% characters.
   if (_hfmAltView?.setFontScale) {
-    _hfmAltView.setFontScale(clamped);
+    _hfmAltView.setFontScale(Math.max(clamped, _HFM_VECTOR_BELOW));
     _hfmAltView.invalidate?.();
   }
 
   _hfmFontScaleControls?.sync?.(clamped);
   _initHfmCharacterStepper()?.sync(clamped);
+  _syncHfmVectorLook();
   _syncHfmPanToggleUi();
   _debouncedSave(STORAGE_KEY_HFM_FONT_SCALE, clamped);
 
+  return clamped;
+}
+
+/**
+ * True when a size is under 30%, where the model is drawn as lines.
+ * @param {number} [scale]
+ * @returns {boolean}
+ */
+function _hfmIsVector(scale = _hfmFontScale) {
+  return scale < _HFM_VECTOR_BELOW - _HFM_STEP_TOLERANCE;
+}
+
+/**
+ * What a size is called aloud: "Characters 40%", or under 30% "Vector
+ * lines, 25%".
+ * @param {number} scale
+ * @returns {string}
+ */
+function _hfmSizeWords(scale) {
+  return _hfmIsVector(scale)
+    ? `Vector lines, ${_formatPercent(scale)}`
+    : `Characters ${_formatPercent(scale)}`;
+}
+
+/**
+ * The crease angle the Edges slider chooses in the vector look.
+ * @param {number} scale - the Edges slider's value
+ * @returns {number} degrees
+ */
+function _hfmCreaseDeg(scale) {
+  const points = _HFM_VECTOR_CREASE;
+  if (scale <= points[0][0]) return points[0][1];
+  for (let i = 1; i < points.length; i++) {
+    const [x1, y1] = points[i];
+    if (scale <= x1) {
+      const [x0, y0] = points[i - 1];
+      return y0 + ((scale - x0) / (x1 - x0)) * (y1 - y0);
+    }
+  }
+  return points[points.length - 1][1];
+}
+
+/**
+ * The vector look as the sliders set it, or null at 30% and above.
+ * @returns {{widthPx: number, surfaceOpacity: number, creaseDeg: number,
+ *   crisp: boolean}|null}
+ */
+function _hfmVectorLook() {
+  if (!_hfmIsVector()) return null;
+  return {
+    widthPx:
+      _HFM_VECTOR_WIDTH_AT_0 + _HFM_VECTOR_WIDTH_PER_SCALE * _hfmFontScale,
+    surfaceOpacity: _hfmSurfaceOpacity,
+    creaseDeg: Math.round(_hfmCreaseDeg(_hfmContrastScale) * 10) / 10,
+    // Classic's look draws crisp, as a raster card did; the phosphor looks
+    // glow.
+    crisp: document.body?.dataset.uiMode === 'classic',
+  };
+}
+
+function _syncHfmVectorLook() {
+  _hfmAltView?.setVectorLook?.(_hfmVectorLook());
+}
+
+function _applyHfmSurfaceOpacity(value) {
+  const raw = Number(value);
+  const next = Number.isFinite(raw) ? raw : _HFM_SURFACE_RANGE.default;
+  const clamped = Math.max(
+    _HFM_SURFACE_RANGE.min,
+    Math.min(_HFM_SURFACE_RANGE.max, next)
+  );
+  _hfmSurfaceOpacity = clamped;
+  _hfmSurfaceControls?.sync?.(clamped);
+  _syncHfmVectorLook();
+  _debouncedSave(STORAGE_KEY_HFM_SURFACES, clamped);
   return clamped;
 }
 
@@ -376,8 +771,9 @@ function _applyHfmPersistFade(value) {
 // ---------------------------------------------------------------------------
 
 /**
- * Build a pair of Alt View slider sections (desktop camera panel + mobile
- * drawer) and return a { setEnabled, sync } controls object.
+ * Build one Alt View slider in each of its homes (the desktop camera panel,
+ * the phone's ASCII drawer, Classic's two) and return a { setEnabled, sync }
+ * controls object over all of them.
  *
  * setEnabled(true) shows the sections while Alt View is on; setEnabled(false)
  * hides them entirely so they never appear in the standard UI.
@@ -396,6 +792,8 @@ function _buildHfmSliderControls({
   range,
   getValue,
   onInput,
+  speak = _formatPercent,
+  note = null,
 }) {
   const inputs = [];
   const valueEls = [];
@@ -408,16 +806,19 @@ function _buildHfmSliderControls({
     sectionClass,
     titleClass,
     inputId,
+    noteVisible,
+    titleTag = 'h3',
   }) => {
     if (!container || document.getElementById(inputId)) return;
 
     const section = document.createElement('div');
     section.className = sectionClass;
 
-    const title = document.createElement('h3');
+    const title = document.createElement(titleTag);
     title.className = titleClass;
     title.id = `${inputId}-label`;
     title.textContent = titleText;
+    if (titleTag === 'label') title.htmlFor = inputId;
 
     const sliderContainer = document.createElement('div');
     sliderContainer.className = 'slider-container';
@@ -440,6 +841,14 @@ function _buildHfmSliderControls({
     sliderContainer.appendChild(valueEl);
     section.appendChild(title);
     section.appendChild(sliderContainer);
+    if (note) {
+      const noteEl = document.createElement('p');
+      noteEl.id = `${inputId}-note`;
+      noteEl.className = noteVisible ? 'hfm-slider-note' : 'sr-only';
+      noteEl.textContent = note;
+      section.appendChild(noteEl);
+      input.setAttribute('aria-describedby', noteEl.id);
+    }
 
     if (insertBefore) {
       container.insertBefore(section, insertBefore);
@@ -463,16 +872,37 @@ function _buildHfmSliderControls({
     sectionClass: `camera-control-section hfm-slider-section ${idBase}-section`,
     titleClass: 'camera-control-section-title',
     inputId: idBase,
+    noteVisible: true,
   });
 
-  // The phone's ASCII drawer holds these three and nothing else.
+  // The phone's ASCII drawer holds these sliders and nothing else: a
+  // slider's note is its description there, read but not shown.
   buildSection({
     container: document.getElementById('asciiDrawerBody'),
     insertBefore: null,
     sectionClass: `camera-drawer-section hfm-slider-section ${idBase}-drawer-section`,
     titleClass: 'camera-drawer-section-title',
     inputId: `${idBase}Mobile`,
+    noteVisible: false,
   });
+
+  // Classic has no camera panel: its ASCII group in Viewport-Control, and
+  // in the Simplified view, which has no Viewport-Control, at the foot of
+  // the Customizer. Labels, as in the panel's other fields.
+  for (const [containerId, suffix] of [
+    ['vpAsciiGroup', 'Classic'],
+    ['classicAsciiSimplified', 'Simplified'],
+  ]) {
+    buildSection({
+      container: document.getElementById(containerId),
+      insertBefore: null,
+      sectionClass: `classic-ascii-field hfm-slider-section ${idBase}-classic-section`,
+      titleClass: 'classic-ascii-label',
+      inputId: `${idBase}${suffix}`,
+      noteVisible: true,
+      titleTag: 'label',
+    });
+  }
 
   const controls = {
     setEnabled(isEnabled) {
@@ -491,7 +921,7 @@ function _buildHfmSliderControls({
         if (input.value !== rawValue) {
           input.value = rawValue;
         }
-        input.setAttribute('aria-valuetext', formatted);
+        input.setAttribute('aria-valuetext', speak(value));
       });
       valueEls.forEach((el) => {
         el.textContent = formatted;
@@ -526,7 +956,7 @@ function _stepHfmCharacters(direction) {
     if (above) target = above.scale;
   }
   const next = _applyHfmFontScale(target);
-  announceImmediate(`Characters ${_formatPercent(next)}`);
+  announceImmediate(_hfmSizeWords(next));
   return next;
 }
 
@@ -630,6 +1060,10 @@ function _initHfmFontScaleControls() {
     range: _HFM_FONT_SCALE_RANGE,
     getValue: () => _hfmFontScale,
     onInput: (value) => _applyHfmFontScale(value),
+    speak: (value) =>
+      _hfmIsVector(value)
+        ? `Vector lines, ${_formatPercent(value)}`
+        : _formatPercent(value),
   });
   return _hfmFontScaleControls;
 }
@@ -655,10 +1089,25 @@ function _initHfmPersistFadeControls() {
   return _hfmPersistFadeControls;
 }
 
+// The vector look's surfaces: the last of the look's sliders.
+function _initHfmSurfaceControls() {
+  if (_hfmSurfaceControls) return _hfmSurfaceControls;
+  _hfmSurfaceControls = _buildHfmSliderControls({
+    idBase: '_hfmSurfaces',
+    titleText: 'Surfaces',
+    range: _HFM_SURFACE_RANGE,
+    getValue: () => _hfmSurfaceOpacity,
+    onInput: (value) => _applyHfmSurfaceOpacity(value),
+    note: 'Below 30% Characters: how solid the faces under the lines are.',
+  });
+  return _hfmSurfaceControls;
+}
+
 function _setHfmSlidersEnabled(enabled) {
   _initHfmContrastControls().setEnabled(enabled);
   _initHfmFontScaleControls().setEnabled(enabled);
   _initHfmPersistFadeControls().setEnabled(enabled);
+  _initHfmSurfaceControls().setEnabled(enabled);
 }
 
 // ---------------------------------------------------------------------------
@@ -729,10 +1178,12 @@ function _loadSavedHfmSettings() {
   let savedContrast = null;
   let savedFont = null;
   let savedPersistFade = null;
+  let savedSurfaces = null;
   try {
     savedContrast = localStorage.getItem(STORAGE_KEY_HFM_CONTRAST_SCALE);
     savedFont = localStorage.getItem(STORAGE_KEY_HFM_FONT_SCALE);
     savedPersistFade = localStorage.getItem(STORAGE_KEY_HFM_PERSIST_FADE);
+    savedSurfaces = localStorage.getItem(STORAGE_KEY_HFM_SURFACES);
   } catch (_) {
     // Private browsing or storage unavailable
   }
@@ -766,6 +1217,15 @@ function _loadSavedHfmSettings() {
   ) {
     _hfmPersistFade = parsedPersistFade;
   }
+  const parsedSurfaces =
+    savedSurfaces !== null ? parseFloat(savedSurfaces) : NaN;
+  if (
+    Number.isFinite(parsedSurfaces) &&
+    parsedSurfaces >= _HFM_SURFACE_RANGE.min &&
+    parsedSurfaces <= _HFM_SURFACE_RANGE.max
+  ) {
+    _hfmSurfaceOpacity = parsedSurfaces;
+  }
 }
 
 function _onAltViewRevealEnd(event) {
@@ -795,6 +1255,9 @@ function _onPowerOnEnd(event) {
 function _endPowerOn() {
   clearTimeout(_hfmPowerOnTimer);
   _hfmPowerOnTimer = null;
+  const waiters = _hfmPowerOnWaiters;
+  _hfmPowerOnWaiters = [];
+  waiters.forEach((done) => done());
   const canvas = document.querySelector('.hfm-overlay-canvas');
   if (!canvas) return;
   canvas.removeEventListener('animationend', _onPowerOnEnd);
@@ -813,6 +1276,70 @@ function _powerOnPicture(afterReveal) {
   _hfmPowerOnTimer = setTimeout(_endPowerOn, _HFM_POWER_ON_FALLBACK_MS);
   canvas.classList.add('alt-view-power-on');
   if (afterReveal) canvas.classList.add('alt-view-power-on--after-reveal');
+}
+
+/** @returns {Promise<void>} once the picture has powered on, or would have */
+function _poweredOn() {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(
+      done,
+      _HFM_SOUND_LEAD_MS + _HFM_POWER_ON_FALLBACK_MS
+    );
+    _hfmPowerOnWaiters.push(done);
+  });
+}
+
+/**
+ * Shut the open drawers at once, quietly and without remembering it, and
+ * say which they were, left to right. With reduced motion they stay open.
+ * @returns {string[]}
+ */
+function _shutDrawersForDrawIn() {
+  if (_prefersReducedMotion()) return [];
+  const names = openLookDrawers();
+  const how = { instant: true, quiet: true, remember: false };
+  names.forEach((name) => setLookDrawer(name, false, how));
+  return names;
+}
+
+/** Open the shut drawers again once the picture is on, one at a time. */
+async function _openDrawersAfterDrawIn(names) {
+  if (!names.length) return;
+  const staging = { names: [...names], stopped: false };
+  _hfmDrawerStaging = staging;
+  // While they come back the page says so, for anything that waits on them.
+  document.documentElement.dataset.altViewDrawers = 'returning';
+  await _poweredOn();
+  while (staging.names.length && !staging.stopped) {
+    const slide = setLookDrawer(staging.names.shift(), true, {
+      quiet: true,
+      remember: false,
+    });
+    if (slide) await slide;
+    if (staging.names.length && !staging.stopped) {
+      await new Promise((resolve) => setTimeout(resolve, _HFM_DRAWER_PAUSE_MS));
+    }
+  }
+  if (_hfmDrawerStaging === staging) {
+    _hfmDrawerStaging = null;
+    delete document.documentElement.dataset.altViewDrawers;
+  }
+}
+
+/** Leaving the look in the middle: what is still shut opens at once. */
+function _endDrawerStaging() {
+  const staging = _hfmDrawerStaging;
+  if (!staging) return;
+  _hfmDrawerStaging = null;
+  delete document.documentElement.dataset.altViewDrawers;
+  staging.stopped = true;
+  const how = { instant: true, quiet: true, remember: false };
+  staging.names.forEach((name) => setLookDrawer(name, true, how));
+  staging.names = [];
 }
 
 function _typeAltViewGreeting() {
@@ -861,24 +1388,172 @@ function _hfmKeyBand(el) {
   return band;
 }
 
-// The button a press lands on; the look's own key keeps its switch sounds.
+// The button a press lands on; the look's own key keeps its switch sounds,
+// the sounds button plays its key only when it turns sounds on, and a
+// switch snaps instead.
 function _hfmKeyTarget(event) {
-  const el = event.target?.closest?.(_HFM_KEY_TARGET);
-  if (!el || el.id === '_hfmToggle' || el.disabled) return null;
+  const el =
+    event.target?.closest?.(_HFM_KEY_TARGET) ?? _hfmChooserLabel(event.target);
+  if (
+    !el ||
+    el.id === '_hfmToggle' ||
+    el.id === '_hfmSounds' ||
+    el.disabled ||
+    el.matches(_HFM_SNAP_TARGET)
+  ) {
+    return null;
+  }
   return el;
 }
 
+// A file chooser drawn as a button is a label around its file input; a
+// press on either is the label's key.
+function _hfmChooserLabel(target) {
+  const label =
+    target instanceof HTMLInputElement
+      ? target.labels?.[0]
+      : target?.closest?.('label');
+  const control = label?.control;
+  return control?.type === 'file' && !control.disabled ? label : null;
+}
+
+// A controller's button held down: the press a controller makes is a click.
+function _hfmPadButtonHeld() {
+  for (const pad of navigator.getGamepads?.() ?? []) {
+    if (pad?.buttons?.some((button) => button?.pressed)) return true;
+  }
+  return false;
+}
+
+// A field a keystroke types into.
+function _hfmTypedInto(el) {
+  if (el instanceof HTMLTextAreaElement) return !el.readOnly && !el.disabled;
+  if (el instanceof HTMLInputElement) {
+    return _HFM_TYPED_INPUTS.has(el.type) && !el.readOnly && !el.disabled;
+  }
+  return Boolean(el?.isContentEditable);
+}
+
+// A key that types or edits, not a shortcut, a modifier or a move.
+function _hfmTypes(event) {
+  if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  return (
+    event.key?.length === 1 ||
+    event.key === 'Backspace' ||
+    event.key === 'Delete' ||
+    event.key === 'Enter'
+  );
+}
+
+// A list or a color well: one that opens to be chosen from.
+function _hfmSelector(el) {
+  if (el instanceof HTMLSelectElement) return !el.multiple && el.size <= 1;
+  return el instanceof HTMLInputElement && el.type === 'color';
+}
+
+// A latch is a menu's or a dialog's; the snaps, levers and selectors are
+// the switches' and lists'.
+function _playControlSound(kind) {
+  if (!_soundOn(kind.startsWith('latch') ? 'menus' : 'switches')) return;
+  playControlSound(kind).catch((error) => {
+    console.warn(`[Alt View] The ${kind} sound did not play:`, error);
+  });
+}
+
+function _playTypingSound() {
+  if (!_soundOn('typing')) return;
+  playTypingSound(_hfmKeySet()).catch((error) => {
+    console.warn('[Alt View] A typing sound did not play:', error);
+  });
+}
+
+// A drawer the look heard move: its own sound in the look's set.
+function _playDrawerSound(name, open, move) {
+  if (!_HFM_SOUNDING_DRAWERS.has(name) || !_soundOn('drawers')) return;
+  playDrawerSound(name, open ? 'open' : 'close', move).catch((error) => {
+    console.warn(`[Alt View] The ${name} drawer's sound did not play:`, error);
+  });
+}
+
+// Whether a latch's pop-up shows, by the attribute that hides it.
+function _hfmLatchShown(attr, value) {
+  return attr === 'aria-hidden' ? value === 'false' : value === null;
+}
+
+// A dialog or a menu that opened or closed since the last look: a latch
+// each. The first change an element had in the batch says how it was.
+function _hfmLatchesMoved(records) {
+  const first = new Map();
+  for (const record of records) {
+    const seen = first.get(record.target) ?? new Map();
+    if (!seen.has(record.attributeName)) {
+      seen.set(record.attributeName, record.oldValue);
+    }
+    first.set(record.target, seen);
+  }
+  for (const [el, seen] of first) {
+    for (const [attr, was] of seen) {
+      const latch =
+        attr === 'aria-hidden'
+          ? el.matches(_HFM_LATCH_BY_ARIA_HIDDEN)
+          : el.matches(_HFM_LATCH_BY_HIDDEN);
+      if (!latch) continue;
+      const shown = _hfmLatchShown(attr, el.getAttribute(attr));
+      if (shown === _hfmLatchShown(attr, was)) continue;
+      _playControlSound(shown ? 'latch-open' : 'latch-close');
+    }
+  }
+}
+
+// Where a grip is now.
+function _hfmGripAt(el) {
+  const box = el.getBoundingClientRect();
+  return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+}
+
+// A grip's tick when it has come 2 % of the window or more from the last
+// one, no sooner than a dial's click.
+function _hfmGripMoved(grip, { anyMove = false } = {}) {
+  const at = _hfmGripAt(grip.el);
+  const share = Math.max(
+    Math.abs(at.x - grip.from.x) / Math.max(1, window.innerWidth),
+    Math.abs(at.y - grip.from.y) / Math.max(1, window.innerHeight)
+  );
+  const moved = anyMove ? share > 0 : share >= _HFM_GRIP_STEP - 1e-9;
+  if (!moved) return;
+  grip.from = at;
+  const now = performance.now();
+  if (now - _hfmGripLastAt < 1000 / _HFM_DIAL_CLICKS_PER_SECOND) return;
+  _hfmGripLastAt = now;
+  _playDialSound(_HFM_GRIP_TONE);
+}
+
+function _stopGripWatch() {
+  if (!_hfmGrip) return;
+  cancelAnimationFrame(_hfmGrip.frame);
+  _hfmGrip = null;
+}
+
 function _playKeySound(el, phase) {
-  if (!_soundsOn()) return;
+  if (
+    !_soundOn('keys') ||
+    _HFM_CAMERA_BUTTONS.has(el.id) ||
+    el.matches(_HFM_DRAWER_BUTTONS)
+  ) {
+    return;
+  }
   playKeySound(_hfmKeySet(), _hfmKeyBand(el), phase).catch((error) => {
     console.warn(`[Alt View] A key sound did not play:`, error);
   });
 }
 
-// The slider a press or a move lands on.
+// The slider, or the number box stepped by its arrows, a press or a move
+// lands on.
 function _hfmDialTarget(event) {
   const el = event.target;
-  return el instanceof HTMLInputElement && el.type === 'range' && !el.disabled
+  return el instanceof HTMLInputElement &&
+    (el.type === 'range' || el.type === 'number') &&
+    !el.disabled
     ? el
     : null;
 }
@@ -904,7 +1579,7 @@ function _hfmDial(el) {
 }
 
 function _playDialSound(variant) {
-  if (!_soundsOn()) return;
+  if (!_soundOn('dials')) return;
   playDialSound(_hfmKeySet(), variant).catch((error) => {
     console.warn(`[Alt View] A dial click did not play:`, error);
   });
@@ -915,9 +1590,174 @@ function _preloadLookSounds() {
   const set = _hfmKeySet();
   preloadKeySounds(set);
   preloadDialSounds(set);
+  preloadCameraSounds();
+  preloadDrawerSounds();
+  preloadControlSounds();
+  preloadScrollSounds();
 }
 
-// The keys and the dials: every button and every slider of the look.
+// Where the camera is, seen from what it looks at: its turn and tilt in
+// degrees, and how far away as a logarithm, so in and out count alike (an
+// orthographic view zooms without moving).
+function _hfmCameraPose(previewManager) {
+  const camera = previewManager.getActiveCamera?.();
+  const target = previewManager.controls?.target;
+  if (!camera || !target) return null;
+  const x = camera.position.x - target.x;
+  const y = camera.position.y - target.y;
+  const z = camera.position.z - target.z;
+  const distance = Math.hypot(x, y, z);
+  if (distance < 1e-6) return null;
+  const ortho =
+    previewManager.projectionMode === 'orthographic'
+      ? previewManager.orthoCamera
+      : null;
+  return {
+    turn: (Math.atan2(y, x) * 180) / Math.PI,
+    tilt: (Math.asin(Math.max(-1, Math.min(1, z / distance))) * 180) / Math.PI,
+    zoom: Math.log(ortho ? 1 / ortho.zoom : distance),
+  };
+}
+
+function _hfmStickPushed() {
+  for (const pad of navigator.getGamepads?.() ?? []) {
+    if (!pad) continue;
+    if (pad.axes?.some((value) => Math.abs(value) >= _HFM_STICK_DEAD_ZONE)) {
+      return true;
+    }
+    // The standard layout's triggers zoom.
+    if (
+      [6, 7].some(
+        (index) => (pad.buttons?.[index]?.value ?? 0) >= _HFM_STICK_DEAD_ZONE
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// One of the view's ticks, unless one came under 70 ms ago, by its way.
+function _playCameraTick(kind, way = 0) {
+  const now = performance.now();
+  if (now - _hfmCameraTickAt < _HFM_CAMERA_TICK_GAP_MS) return;
+  _hfmCameraTickAt = now;
+  if (!_soundOn('camera')) return;
+  playCameraSound(kind, { way }).catch((error) => {
+    console.warn('[Alt View] A camera tick did not play:', error);
+  });
+}
+
+function _installCameraTicks(previewManager) {
+  const controls = previewManager?.controls;
+  if (_hfmCamera || !controls?.addEventListener) return;
+  const cam = {
+    from: null,
+    way: { turn: 0, tilt: 0, zoom: 0 },
+    dragging: false,
+    directUntil: 0,
+  };
+  const direct = () =>
+    cam.dragging || performance.now() < cam.directUntil || _hfmStickPushed();
+  const onStart = () => {
+    cam.dragging = true;
+  };
+  const onEnd = () => {
+    cam.dragging = false;
+    cam.directUntil = performance.now() + _HFM_CAMERA_GLIDE_MS;
+  };
+  const onChange = () => {
+    const pose = _hfmCameraPose(previewManager);
+    if (!pose) return;
+    if (!cam.from || !direct()) {
+      cam.from = pose;
+      return;
+    }
+    let kind = null;
+    for (const name of ['turn', 'tilt', 'zoom']) {
+      let moved = pose[name] - cam.from[name];
+      if (name === 'turn') moved = (((moved % 360) + 540) % 360) - 180;
+      const sign = Math.sign(moved);
+      const reach =
+        _HFM_CAMERA_STEPS[name] +
+        (sign === -cam.way[name] ? _HFM_CAMERA_DEAD_BAND[name] : 0);
+      // A whisker of slack: a pose read back through the trigonometry
+      // lands a hair under an exact step.
+      const size = Math.abs(moved) + 1e-6;
+      if (size < reach) continue;
+      const steps = Math.floor(size / _HFM_CAMERA_STEPS[name]);
+      cam.from[name] += sign * steps * _HFM_CAMERA_STEPS[name];
+      cam.way[name] = sign;
+      kind ??= name;
+    }
+    // The turn's angle grows as the view turns left (as Rotate left turns
+    // it), the tilt's as it tilts up, the distance as it zooms out.
+    const ways = {
+      turn: -cam.way.turn,
+      tilt: cam.way.tilt,
+      zoom: -cam.way.zoom,
+    };
+    if (kind) _playCameraTick(kind, ways[kind]);
+  };
+  // Any other press is not a direct move of the view: what it moves, it
+  // moves as a button, a menu or a shortcut does.
+  const elsewhere = (event) => {
+    const canvas = previewManager.renderer?.domElement;
+    if (
+      canvas &&
+      event.target instanceof Node &&
+      canvas.contains(event.target)
+    ) {
+      return;
+    }
+    cam.directUntil = 0;
+  };
+  const onKey = (event) => {
+    const focused = document.activeElement;
+    const onPreview =
+      !!focused &&
+      (previewManager.container?.contains(focused) ||
+        focused === previewManager.renderer?.domElement);
+    const plain = !event.ctrlKey && !event.altKey && !event.metaKey;
+    cam.directUntil =
+      onPreview && plain && _HFM_CAMERA_KEYS.has(event.key)
+        ? performance.now() + _HFM_CAMERA_KEY_MS
+        : 0;
+  };
+  cam.controls = controls;
+  cam.controlListeners = [
+    ['start', onStart],
+    ['change', onChange],
+    ['end', onEnd],
+  ];
+  cam.pageListeners = [
+    ['pointerdown', elsewhere],
+    ['click', elsewhere],
+    ['keydown', onKey],
+  ];
+  for (const [type, fn] of cam.controlListeners) {
+    controls.addEventListener(type, fn);
+  }
+  for (const [type, fn] of cam.pageListeners) {
+    document.addEventListener(type, fn, true);
+  }
+  _hfmCamera = cam;
+}
+
+function _removeCameraTicks() {
+  if (!_hfmCamera) return;
+  const { controls, controlListeners, pageListeners } = _hfmCamera;
+  for (const [type, fn] of controlListeners) {
+    controls.removeEventListener(type, fn);
+  }
+  for (const [type, fn] of pageListeners) {
+    document.removeEventListener(type, fn, true);
+  }
+  _hfmCamera = null;
+}
+
+// Every control of the look: the keys and the dials, the switches, the
+// lists, the typing, the grips, the menus and dialogs, and the drawers.
 function _installKeySounds() {
   if (_hfmKeyListeners) return;
   _preloadLookSounds();
@@ -925,6 +1765,7 @@ function _installKeySounds() {
     const el = _hfmKeyTarget(event);
     if (!el) return;
     _hfmKeyDown = el;
+    _hfmKeyHeard = el;
     _playKeySound(el, 'down');
   };
   const up = () => {
@@ -937,13 +1778,130 @@ function _installKeySounds() {
   const keydown = (event) => {
     if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
     const el = _hfmKeyTarget(event);
-    if (!el || el !== event.target) return;
+    if (!el || (el !== event.target && el.control !== event.target)) return;
     _hfmKeyDown = el;
+    _hfmKeyHeard = el;
     _playKeySound(el, 'down');
   };
   const keyup = (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     up();
+  };
+  // A click no press of ours came before: a screen reader's Enter in browse
+  // mode, which the page gets as a click alone, or a controller's A button.
+  // Anything else the page clicks for itself stays quiet. A label's click
+  // is passed on to its file input, and the two are one press. A camera
+  // button's click, after its press or alone, is its move: heard as the
+  // view's tick instead of a key.
+  const click = (event) => {
+    const el = _hfmKeyTarget(event);
+    if (!el) return;
+    const control = el instanceof HTMLLabelElement ? el.control : null;
+    const passing = control !== null && event.target !== control;
+    const camera = _HFM_CAMERA_BUTTONS.get(el.id);
+    if (el === _hfmKeyHeard) {
+      if (!passing) _hfmKeyHeard = null;
+      if (camera) _playCameraTick(...camera);
+      return;
+    }
+    // A file input another control opens: that control has sounded.
+    if (control && !passing && control !== document.activeElement) return;
+    if (!event.isTrusted && !_hfmPadButtonHeld()) return;
+    if (passing) _hfmKeyHeard = el;
+    if (camera) {
+      _playCameraTick(...camera);
+      return;
+    }
+    _playKeySound(el, 'down');
+    setTimeout(() => _playKeySound(el, 'up'), _HFM_KEY_TAP_MS);
+  };
+  // A checkbox flips its lever once it has changed, up for on and down for
+  // off, and a radio button snaps as it is chosen; a switch or a radio drawn
+  // as a button does so as it is pressed, by the state it leaves.
+  const snapChange = (event) => {
+    const el = event.target;
+    if (!(el instanceof HTMLInputElement)) return;
+    if (el.type === 'radio') {
+      _playControlSound('snap-on');
+    } else if (el.type === 'checkbox') {
+      _playControlSound(el.checked ? 'lever-on' : 'lever-off');
+    }
+  };
+  const snapClick = (event) => {
+    const el = event.target?.closest?.(
+      '[role="switch"], [role="checkbox"], [role="radio"]'
+    );
+    if (
+      !el ||
+      el instanceof HTMLInputElement ||
+      el.disabled ||
+      el.getAttribute('aria-disabled') === 'true'
+    ) {
+      return;
+    }
+    const on = el.getAttribute('aria-checked') === 'true';
+    if (el.getAttribute('role') === 'radio') {
+      // A radio button already chosen does nothing when pressed again.
+      if (!on) _playControlSound('snap-on');
+      return;
+    }
+    _playControlSound(on ? 'lever-off' : 'lever-on');
+  };
+  // A list clicks as it opens, by a press or by the keys that open it, and
+  // again as a choice is made.
+  const selectDown = (event) => {
+    if (_hfmSelector(event.target) && !event.target.disabled) {
+      _playControlSound('select-open');
+    }
+  };
+  const selectKey = (event) => {
+    const el = event.target;
+    if (!_hfmSelector(el) || el.disabled) return;
+    const opens =
+      event.key === 'F4' ||
+      (event.altKey &&
+        (event.key === 'ArrowDown' || event.key === 'ArrowUp')) ||
+      event.key === ' ' ||
+      (el instanceof HTMLInputElement && event.key === 'Enter');
+    if (opens && !event.repeat) _playControlSound('select-open');
+  };
+  const selectChange = (event) => {
+    const el = event.target;
+    if (el instanceof HTMLSelectElement || _hfmSelector(el)) {
+      _playControlSound('select-choose');
+    }
+  };
+  // A keystroke in a field: the quiet key.
+  const typing = (event) => {
+    const el = event.target;
+    if (!_hfmTypedInto(el) || !_hfmTypes(event)) return;
+    const now = performance.now();
+    _hfmTypedAt.set(el, now);
+    if (now - _hfmTypingLastAt < 1000 / _HFM_TYPING_PER_SECOND) return;
+    _hfmTypingLastAt = now;
+    _playTypingSound();
+  };
+  // A grip taken hold of: watched each frame until it is let go. Moved by
+  // its keys: a tick for any move a key made.
+  const gripDown = (event) => {
+    const el = event.target?.closest?.(_HFM_GRIP_TARGET);
+    if (!el) return;
+    _stopGripWatch();
+    const grip = { el, from: _hfmGripAt(el), frame: 0 };
+    const watch = () => {
+      _hfmGripMoved(grip);
+      grip.frame = requestAnimationFrame(watch);
+    };
+    grip.frame = requestAnimationFrame(watch);
+    _hfmGrip = grip;
+  };
+  const gripUp = () => _stopGripWatch();
+  const gripKey = (event) => {
+    const el = event.target;
+    if (!(el instanceof Element) || !el.matches(_HFM_GRIP_TARGET)) return;
+    if (!/^(Arrow|Home$|End$|Page)/.test(event.key)) return;
+    const grip = { el, from: _hfmGripAt(el) };
+    requestAnimationFrame(() => _hfmGripMoved(grip, { anyMove: true }));
   };
   // A slider taken hold of, by pointer or key: where it stands, so the
   // first move's steps are counted from there.
@@ -959,6 +1917,11 @@ function _installKeySounds() {
     if (!el) return;
     const dial = _hfmDial(el);
     const value = Number(el.value);
+    // A number typed into the box was heard as typing.
+    if (performance.now() - (_hfmTypedAt.get(el) ?? -Infinity) < 150) {
+      dial.value = value;
+      return;
+    }
     const step = Number(el.step) || 1;
     const crossed = Number.isFinite(dial.value)
       ? Math.round(Math.abs(value - dial.value) / step)
@@ -976,23 +1939,139 @@ function _installKeySounds() {
     ['pointercancel', up],
     ['keydown', keydown],
     ['keyup', keyup],
+    ['click', click],
     ['pointerdown', dialDown],
     ['keydown', dialDown],
     ['input', dialInput],
+    ['change', snapChange],
+    ['click', snapClick],
+    ['pointerdown', selectDown],
+    ['keydown', selectKey],
+    ['change', selectChange],
+    ['keydown', typing],
+    ['pointerdown', gripDown],
+    ['pointerup', gripUp],
+    ['pointercancel', gripUp],
+    ['keydown', gripKey],
   ];
   for (const [type, fn] of _hfmKeyListeners) {
     document.addEventListener(type, fn, true);
   }
+  _hfmLatches = new MutationObserver(_hfmLatchesMoved);
+  _hfmLatches.observe(document.body, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['aria-hidden', 'hidden'],
+    attributeOldValue: true,
+  });
+  onDrawerMove(_playDrawerSound);
+  _installScrollTicks();
+}
+
+function _playScrollTick(way) {
+  const now = performance.now();
+  if (now - _hfmScrollTickAt < _HFM_SCROLL_TICK_GAP_MS) return;
+  _hfmScrollTickAt = now;
+  if (!_soundOn('scroll')) return;
+  playScrollSound({ way }).catch((error) => {
+    console.warn('[Alt View] A scroll tick did not play:', error);
+  });
+}
+
+function _playScrollEnd() {
+  if (!_soundOn('scroll')) return;
+  playScrollSound({ end: true }).catch((error) => {
+    console.warn("[Alt View] The end of a list's sound did not play:", error);
+  });
+}
+
+function _installScrollTicks() {
+  if (_hfmScrollListeners) return;
+  const hand = () => {
+    _hfmScrollHandUntil = performance.now() + _HFM_SCROLL_HAND_MS;
+  };
+  const key = (event) => {
+    if (_HFM_SCROLL_KEYS.has(event.key)) hand();
+  };
+  // A press on a scrollbar lands on the element that scrolls, outside its
+  // content.
+  const bar = (event) => {
+    const el = event.target;
+    if (
+      el instanceof Element &&
+      el.clientWidth > 0 &&
+      (event.offsetX > el.clientWidth || event.offsetY > el.clientHeight)
+    ) {
+      hand();
+    }
+  };
+  const scrolled = (event) => {
+    const el =
+      event.target === document ? document.scrollingElement : event.target;
+    if (!(el instanceof Element)) return;
+    const top = el.scrollTop;
+    const seen = _hfmScrolls.get(el);
+    if (!seen) {
+      _hfmScrolls.set(el, { top, carry: 0, end: null });
+      return;
+    }
+    const moved = top - seen.top;
+    seen.top = top;
+    if (!moved) return;
+    if (performance.now() > _hfmScrollHandUntil) {
+      seen.carry = 0;
+      seen.end = null;
+      return;
+    }
+    seen.carry =
+      Math.sign(seen.carry) === Math.sign(moved) ? seen.carry + moved : moved;
+    if (Math.abs(seen.carry) >= _HFM_SCROLL_LINE_PX) {
+      seen.carry %= _HFM_SCROLL_LINE_PX;
+      _playScrollTick(moved > 0 ? -1 : 1);
+    }
+    const bottom = el.scrollHeight - el.clientHeight;
+    const end = top <= 0 ? 'top' : top >= bottom - 1 ? 'bottom' : null;
+    if (end && end !== seen.end) _playScrollEnd();
+    seen.end = end;
+  };
+  _hfmScrollListeners = [
+    ['wheel', hand],
+    ['touchstart', hand],
+    ['touchmove', hand],
+    ['touchend', hand],
+    ['keydown', key],
+    ['pointerdown', bar],
+    ['scroll', scrolled],
+  ];
+  for (const [type, fn] of _hfmScrollListeners) {
+    document.addEventListener(type, fn, { capture: true, passive: true });
+  }
+}
+
+function _removeScrollTicks() {
+  if (!_hfmScrollListeners) return;
+  for (const [type, fn] of _hfmScrollListeners) {
+    document.removeEventListener(type, fn, { capture: true });
+  }
+  _hfmScrollListeners = null;
 }
 
 function _removeKeySounds() {
+  _removeScrollTicks();
   if (!_hfmKeyListeners) return;
   for (const [type, fn] of _hfmKeyListeners) {
     document.removeEventListener(type, fn, true);
   }
   _hfmKeyListeners = null;
   _hfmKeyDown = null;
+  _hfmKeyHeard = null;
   _hfmDialLastClickAt = -Infinity;
+  _hfmTypingLastAt = -Infinity;
+  _stopGripWatch();
+  _hfmGripLastAt = -Infinity;
+  _hfmLatches?.disconnect();
+  _hfmLatches = null;
+  onDrawerMove(null);
 }
 
 /** @returns {Promise<void>|null} Settles once the sound has started or failed; null when none plays */
@@ -1117,6 +2196,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
   let lastMode = document.body?.dataset.uiMode;
   _hfmModeListener = (event) => {
     _hfmAltView?.rebuildGlyphs?.();
+    _syncHfmVectorLook();
     _hfmAltView?.invalidate?.();
     const mode = event?.detail?.mode;
     const classicCrossed = mode === 'classic' || lastMode === 'classic';
@@ -1132,6 +2212,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
 
   _applyHfmContrastScale(_hfmContrastScale);
   _applyHfmFontScale(_hfmFontScale);
+  _applyHfmSurfaceOpacity(_hfmSurfaceOpacity);
   if (_prefersReducedMotion()) {
     // Afterglow is motion: held at 0 without saving, so the person's own
     // value is there when motion is allowed again.
@@ -1156,6 +2237,9 @@ async function _enableAltViewWithPreview(toggleBtn) {
   previewManager.applyGridForAltView?.(true);
 
   root.setAttribute('data-ui-variant', 'mono');
+  // In the same task as the look comes on, so no frame of it shows a drawer
+  // open, and under the look's own rules, so nothing eases shut.
+  const shut = _shutDrawersForDrawIn();
 
   const newTheme = previewManager.detectTheme();
   previewManager.updateTheme(
@@ -1172,6 +2256,8 @@ async function _enableAltViewWithPreview(toggleBtn) {
   _hfmPendingEnable = false;
   _playAltViewMoment({ greeting: true, sound: 'on' });
   _installKeySounds();
+  _installCameraTicks(previewManager);
+  _openDrawersAfterDrawIn(shut);
 
   if (_hfmPanToggleButtons?.desktop)
     _hfmPanToggleButtons.desktop.style.display = 'flex';
@@ -1182,9 +2268,11 @@ function _disableAltViewWithPreview(toggleBtn) {
   const previewManager = _getPreviewManager();
   const root = document.documentElement;
 
+  _endDrawerStaging();
   _stopAltViewStart();
   _playCrtSound('off');
   _removeKeySounds();
+  _removeCameraTicks();
 
   if (_hfmMotionListener) {
     const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -1298,6 +2386,24 @@ function _injectAltToggle() {
   // The key is there: its sounds are fetched now, so the first press is not
   // waiting on a download.
   if (_soundsOn()) preloadCrtSounds();
+
+  // Just before the key; the stylesheet shows it while the look is on. The
+  // row is right-aligned, so the key stays under the pointer that pressed it
+  // when this appears (placed after the key, it pushed the key 48 px away).
+  const soundsBtn = document.createElement('button');
+  soundsBtn.id = '_hfmSounds';
+  soundsBtn.type = 'button';
+  soundsBtn.className =
+    'btn btn-sm btn-secondary alt-view-toggle alt-view-sounds';
+  soundsBtn.setAttribute('aria-label', _HFM_SOUNDS_NAME);
+  soundsBtn.setAttribute('title', _HFM_SOUNDS_NAME);
+  toggleBtn.before(soundsBtn);
+  _syncSoundsButton(_soundsOn());
+  soundsBtn.addEventListener('click', () => {
+    const on = soundsBtn.getAttribute('aria-pressed') !== 'true';
+    setSoundsOn(on);
+    if (on) _playKeySound(soundsBtn, 'down');
+  });
 
   const panToggleBtn = document.createElement('button');
   panToggleBtn.id = '_hfmPanAdjust';
@@ -1459,6 +2565,8 @@ export function initHfmController({
 }) {
   _getPreviewManager = getPreviewManager;
   _getDisplayOptionsController = getDisplayOptionsController;
+  // A page that starts with sounds off starts muted.
+  setMuted(!_soundsOn());
 
   return {
     handleUnlock: _handleUnlock,
@@ -1574,13 +2682,13 @@ export function initHfmController({
         const next = _applyHfmFontScale(
           _hfmFontScale - _HFM_FONT_SCALE_RANGE.step
         );
-        return `Characters ${_formatPercent(next)}`;
+        return _hfmSizeWords(next);
       }
       if (direction === 'right') {
         const next = _applyHfmFontScale(
           _hfmFontScale + _HFM_FONT_SCALE_RANGE.step
         );
-        return `Characters ${_formatPercent(next)}`;
+        return _hfmSizeWords(next);
       }
       return true;
     },

@@ -25,6 +25,7 @@ import {
   SIDEWAYS_PHONE_QUERY,
 } from './phone-drawers.js';
 import { initPhoneCustomizer } from './phone-customizer.js';
+import { registerLookDrawer, slideDrawer } from './drawer-motion.js';
 
 /** Input types a phone answers with its on-screen keyboard. */
 const TYPED_INPUTS = new Set([
@@ -53,6 +54,13 @@ export function initDrawerController() {
   }
 
   const width = initPhoneCustomizer({ panel: drawer, grip });
+
+  // The tint behind the panel and the grip on its edge travel with it.
+  const sheetParts = () => [
+    { el: drawer },
+    { el: document.querySelector('.customizer-glass'), role: 'rider' },
+    { el: grip, role: 'rider' },
+  ];
 
   let isOpen = false;
   let triggerEl = null;
@@ -164,10 +172,15 @@ export function initDrawerController() {
    * Open the sheet
    *
    * @param {HTMLElement} [trigger] - Where focus returns when it closes
-   * @param {{initialFocus?: HTMLElement}} [options] - Where focus lands on
-   *   opening; by default the first parameter control
+   * @param {{initialFocus?: HTMLElement, keepFocus?: boolean, instant?: boolean}} [options]
+   *   - Where focus lands on opening, by default the first parameter control;
+   *   keepFocus leaves it where it is (the look reopening the sheet)
+   * @returns {Promise<boolean>|null|undefined} its slide
    */
-  function open(trigger, { initialFocus } = {}) {
+  function open(
+    trigger,
+    { initialFocus, keepFocus = false, instant = false } = {}
+  ) {
     if (isOpen || !isPhoneLayout()) return;
     // Classic lays the Customizer into its own stacked pane (classic.css
     // resets the sheet's positioning); there is no sheet to open.
@@ -185,13 +198,20 @@ export function initDrawerController() {
     previewPanel?.classList.add('customizer-sheet-open');
     closeBtn?.classList.remove('hidden');
     placePanel();
+    const slide = slideDrawer(sheetParts(), {
+      from: 'left',
+      open: true,
+      instant,
+      name: 'phone-customizer',
+    });
 
     if (initialFocus) {
       initialFocus.focus();
-    } else {
+    } else if (!keepFocus) {
       showParameters();
     }
     syncTour();
+    return slide;
   }
 
   /**
@@ -227,10 +247,11 @@ export function initDrawerController() {
 
   /**
    * Close the drawer
-   * @param {{restoreFocus?: boolean}} [options] - restoreFocus false when
-   *   another drawer is opening: focus stays on the control that opened it
+   * @param {{restoreFocus?: boolean, instant?: boolean}} [options] -
+   *   restoreFocus false when another drawer is opening: focus stays on the
+   *   control that opened it; instant when the layout is leaving the phone's
    */
-  function close({ restoreFocus = true } = {}) {
+  function close({ restoreFocus = true, instant = false } = {}) {
     if (!isOpen) return;
 
     isOpen = false;
@@ -238,15 +259,27 @@ export function initDrawerController() {
 
     toggleBtn.setAttribute('aria-expanded', 'false');
     toggleBtn.setAttribute('aria-label', 'Open customizer panel');
-    drawer.classList.remove('drawer-open');
-    previewPanel?.classList.remove('customizer-sheet-open');
-    closeBtn?.classList.add('hidden');
-    if (grip) grip.hidden = true;
 
+    // Focus leaves before the sheet slides away out of reach.
     if (triggerEl) {
       if (restoreFocus) triggerEl.focus();
       triggerEl = null;
     }
+
+    return slideDrawer(sheetParts(), {
+      from: 'left',
+      open: false,
+      instant,
+      name: 'phone-customizer',
+      inert: [drawer],
+      whenClosed: () => {
+        if (isOpen) return;
+        drawer.classList.remove('drawer-open');
+        previewPanel?.classList.remove('customizer-sheet-open');
+        closeBtn?.classList.add('hidden');
+        if (grip) grip.hidden = true;
+      },
+    });
   }
 
   /**
@@ -292,7 +325,7 @@ export function initDrawerController() {
   // dispatch note in ui-mode-controller.applyMode().
   document.addEventListener('ui-mode-changed', (event) => {
     if (event.detail?.mode === 'classic' && isOpen) {
-      close();
+      close({ instant: true });
     }
   });
 
@@ -306,6 +339,12 @@ export function initDrawerController() {
   }
 
   registerPhoneDrawer('customizer', { isOpen: () => isOpen, close });
+  registerLookDrawer('phone-customizer', {
+    place: () => drawer,
+    isOpen: () => isOpen,
+    open: ({ instant } = {}) => open(toggleBtn, { keepFocus: true, instant }),
+    close: ({ instant } = {}) => close({ restoreFocus: false, instant }),
+  });
 
   // A turned phone or a resized window moves the panel's lines and width,
   // or, at a desktop width, closes it: the Customizer is a column there.
@@ -317,7 +356,7 @@ export function initDrawerController() {
       if (isPhoneLayout()) {
         placePanel();
       } else {
-        close({ restoreFocus: false });
+        close({ restoreFocus: false, instant: true });
       }
     }, 150);
   };

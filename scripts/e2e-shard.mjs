@@ -108,7 +108,9 @@ export const MEASURED_SECONDS = {
   // margin, and 29 unbooked seconds is a sixth of it.
   'ascii-city-walk-furniture.spec.js': 164,
   'classic-panels.spec.js': 442.5,
-  'classic-mode.spec.js': 400.8,
+  // Two cases turn the Alt View on inside Classic (about 15 s locally
+  // together); booked at 40 more for the look's software drawing on CI.
+  'classic-mode.spec.js': 440.8,
   'menu-parity.spec.js': 253.9,
   'accessibility.spec.js': 195.8,
   // Every pose is now read once the camera holds still: one local pass went
@@ -150,6 +152,32 @@ export const MEASURED_SECONDS = {
   'alt-view-arrival.spec.js': 110.0,
   // One case on the box with WebGL switched off: 4.9 s locally; booked at 15.
   'alt-view-without-webgl.spec.js': 15.0,
+  // Eighteen cases, each loading the box and picturing every icon button in
+  // four states, one picture a state; the phone cases also tap one camera
+  // drawer button of each kind: 186 s locally, 748 s on a pull request's
+  // Chromium shard (the sum of its cases, 2026-10-17). One picture per
+  // button per state had taken about 40 test-minutes on CI.
+  // Chromium only (PROJECT_IGNORES): forcing :hover is a CDP feature.
+  'alt-view-icon-states.spec.js': 748.0,
+  // Five cases, each loading the box and turning the look on (one drags the
+  // view for a second and a half): 45 s locally; booked at 100 for the
+  // look's software drawing on CI. A sixth (a drawer's slide and a menu's
+  // latch, about 16 s locally) adds 40. A seventh (Classic's zoom buttons,
+  // about 14 s locally) adds 40, and four camera presses in the drag's case
+  // about 10.
+  'alt-view-sounds.spec.js': 200.0,
+  // Two cases, each loading the box, turning the look on and watching about
+  // twenty drawer presses for 1.2 s each: 48 s locally; booked at 110 for
+  // the look's software drawing on CI.
+  'alt-view-drawers.spec.js': 110.0,
+  // Three cases, each loading the box (one in Classic), turning the look on
+  // and watching its drawers for up to nine seconds: about 80 s locally;
+  // booked at 150 for the look's software drawing on CI.
+  'alt-view-entry.spec.js': 150.0,
+  // Two cases, each loading the box (the second again in Classic), the look
+  // drawn as lines at five sizes and read pixel by pixel, and turned: 25 s
+  // locally; booked at 90 for the look's software drawing on CI.
+  'alt-view-vector.spec.js': 90.0,
   'editor-content-sync.spec.js': 70.4,
   'saved-projects.spec.js': 68.5,
   'classic-stow.spec.js': 66.8,
@@ -417,6 +445,13 @@ export const DEFAULT_WEIGHT_S = 60;
  * real-start.spec.js was Chromium only while Edge and Firefox had three
  * shards (booked at the default, it put the Edge lane at 35.2 of its 35
  * minutes). With four shards it runs in every lane.
+ *
+ * alt-view-icon-states.spec.js runs on Chromium only. It forces :hover and
+ * :active through the DevTools protocol, which Firefox does not have (every
+ * case would skip), and Edge draws with Chromium's engine, so it would
+ * measure the same pixels; booked honestly at 600 s it put the Edge lane at
+ * 35.0 of its 35 minutes. Reverse: delete the two entries once the lanes are
+ * re-split.
  */
 export const PROJECT_IGNORES = Object.freeze({
   chromium: [],
@@ -424,12 +459,14 @@ export const PROJECT_IGNORES = Object.freeze({
     'drawing-editor.spec.js',
     'trace-start-cancel.spec.js',
     'potrace-engine.spec.js',
+    'alt-view-icon-states.spec.js',
   ],
   firefox: [
     'wasm-smoke.spec.js',
     'drawing-editor.spec.js',
     'trace-start-cancel.spec.js',
     'potrace-engine.spec.js',
+    'alt-view-icon-states.spec.js',
   ],
 });
 

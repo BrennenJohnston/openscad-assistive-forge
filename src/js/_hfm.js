@@ -80,6 +80,11 @@ const _DEFAULT_DIR_CONTRAST_EXP = 5.0;
 // Phosphor afterglow / persistence (off by default; enable via setPersistFade())
 const _DEFAULT_PERSIST_FADE = 0;
 
+// The vector look's bloom: the frame shrunk by this much and laid back over
+// itself, softened. It lightens only, so a line keeps its look's own color
+// (a screen blend turned amber yellow).
+const _VECTOR_BLOOM_DIVISOR = 4;
+
 /**
  * Per-instance renderer state. One of these is created for every
  * initAltView() call; all stateful helpers below take it as their first
@@ -231,6 +236,16 @@ function _createInstanceState() {
 
     persistFade: 0,
     reducedMotion: false, // mirrors prefers-reduced-motion
+
+    // The vector look: the model drawn as its edges in place of characters,
+    // asked for by the preview's Alt View below its smallest characters.
+    // null is off. The lines' code (_hfm-vector.js) loads on first use.
+    vectorLook: null,
+    vectorPass: null,
+    vectorLoading: null,
+    vectorColors: null,
+    bloomCanvas: null,
+    bloomCtx: null,
   };
 }
 
@@ -273,11 +288,11 @@ function _setContrastScale(st, scale) {
 
 function _setFontScale(st, scale) {
   const next = Number.isFinite(scale) ? scale : 1;
-  // Instance floor is 0.05, not the preview slider's 0.3: the City
-  // Walk asks for characters small enough to disappear into, and
-  // _HFM_FONT_SCALE_RANGE in hfm-controller.js still holds the preview's
-  // Alt View to 0.3-2.5. Below ~0.15 the fontSizePx floor takes over and
-  // the glyphs stop shrinking.
+  // Instance floor is 0.05, not the preview's 0.3: the City Walk asks
+  // for characters small enough to disappear into, and hfm-controller.js
+  // still gives the preview's Alt View no characters under 0.3 (its
+  // slider goes lower, to the vector look). Below ~0.15 the fontSizePx
+  // floor takes over and the glyphs stop shrinking.
   // - Max 2.5 → larger chars, lower resolution (more legible)
   st.fontScale = Math.max(0.05, Math.min(2.5, next));
   st.dirty = true;
@@ -1621,6 +1636,101 @@ function _paintConverted(
 }
 
 /**
+ * The vector look's two colors: the look's own line color and the screen's,
+ * as the overlay shows it. Read once per look change.
+ * @param {Object} st
+ * @returns {{line: string, background: string}}
+ */
+function _vectorColors(st) {
+  if (!st.vectorColors) {
+    st.vectorColors = {
+      line: getPhosphorColor(),
+      background:
+        getComputedStyle(st.overlayCanvas).backgroundColor || '#000000',
+    };
+  }
+  return st.vectorColors;
+}
+
+/**
+ * One frame of the vector look: the lines rendered to the WebGL canvas, then
+ * shown on the overlay. The phosphor looks lay a softened copy of the frame
+ * over it (the bloom) and keep a trace of the frames before (the Glow
+ * slider's afterglow, as strong per 33 ms as the characters' per frame). The
+ * DOS look shows the frame as it is.
+ */
+function _renderVectorFrame(st, { renderer, previewManager, container }) {
+  if (previewManager.isAutoRotateEnabled?.()) st.dirty = true;
+  const now = performance.now();
+  if (!st.dirty && now - st.lastConvertMs <= _FALLBACK_TICK_MS) return;
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+  if (width <= 0 || height <= 0) return;
+
+  const look = st.vectorLook;
+  const colors = _vectorColors(st);
+  st.vectorPass.render({
+    camera: previewManager.getActiveCamera(),
+    width,
+    height,
+    line: colors.line,
+    background: colors.background,
+    widthPx: look.widthPx,
+    surfaceOpacity: look.surfaceOpacity,
+    creaseDeg: look.creaseDeg,
+    crisp: look.crisp,
+  });
+
+  const dpr = _getDpr();
+  const backingW = Math.max(1, Math.round(width * dpr));
+  const backingH = Math.max(1, Math.round(height * dpr));
+  if (
+    st.overlayCanvas.width !== backingW ||
+    st.overlayCanvas.height !== backingH
+  ) {
+    resizeOverlay(st.overlayCanvas, width, height, dpr, st.persistCanvas);
+  }
+  const ctx = st.overlayCtx;
+  const source = renderer.domElement;
+  ctx.save();
+  ctx.globalCompositeOperation = 'copy';
+  ctx.imageSmoothingEnabled = !look.crisp;
+  ctx.drawImage(source, 0, 0, backingW, backingH);
+  const fade =
+    !look.crisp && st.persistFade > 0 && st.persistCanvas
+      ? Math.pow(st.persistFade, (now - st.lastConvertMs) / _MIN_INTERVAL_MS)
+      : 0;
+  if (!look.crisp) {
+    const bloomW = Math.max(1, Math.round(backingW / _VECTOR_BLOOM_DIVISOR));
+    const bloomH = Math.max(1, Math.round(backingH / _VECTOR_BLOOM_DIVISOR));
+    if (!st.bloomCanvas) {
+      st.bloomCanvas = document.createElement('canvas');
+      st.bloomCtx = st.bloomCanvas.getContext('2d');
+    }
+    if (st.bloomCanvas.width !== bloomW || st.bloomCanvas.height !== bloomH) {
+      st.bloomCanvas.width = bloomW;
+      st.bloomCanvas.height = bloomH;
+    }
+    st.bloomCtx.imageSmoothingEnabled = true;
+    st.bloomCtx.drawImage(source, 0, 0, bloomW, bloomH);
+    ctx.globalCompositeOperation = 'lighten';
+    ctx.drawImage(st.bloomCanvas, 0, 0, backingW, backingH);
+    if (fade > 0.002) {
+      ctx.globalCompositeOperation = 'lighten';
+      ctx.globalAlpha = fade;
+      ctx.drawImage(st.persistCanvas, 0, 0);
+    }
+  }
+  ctx.restore();
+  if (st.persistFade > 0 && st.persistCtx) {
+    st.persistCtx.globalCompositeOperation = 'copy';
+    st.persistCtx.drawImage(st.overlayCanvas, 0, 0);
+  }
+  st.dirty = false;
+  st.lastConvertMs = now;
+}
+
+/**
  * Initialize alternate view
  * @param {Object} previewManager - PreviewManager instance
  * @param {{allowTinyCells?: boolean}} [options] - allowTinyCells opts this
@@ -1786,6 +1896,10 @@ export async function initAltView(previewManager, options = {}) {
       return st.enabled;
     },
     render() {
+      if (st.enabled && st.vectorLook && st.vectorPass) {
+        _renderVectorFrame(st, { renderer, previewManager, container });
+        return;
+      }
       // On the GPU path the scene is rendered by the glyph pass, into its own
       // target, so drawing it to the canvas as well would be rendering the
       // city twice a frame for a canvas nobody can see (enable() sets it to
@@ -1804,6 +1918,9 @@ export async function initAltView(previewManager, options = {}) {
       }
 
       if (!st.enabled) return;
+      // The lines' code is loading: the screen keeps its last frame rather
+      // than show characters smaller than the slider allows for a moment.
+      if (st.vectorLook && st.vectorLoading) return;
 
       // Auto-rotate moves the camera every frame without firing 'change'
       if (previewManager.isAutoRotateEnabled?.()) {
@@ -1870,8 +1987,53 @@ export async function initAltView(previewManager, options = {}) {
      */
     rebuildGlyphs() {
       st.atlasKey = '';
+      st.vectorColors = null;
       st.dirty = true;
     },
+    /**
+     * Draw the model as its edges in place of characters, or go back to
+     * characters with null. The first call loads the lines' code; until it
+     * has loaded the screen keeps its last frame.
+     * @param {{widthPx: number, surfaceOpacity: number, creaseDeg: number,
+     *   crisp: boolean}|null} look - the line width in CSS px, the surfaces'
+     *   opacity (0 to 1), the crease angle in degrees, and the DOS look's
+     *   raster pixels
+     */
+    setVectorLook(look) {
+      const on = Boolean(look);
+      if (on !== Boolean(st.vectorLook) && st.persistCtx) {
+        st.persistCtx.clearRect(
+          0,
+          0,
+          st.persistCanvas.width,
+          st.persistCanvas.height
+        );
+      }
+      st.vectorLook = on ? { ...look } : null;
+      if (on && !st.vectorPass && !st.vectorLoading) {
+        st.vectorLoading = import('./_hfm-vector.js').then(
+          ({ createVectorPass }) => {
+            st.vectorPass = createVectorPass(previewManager);
+            st.vectorLoading = null;
+            st.dirty = true;
+          },
+          (error) => {
+            st.vectorLoading = null;
+            st.vectorLook = null;
+            st.dirty = true;
+            console.warn(
+              '[Alt View] The vector look did not load; the characters stay:',
+              error
+            );
+          }
+        );
+      }
+      st.dirty = true;
+    },
+    /** True while the model is drawn as its edges. */
+    isVectorLook: () => Boolean(st.vectorLook && st.vectorPass),
+    /** How many edges the vector look drew last, or 0. */
+    getVectorEdgeCount: () => st.vectorPass?.edgeCount() ?? 0,
     /**
      * Palette mode. Pass an array of #rrggbb colors to render each
      * cell in the nearest palette color (one glyph atlas per entry);
@@ -2284,6 +2446,10 @@ export async function initAltView(previewManager, options = {}) {
       st.tapPlanKey = '';
       st.gpuPass?.dispose();
       st.gpuPass = null;
+      st.vectorPass?.dispose();
+      st.vectorPass = null;
+      st.bloomCanvas = null;
+      st.bloomCtx = null;
       st.dirty = true;
     },
     isEnabled: () => st.enabled,

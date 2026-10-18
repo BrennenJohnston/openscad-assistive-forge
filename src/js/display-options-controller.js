@@ -61,6 +61,135 @@ function _coerceEdgeBudget(value) {
   return Number.isFinite(n) && n >= 0 ? n : DEFAULT_EDGE_BUDGET;
 }
 
+/**
+ * The edge geometry the edges overlay draws, clipped to a budget. Dense
+ * models (keyguards, lithophanes) can produce hundreds of thousands of
+ * segments, which both costs GPU memory and visually collapses the model into
+ * a dark mass. When over budget the longest segments are kept: silhouettes
+ * and structural lines survive while short tessellation facets on cylinders
+ * and fillets are dropped. The Alt View's vector look draws the same lines.
+ *
+ * A big mesh's segments come from the preview's worker at 15 degrees. Another
+ * angle is built here for a mesh of up to `buildUpTo` triangles (a 29,000
+ * triangle model takes about 60 ms); a bigger one keeps the worker's.
+ *
+ * @param {Object} T - Three.js module reference
+ * @param {Object} sourceGeometry - The mesh geometry to outline
+ * @param {{budget: number, thresholdDeg?: number, buildUpTo?: number}}
+ *   options - budget 0 keeps every segment
+ * @returns {{geometry: Object, total: number, shown: number}}
+ */
+export function buildEdgeGeometry(
+  T,
+  sourceGeometry,
+  { budget, thresholdDeg = 15, buildUpTo = 0 }
+) {
+  const position = sourceGeometry?.getAttribute?.('position');
+  const triangles = Math.floor(
+    (sourceGeometry?.index?.count ?? position?.count ?? 0) / 3
+  );
+  const buildHere = thresholdDeg !== 15 && triangles <= buildUpTo;
+  // A big mesh's segments are computed in the preview's
+  // worker and arrive on `userData`; until they do, the overlay is empty
+  // rather than the page held for seconds. A small mesh takes three.js'
+  // own EdgesGeometry here.
+  const ready = buildHere ? null : sourceGeometry?.userData?.edgeSegments;
+  if (ready) {
+    const geo = new T.BufferGeometry();
+    const total = sourceGeometry.userData.edgeTotal ?? ready.length / 6;
+    const canClip = T.Float32BufferAttribute && budget > 0;
+    let segments = ready;
+    let shown = Math.floor(ready.length / 6);
+    if (canClip && shown > budget) {
+      const clipped = clipSegments(ready, budget);
+      segments = clipped.segments;
+      shown = clipped.shown;
+    }
+    geo.setAttribute('position', new T.Float32BufferAttribute(segments, 3));
+    return { geometry: geo, total, shown };
+  }
+  if (!buildHere && sourceGeometry?.userData?.extrasPending) {
+    return { geometry: new T.BufferGeometry(), total: 0, shown: 0 };
+  }
+  const edgesGeo = new T.EdgesGeometry(sourceGeometry, thresholdDeg);
+
+  const edgePositions = edgesGeo.attributes?.position;
+  const total = edgePositions ? Math.floor(edgePositions.count / 2) : 0;
+
+  const canClip = T.BufferGeometry && T.Float32BufferAttribute;
+  if (!total || budget <= 0 || total <= budget || !canClip) {
+    return { geometry: edgesGeo, total, shown: total };
+  }
+
+  const src = edgePositions.array;
+  const lengthsSq = new Float32Array(total);
+  for (let i = 0; i < total; i++) {
+    const a = i * 6;
+    const dx = src[a + 3] - src[a];
+    const dy = src[a + 4] - src[a + 1];
+    const dz = src[a + 5] - src[a + 2];
+    lengthsSq[i] = dx * dx + dy * dy + dz * dz;
+  }
+
+  // TypedArray.sort() is numeric by default. The cutoff is the length of
+  // the shortest segment we can still afford to keep.
+  const cutoff = lengthsSq.slice().sort()[total - budget];
+
+  const kept = new Float32Array(budget * 6);
+  let shown = 0;
+  for (let i = 0; i < total && shown < budget; i++) {
+    if (lengthsSq[i] < cutoff) continue;
+    const a = i * 6;
+    const o = shown * 6;
+    for (let k = 0; k < 6; k++) kept[o + k] = src[a + k];
+    shown++;
+  }
+
+  const clipped = new T.BufferGeometry();
+  clipped.setAttribute(
+    'position',
+    new T.Float32BufferAttribute(
+      shown === budget ? kept : kept.subarray(0, shown * 6),
+      3
+    )
+  );
+  edgesGeo.dispose?.();
+  return { geometry: clipped, total, shown };
+}
+
+/**
+ * The longest `budget` segments of a set (the same rule the inline path
+ * applies to three.js' segments).
+ * @param {Float32Array} src - 6 numbers per segment
+ * @param {number} budget
+ * @returns {{segments: Float32Array, shown: number}}
+ */
+function clipSegments(src, budget) {
+  const total = Math.floor(src.length / 6);
+  const lengthsSq = new Float32Array(total);
+  for (let i = 0; i < total; i++) {
+    const a = i * 6;
+    const dx = src[a + 3] - src[a];
+    const dy = src[a + 4] - src[a + 1];
+    const dz = src[a + 5] - src[a + 2];
+    lengthsSq[i] = dx * dx + dy * dy + dz * dz;
+  }
+  const cutoff = lengthsSq.slice().sort()[total - budget];
+  const kept = new Float32Array(budget * 6);
+  let shown = 0;
+  for (let i = 0; i < total && shown < budget; i++) {
+    if (lengthsSq[i] < cutoff) continue;
+    const a = i * 6;
+    const o = shown * 6;
+    for (let k = 0; k < 6; k++) kept[o + k] = src[a + k];
+    shown++;
+  }
+  return {
+    segments: shown === budget ? kept : kept.subarray(0, shown * 6),
+    shown,
+  };
+}
+
 const HUMAN_LABELS = {
   axes: 'Axes',
   edges: 'Edges',
@@ -664,11 +793,8 @@ export class DisplayOptionsController {
 
   /**
    * Build the edge geometry for `sourceGeometry`, clipped to the current
-   * edge budget. Dense models (keyguards, lithophanes) can produce hundreds
-   * of thousands of segments, which both costs GPU memory and visually
-   * collapses the model into a dark mass. When over budget we keep the
-   * longest segments: silhouettes and structural lines survive while short
-   * tessellation facets on cylinders and fillets are dropped.
+   * edge budget (see buildEdgeGeometry), and keep its counts for the
+   * budget's status line.
    *
    * @param {Object} T - Three.js module reference
    * @param {Object} sourceGeometry - The mesh geometry to outline
@@ -676,112 +802,11 @@ export class DisplayOptionsController {
    * @private
    */
   _buildEdgeGeometry(T, sourceGeometry) {
-    // A big mesh's segments are computed in the preview's
-    // worker and arrive on `userData`; until they do, the overlay is empty
-    // rather than the page held for seconds. A small mesh takes three.js'
-    // own EdgesGeometry here.
-    const ready = sourceGeometry?.userData?.edgeSegments;
-    if (ready) {
-      const geo = new T.BufferGeometry();
-      const total = sourceGeometry.userData.edgeTotal ?? ready.length / 6;
-      const budget = this._edgeBudget;
-      const canClip = T.Float32BufferAttribute && budget > 0;
-      let segments = ready;
-      let shown = Math.floor(ready.length / 6);
-      if (canClip && shown > budget) {
-        const clipped = this._clipSegments(ready, budget);
-        segments = clipped.segments;
-        shown = clipped.shown;
-      }
-      geo.setAttribute('position', new T.Float32BufferAttribute(segments, 3));
-      this._edgeStats = { total, shown };
-      return geo;
-    }
-    if (sourceGeometry?.userData?.extrasPending) {
-      this._edgeStats = { total: 0, shown: 0 };
-      return new T.BufferGeometry();
-    }
-    const edgesGeo = new T.EdgesGeometry(sourceGeometry, 15);
-
-    const position = edgesGeo.attributes?.position;
-    const total = position ? Math.floor(position.count / 2) : 0;
-    this._edgeStats = { total, shown: total };
-
-    const budget = this._edgeBudget;
-    const canClip = T.BufferGeometry && T.Float32BufferAttribute;
-    if (!total || budget <= 0 || total <= budget || !canClip) {
-      return edgesGeo;
-    }
-
-    const src = position.array;
-    const lengthsSq = new Float32Array(total);
-    for (let i = 0; i < total; i++) {
-      const a = i * 6;
-      const dx = src[a + 3] - src[a];
-      const dy = src[a + 4] - src[a + 1];
-      const dz = src[a + 5] - src[a + 2];
-      lengthsSq[i] = dx * dx + dy * dy + dz * dz;
-    }
-
-    // TypedArray.sort() is numeric by default. The cutoff is the length of
-    // the shortest segment we can still afford to keep.
-    const cutoff = lengthsSq.slice().sort()[total - budget];
-
-    const kept = new Float32Array(budget * 6);
-    let shown = 0;
-    for (let i = 0; i < total && shown < budget; i++) {
-      if (lengthsSq[i] < cutoff) continue;
-      const a = i * 6;
-      const o = shown * 6;
-      for (let k = 0; k < 6; k++) kept[o + k] = src[a + k];
-      shown++;
-    }
-
-    const clipped = new T.BufferGeometry();
-    clipped.setAttribute(
-      'position',
-      new T.Float32BufferAttribute(
-        shown === budget ? kept : kept.subarray(0, shown * 6),
-        3
-      )
-    );
-    edgesGeo.dispose?.();
-
-    this._edgeStats = { total, shown };
-    return clipped;
-  }
-
-  /**
-   * The longest `budget` segments of a set (the same rule the inline path
-   * applies to three.js' segments).
-   * @param {Float32Array} src - 6 numbers per segment
-   * @param {number} budget
-   * @returns {{segments: Float32Array, shown: number}}
-   */
-  _clipSegments(src, budget) {
-    const total = Math.floor(src.length / 6);
-    const lengthsSq = new Float32Array(total);
-    for (let i = 0; i < total; i++) {
-      const a = i * 6;
-      const dx = src[a + 3] - src[a];
-      const dy = src[a + 4] - src[a + 1];
-      const dz = src[a + 5] - src[a + 2];
-      lengthsSq[i] = dx * dx + dy * dy + dz * dz;
-    }
-    const cutoff = lengthsSq.slice().sort()[total - budget];
-    const kept = new Float32Array(budget * 6);
-    let shown = 0;
-    for (let i = 0; i < total && shown < budget; i++) {
-      if (lengthsSq[i] < cutoff) continue;
-      const a = i * 6;
-      const o = shown * 6;
-      for (let k = 0; k < 6; k++) kept[o + k] = src[a + k];
-      shown++;
-    }
-    return {
-      segments: shown === budget ? kept : kept.subarray(0, shown * 6),
-      shown,
-    };
+    const built = buildEdgeGeometry(T, sourceGeometry, {
+      budget: this._edgeBudget,
+    });
+    this._edgeStats = { total: built.total, shown: built.shown };
+    return built.geometry;
   }
 
   /** Detach and dispose the edges overlay (parented to the mesh). */

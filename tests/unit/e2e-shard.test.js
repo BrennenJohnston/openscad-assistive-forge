@@ -72,11 +72,11 @@ describe('e2e shard planner', () => {
     // model can be right and still lie, if nobody re-measures what it is
     // multiplying.
     //
-    // Chromium runs six shards (test.yml): with fewer, the lane's heavy city
+    // Chromium runs seven shards (test.yml): with fewer, the lane's heavy city
     // suites push a shard past the 2100 s clock, and the two-core runner does
     // not parallelize software 3D. Twenty-five minutes leaves ten of margin on
     // a thirty-five minute ceiling, which is what a starved runner eats.
-    for (const shard of planShards(files, MEASURED_SECONDS, 6)) {
+    for (const shard of planShards(files, MEASURED_SECONDS, 7)) {
       const wallMin = projectMin(shard)
       expect(
         wallMin,
@@ -212,10 +212,16 @@ describe('planning for what CI actually runs', () => {
   })
 
   it('no CI shard is left idle while another carries everything', () => {
-    const plan = planShards(files, weightsFor(true), 6)
-    const counts = plan.map((shard) => shard.length)
+    const plan = planShards(files, weightsFor(true), 7)
     // Otherwise three shards would hold one file each - a file that skips.
-    expect(Math.min(...counts), `files per shard: ${counts}`).toBeGreaterThan(5)
+    // A shard may hold few files when one of them is long (ui-schema alone
+    // is over twenty minutes), as long as something in it runs.
+    for (const shard of plan) {
+      expect(
+        shard.some((f) => !CI_SKIPPED.includes(f)),
+        `a shard of files that all skip on CI: ${shard}`
+      ).toBe(true)
+    }
 
     const loads = plan.map((shard) =>
       shard.reduce(

@@ -1045,7 +1045,7 @@ for (const height of [915, 810]) {
       });
 
       if (look.altView) {
-        test('S5: the ASCII drawer holds the three sliders only', async ({
+        test('S5: the ASCII drawer holds the four sliders only', async ({
           page,
         }) => {
           expectRule('S5-ascii');
@@ -1075,8 +1075,11 @@ for (const height of [915, 810]) {
             };
           });
           expect
-            .soft(m.sliders.length, `Edges, Characters and Glow (${m.sliders})`)
-            .toBe(3);
+            .soft(
+              m.sliders.length,
+              `Edges, Characters, Glow and Surfaces (${m.sliders})`
+            )
+            .toBe(4);
           expect.soft(m.others, 'nothing but the sliders').toEqual([]);
         });
       }

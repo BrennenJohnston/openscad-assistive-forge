@@ -152,6 +152,27 @@ body[data-ui-mode='classic'] {
     saturate(10);
 }
 
+/* The drawers' pace in this look, a desk drawer's: out in 500 ms, back in
+   450, speeding up and slowing to the stop as a hand moves one
+   (drawer-motion.js reads these). Asked for less motion, there is no pace,
+   and a drawer opens and closes at once. */
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-ui-variant='mono'] {
+    --alt-drawer-open: 500ms;
+    --alt-drawer-close: 450ms;
+    --alt-drawer-ease: cubic-bezier(0.42, 0, 0.58, 1);
+  }
+}
+
+/* The phone Customizer and its tint hide the moment they are laid out
+   closed: their stylesheet waits 240 ms for its own slide first, which in
+   this look comes after drawer-motion.js's slide and left the closed sheet
+   in reach of Tab. */
+:root[data-ui-variant='mono'] .param-panel,
+:root[data-ui-variant='mono'] .customizer-glass {
+  transition-delay: 0s !important;
+}
+
 /* ========================================
  * Amber Phosphor Variant (Light Theme)
  * DOS P3 monitor style
@@ -221,12 +242,16 @@ body[data-ui-mode='classic'] {
   color: var(--color-text-primary);
 }
 
-:root[data-ui-variant='mono'] .btn:hover,
-:root[data-ui-variant='mono'] button:hover {
-  background: var(--color-hover-bg);
-  border-color: var(--color-accent);
-  box-shadow: none;
-  transform: none;
+/* Hover only where a pointer hovers: a tap sets :hover too and leaves it
+   until the next tap, so on a touch screen it would outlive the press. */
+@media (hover: hover) {
+  :root[data-ui-variant='mono'] .btn:hover,
+  :root[data-ui-variant='mono'] button:hover {
+    background: var(--color-hover-bg);
+    border-color: var(--color-accent);
+    box-shadow: none;
+    transform: none;
+  }
 }
 
 :root[data-ui-variant='mono'] .btn:active,
@@ -247,8 +272,41 @@ body[data-ui-mode='classic'] {
  * label to the accent, the same hover-bg/accent pairing the header
  * toggles measure at 14.41:1 (green) and 7.79:1 (amber); icons follow
  * via currentColor. */
-:root[data-ui-variant='mono'] .btn-primary:hover:not(:disabled) {
-  color: var(--color-accent);
+@media (hover: hover) {
+  :root[data-ui-variant='mono'] .btn-primary:hover:not(:disabled) {
+    color: var(--color-accent);
+  }
+}
+
+/* The camera buttons' hover and press in the look, as one pair: the accent
+ * ground with the black icon, 15.3:1 green and 11.5:1 amber. layout.css
+ * pairs them the same way, but the look's hover above takes the ground at
+ * the same weight and left the black icon on #1a4d1a (2.12:1) or #1a1000
+ * (1.12:1). The pan adjust toggle is a camera button too. */
+@media (hover: hover) {
+  :root[data-ui-variant='mono']
+    :is(
+      .camera-btn,
+      .camera-view-btn,
+      .camera-btn-wide,
+      .camera-drawer-btn
+    ):hover:not(:disabled) {
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    border-color: var(--color-accent);
+  }
+}
+
+:root[data-ui-variant='mono']
+  :is(
+    .camera-btn,
+    .camera-view-btn,
+    .camera-btn-wide,
+    .camera-drawer-btn
+  ):active:not(:disabled) {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
 }
 
 :root[data-ui-variant='mono'] .btn-icon-svg {
@@ -263,13 +321,17 @@ body[data-ui-mode='classic'] {
   border-radius: 0;
 }
 
+/* The icon is the button's own color, so every rule that sets a state's
+   ground and color (pressed, or high contrast's fill) sets the icon too. */
 :root[data-ui-variant='mono'] .alt-view-toggle svg {
-  stroke: var(--color-accent);
+  stroke: currentColor;
 }
 
-:root[data-ui-variant='mono'] .alt-view-toggle:hover {
-  background: var(--color-hover-bg);
-  border-color: var(--color-accent);
+@media (hover: hover) {
+  :root[data-ui-variant='mono'] .alt-view-toggle:hover {
+    background: var(--color-hover-bg);
+    border-color: var(--color-accent);
+  }
 }
 
 :root[data-ui-variant='mono'] .alt-view-toggle[aria-pressed='true'] {
@@ -278,8 +340,13 @@ body[data-ui-mode='classic'] {
   border-color: var(--color-accent);
 }
 
-:root[data-ui-variant='mono'] .alt-view-toggle[aria-pressed='true'] svg {
-  stroke: var(--color-accent-text);
+/* The sounds button rides beside the key, in the look only. */
+.alt-view-toggle.alt-view-sounds {
+  display: none;
+}
+
+:root[data-ui-variant='mono'] .alt-view-toggle.alt-view-sounds {
+  display: flex;
 }
 
 /* Cursor theming (mono variant only) */
@@ -729,8 +796,11 @@ body[data-ui-mode='classic'] {
     box-shadow: none !important;
   }
 
+  /* The ground wins by weight, not !important: an !important ground kept
+     the accent pair's ground away from a hovered, pressed or focused
+     button while the pair's black icon still applied. */
   :root[data-ui-variant='mono'] .camera-drawer-btn {
-    background: var(--color-bg-tertiary) !important;
+    background: var(--color-bg-tertiary);
     border: 1px solid var(--color-border) !important;
     border-radius: 0 !important;
   }
@@ -819,7 +889,14 @@ body[data-ui-mode='classic'] {
   line-height: 1;
 }
 
-:root[data-ui-variant='mono'] .alt-view-stepper-btn:hover {
+@media (hover: hover) {
+  :root[data-ui-variant='mono'] .alt-view-stepper-btn:hover {
+    color: var(--color-accent-text);
+    background: var(--color-accent);
+  }
+}
+
+:root[data-ui-variant='mono'] .alt-view-stepper-btn:active:not(:disabled) {
   color: var(--color-accent-text);
   background: var(--color-accent);
 }
@@ -854,6 +931,18 @@ body[data-ui-mode='classic'] {
   min-width: 3.5em;
   font-size: var(--font-size-xs);
   text-align: right;
+}
+
+/* A slider's note: when it applies (Surfaces, to the lines under 30%). */
+:root[data-ui-variant='mono'] .hfm-slider-note {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+}
+
+:root[data-ui-variant='mono'][data-high-contrast='true'] .hfm-slider-note {
+  color: var(--color-text-primary);
 }
 
 /* Alt adjust info line - visible only in mono variant */
@@ -1092,13 +1181,11 @@ body[data-ui-mode='classic'] {
   border-radius: 0;
 }
 
+/* The icon is the button's own color, as on the key: a press or high
+   contrast's fill that sets the color sets the icon too. Its hover and
+   press are the camera buttons' pair, above. */
 :root[data-ui-variant='mono'] .alt-pan-toggle svg {
-  stroke: var(--color-accent);
-}
-
-:root[data-ui-variant='mono'] .alt-pan-toggle:hover {
-  background: var(--color-hover-bg);
-  border-color: var(--color-accent);
+  stroke: currentColor;
 }
 
 :root[data-ui-variant='mono'] .alt-pan-toggle.active,
@@ -1106,11 +1193,6 @@ body[data-ui-mode='classic'] {
   background: var(--color-accent);
   color: var(--color-accent-text);
   border-color: var(--color-accent);
-}
-
-:root[data-ui-variant='mono'] .alt-pan-toggle.active svg,
-:root[data-ui-variant='mono'] .alt-pan-toggle[aria-pressed='true'] svg {
-  stroke: var(--color-accent-text);
 }
 
 :root[data-ui-variant='mono'] .alt-pan-toggle:focus,

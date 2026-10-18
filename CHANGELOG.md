@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   controller, shows its buttons for Xbox, PlayStation, Nintendo or generic
   layouts, offers two presets, and lets each action take the button you
   press.
+- Under 30% Characters, the Alt View draws the model as lines, bold at 25%
+  and the thinnest at 0%, with a Surfaces slider for how solid the faces
+  under them are.
+- The Alt View has a sounds button beside its key, the same setting as Play
+  sounds. In the look the 3D view ticks as it is turned, tilted or zoomed,
+  by hand or by its camera buttons, a drawer unlatches, rolls and meets its
+  stop with a thump, checkboxes and switches flip like a lever, scrolling
+  ticks a line at a time like a typewriter's roller, and lists, menus and
+  typing each have theirs. Preferences > Advanced turns each kind off on
+  its own.
 
 ### Changed
 
@@ -38,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On a phone held sideways, the header and the menu bar each keep to one row,
   the camera controls open as a column at the right edge, and the Customizer
   is a column beside the preview.
+- In the Alt View the drawers and Classic's panes slide open and shut like
+  desk drawers; the look comes on with them shut, then opens the ones that
+  were open. With reduced motion they open at once.
 
 ### Fixed
 
@@ -48,6 +61,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Customizer is open, and on a desktop a step whose target is scrolled out of
   the Customizer is scrolled into view instead of skipped.
 - A phone drawer's toggle no longer says its name twice to a screen reader.
+- Icon buttons keep their icons readable when hovered, pressed or focused in
+  every look (in the Alt View a hovered icon was black on a dark ground), and
+  a tap on a touch screen no longer leaves a button looking hovered.
+- In Classic, the Alt View's sliders have a place: the 3D view toolbar's
+  ASCII settings button opens them in Viewport-Control, or at the foot of the
+  Customizer in the Simplified view.
 
 ## [5.6.0] - 2026-10-15
 

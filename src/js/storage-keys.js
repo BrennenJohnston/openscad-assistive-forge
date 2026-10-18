@@ -368,6 +368,9 @@ export const STORAGE_KEY_LAZY_UNION = getAppPrefKey('lazy-union');
 export const STORAGE_KEY_MANIFOLD_ENGINE = getAppPrefKey('manifold-engine');
 // Preferences ▸ Advanced ▸ Play sounds; on unless set to 'false'.
 export const STORAGE_KEY_SOUNDS = getAppPrefKey('sounds');
+// Preferences ▸ Advanced ▸ Sounds in Alt View: the kinds turned off, a JSON
+// list of their names (hfm-controller.js); none unless set.
+export const STORAGE_KEY_SOUND_KINDS_OFF = getAppPrefKey('sound-kinds-off');
 
 // --- UI mode (ui-mode-controller.js) ---
 // The controller has always persisted under this name; centralized here so
@@ -533,6 +536,13 @@ export const STORAGE_KEY_HFM_FONT_SCALE = 'openscad-forge-hfm-font-scale';
  * Value is a decimal string in [0, 1] matching _HFM_PERSIST_FADE_RANGE in main.js.
  */
 export const STORAGE_KEY_HFM_PERSIST_FADE = 'openscad-forge-hfm-persist-fade';
+
+/**
+ * localStorage key for how solid the Alt View's vector look draws the model's
+ * surfaces. Value is a decimal string in [0.01, 1] matching
+ * _HFM_SURFACE_RANGE in hfm-controller.js.
+ */
+export const STORAGE_KEY_HFM_SURFACES = 'openscad-forge-hfm-surfaces';
 
 /**
  * localStorage key for the grid while the Alt View is on: 'true' only after

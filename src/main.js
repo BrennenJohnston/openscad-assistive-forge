@@ -162,6 +162,12 @@ import { startTutorial } from './js/tutorial-sandbox.js';
 import { initWelcomeSpotlight } from './js/welcome-spotlight.js';
 import { initTourNudge } from './js/tour-nudge.js';
 import { initDrawerController } from './js/drawer-controller.js';
+import {
+  registerLookDrawer,
+  sidePanelParts,
+  slideDrawer,
+  stripWidth,
+} from './js/drawer-motion.js';
 import { initPreviewSettingsDrawer } from './js/preview-settings-drawer.js';
 import { initCameraPanelController } from './js/camera-panel-controller.js';
 import { initSequenceDetector } from './js/_seq.js';
@@ -306,7 +312,12 @@ import { TextareaEditor } from './js/textarea-editor.js';
 import { CodeMirrorEditor } from './js/codemirror-editor.js';
 import { showConfirmDialog, showTextToCopyDialog } from './js/dialogs.js';
 import { showLibraryInfoDialog } from './js/library-info-dialog.js';
-import { initHfmController } from './js/hfm-controller.js';
+import {
+  initHfmController,
+  setSoundsOn,
+  setSoundKindOff,
+  soundKindsOff,
+} from './js/hfm-controller.js';
 import {
   EXAMPLE_DEFINITIONS,
   PROGRAM_DEFINITIONS,
@@ -7122,15 +7133,32 @@ async function initApp() {
   }
 
   // Play sounds: on unless turned off. The moments that play one read the
-  // stored choice when they happen.
+  // stored choice when they happen. The Alt View's sounds button is the same
+  // setting, so each follows the other.
   const soundsToggle = document.getElementById('soundsToggle');
   if (soundsToggle) {
     soundsToggle.checked = localStorage.getItem(STORAGE_KEY_SOUNDS) !== 'false';
     soundsToggle.addEventListener('change', () => {
-      localStorage.setItem(
-        STORAGE_KEY_SOUNDS,
-        soundsToggle.checked ? 'true' : 'false'
-      );
+      setSoundsOn(soundsToggle.checked);
+    });
+    document.addEventListener('sounds-setting-change', (event) => {
+      soundsToggle.checked = event.detail.on;
+    });
+  }
+  // Each kind of Alt View sound on its own, under Play sounds.
+  const kindBoxes = document.querySelectorAll('input[data-sound-kind]');
+  if (kindBoxes.length) {
+    const off = new Set(soundKindsOff());
+    for (const box of kindBoxes) {
+      box.checked = !off.has(box.dataset.soundKind);
+      box.addEventListener('change', () => {
+        setSoundKindOff(box.dataset.soundKind, !box.checked);
+      });
+    }
+    document.addEventListener('sound-kinds-change', (event) => {
+      const now = new Set(event.detail.off);
+      for (const box of kindBoxes)
+        box.checked = !now.has(box.dataset.soundKind);
     });
   }
 
@@ -9921,6 +9949,10 @@ if (rounded) {
 
   // Declare toggleParamPanel at module scope so it can be referenced by Split.js code
   let toggleParamPanel = null;
+  // The splitter's part in the panel opening and closing, set where the
+  // splitter is built: built before an opening panel is measured, taken down
+  // once a closing one has slid shut, so its width and gutter never jump.
+  let paramPanelLayout = null;
 
   if (collapseParamPanelBtn && paramPanel && paramPanelBody) {
     // Load saved collapsed state (desktop only)
@@ -9948,14 +9980,22 @@ if (rounded) {
       collapseParamPanelBtn.title = 'Expand panel';
     }
 
-    // Toggle function (assigned to outer scope variable)
-    toggleParamPanel = function () {
-      // Only allow collapse on desktop (>= 768px)
-      if (window.innerWidth < 768) {
+    /**
+     * Close or open the panel (desktop only, >= 768px).
+     * @param {boolean} collapsed
+     * @param {import('./js/drawer-motion.js').DrawerHow} [how]
+     * @returns {Promise<boolean>|null|undefined} its slide
+     */
+    const setParamPanelCollapsed = (
+      collapsed,
+      { instant = false, remember = true } = {}
+    ) => {
+      if (window.innerWidth < 768 || collapsed === isCollapsed) {
         return;
       }
 
-      isCollapsed = !isCollapsed;
+      isCollapsed = collapsed;
+      let slide;
 
       if (isCollapsed) {
         // Check if focus is inside the panel body
@@ -9963,7 +10003,6 @@ if (rounded) {
         const isFocusInBody = paramPanelBody.contains(activeElement);
 
         // Collapse panel
-        paramPanel.classList.add('collapsed');
         collapseParamPanelBtn.setAttribute('aria-expanded', 'false');
         collapseParamPanelBtn.setAttribute(
           'aria-label',
@@ -9975,19 +10014,42 @@ if (rounded) {
         if (isFocusInBody) {
           collapseParamPanelBtn.focus();
         }
+        slide = slideDrawer(sidePanelParts(paramPanel, 'left'), {
+          from: 'left',
+          open: false,
+          keep: stripWidth(),
+          instant,
+          name: 'customizer',
+          inert: [paramPanelBody],
+          whenClosed: () => {
+            if (!isCollapsed) return;
+            paramPanel.classList.add('collapsed');
+            paramPanelLayout?.(false);
+          },
+        });
       } else {
         // Expand panel
         paramPanel.classList.remove('collapsed');
+        paramPanelLayout?.(true);
         collapseParamPanelBtn.setAttribute('aria-expanded', 'true');
         collapseParamPanelBtn.setAttribute(
           'aria-label',
           'Collapse customizer panel'
         );
         collapseParamPanelBtn.title = 'Collapse panel';
+        slide = slideDrawer(sidePanelParts(paramPanel, 'left'), {
+          from: 'left',
+          open: true,
+          keep: stripWidth(),
+          instant,
+          name: 'customizer',
+        });
       }
 
       // Persist state
-      safeSetItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED, String(isCollapsed));
+      if (remember) {
+        safeSetItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED, String(isCollapsed));
+      }
 
       // Trigger preview resize after transition
       setTimeout(() => {
@@ -9995,7 +10057,23 @@ if (rounded) {
           previewManager.handleResize();
         }
       }, 300); // Match CSS transition duration
+      return slide;
     };
+
+    // Toggle function (assigned to outer scope variable)
+    toggleParamPanel = function () {
+      setParamPanelCollapsed(!isCollapsed);
+    };
+
+    registerLookDrawer('customizer', {
+      place: () => paramPanel,
+      isOpen: () =>
+        !isCollapsed &&
+        window.innerWidth >= 768 &&
+        document.body.dataset.uiMode !== 'classic',
+      open: (how) => setParamPanelCollapsed(false, how),
+      close: (how) => setParamPanelCollapsed(true, how),
+    });
 
     // Add click listener
     collapseParamPanelBtn.addEventListener('click', toggleParamPanel);
@@ -11328,6 +11406,11 @@ if (rounded) {
         refreshStop();
         document.addEventListener('ui-mode-changed', refreshStop);
         document.addEventListener('classic-density-change', refreshStop);
+        // The Alt View's ASCII settings button shows in the look only.
+        new MutationObserver(refreshStop).observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ['data-ui-variant'],
+        });
         let resizeTimer;
         window.addEventListener('resize', () => {
           clearTimeout(resizeTimer);
@@ -11850,30 +11933,10 @@ if (rounded) {
     // Call on load
     initMobileDetailsCollapse();
 
-    // Re-initialize/destroy split when collapse state changes
-    const originalToggleParamPanel = toggleParamPanel;
-    if (typeof originalToggleParamPanel === 'function') {
-      toggleParamPanel = function () {
-        const wasCollapsed = paramPanel.classList.contains('collapsed');
-        originalToggleParamPanel.call(this);
-
-        if (wasCollapsed) {
-          // Built at once, so the panel opens straight to the width it had
-          // instead of opening wider or narrower and then jumping.
-          initSplit();
-        } else {
-          // Just collapsed - destroy split
-          destroySplit();
-        }
-      };
-
-      // Re-bind the event listener
-      collapseParamPanelBtn.removeEventListener(
-        'click',
-        originalToggleParamPanel
-      );
-      collapseParamPanelBtn.addEventListener('click', toggleParamPanel);
-    }
+    // The split is built the moment the panel opens, so it opens straight to
+    // the width it had instead of opening wider or narrower and then jumping,
+    // and taken down once it has closed.
+    paramPanelLayout = (open) => (open ? initSplit() : destroySplit());
 
     // Handle window resize - destroy/reinit split on mobile
     let splitResizeTimeout;

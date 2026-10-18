@@ -181,7 +181,7 @@ test.describe('the Alt View’s controls on a phone', () => {
     await expect(key).toBeVisible();
     await key.click();
     await expect(key).toHaveAttribute('aria-pressed', 'true');
-    // On a phone the three sliders sit in the ASCII drawer.
+    // On a phone the four sliders sit in the ASCII drawer.
     await page.locator('#asciiDrawerToggle').click();
     await expectAtLeast(
       page,

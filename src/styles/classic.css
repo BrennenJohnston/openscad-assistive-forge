@@ -1570,6 +1570,43 @@ body[data-ui-mode='classic'] .classic-panel-body select:disabled {
   cursor: not-allowed;
 }
 
+/* The Alt View's sliders and the toolbar button that reaches them show in
+   the look only: in Viewport-Control, or at the foot of the Customizer in
+   the Simplified view, which has no Viewport-Control. */
+.classic-ascii-group,
+body[data-ui-mode='classic'] .classic-tb-ascii {
+  display: none;
+}
+
+:root[data-ui-variant='mono'] body[data-ui-mode='classic'] .classic-tb-ascii {
+  display: flex;
+}
+
+:root[data-ui-variant='mono'] body[data-ui-mode='classic'] #vpAsciiGroup,
+:root[data-ui-variant='mono']
+  body[data-ui-mode='classic'][data-classic-density='simplified']
+  #classicAsciiSimplified {
+  display: block;
+}
+
+#classicAsciiSimplified {
+  margin: var(--space-sm) var(--space-sm) var(--space-md);
+}
+
+/* A slider's name above its row, which keeps the panel's whole width. */
+body[data-ui-mode='classic'] .classic-ascii-field {
+  margin-bottom: var(--space-2xs);
+}
+
+body[data-ui-mode='classic'] .classic-ascii-label {
+  display: block;
+  color: var(--color-text-secondary);
+}
+
+body[data-ui-mode='classic'] .classic-tb-svg {
+  flex-shrink: 0;
+}
+
 body[data-ui-mode='classic'] .classic-vp-unit {
   flex: 0 0 auto;
   color: var(--color-text-secondary);

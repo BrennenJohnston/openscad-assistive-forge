@@ -182,7 +182,7 @@ jobs:
           path: artifacts/parity/report.*
           retention-days: 30
 
-  # Chromium runs as six shards side by side, each with the whole ceiling
+  # Chromium runs as seven shards side by side, each with the whole ceiling
   # below; a shard that comes close to it calls for another shard rather
   # than a bigger ceiling. The shards get their own check names, and the
   # small summary job below keeps the one name the rulesets require, "E2E
@@ -193,7 +193,7 @@ jobs:
   # carrying a result, so the never-started guard works per shard rather
   # than seeing the other shards' tests as missing.
   e2e-tests-chromium-shard:
-    name: E2E Tests (Chromium ${{ matrix.shard }}/6)
+    name: E2E Tests (Chromium ${{ matrix.shard }}/7)
     runs-on: ubuntu-latest
     # The City Walk e2e suites are paused on CI (the skip in
     # tests/e2e/helpers/city-walk.js says why), and the rest of the suite
@@ -208,8 +208,10 @@ jobs:
         # Six, measured rather than modelled: four shards still hit the
         # 2100 s clock, because two workers on a two-core runner with
         # software 3D rendering deliver nowhere near 2x parallelism on the
-        # heaviest files.
-        shard: [1, 2, 3, 4, 5, 6]
+        # heaviest files. Seven since the Alt View's drawer tests: with the
+        # City Walk suites counted, the planner put six shards' heaviest at
+        # 25.35 minutes, over its 25-minute guard (2026-10-17).
+        shard: [1, 2, 3, 4, 5, 6, 7]
     
     steps:
       - name: Checkout code
@@ -249,7 +251,7 @@ jobs:
             npx playwright install --with-deps chromium
           fi
       
-      - name: Run E2E tests (Chromium shard ${{ matrix.shard }} of 6)
+      - name: Run E2E tests (Chromium shard ${{ matrix.shard }} of 7)
         # The division comes from scripts/e2e-shard.mjs, not from
         # Playwright's --shard. --shard divides by test count in path order,
         # which balanced the counts (476 / 475) and not the work (50.3 / 20.9
@@ -257,8 +259,8 @@ jobs:
         # script reads tests/e2e itself, so a new spec cannot fall between the
         # shards; its header says how to re-measure the weights.
         run: |
-          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 6)
-          echo "shard ${{ matrix.shard }}/6 runs: $FILES"
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 7)
+          echo "shard ${{ matrix.shard }}/7 runs: $FILES"
           npx playwright test --project=chromium $FILES
         env:
           # Playwright's whole-run clock: 35 minutes per shard. Under the
@@ -309,7 +311,7 @@ jobs:
           result='${{ needs.e2e-tests-chromium-shard.result }}'
           echo "Chromium shards reported: $result"
           if [ "$result" != "success" ]; then
-            echo "::error::Chromium did not pass ($result). The shard that failed is one of E2E Tests (Chromium 1/6) to (6/6)."
+            echo "::error::Chromium did not pass ($result). The shard that failed is one of E2E Tests (Chromium 1/7) to (7/7)."
             exit 1
           fi
 

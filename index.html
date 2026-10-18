@@ -1027,6 +1027,55 @@
               ><span class="sr-only">Bottom</span>
             </button>
           </div>
+          <!-- The Alt View's sliders, in the look only: one button, so no
+               group of its own to name. Kept ahead of the groups the bar
+               scrolls to on a narrow window. -->
+          <div class="classic-tb-group classic-tb-ascii">
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicAsciiSettingsBtn"
+              title="ASCII settings"
+            >
+              <svg
+                class="classic-tb-svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  d="M3 6h18M3 12h18M3 18h18"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  fill="none"
+                ></path>
+                <rect
+                  x="6"
+                  y="3"
+                  width="4"
+                  height="6"
+                  fill="currentColor"
+                ></rect>
+                <rect
+                  x="14"
+                  y="9"
+                  width="4"
+                  height="6"
+                  fill="currentColor"
+                ></rect>
+                <rect
+                  x="9"
+                  y="15"
+                  width="4"
+                  height="6"
+                  fill="currentColor"
+                ></rect>
+              </svg>
+              <span class="sr-only">ASCII settings</span>
+            </button>
+          </div>
           <div class="classic-tb-group" role="group" aria-label="Projection">
             <button
               type="button"
@@ -2660,6 +2709,14 @@
                 id="viewportControlPanel"
                 class="classic-panel-body classic-viewport-control"
               >
+                <!-- The Alt View's four sliders, in the look only; the page
+                     fills it when it starts. -->
+                <fieldset
+                  class="classic-vp-group classic-ascii-group"
+                  id="vpAsciiGroup"
+                >
+                  <legend>ASCII</legend>
+                </fieldset>
                 <fieldset class="classic-vp-group">
                   <legend>Aspect Ratio</legend>
                   <!-- Upstream sets the render size here; our canvas is sized
@@ -4356,6 +4413,15 @@
               >
                 <!-- Parameters will be dynamically generated here -->
               </div>
+              <!-- The Alt View's four sliders in Classic's Simplified view,
+                   which has no Viewport-Control; the page fills it when it
+                   starts. -->
+              <fieldset
+                class="classic-vp-group classic-ascii-group"
+                id="classicAsciiSimplified"
+              >
+                <legend>ASCII</legend>
+              </fieldset>
               <!-- The whole stencil set in one download. Shown only
                    when the loaded tile makes plates; main.js reveals it. -->
               <div id="stencilSetExport" class="stencil-set-export" hidden>
@@ -5563,7 +5629,7 @@
                   </svg>
                   <span class="camera-drawer-label">ASCII</span>
                 </button>
-                <!-- Filled when the page starts with the Alt View's three
+                <!-- Filled when the page starts with the Alt View's four
                      sliders. -->
                 <div
                   class="camera-drawer-body ascii-drawer-body"
@@ -7776,9 +7842,23 @@
               <li>
                 <strong>Sounds</strong>: a short switch sound plays when it
                 comes on, when its look changes and when it goes off; every
-                button sounds a key of its size, and a slider clicks step by
-                step as it is dragged, like a dial; Play sounds in Preferences
-                turns them all off
+                button sounds a key of its size, a slider clicks step by step
+                like a dial, a drawer unlatches, rolls on its rails and meets
+                its stop with a thump, checkboxes and switches flip like a
+                lever, scrolling ticks a line at a time like a typewriter's
+                roller, lists click, menus latch, typing is a quiet key, and the
+                3D view ticks as you turn, tilt or zoom it; the sounds button
+                just before the key turns them all off and on, the same setting
+                as Play sounds in Preferences, where each kind of sound can also
+                be turned off on its own
+              </li>
+              <li>
+                <strong>Drawers</strong>: the Customizer, Preview Settings,
+                Camera and ASCII drawers and Classic's panes slide open and shut
+                like desk drawers, their controls riding inside; when Alt View
+                comes on they start shut, then the ones you had open come back,
+                left to right; when your system asks for reduced motion they
+                open and shut at once
               </li>
               <li>
                 <strong>Session-only</strong>: The theme switch does not
@@ -7844,8 +7924,8 @@
             <h4>Adjust with the pan arrows</h4>
             <p>
               On a desktop window the adjust button sits beside the projection
-              button in the camera panel (a phone has the three sliders
-              instead). It switches the Pan D-pad between two jobs:
+              button in the camera panel (a phone has the four sliders instead).
+              It switches the Pan D-pad between two jobs:
             </p>
             <ul class="features-list">
               <li>
@@ -7876,31 +7956,45 @@
               </li>
             </ul>
             <p>
-              Edges go from 50% to 400%, Characters from 30% to 250%, and Glow
+              Edges go from 50% to 400%, Characters from 0% to 250%, and Glow
               from 0% to 100%. They start at Edges 100%, Characters 60% and Glow
               15% (on a phone, Characters 40%); when your system asks for
               reduced motion, Glow stays at 0%.
+            </p>
+            <h4>Under 30%: lines</h4>
+            <p>
+              Below 30%, Characters draws the model as lines instead, the way an
+              early vector arcade screen did: bold at 25%, the thinnest at 0%.
+              Edges then chooses which creases become lines (Soft, Normal or
+              Sharp), and the Surfaces slider sets how solid the faces under
+              them are, from a faint 1%. The green and amber screens glow; the
+              blue one in Classic draws crisp pixels.
             </p>
             <h4>Beside the preview</h4>
             <p>
               The status line under the preview shows the current values, for
               example
-              <code>[ALT VIEW] EDGE 100% · SIZE 60% · GLOW 15%</code>. Beside
-              it, Characters steps through Fine, Normal and Bold (the minus and
-              equals keys do the same), and Edges chooses Soft, Normal or Sharp.
+              <code>[ALT VIEW] EDGE 100% · SIZE 60% · GLOW 15%</code> (under
+              30%, LINES in place of SIZE). Beside it, Characters steps through
+              Fine, Normal and Bold (the minus and equals keys do the same), and
+              Edges chooses Soft, Normal or Sharp.
             </p>
             <h4>Sliders</h4>
             <p>
-              While Alt View is on, three sliders appear in the camera panel (on
+              While Alt View is on, four sliders appear in the camera panel (on
               a phone, in the ASCII drawer beside the camera drawer): Edges,
-              Characters and Glow, for fine steps. The Glow slider is hidden
-              when your system asks for reduced motion.
+              Characters, Glow and Surfaces, for fine steps. In Classic they are
+              under ASCII in Viewport-Control, and the ASCII settings button on
+              the 3D view toolbar opens it on the first slider; the Simplified
+              view has no Viewport-Control, so there they sit at the foot of the
+              Customizer. The Glow slider is hidden when your system asks for
+              reduced motion.
             </p>
             <h4>Tips</h4>
             <ul class="features-list">
               <li>
-                Double-click the adjust button to put Edges, Characters and Glow
-                back where they start
+                Double-click the adjust button to put Edges, Characters, Glow
+                and Surfaces back where they start
               </li>
               <li>Your settings are kept for the next time you turn it on</li>
               <li>
@@ -8703,6 +8797,88 @@
               <input type="checkbox" id="soundsToggle" checked />
               <label for="soundsToggle">Play sounds</label>
             </div>
+            <!-- Each kind of Alt View sound on its own; Play sounds, above,
+                 turns them all off. The look's switch sounds follow Play
+                 sounds alone. -->
+            <fieldset class="preferences-fieldset" id="soundKindsGroup">
+              <legend>Sounds in Alt View</legend>
+              <p class="preferences-field-note">
+                Each kind can be turned off on its own. Play sounds, above,
+                turns them all off.
+              </p>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindKeys"
+                  data-sound-kind="keys"
+                  checked
+                />
+                <label for="soundKindKeys">Keys</label>
+              </div>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindDials"
+                  data-sound-kind="dials"
+                  checked
+                />
+                <label for="soundKindDials">Sliders and grips</label>
+              </div>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindCamera"
+                  data-sound-kind="camera"
+                  checked
+                />
+                <label for="soundKindCamera">3D view</label>
+              </div>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindDrawers"
+                  data-sound-kind="drawers"
+                  checked
+                />
+                <label for="soundKindDrawers">Drawers</label>
+              </div>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindSwitches"
+                  data-sound-kind="switches"
+                  checked
+                />
+                <label for="soundKindSwitches">Switches and lists</label>
+              </div>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindMenus"
+                  data-sound-kind="menus"
+                  checked
+                />
+                <label for="soundKindMenus">Menus and dialogs</label>
+              </div>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindTyping"
+                  data-sound-kind="typing"
+                  checked
+                />
+                <label for="soundKindTyping">Typing</label>
+              </div>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindScroll"
+                  data-sound-kind="scroll"
+                  checked
+                />
+                <label for="soundKindScroll">Scrolling</label>
+              </div>
+            </fieldset>
             <div class="preferences-check-row">
               <button
                 type="button"

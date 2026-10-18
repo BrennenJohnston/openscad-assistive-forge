@@ -33,6 +33,13 @@
 import { getUIModeController } from './ui-mode-controller.js';
 import { announceImmediate } from './announcer.js';
 import {
+  cancelSlide,
+  drawerChanged,
+  drawerPace,
+  registerLookDrawer,
+  slideDrawer,
+} from './drawer-motion.js';
+import {
   initClassicResizers,
   destroyClassicResizers,
   getClassicResizerController,
@@ -359,6 +366,10 @@ export class ClassicLayoutController {
    * Subscribe to UI mode changes and apply the current mode.
    */
   init() {
+    this._registerLookDrawers();
+    document
+      .getElementById('classicAsciiSettingsBtn')
+      ?.addEventListener('click', () => this.showAsciiSettings());
     const ui = getUIModeController();
     ui.subscribe((newMode) => {
       if (newMode === 'classic') {
@@ -650,6 +661,32 @@ export class ClassicLayoutController {
   }
 
   /**
+   * The editor, the bottom strip and the Customizer as the look's drawers,
+   * open while Classic shows them.
+   * @private
+   */
+  _registerLookDrawers() {
+    const strip = STOW_FIELDS.find((f) => f.name === 'bottom');
+    const shown = (el) => this.active && el?.offsetWidth > 0;
+    for (const pane of ['editor', 'customizer']) {
+      registerLookDrawer(`classic-${pane}`, {
+        place: () => this._paneElement(pane),
+        isOpen: () => shown(this._paneElement(pane)),
+        open: (how) => this._setPaneVisible(pane, true, how),
+        close: (how) => this._setPaneVisible(pane, false, how),
+      });
+    }
+    registerLookDrawer('classic-console', {
+      place: () => document.getElementById('classicBottomStrip'),
+      isOpen: () =>
+        !this._panes[strip.paneKey] &&
+        shown(document.getElementById('classicBottomStrip')),
+      open: (how) => this._moveFieldStowed(strip, false, how),
+      close: (how) => this._moveFieldStowed(strip, true, how),
+    });
+  }
+
+  /**
    * After a pane hid with focus inside it (its own ✕, or a shortcut pressed
    * there), focus would fall to the page body: it goes to the control that
    * brings the pane back, the toolbar's Customizer button for the
@@ -677,16 +714,41 @@ export class ClassicLayoutController {
 
   /** Show/hide the editor pane (Window > Editor, titlebar ✕). */
   toggleEditor() {
-    const hadFocus = this._paneElement('editor')?.contains(
-      document.activeElement
-    );
-    this._panes.editorVisible = !this._panes.editorVisible;
-    this._applyPaneAttributes();
-    this._savePaneState();
-    if (!this._panes.editorVisible && hadFocus) {
-      this._focusRestoreControl('editor');
-    }
-    if (this.active) {
+    this._setPaneVisible('editor', !this._panes.editorVisible);
+    return this._panes.editorVisible;
+  }
+
+  /** Show/hide the Customizer dock (Window > Customizer, titlebar ✕). */
+  toggleCustomizer() {
+    this._setPaneVisible('customizer', !this._panes.customizerVisible);
+    return this._panes.customizerVisible;
+  }
+
+  /**
+   * Show or hide the editor or the Customizer.
+   * @param {'editor'|'customizer'} pane
+   * @param {boolean} visible
+   * @param {import('./drawer-motion.js').DrawerHow} [how] - quiet: no
+   *   sentence; remember false: the change is not saved
+   * @returns {Promise<boolean>|null} its slide in the look
+   * @private
+   */
+  _setPaneVisible(
+    pane,
+    visible,
+    { instant = false, quiet = false, remember = true } = {}
+  ) {
+    const key = `${pane}Visible`;
+    if (this._panes[key] === visible) return null;
+    const hadFocus = this._paneElement(pane)?.contains(document.activeElement);
+    this._panes[key] = visible;
+    const slide = this._applyPaneAttributesMoving({
+      instant,
+      drawer: `classic-${pane}`,
+    });
+    if (remember) this._savePaneState();
+    if (!visible && hadFocus) this._focusRestoreControl(pane);
+    if (pane === 'editor' && this.active) {
       document.dispatchEvent(
         new CustomEvent(
           this._isEditorAvailable()
@@ -695,27 +757,11 @@ export class ClassicLayoutController {
         )
       );
     }
-    announceImmediate(
-      this._panes.editorVisible ? 'Editor shown' : 'Editor hidden'
-    );
-    return this._panes.editorVisible;
-  }
-
-  /** Show/hide the Customizer dock (Window > Customizer, titlebar ✕). */
-  toggleCustomizer() {
-    const hadFocus = this._paneElement('customizer')?.contains(
-      document.activeElement
-    );
-    this._panes.customizerVisible = !this._panes.customizerVisible;
-    this._applyPaneAttributes();
-    this._savePaneState();
-    if (!this._panes.customizerVisible && hadFocus) {
-      this._focusRestoreControl('customizer');
+    if (!quiet) {
+      const label = pane === 'editor' ? 'Editor' : 'Customizer';
+      announceImmediate(`${label} ${visible ? 'shown' : 'hidden'}`);
     }
-    announceImmediate(
-      this._panes.customizerVisible ? 'Customizer shown' : 'Customizer hidden'
-    );
-    return this._panes.customizerVisible;
+    return slide;
   }
 
   /**
@@ -769,6 +815,37 @@ export class ClassicLayoutController {
   /** Show/hide the Viewport-Control pane (Window > Viewport-Control). */
   toggleViewportControl() {
     return this._toggleOptionalPane('viewportControl');
+  }
+
+  /**
+   * The 3D view toolbar's ASCII settings button, in the Alt View: put the
+   * look's sliders on the screen and the focus on the first. Standard keeps
+   * them in Viewport-Control; Simplified, which has no Viewport-Control, at
+   * the foot of the Customizer.
+   * @returns {HTMLInputElement|null} the slider given the focus
+   */
+  showAsciiSettings() {
+    const simplified =
+      getUIModeController().getClassicDensity() === 'simplified';
+    const pane = simplified ? 'customizer' : 'viewportControl';
+    if (!this._panes[`${pane}Visible`]) {
+      if (simplified) this.toggleCustomizer();
+      else this.toggleViewportControl();
+    }
+    // A pane in a stowed field is out of sight with its field.
+    const stowDef = STOW_FIELDS.find(
+      (f) => f.name === this.getPanelField(pane)
+    );
+    if (stowDef && this._panes[stowDef.paneKey]) {
+      this._setFieldStowed(stowDef, false, { focus: false });
+    }
+    const slider = document
+      .getElementById(simplified ? 'classicAsciiSimplified' : 'vpAsciiGroup')
+      ?.querySelector('input[type="range"]');
+    if (!slider) return null;
+    slider.focus();
+    slider.scrollIntoView({ block: 'nearest' });
+    return slider;
   }
 
   /**
@@ -992,28 +1069,7 @@ export class ClassicLayoutController {
    * @private
    */
   _setFieldStowed(def, stowed, { focus = true } = {}) {
-    this._panes[def.paneKey] = stowed;
-
-    // The bottom stow and the row resizer both own --classic-row-bottom,
-    // so the resizer parks its value for the duration. Un-stowing returns the
-    // height the user chose, not the default.
-    if (def.name === 'bottom') {
-      const resizers = getClassicResizerController();
-      if (stowed) resizers?.parkBottomSize();
-      else resizers?.restoreBottomSize();
-    }
-
-    this._applyPaneAttributes();
-    this._refreshTitlebarControls();
-    this._savePaneState();
-    // The 3D view's track just changed size.
-    document.dispatchEvent(new CustomEvent('classic-layout-resize'));
-
-    // announceImmediate, not announce(): a debounced disclosure that
-    // sometimes says nothing is worse than one that repeats.
-    announceImmediate(
-      stowed ? `${def.subject} stowed` : `${def.subject} restored`
-    );
+    this._moveFieldStowed(def, stowed);
 
     if (focus) {
       if (stowed) {
@@ -1031,6 +1087,159 @@ export class ClassicLayoutController {
       }
     }
     return stowed;
+  }
+
+  /**
+   * Stow a field or bring it back, without moving focus.
+   * @param {(typeof STOW_FIELDS)[number]} def
+   * @param {boolean} stowed
+   * @param {import('./drawer-motion.js').DrawerHow} [how]
+   * @returns {Promise<boolean>|null} its slide in the look
+   * @private
+   */
+  _moveFieldStowed(
+    def,
+    stowed,
+    { instant = false, quiet = false, remember = true } = {}
+  ) {
+    this._panes[def.paneKey] = stowed;
+
+    // The bottom stow and the row resizer both own --classic-row-bottom,
+    // so the resizer parks its value for the duration. Un-stowing returns the
+    // height the user chose, not the default.
+    if (def.name === 'bottom') {
+      const resizers = getClassicResizerController();
+      if (stowed) resizers?.parkBottomSize();
+      else resizers?.restoreBottomSize();
+    }
+
+    const slide = this._applyPaneAttributesMoving({
+      instant,
+      drawer: def.name === 'bottom' ? 'classic-console' : `classic-${def.name}`,
+    });
+    this._refreshTitlebarControls();
+    if (remember) this._savePaneState();
+    // The 3D view's track just changed size.
+    document.dispatchEvent(new CustomEvent('classic-layout-resize'));
+
+    // announceImmediate, not announce(): a debounced disclosure that
+    // sometimes says nothing is worse than one that repeats.
+    if (!quiet) {
+      announceImmediate(
+        stowed ? `${def.subject} stowed` : `${def.subject} restored`
+      );
+    }
+    return slide;
+  }
+
+  /**
+   * Stamp the grid's attributes. In the Alt View's look on a desktop, a
+   * field that opens or closes moves like a drawer: the grid's tracks go
+   * from their old sizes to their new ones with the field's slide, the
+   * field's panes keep their open size and ride its moving edge, and a
+   * closing field keeps its old layout until it has slid shut.
+   * @param {import('./drawer-motion.js').DrawerHow & {drawer?: string}} [how]
+   *   - drawer: the name the look hears the field's move by
+   * @returns {Promise<boolean>|null}
+   * @private
+   */
+  _applyPaneAttributesMoving({ instant = false, drawer } = {}) {
+    const main = document.querySelector('.main-interface');
+    cancelSlide(main);
+    if (instant || !main || !this.active || !this._isDesktopWidth()) {
+      this._applyPaneAttributes();
+      return null;
+    }
+    const body = document.body;
+    const occupied = () =>
+      DOCK_FIELDS.filter(
+        (f) => body.dataset[`classicField${f.datasetSuffix}`] === 'occupied'
+      ).map((f) => f.name);
+    if (!drawerPace()) {
+      // Nothing slides, but a field that opens or closes is still heard.
+      const was = occupied();
+      this._applyPaneAttributes();
+      const now = occupied();
+      const opening = now.some((name) => !was.includes(name));
+      if (opening || was.some((name) => !now.includes(name))) {
+        drawerChanged(drawer, opening);
+      }
+      return null;
+    }
+    const read = () => {
+      const style = getComputedStyle(main);
+      const px = (list) => list.split(/\s+/).map(parseFloat);
+      return {
+        cols: px(style.gridTemplateColumns),
+        rows: px(style.gridTemplateRows),
+        attrs: Object.entries(body.dataset).filter(([name]) =>
+          name.startsWith('classic')
+        ),
+        open: occupied(),
+      };
+    };
+    const before = read();
+    this._applyPaneAttributes();
+    const after = read();
+    const opened = after.open.filter((name) => !before.open.includes(name));
+    const closed = before.open.filter((name) => !after.open.includes(name));
+    const name = opened[0] ?? closed[0];
+    if (!name) return null;
+    const opening = opened.length > 0;
+    const [shut, shown] = opening ? [before, after] : [after, before];
+    if (!opening) {
+      // Laid out open again until the field has slid shut.
+      for (const [key] of after.attrs) delete body.dataset[key];
+      for (const [key, value] of before.attrs) body.dataset[key] = value;
+    }
+    const from =
+      name === 'left' ? 'left' : name === 'bottom' ? 'bottom' : 'right';
+    const across = from !== 'bottom';
+    const track = name === 'left' ? 0 : name === 'bottom' ? 2 : 4;
+    const list = across ? 'cols' : 'rows';
+    const travel = shown[list][track] - shut[list][track];
+    const field = document.getElementById(
+      DOCK_FIELDS.find((f) => f.name === name).elementId
+    );
+    const grid = across
+      ? {
+          gridTemplateColumns: [shut.cols, shown.cols],
+          gridTemplateRows: [shut.rows, shown.rows],
+        }
+      : {
+          gridTemplateRows: [shut.rows, shown.rows],
+          gridTemplateColumns: [shut.cols, shown.cols],
+        };
+    const panes = [...(field?.children ?? [])]
+      .filter((child) => child.offsetWidth > 0 && child.offsetHeight > 0)
+      .map((child) => {
+        const size = across
+          ? { width: `${child.offsetWidth}px` }
+          : {
+              height: `${child.offsetHeight}px`,
+              minHeight: `${child.offsetHeight}px`,
+            };
+        return {
+          el: child,
+          role: from === 'left' ? 'rider' : 'held',
+          hold: size,
+        };
+      });
+    return slideDrawer(
+      [
+        { el: main, role: 'space', props: grid },
+        { el: field, role: 'clip' },
+        ...panes,
+      ],
+      {
+        from,
+        open: opening,
+        travel,
+        name: drawer,
+        inert: opening ? [] : [field],
+        whenClosed: () => this._applyPaneAttributes(),
+      }
+    );
   }
 
   /**
