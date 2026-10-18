@@ -859,6 +859,38 @@ describe('the Alt View is heard', () => {
     controller.disableAltViewWithPreview(document.createElement('button'))
   })
 
+  it('auto-rotate ticks the bearing every 15 degrees as the view spins, with nothing pressed', async () => {
+    pageWithHeaderAndDpad()
+    clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const pm = previewManagerStub()
+    const { place } = viewWithControls(pm)
+    let spinning = false
+    pm.isAutoRotateEnabled = () => spinning
+    const controller = await freshController(pm)
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    place(0, 20)
+
+    // The view turned by nothing a person did: silent.
+    for (let turn = 1; turn <= 20; turn++) {
+      clock += 20
+      place(turn, 20)
+    }
+    expect(await cameraAsked(), 'a move nobody made').toEqual([])
+
+    // Auto-rotate on: the render loop turns the view a degree a frame, and
+    // it is heard as a drag would be, three bearing ticks over 45 degrees.
+    spinning = true
+    for (let turn = 21; turn <= 65; turn++) {
+      clock += 20
+      place(turn, 20)
+    }
+    expect(await cameraAsked(), 'auto-rotate').toEqual(['turn', 'turn', 'turn'])
+    expect(await cameraWays(), 'turning left, as it spins').toEqual([-1, -1, -1])
+    controller.disableAltViewWithPreview(toggle)
+  })
+
   it('a move a pan button, a view or View All made plays no camera tick; the arrow keys on the preview and a controller stick do', async () => {
     pageWithHeaderAndDpad()
     clock = 0

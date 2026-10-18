@@ -347,6 +347,18 @@ This project uses modules from the Three.js examples collection (e.g., controls 
 
 ---
 
+## Cursors (GPL-3.0-or-later)
+
+The Alt View's cursors, `public/icons/cursor-mono.svg`,
+`cursor-mono-pointer.svg`, `cursor-mono-amber.svg`,
+`cursor-mono-amber-pointer.svg`, `cursor-dos.svg` and
+`cursor-dos-pointer.svg`, are adapted from the Retrosmart X11 Cursors by
+mdomlop (https://github.com/mdomlop/retrosmart-x11-cursors), GPL-3.0.
+
+- **Changes**: redrawn as SVG rectangles, the colors changed to each look's
+  own (green #00ff00, amber #ffb000, the DOS yellow #ffff55) with the black
+  outline kept.
+
 ## Switch Sounds (CC0-1.0)
 
 Three short sounds play when the Alt View switches on, changes its look or

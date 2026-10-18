@@ -431,11 +431,11 @@ body[data-ui-mode='classic'] {
   }
 }
 
-/* Amber cursors for light theme */
+/* The amber look's cursors (the light theme's mono variant). */
 :root[data-ui-variant='mono'][data-theme='light'],
 :root[data-ui-variant='mono'][data-theme='light'] body {
   cursor:
-    url('/icons/cursor-mono-hc.svg') 0 0,
+    url('/icons/cursor-mono-amber.svg') 0 0,
     default;
 }
 
@@ -445,14 +445,38 @@ body[data-ui-mode='classic'] {
 :root[data-ui-variant='mono'][data-theme='light'] summary,
 :root[data-ui-variant='mono'][data-theme='light'] label {
   cursor:
-    url('/icons/cursor-mono-hc-pointer.svg') 4 0,
+    url('/icons/cursor-mono-amber-pointer.svg') 4 0,
     pointer;
 }
 
 :root[data-ui-variant='mono'][data-theme='light'] input[type='checkbox'],
 :root[data-ui-variant='mono'][data-theme='light'] input[type='range'] {
   cursor:
-    url('/icons/cursor-mono-hc-pointer.svg') 4 0,
+    url('/icons/cursor-mono-amber-pointer.svg') 4 0,
+    pointer;
+}
+
+/* The DOS look's cursors (Classic in the mono variant), in the look's
+   yellow: the look ignores the theme, so these come after the amber rules
+   and win on their order. */
+:root[data-ui-variant='mono']:has(body[data-ui-mode='classic']),
+:root[data-ui-variant='mono'] body[data-ui-mode='classic'] {
+  cursor:
+    url('/icons/cursor-dos.svg') 0 0,
+    default;
+}
+
+:root[data-ui-variant='mono'] body[data-ui-mode='classic'] a,
+:root[data-ui-variant='mono'] body[data-ui-mode='classic'] button,
+:root[data-ui-variant='mono'] body[data-ui-mode='classic'] [role='button'],
+:root[data-ui-variant='mono'] body[data-ui-mode='classic'] summary,
+:root[data-ui-variant='mono'] body[data-ui-mode='classic'] label,
+:root[data-ui-variant='mono']
+  body[data-ui-mode='classic']
+  input[type='checkbox'],
+:root[data-ui-variant='mono'] body[data-ui-mode='classic'] input[type='range'] {
+  cursor:
+    url('/icons/cursor-dos-pointer.svg') 4 0,
     pointer;
 }
 
