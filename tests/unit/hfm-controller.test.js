@@ -762,6 +762,11 @@ describe('the Alt View is heard', () => {
     const { playCameraSound } = await import('../../src/js/crt-sounds.js')
     return playCameraSound.mock.calls.map(([kind]) => kind)
   }
+  // Each tick's way: left -1, right 1, none 0.
+  const cameraWays = async () => {
+    const { playCameraSound } = await import('../../src/js/crt-sounds.js')
+    return playCameraSound.mock.calls.map(([, how]) => how?.way ?? 0)
+  }
 
   it('the 3D view ticks for a direct move: a bearing per 15 degrees turned, a ratchet per 10 tilted, a lens detent per 5 % zoomed', async () => {
     pageWithHeaderAndDpad()
@@ -790,6 +795,8 @@ describe('the Alt View is heard', () => {
     }
     controls.fire('end')
     expect(await cameraAsked()).toEqual(['turn', 'turn', 'turn'])
+    // Turned left (the angle growing, as Rotate left turns it): left's tick.
+    expect(await cameraWays()).toEqual([-1, -1, -1])
 
     // A tilt of 20 degrees: two ratchet ticks; the damping's glide after the
     // drag ends still counts.
@@ -955,6 +962,9 @@ describe('the Alt View is heard', () => {
       el.click()
     }
     expect(await cameraAsked()).toEqual(buttons.map(({ kind }) => kind))
+    expect(await cameraWays(), 'left lower, right higher').toEqual([
+      -1, 1, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ])
     expect(await keysAsked(), 'no key for any of them').toEqual([])
 
     // Enter on the focused button: its keydown, the click it makes, its keyup.

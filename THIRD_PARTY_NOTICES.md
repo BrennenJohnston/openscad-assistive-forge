@@ -464,32 +464,42 @@ Commons 0.
 
 ---
 
-## Drawer Sounds (CC0-1.0)
+## Drawer Sounds (CC0-1.0, CC-BY-4.0)
 
-While the Alt View is on, a drawer opening is heard as a latch letting go,
-its roll out on steel rails and the thump of its stop, and a drawer shutting
-as the faintest roll, the thump of the closed stop and the latch catching,
-under `public/sounds/drawers/`. Each part is cut from a recording on
-Freesound at its own speed and pitch, levelled, at 48 kHz mono:
+While the Alt View is on, a drawer opening is heard as its latch letting go,
+its glide out on its rollers and the thump of its stop, and a drawer
+shutting as its latch gripped open, the glide, the muffled thump of the
+closed stop and the latch released, under `public/sounds/drawers/`. Each
+part is cut from a recording on Freesound at its own speed and pitch,
+levelled, at 48 kHz mono.
 
-- The latches (`latch-open.wav`, `latch-close.wav`): a spring latch letting
-  go and snapping shut, from "briefcase latch open close click.wav" by
-  rsellick, https://freesound.org/s/545521/
-- The rolls (`slide-open.wav`, `slide-close.wav`): from "Metal drawer" by
-  LloydEvans09, https://freesound.org/s/185842/, its level evened out and
-  then shaped to the drawer's speed on screen
-- The stops (`stop-open.wav`, `stop-close.wav`): from "Ball-bearing latched
-  cupboard door" by wlabarron, https://freesound.org/s/509108/
+### Latch, glide and stops (CC0-1.0)
 
-The earlier per-drawer slides (`p-*.wav`, `d-*.wav`) are cut from "Drawer
-opening/closing - Ball Bearing rails" by leocb,
-https://freesound.org/s/710648/, and "CD-tray, open & close.wav" by Ryding,
-https://freesound.org/s/109308/.
+- The latch letting go (`latch-open.wav`): from "briefcase latch open close
+  click.wav" by rsellick, https://freesound.org/s/545521/
+- The glides and the stops (`slide-open.wav`, `slide-close.wav`,
+  `stop-open.wav`, `stop-close.wav`): from "Drawyer Sounds (SE499) (High
+  Quality)" by MPooman, https://freesound.org/s/673103/; each glide's level
+  evened out and then shaped to the drawer's speed on screen, the closed
+  stop muffled by a low-pass filter
 
 Each is released under Creative Commons 0.
 
 - **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
 - **Note**: CC0 asks for no credit; it is given with thanks.
+
+### Door-Handle-Open-01 and Door-Handle-Close-01 (CC-BY-4.0)
+
+The latch gripped open, `grip-close.wav`, is cut from "Door-Handle-Open-01.wav"
+(https://freesound.org/s/151577/), and the latch released,
+`latch-close.wav`, from "Door-Handle-Close-01.wav"
+(https://freesound.org/s/151576/), both by DWOBoyle.
+
+- **Author**: DWOBoyle
+- **License**: Creative Commons Attribution 4.0 International,
+  https://creativecommons.org/licenses/by/4.0/
+- **Changes**: each cut (285 and 300 ms, with short fades), resampled to
+  48 kHz, levelled.
 
 ---
 

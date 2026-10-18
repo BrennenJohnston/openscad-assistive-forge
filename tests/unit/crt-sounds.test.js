@@ -17,10 +17,11 @@ const DURATIONS = {
   '/sounds/crt-off.wav': 2.17,
   '/sounds/drawers/latch-open.wav': 0.172,
   '/sounds/drawers/slide-open.wav': 0.4,
-  '/sounds/drawers/stop-open.wav': 0.295,
+  '/sounds/drawers/stop-open.wav': 0.26,
+  '/sounds/drawers/grip-close.wav': 0.285,
   '/sounds/drawers/slide-close.wav': 0.45,
-  '/sounds/drawers/stop-close.wav': 0.325,
-  '/sounds/drawers/latch-close.wav': 0.115,
+  '/sounds/drawers/stop-close.wav': 0.24,
+  '/sounds/drawers/latch-close.wav': 0.3,
 };
 
 function wavHeader(bytes) {
@@ -179,14 +180,16 @@ function peakOf(bytes) {
   return peak / 32768;
 }
 
-// The drawer, the same in every look, in six parts at the recordings' own
-// rate: a latch, the roll out (as long as the way to the stop, 400 ms), the
-// stop; the roll shut (as long as the way shut, 450 ms), the stop, the latch.
+// The drawer, the same in every look, in seven parts at the recordings' own
+// rate: the latch let go, the glide out (as long as the way to the stop,
+// 400 ms), the stop; the latch gripped, the glide shut (as long as the way
+// shut, 450 ms), the muffled stop, the latch released.
 const DRAWERS_DIR = join(SOUNDS_DIR, 'drawers');
 const DRAWER_PARTS = {
   'latch-open.wav': [0.05, 0.4],
   'slide-open.wav': [0.4, 0.4],
   'stop-open.wav': [0.1, 0.4],
+  'grip-close.wav': [0.05, 0.4],
   'slide-close.wav': [0.45, 0.45],
   'stop-close.wav': [0.1, 0.4],
   'latch-close.wav': [0.05, 0.4],
@@ -209,13 +212,13 @@ describe('the drawer sound files', () => {
     }
   );
 
-  it('the six weigh under 200 KB together', () => {
+  it('the seven weigh under 250 KB together', () => {
     const total = Object.keys(DRAWER_PARTS).reduce(
       (n, f) => n + statSync(join(DRAWERS_DIR, f)).size,
       0
     );
     expect(total).toBeGreaterThan(0);
-    expect(total).toBeLessThan(200_000);
+    expect(total).toBeLessThan(250_000);
   });
 });
 
@@ -291,6 +294,7 @@ describe('playing a switch sound', () => {
           started: false,
           stopped: false,
           addEventListener: vi.fn(),
+          playbackRate: { value: 1 },
         };
         source.connect = vi.fn((node) => {
           source.connectedTo = node;
@@ -579,7 +583,8 @@ describe('playing a switch sound', () => {
     expect(() => duck('hum', 8, 150)).toThrow('No such sound group: hum');
   });
 
-  it('plays a camera tick by its kind in the camera group, which it does not lower itself; the turn 3 dB under the tilt and the zoom', async () => {
+  it('plays a camera tick by its kind in the camera group, which it does not lower itself; the turn 8 dB under the tilt and the zoom', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
     const { playCameraSound, preloadCameraSounds, soundGroup } = await load();
     const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
     await expect(playCameraSound('turn')).resolves.toBeGreaterThan(0);
@@ -587,7 +592,7 @@ describe('playing a switch sound', () => {
     await playCameraSound('tilt');
     await playCameraSound('zoom');
     expect(urls().slice(1)).toEqual(['/sounds/camera/tilt.wav', '/sounds/camera/zoom.wav']);
-    for (const [n, level] of [db(-3), db(0), db(0)].entries()) {
+    for (const [n, level] of [db(-8), db(0), db(0)].entries()) {
       expect(sources[n].connectedTo.connectedTo, 'its level, then the group').toBe(
         soundGroup('camera')
       );
@@ -597,6 +602,29 @@ describe('playing a switch sound', () => {
     await expect(playCameraSound('pan')).rejects.toThrow('No such camera sound: pan');
     preloadCameraSounds();
     expect(globalThis.fetch, 'the three fetched once').toHaveBeenCalledTimes(3);
+    vi.restoreAllMocks();
+  });
+
+  it('the turn tells its way, left 70 cents lower and right 70 higher, and each tick strays up to 15 cents and 1 dB; the tilt and the zoom do not', async () => {
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const { playCameraSound } = await load();
+    const cents = (s) => Math.round(1200 * Math.log2(s.playbackRate.value));
+    await playCameraSound('turn', { way: -1 });
+    await playCameraSound('turn', { way: 1 });
+    await playCameraSound('turn');
+    expect(sources.map(cents)).toEqual([-70, 70, 0]);
+    // Its length played is its length at that speed.
+    await expect(playCameraSound('turn', { way: -1 })).resolves.toBeCloseTo(0.16 / 2 ** (-70 / 1200), 6);
+    random.mockReturnValue(1);
+    await playCameraSound('turn', { way: 1 });
+    const last = sources.at(-1);
+    expect(cents(last), 'strayed up').toBe(85);
+    expect(last.connectedTo.gain.value, 'and a decibel louder').toBeCloseTo(db(-7), 6);
+    await playCameraSound('tilt', { way: 1 });
+    await playCameraSound('zoom', { way: -1 });
+    expect(sources.slice(-2).map(cents), 'the others as they are').toEqual([0, 0]);
+    expect(sources.slice(-2).map((s) => s.connectedTo.gain.value)).toEqual([1, 1]);
+    vi.restoreAllMocks();
   });
 
   // When each part starts, `[when, offset]`, and its own level.
@@ -620,15 +648,17 @@ describe('playing a switch sound', () => {
       [10, 0],
       [10.4, 0],
     ]);
-    expect(levels(sources)).toEqual([db(-3), db(-6), db(-1)].map((n) => Math.round(n * 1000) / 1000));
+    // The stop well under the latch and the glide.
+    expect(levels(sources)).toEqual([db(-3), db(-5), db(-11)].map((n) => Math.round(n * 1000) / 1000));
     for (const source of sources) {
       expect(source.connectedTo.connectedTo, 'its level, then the group').toBe(soundGroup('drawers'));
     }
-    expect(seconds, 'until the thump has rung out').toBeCloseTo(0.695, 6);
+    expect(seconds, 'until the thump has rung out').toBeCloseTo(0.66, 6);
     await expect(playDrawerSound('camera', 'slam')).rejects.toThrow('No such drawer phase: slam');
     globalThis.fetch.mockClear();
     preloadDrawerSounds();
-    expect(urls(), 'the other three, the three played already kept').toEqual([
+    expect(urls(), 'the other four, the three played already kept').toEqual([
+      '/sounds/drawers/grip-close.wav',
       '/sounds/drawers/slide-close.wav',
       '/sounds/drawers/stop-close.wav',
       '/sounds/drawers/latch-close.wav',
@@ -636,29 +666,33 @@ describe('playing a switch sound', () => {
     vi.restoreAllMocks();
   });
 
-  it('plays a drawer shutting: the faintest roll ending at the closed stop, the thump as it meets it, then the latch catching; without a slide, the thump at once', async () => {
+  it('plays a drawer shutting: the latch gripped and the glide at once, the muffled thump as it meets the closed stop, the latch released 120 ms after; without a slide, no glide', async () => {
     vi.spyOn(performance, 'now').mockReturnValue(1000);
     const { playDrawerSound } = await load();
     const seconds = await playDrawerSound('customizer', 'close', { stopAt: 0.45, whole: true });
+    expect(sources.map((s) => s.buffer.duration)).toEqual([0.285, 0.45, 0.24, 0.3]);
     expect(timed(sources)).toEqual([
       [10, 0],
+      [10, 0],
       [10.45, 0],
-      [10.53, 0],
+      [10.57, 0],
     ]);
-    expect(levels(sources)).toEqual([db(-9), db(-1), db(-3)].map((n) => Math.round(n * 1000) / 1000));
-    expect(seconds, 'until the thump has rung out').toBeCloseTo(0.775, 6);
+    // A gentle grip, a softer glide, the stop quieter still, the release.
+    expect(levels(sources)).toEqual([db(-7), db(-8), db(-15), db(-7)].map((n) => Math.round(n * 1000) / 1000));
+    expect(seconds, 'until the release has rung out').toBeCloseTo(0.87, 6);
 
-    // Reduced motion: no roll; opening, the latch and the thump just after;
-    // shutting, the thump and the latch.
+    // Reduced motion: no glide; opening, the latch and the thump just after;
+    // shutting, the grip, the thump just after, the release.
     sources.length = 0;
     await playDrawerSound('preview-settings', 'open', { stopAt: 0, whole: true });
     await playDrawerSound('phone-ascii', 'close', { stopAt: 0, whole: true });
-    expect(sources.map((s) => s.buffer.duration)).toEqual([0.172, 0.295, 0.325, 0.115]);
+    expect(sources.map((s) => s.buffer.duration)).toEqual([0.172, 0.26, 0.285, 0.24, 0.3]);
     expect(timed(sources)).toEqual([
       [10, 0],
       [10.06, 0],
       [10, 0],
-      [10.08, 0],
+      [10.06, 0],
+      [10.18, 0],
     ]);
     vi.restoreAllMocks();
   });
@@ -675,30 +709,32 @@ describe('playing a switch sound', () => {
     expect(rounded(roll.level.gain.calls)).toEqual(
       rounded([
         ['cancel', 10.2],
-        ['set', db(-6), 10.2],
+        ['set', db(-5), 10.2],
         ['ramp', 0, 10.24],
       ])
     );
     expect(roll.stop.mock.calls[0][0]).toBeCloseTo(10.24, 6);
     const [shutRoll, shutThump, shutLatch] = sources.slice(3);
+    // Turned round, no grip: the hand is on the drawer already.
+    expect(sources.slice(3).map((s) => s.buffer.duration)).toEqual([0.45, 0.24, 0.3]);
     expect(timed([shutRoll, shutThump, shutLatch])).toEqual([
       [10.2, 0.27],
       [10.38, 0],
-      [10.46, 0],
+      [10.5, 0],
     ]);
     expect(rounded(shutRoll.level.gain.calls)).toEqual(
       rounded([
         ['set', 0, 10.2],
-        ['ramp', db(-9), 10.215],
+        ['ramp', db(-8), 10.215],
       ])
     );
-    expect(seconds, 'until the thump has rung out').toBeCloseTo(0.505, 6);
+    expect(seconds, 'until the release has rung out').toBeCloseTo(0.6, 6);
 
     // A drawer opened again part of the way has no latch to let go.
     context.currentTime = 10.3;
     sources.length = 0;
     await playDrawerSound('camera', 'open', { stopAt: 0.1, whole: false });
-    expect(sources.map((s) => s.buffer.duration)).toEqual([0.4, 0.295]);
+    expect(sources.map((s) => s.buffer.duration)).toEqual([0.4, 0.26]);
     await playDrawerSound('phone-ascii', 'open', { stopAt: 0.4, whole: true });
     expect(sources[0].stopped, 'another drawer does not cut it short').toBe(false);
     vi.restoreAllMocks();

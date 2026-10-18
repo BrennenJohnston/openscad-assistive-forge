@@ -61,30 +61,44 @@ const CAMERA_FILES = {
   turn: '/sounds/camera/turn.wav',
   tilt: '/sounds/camera/tilt.wav',
 };
-// Each tick's level in the camera group: the turn, the fullest of the
-// three, sits a little under the other two.
-const CAMERA_LEVELS_DB = { zoom: 0, turn: -3, tilt: 0 };
+// Each tick's level in the camera group: the turn, the one heard most as a
+// drag goes round, sits well under the other two.
+const CAMERA_LEVELS_DB = { zoom: 0, turn: -8, tilt: 0 };
+// The turn tells its way, left a little lower and right a little higher (in
+// cents), and each tick strays a little in pitch and level, so a run of
+// them does not wear.
+const TURN_WAY_CENTS = 70;
+const TURN_STRAY_CENTS = 15;
+const TURN_STRAY_DB = 1;
 // A drawer, the same in every look, in parts played in time with its slide:
-// opening, a latch letting go, the roll out on its rails, the thump of the
-// stop it meets; shutting, the faintest roll, the thump of the closed stop,
-// the latch catching. A roll is as long as the way it covers (400 ms out to
-// the stop, 450 ms shut). Each part has its level in the drawers group.
+// opening, the latch let go at the press, the glide out on its rollers, the
+// thump of the stop it meets; shutting, the latch gripped open at the press,
+// the glide, the closed stop's thump muffled by the cabinet round it, the
+// latch released as the hand lets go. A glide is as long as the way it
+// covers (400 ms out to the stop, 450 ms shut). Each part has its level in
+// the drawers group, the stops under the latch and the glide.
 const DRAWER_PARTS = {
-  open: { latch: 'latch-open', roll: 'slide-open', stop: 'stop-open' },
-  close: { latch: 'latch-close', roll: 'slide-close', stop: 'stop-close' },
+  open: { press: 'latch-open', roll: 'slide-open', stop: 'stop-open' },
+  close: {
+    press: 'grip-close',
+    roll: 'slide-close',
+    stop: 'stop-close',
+    after: 'latch-close',
+  },
 };
 const DRAWER_LEVELS_DB = {
   'latch-open': -3,
-  'slide-open': -6,
-  'stop-open': -1,
-  'slide-close': -9,
-  'stop-close': -1,
-  'latch-close': -3,
+  'slide-open': -5,
+  'stop-open': -11,
+  'grip-close': -7,
+  'slide-close': -8,
+  'stop-close': -15,
+  'latch-close': -7,
 };
-// Shutting, the latch catches this long after the stop. A drawer that
+// Shutting, the latch is released this long after the stop. A drawer that
 // changes at once (less motion asked for) meets its stop this long after
-// its latch lets go.
-const DRAWER_LATCH_LAG_S = 0.08;
+// the press.
+const DRAWER_LATCH_LAG_S = 0.12;
 const DRAWER_STILL_STOP_S = 0.06;
 // A roll turned round in mid-slide fades out over this; a roll begun part of
 // the way in rises over the other, so neither starts or ends with a click.
@@ -264,19 +278,20 @@ async function _whenRunning(running) {
 }
 
 // Waits for the context to run, then starts the buffer in its group,
-// `offset` seconds in. With `own`, the sound has a level of its
-// own (`source.level`, `levelDb` to start) between it and the group, so it
-// can be set apart from the group or faded out.
+// `offset` seconds in, at `rate` times its speed. With `own`, the sound has
+// a level of its own (`source.level`, `levelDb` to start) between it and the
+// group, so it can be set apart from the group or faded out.
 async function _start(
   context,
   running,
   buffer,
   group,
-  { offset = 0, own = false, levelDb = 0 } = {}
+  { offset = 0, own = false, levelDb = 0, rate = 1 } = {}
 ) {
   await _whenRunning(running);
   const source = context.createBufferSource();
   source.buffer = buffer;
+  if (rate !== 1) source.playbackRate.value = rate;
   const into = _mixerFor(context).groups[group];
   if (own) {
     source.level = context.createGain();
@@ -428,20 +443,30 @@ export function preloadControlSounds() {
 
 /**
  * Play one of the 3D view's ticks in the camera group, which keys and dial
- * clicks lower for a moment, through a level of its own.
+ * clicks lower for a moment, through a level of its own. A turn tells its
+ * way by its pitch and strays a little in pitch and level.
  * @param {'zoom'|'turn'|'tilt'} kind
+ * @param {{way?: -1|0|1}} [how] - way: a turn left (-1) or right (1)
  * @returns {Promise<number>} The tick's length in seconds once it has begun
  */
-export async function playCameraSound(kind) {
+export async function playCameraSound(kind, { way = 0 } = {}) {
   if (!CAMERA_FILES[kind]) throw new Error(`No such camera sound: ${kind}`);
   const context = _audioContext();
   const running = context.resume();
   const buffer = await _bufferFor(CAMERA_FILES[kind], context);
+  let levelDb = CAMERA_LEVELS_DB[kind];
+  let rate = 1;
+  if (kind === 'turn') {
+    const stray = () => Math.random() * 2 - 1;
+    rate = 2 ** ((way * TURN_WAY_CENTS + stray() * TURN_STRAY_CENTS) / 1200);
+    levelDb += stray() * TURN_STRAY_DB;
+  }
   await _start(context, running, buffer, 'camera', {
     own: true,
-    levelDb: CAMERA_LEVELS_DB[kind],
+    levelDb,
+    rate,
   });
-  return buffer.duration;
+  return buffer.duration / rate;
 }
 
 /** Ends the switch sound playing now, if any. */
@@ -545,30 +570,29 @@ function _turnRound(sound) {
 }
 
 // When each of a drawer's parts plays, in seconds from the press, and the
-// roll's span: opening, the latch (from shut) and the roll at once, the stop
-// as the drawer meets it; shutting, the roll, the stop, then the latch.
+// glide's span: the press's latch (a drawer going the whole way; one turned
+// round is in hand already) and the glide at once, the stop as the drawer
+// meets it, and shutting, the latch released after.
 function _drawerTimeline(phase, stopAt, whole) {
-  const { latch, roll, stop } = DRAWER_PARTS[phase];
+  const { press, roll, stop, after } = DRAWER_PARTS[phase];
   const parts = [];
-  if (phase === 'open' && whole) parts.push({ name: latch, at: 0 });
+  if (whole) parts.push({ name: press, at: 0 });
   if (stopAt > 0) parts.push({ name: roll, at: 0, until: stopAt, roll: true });
-  const still = phase === 'open' && whole ? DRAWER_STILL_STOP_S : 0;
-  parts.push({ name: stop, at: stopAt > 0 ? stopAt : still });
-  if (phase === 'close') {
-    parts.push({ name: latch, at: stopAt + DRAWER_LATCH_LAG_S });
-  }
+  const stopped = stopAt > 0 ? stopAt : whole ? DRAWER_STILL_STOP_S : 0;
+  parts.push({ name: stop, at: stopped });
+  if (after) parts.push({ name: after, at: stopped + DRAWER_LATCH_LAG_S });
   return parts;
 }
 
 /**
  * Play a drawer opening or shutting, in time with its slide on screen.
- * Opening from shut: the latch lets go and the roll begins at once, the
- * roll ends as the drawer meets its stop, and the stop's thump comes then.
- * Shutting: the faintest roll, the thump of the closed stop, the latch
- * catching. A slide over part of the way (a press that turned the drawer
- * round) plays only the end of its roll, rising in, and opens no latch; a
- * drawer that changes at once has no roll. The sound the drawer was making
- * is turned round with it.
+ * Opening from shut: the latch lets go and the glide begins at once, the
+ * glide ends as the drawer meets its stop, and the stop's thump comes then.
+ * Shutting: the latch gripped open and the glide, the closed stop's muffled
+ * thump, the latch released. A slide over part of the way (a press that
+ * turned the drawer round) plays only the end of its glide, rising in, with
+ * no press of the latch; a drawer that changes at once has no glide. The
+ * sound the drawer was making is turned round with it.
  * @param {string} drawer - Which drawer: a sound turns round only its own
  * @param {'open'|'close'} phase
  * @param {{stopAt?: number, whole?: boolean}} [timing]

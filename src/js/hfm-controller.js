@@ -229,22 +229,23 @@ const _HFM_CAMERA_KEYS = new Set([
 const _HFM_STICK_DEAD_ZONE = 0.15;
 // The camera's rotate and zoom buttons, in the panel, the phone's drawer and
 // Classic's 3D view toolbar: each press moves the view one step, heard as the
-// view's own tick for that move instead of a key.
+// view's own tick for that move instead of a key, a turn by its way (left -1,
+// right 1).
 const _HFM_CAMERA_BUTTONS = new Map([
-  ['cameraRotateLeft', 'turn'],
-  ['cameraRotateRight', 'turn'],
-  ['mobileCameraRotateLeft', 'turn'],
-  ['mobileCameraRotateRight', 'turn'],
-  ['cameraRotateUp', 'tilt'],
-  ['cameraRotateDown', 'tilt'],
-  ['mobileCameraRotateUp', 'tilt'],
-  ['mobileCameraRotateDown', 'tilt'],
-  ['cameraZoomIn', 'zoom'],
-  ['cameraZoomOut', 'zoom'],
-  ['mobileCameraZoomIn', 'zoom'],
-  ['mobileCameraZoomOut', 'zoom'],
-  ['classicZoomInBtn', 'zoom'],
-  ['classicZoomOutBtn', 'zoom'],
+  ['cameraRotateLeft', ['turn', -1]],
+  ['cameraRotateRight', ['turn', 1]],
+  ['mobileCameraRotateLeft', ['turn', -1]],
+  ['mobileCameraRotateRight', ['turn', 1]],
+  ['cameraRotateUp', ['tilt', 0]],
+  ['cameraRotateDown', ['tilt', 0]],
+  ['mobileCameraRotateUp', ['tilt', 0]],
+  ['mobileCameraRotateDown', ['tilt', 0]],
+  ['cameraZoomIn', ['zoom', 0]],
+  ['cameraZoomOut', ['zoom', 0]],
+  ['mobileCameraZoomIn', ['zoom', 0]],
+  ['mobileCameraZoomOut', ['zoom', 0]],
+  ['classicZoomInBtn', ['zoom', 0]],
+  ['classicZoomOutBtn', ['zoom', 0]],
 ]);
 let _hfmCamera = null;
 // When the view last ticked, by hand or by a camera button.
@@ -1529,13 +1530,14 @@ function _hfmStickPushed() {
   return false;
 }
 
-// One of the view's ticks, unless one came under 70 ms ago.
-function _playCameraTick(kind) {
+// One of the view's ticks, unless one came under 70 ms ago; a turn by its
+// way, left -1 or right 1.
+function _playCameraTick(kind, way = 0) {
   const now = performance.now();
   if (now - _hfmCameraTickAt < _HFM_CAMERA_TICK_GAP_MS) return;
   _hfmCameraTickAt = now;
   if (!_soundsOn()) return;
-  playCameraSound(kind).catch((error) => {
+  playCameraSound(kind, { way }).catch((error) => {
     console.warn('[Alt View] A camera tick did not play:', error);
   });
 }
@@ -1582,7 +1584,8 @@ function _installCameraTicks(previewManager) {
       cam.way[name] = sign;
       kind ??= name;
     }
-    if (kind) _playCameraTick(kind);
+    // The turn's angle grows as the view turns left (as Rotate left turns it).
+    if (kind) _playCameraTick(kind, kind === 'turn' ? -cam.way.turn : 0);
   };
   // Any other press is not a direct move of the view: what it moves, it
   // moves as a button, a menu or a shortcut does.
@@ -1686,7 +1689,7 @@ function _installKeySounds() {
     const camera = _HFM_CAMERA_BUTTONS.get(el.id);
     if (el === _hfmKeyHeard) {
       if (!passing) _hfmKeyHeard = null;
-      if (camera) _playCameraTick(camera);
+      if (camera) _playCameraTick(...camera);
       return;
     }
     // A file input another control opens: that control has sounded.
@@ -1694,7 +1697,7 @@ function _installKeySounds() {
     if (!event.isTrusted && !_hfmPadButtonHeld()) return;
     if (passing) _hfmKeyHeard = el;
     if (camera) {
-      _playCameraTick(camera);
+      _playCameraTick(...camera);
       return;
     }
     _playKeySound(el, 'down');

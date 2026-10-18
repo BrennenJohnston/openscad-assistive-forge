@@ -23,7 +23,7 @@ const WASM_READY_TIMEOUT = 180_000;
 // The 3D view's three ticks, in seconds, as public/sounds/camera/ holds
 // them. The browser decodes at its own rate, so a played tick is known by
 // its length to a few milliseconds (a key is 160 ms).
-const TURN_SECONDS = 0.2;
+const TURN_SECONDS = 0.102;
 const TILT_SECONDS = 0.03;
 const ZOOM_SECONDS = 0.018;
 const oneTick = (heard, seconds) =>
@@ -32,10 +32,11 @@ const oneTick = (heard, seconds) =>
 const DRAWER_PARTS = {
   'latch-open': 0.172,
   'slide-open': 0.4,
-  'stop-open': 0.295,
+  'stop-open': 0.26,
+  'grip-close': 0.285,
   'slide-close': 0.45,
-  'stop-close': 0.325,
-  'latch-close': 0.115,
+  'stop-close': 0.24,
+  'latch-close': 0.3,
 };
 const partOf = (seconds) =>
   Object.keys(DRAWER_PARTS).find((name) => Math.abs(DRAWER_PARTS[name] - seconds) < 0.005) ??
@@ -300,7 +301,7 @@ test.describe('The sounds button', () => {
     }
   });
 
-  test("a drawer's own button is heard as the drawer alone: shut, its roll, the thump as it stops and the latch; open, the latch and roll, the thump at its stop; a menu latches", async ({
+  test("a drawer's own button is heard as the drawer alone: shut, the latch gripped, the glide, the muffled thump as it stops and the latch released; open, the latch and glide, the thump at its stop; a menu latches", async ({
     page,
   }) => {
     await listenForSound(page);
@@ -332,20 +333,22 @@ test.describe('The sounds button', () => {
 
     const button = page.locator('#collapseParamPanelBtn');
     await expect(button).toHaveAttribute('aria-expanded', 'true');
-    // Shut: no key; the roll with the press, the thump as the 450 ms slide
-    // ends, the latch 80 ms after it.
+    // Shut: no key; the latch gripped and the glide with the press, the
+    // thump as the 450 ms slide ends, the latch released 120 ms after it.
     const closing = await heard(() => button.click());
     expect(closing.map((s) => partOf(s.seconds))).toEqual([
+      'grip-close',
       'slide-close',
       'stop-close',
       'latch-close',
     ]);
-    const [roll, thump, latch] = closing.map((s) => s.plays);
-    expect(roll, 'the roll with the press, ms').toBeLessThan(300);
+    const [grip, roll, thump, latch] = closing.map((s) => s.plays);
+    expect(grip, 'the grip with the press, ms').toBeLessThan(300);
+    expect(Math.abs(roll - grip), 'together, ms').toBeLessThan(15);
     expect(thump - roll, 'the thump as the slide ends, ms').toBeGreaterThan(420);
     expect(thump - roll, 'the thump as the slide ends, ms').toBeLessThan(480);
-    expect(latch - thump, 'the latch after the thump, ms').toBeGreaterThan(65);
-    expect(latch - thump, 'the latch after the thump, ms').toBeLessThan(95);
+    expect(latch - thump, 'the release after the thump, ms').toBeGreaterThan(105);
+    expect(latch - thump, 'the release after the thump, ms').toBeLessThan(135);
     // Open: the latch and the roll with the press, the thump as the drawer
     // meets its stop, four fifths into its 500 ms slide.
     const opening = await heard(() => button.click());
