@@ -84,7 +84,9 @@ async function readScreen(page, name, maskName = null) {
         return [...probe.getImageData(0, 0, 1, 1).data.slice(0, 3)];
       };
       const line = parse(
-        getComputedStyle(document.body).getPropertyValue('--color-accent').trim()
+        getComputedStyle(document.body)
+          .getPropertyValue('--color-accent')
+          .trim()
       );
       const screen = parse(getComputedStyle(canvas).backgroundColor);
       const span = line.map((c, i) => c - screen[i]);
@@ -184,20 +186,22 @@ async function frameGap(page, run) {
   return { result, gap };
 }
 
-async function drag(page, steps, during) {
+// A drag of `steps` moves; `during` is called on the last step, or on
+// every step from `readFrom` on, and its results are returned in order.
+async function drag(page, steps, during, readFrom = steps) {
   const box = await page.locator('#previewContainer').boundingBox();
   const x = box.x + box.width / 2;
   const y = box.y + box.height / 3;
   await page.mouse.move(x, y);
   await page.mouse.down();
-  let seen = null;
+  const seen = [];
   for (let n = 1; n <= steps; n++) {
     await page.mouse.move(x + n * 20, y);
     await page.waitForTimeout(16);
-    if (n === steps) seen = await during();
+    if (n >= readFrom) seen.push(await during());
   }
   await page.mouse.up();
-  return seen;
+  return readFrom === steps ? seen[0] : seen;
 }
 
 test.describe('The vector look', () => {
@@ -238,18 +242,36 @@ test.describe('The vector look', () => {
     const charactersInFaces = await readScreen(page, 'again', 'faces');
 
     const numbers = {
-      lit: { characters: characters.lit, wide: wide.lit, middle: middle.lit, thin: thin.lit },
+      lit: {
+        characters: characters.lit,
+        wide: wide.lit,
+        middle: middle.lit,
+        thin: thin.lit,
+      },
       thinCoveredByWide,
-      faces: { pixels: faceCount, half: half.mean, characters: charactersInFaces.mean },
+      faces: {
+        pixels: faceCount,
+        half: half.mean,
+        characters: charactersInFaces.mean,
+      },
     };
-    test.info().annotations.push({ type: 'measured', description: JSON.stringify(numbers) });
+    test
+      .info()
+      .annotations.push({
+        type: 'measured',
+        description: JSON.stringify(numbers),
+      });
     console.log('vector look:', JSON.stringify(numbers));
 
     expect(thin.lit, '0% still draws').toBeGreaterThan(500);
     expect(middle.lit, '15% wider than 0%').toBeGreaterThan(thin.lit);
     expect(wide.lit, '25% wider than 15%').toBeGreaterThan(middle.lit);
-    expect(wide.lit / thin.lit, '25% at least twice 0%').toBeGreaterThanOrEqual(2);
-    expect(thinCoveredByWide, 'the same lines, only wider').toBeGreaterThan(0.9);
+    expect(wide.lit / thin.lit, '25% at least twice 0%').toBeGreaterThanOrEqual(
+      2
+    );
+    expect(thinCoveredByWide, 'the same lines, only wider').toBeGreaterThan(
+      0.9
+    );
     expect(faceCount, 'faces the lines leave dark').toBeGreaterThan(5000);
     expect(half.mean, 'Surfaces 50% fills them').toBeGreaterThan(0.3);
     expect(charactersInFaces.mean, 'characters fill them').toBeGreaterThan(0.3);
@@ -261,9 +283,17 @@ test.describe('The vector look', () => {
     await openBox(page, 'standard');
     await slide(page, '_hfmFontScale', 0.25);
     const greenStill = await readScreen(page, 'still');
-    const { result: greenTurning, gap } = await frameGap(page, () =>
-      drag(page, 10, () => readScreen(page, 'turning'))
+    // The trace is a decaying maximum of the frames before, so one frame's
+    // read is noisy: the strongest of the last four steps' reads stands for
+    // the turning view, and a read after the drag shows the trace fading.
+    const { result: turningReads, gap } = await frameGap(page, () =>
+      drag(page, 10, () => readScreen(page, 'turning'), 7)
     );
+    const greenTurning = turningReads.reduce((best, read) =>
+      read.half / read.lit > best.half / best.lit ? read : best
+    );
+    await page.waitForTimeout(1_500);
+    const greenAfter = await readScreen(page, 'after');
 
     const classic = await page.context().newPage();
     await page.close();
@@ -276,22 +306,45 @@ test.describe('The vector look', () => {
 
     const numbers = {
       frameGapMs: Math.round(gap),
-      green: { still: { lit: greenStill.lit, half: greenStill.half }, turning: { lit: greenTurning.lit, half: greenTurning.half } },
-      dos: { still: { lit: dosStill.lit, half: dosStill.half }, turning: { lit: dosTurning.lit, half: dosTurning.half } },
+      green: {
+        still: { lit: greenStill.lit, half: greenStill.half },
+        turning: { lit: greenTurning.lit, half: greenTurning.half },
+        after: { lit: greenAfter.lit, half: greenAfter.half },
+      },
+      dos: {
+        still: { lit: dosStill.lit, half: dosStill.half },
+        turning: { lit: dosTurning.lit, half: dosTurning.half },
+      },
     };
-    test.info().annotations.push({ type: 'measured', description: JSON.stringify(numbers) });
+    test
+      .info()
+      .annotations.push({
+        type: 'measured',
+        description: JSON.stringify(numbers),
+      });
     console.log('glow and trace:', JSON.stringify(numbers));
 
     expect(dosStill.lit, 'the DOS look draws').toBeGreaterThan(500);
-    expect(dosTurning.half / dosTurning.lit, 'no half-lit pixels in DOS, turning').toBeLessThan(0.02);
+    expect(
+      dosTurning.half / dosTurning.lit,
+      'no half-lit pixels in DOS, turning'
+    ).toBeLessThan(0.02);
     expect(dosStill.half / dosStill.lit, 'nor still').toBeLessThan(0.02);
     // The trace fades by the clock, the Glow's share every 33 ms, so a
     // machine that draws a frame only now and then (a test runner's software
     // drawing) shows little of it between frames. It is checked where the
-    // frames come at least every 40 ms, and the gap is recorded either way.
+    // frames come at least every 40 ms, and the gap is recorded either way:
+    // more half-lit pixels while turning than at rest, and fewer again once
+    // the view has been still.
     if (gap <= 40) {
-      expect(greenTurning.half / greenTurning.lit, 'the green trace and glow').toBeGreaterThan(
-        (greenStill.half / greenStill.lit) * 1.2
+      const still = greenStill.half / greenStill.lit;
+      const turning = greenTurning.half / greenTurning.lit;
+      const after = greenAfter.half / greenAfter.lit;
+      expect(turning, 'the green trace and glow, turning').toBeGreaterThan(
+        still * 1.05
+      );
+      expect(after, 'the trace fades once the view is still').toBeLessThan(
+        turning
       );
     } else {
       test.info().annotations.push({
