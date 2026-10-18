@@ -21,6 +21,7 @@ import {
   playCrtSound,
   playDialSound,
   playCameraSound,
+  startPanMotion,
   playDrawerSound,
   playKeySound,
   playTypingSound,
@@ -236,6 +237,12 @@ const _HFM_CAMERA_DEAD_BAND = {
   pan: 0.01,
 };
 const _HFM_CAMERA_TICK_GAP_MS = 70;
+// A pan is one motion of the stage rather than a tick a step: the motor
+// starts at the first step, runs while what the view looks at keeps moving
+// (a move this share of the camera's distance between frames counts), and
+// winds down once it has rested this long.
+const _HFM_PAN_REST_MS = 100;
+const _HFM_PAN_MOVE_MIN = 1e-4;
 // A drag's damping glides on after the pointer lifts; a key moves at once.
 const _HFM_CAMERA_GLIDE_MS = 1500;
 const _HFM_CAMERA_KEY_MS = 400;
@@ -1608,8 +1615,13 @@ function _hfmStickPushed() {
   return false;
 }
 
-// One of the view's ticks, unless one came under 70 ms ago, by its way.
+// One of the view's ticks, unless one came under 70 ms ago, by its way; a
+// pan is the stage's motion instead.
 function _playCameraTick(kind, way = 0) {
+  if (kind === 'pan') {
+    _panStart(way);
+    return;
+  }
   const now = performance.now();
   if (now - _hfmCameraTickAt < _HFM_CAMERA_TICK_GAP_MS) return;
   _hfmCameraTickAt = now;
@@ -1617,6 +1629,73 @@ function _playCameraTick(kind, way = 0) {
   playCameraSound(kind, { way }).catch((error) => {
     console.warn('[Alt View] A camera tick did not play:', error);
   });
+}
+
+// The stage's motion: started once, kept going while the view moves, and
+// wound down once it has rested; a pan with no view to watch (no controls)
+// is a short motion on its own.
+function _panStart(way) {
+  const cam = _hfmCamera;
+  const now = performance.now();
+  if (cam?.pan) {
+    cam.panMovedAt = now;
+    return;
+  }
+  if (!_soundOn('camera')) return;
+  const handle = startPanMotion({ way }).catch((error) => {
+    console.warn('[Alt View] The pan did not play:', error);
+    return null;
+  });
+  if (!cam) {
+    setTimeout(() => handle.then((h) => h?.stop()), _HFM_PAN_REST_MS);
+    return;
+  }
+  cam.pan = { handle };
+  cam.panMovedAt = now;
+  _panArm(cam);
+}
+
+function _panArm(cam) {
+  clearTimeout(cam.panTimer);
+  cam.panTimer = setTimeout(() => _panRestCheck(cam), _HFM_PAN_REST_MS + 10);
+}
+
+function _panRestCheck(cam) {
+  if (!cam.pan) return;
+  if (performance.now() - cam.panMovedAt < _HFM_PAN_REST_MS) {
+    _panArm(cam);
+    return;
+  }
+  _panStop(cam);
+}
+
+function _panStop(cam) {
+  const motion = cam.pan;
+  if (!motion) return;
+  cam.pan = null;
+  clearTimeout(cam.panTimer);
+  cam.panTimer = null;
+  motion.handle.then((h) => h?.stop());
+}
+
+// What the view looks at, watched frame by frame: a move keeps the stage's
+// motion going, rest winds it down.
+function _panTrack(cam, pose) {
+  const last = cam.lastTarget;
+  cam.lastTarget = pose.target;
+  if (!last || !cam.pan) return;
+  const moved =
+    Math.hypot(
+      pose.target.x - last.x,
+      pose.target.y - last.y,
+      pose.target.z - last.z
+    ) / pose.distance;
+  if (moved > _HFM_PAN_MOVE_MIN) {
+    cam.panMovedAt = performance.now();
+    _panArm(cam);
+  } else {
+    _panRestCheck(cam);
+  }
 }
 
 function _installCameraTicks(previewManager) {
@@ -1627,6 +1706,10 @@ function _installCameraTicks(previewManager) {
     way: { turn: 0, tilt: 0, zoom: 0, across: 0, up: 0 },
     dragging: false,
     directUntil: 0,
+    pan: null,
+    panMovedAt: 0,
+    panTimer: null,
+    lastTarget: null,
   };
   // A move of the view's own: a drag (and its glide after), a stick, or
   // auto-rotate turning it every frame.
@@ -1645,6 +1728,7 @@ function _installCameraTicks(previewManager) {
   const onChange = () => {
     const pose = _hfmCameraPose(previewManager);
     if (!pose) return;
+    _panTrack(cam, pose);
     if (!cam.from || !direct()) {
       cam.from = pose;
       return;
@@ -1756,6 +1840,7 @@ function _installCameraTicks(previewManager) {
 
 function _removeCameraTicks() {
   if (!_hfmCamera) return;
+  _panStop(_hfmCamera);
   const { controls, controlListeners, pageListeners } = _hfmCamera;
   for (const [type, fn] of controlListeners) {
     controls.removeEventListener(type, fn);

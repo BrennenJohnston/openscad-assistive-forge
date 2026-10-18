@@ -458,15 +458,18 @@ levelled:
 
 ### High speed linear module (CC-BY-4.0)
 
-The pan's tick, `pan.wav`, is cut from "High speed linear module steppermotor
-servo sound" by Artninja: https://freesound.org/s/705184/
+The pan's three parts, `pan.wav` (the motor's run-up), `pan-run.wav` (its
+run, a loop) and `pan-stop.wav` (its wind-down), are cut from "High speed
+linear module steppermotor servo sound" by Artninja:
+https://freesound.org/s/705184/
 
 - **Author**: Artninja
 - **License**: Creative Commons Attribution 4.0 International,
   https://creativecommons.org/licenses/by/4.0/
-- **Changes**: the first 120 ms of one move cut out (the motor's run-up and
-  the start of its run, with short fades), its top end softened, resampled
-  to 32 kHz mono, levelled.
+- **Changes**: three stretches of one move cut out (the first 120 ms with
+  short fades; 700 ms of the steady run, its end crossfaded into its start
+  so it loops; 420 ms from the run through the deceleration to silence),
+  the top end softened, resampled to 32 kHz mono, levelled.
 
 ### declicking aperture (CC-BY-3.0)
 

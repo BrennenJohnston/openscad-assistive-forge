@@ -26,7 +26,12 @@ const WASM_READY_TIMEOUT = 180_000;
 const TURN_SECONDS = 0.102;
 const TILT_SECONDS = 0.03;
 const ZOOM_SECONDS = 0.018;
-const PAN_SECONDS = 0.12;
+// The pan is a motion of the stage: a run-up, a run while the view moves
+// (a loop, scheduled with the run-up and called off for a press that is
+// over before the run-up ends), and the wind-down once it rests.
+const PAN_START_SECONDS = 0.12;
+const PAN_RUN_SECONDS = 0.7;
+const PAN_STOP_SECONDS = 0.42;
 const oneTick = (heard, seconds) =>
   heard.length === 1 && Math.abs(heard[0] - seconds) < 0.005;
 // The drawer's parts, in seconds, as public/sounds/drawers/ holds them.
@@ -353,7 +358,10 @@ test.describe('The sounds button', () => {
     const zoom = await heard('cameraZoomIn');
     expect(oneTick(zoom, ZOOM_SECONDS), `zoom in, the zoom: ${zoom}`).toBe(true);
     const pan = await heard('cameraPanLeft');
-    expect(oneTick(pan, PAN_SECONDS), `pan left, the pan: ${pan}`).toBe(true);
+    expect(pan, `pan left: the stage's run-up, its run, then its wind-down: ${pan}`).toHaveLength(3);
+    expect(Math.abs(pan[0] - PAN_START_SECONDS)).toBeLessThan(0.005);
+    expect(Math.abs(pan[1] - PAN_RUN_SECONDS)).toBeLessThan(0.005);
+    expect(Math.abs(pan[2] - PAN_STOP_SECONDS)).toBeLessThan(0.005);
   });
 
   test("in Classic the 3D view toolbar's zoom buttons tick as the view's zoom", async ({
