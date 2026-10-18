@@ -451,12 +451,13 @@ https://freesound.org/s/445483/
 - **Changes**: the click cut out (18 ms, with short fades), resampled to
   32 kHz mono, levelled.
 
-### Ratchet and ball catch (CC0-1.0)
+### Ratchet and turnstile (CC0-1.0)
 
 The tilt's tick, `tilt.wav`, is cut from "Single_Ratchet-05.wav" by CallFlan
-(https://freesound.org/s/495238/), and the turn's, `turn.wav`, from
-"Ball-bearing latched cupboard door" by wlabarron
-(https://freesound.org/s/509108/), each released under Creative Commons 0.
+(https://freesound.org/s/495238/), and the turn's, `turn.wav`, from the
+turnstile in "Subway, card swipe, double beep and turnstile.wav" by
+SpliceSound (https://freesound.org/s/369875/), each released under Creative
+Commons 0.
 
 - **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
 - **Note**: CC0 asks for no credit; it is given with thanks.
