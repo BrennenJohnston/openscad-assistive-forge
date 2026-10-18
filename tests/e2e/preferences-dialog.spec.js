@@ -664,7 +664,7 @@ test('the Controller tab says what it sees when no controller is attached', asyn
     'No controller detected. Connect one and press any button.'
   );
   await expect(page.locator('#prefsGamepadAssignments tbody tr')).toHaveCount(
-    16
+    29
   );
 });
 
@@ -727,7 +727,8 @@ test('a button changed in the Controller tab is kept after a reload', async ({
   await page.evaluate(() => {
     window.__padButtons[2] = { pressed: false, touched: false, value: 0 };
   });
-  expect(await buttonOf('zoomOut')).toBe('A');
+  // X was Reset View's in the Camera preset, the default: the two swap.
+  expect(await buttonOf('resetView')).toBe('A');
 
   // The tab passes the WCAG 2.2 A and AA rules, and the rule that a
   // control's visible words are in its name.
@@ -745,7 +746,7 @@ test('a button changed in the Controller tab is kept after a reload', async ({
   // openPreferences() loads the page afresh: the saved mapping is read again.
   await openController();
   expect(await buttonOf('activate')).toBe('X');
-  expect(await buttonOf('zoomOut')).toBe('A');
+  expect(await buttonOf('resetView')).toBe('A');
 
   await page.locator('#prefsGamepadReset').click();
   expect(await buttonOf('activate')).toBe('A');

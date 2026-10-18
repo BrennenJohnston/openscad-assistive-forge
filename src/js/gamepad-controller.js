@@ -138,20 +138,82 @@ export const GAMEPAD_ACTIONS = [
   { id: 'keys', name: 'Keyboard shortcuts' },
   { id: 'resetView', name: 'Reset View' },
   { id: 'viewAll', name: 'View All' },
+  { id: 'turnLeft', name: 'Turn left', repeats: true },
+  { id: 'turnRight', name: 'Turn right', repeats: true },
+  { id: 'tiltUp', name: 'Tilt up', repeats: true },
+  { id: 'tiltDown', name: 'Tilt down', repeats: true },
+  { id: 'previousView', name: 'Previous view', repeats: true },
+  { id: 'nextView', name: 'Next view', repeats: true },
+  { id: 'previousParameter', name: 'Previous parameter', repeats: true },
+  { id: 'nextParameter', name: 'Next parameter', repeats: true },
+  { id: 'previousGroup', name: 'Previous group' },
+  { id: 'nextGroup', name: 'Next group' },
+  { id: 'resetParameter', name: 'Reset parameter' },
+  { id: 'generate', name: 'Generate' },
+  { id: 'nextPreset', name: 'Next preset' },
 ];
 
+/** A preset's table: every action, the ones not given unassigned. */
+const presetTable = (given) =>
+  Object.fromEntries(GAMEPAD_ACTIONS.map((a) => [a.id, given[a.id] ?? null]));
+
 /**
- * The presets: each action's input.
- * - "Menus first": the bumpers step from control to control as Tab does,
- *   the triggers jump between the window's parts, X and Y zoom.
- * - "Camera first": the triggers zoom by how far they are pressed; X resets
- *   the view and Y fits the model in it.
- * The D-pad sends the arrow keys in both; the sticks always orbit and pan.
+ * The presets, named for what they drive, in the order the View button
+ * steps through them:
+ * - "Camera": the D-pad turns and tilts the view a step, the bumpers walk
+ *   the six standard views, the triggers zoom by how far they are pressed,
+ *   X resets the view and Y fits the model in it.
+ * - "Customizer": the bumpers step from parameter to parameter, the
+ *   triggers from group to group, the D-pad steps a slider or chooses in a
+ *   list, X puts the parameter back to its default, Y generates.
+ * - "Menus": the bumpers step from control to control as Tab does, the
+ *   triggers jump between the window's parts, X and Y zoom.
+ * In each, A presses, B goes back, Menu is Full Screen and View steps to
+ * the next preset; the sticks always orbit and pan. The keyboard shortcuts
+ * keep F1 and the Help menu, and a button when a person gives them one.
  */
 export const GAMEPAD_PRESETS = {
+  camera: {
+    name: 'Camera',
+    assignments: presetTable({
+      activate: 'a',
+      back: 'b',
+      zoomIn: 'rt',
+      zoomOut: 'lt',
+      fullScreen: 'start',
+      resetView: 'x',
+      viewAll: 'y',
+      turnLeft: 'left',
+      turnRight: 'right',
+      tiltUp: 'up',
+      tiltDown: 'down',
+      previousView: 'lb',
+      nextView: 'rb',
+      nextPreset: 'select',
+    }),
+  },
+  customizer: {
+    name: 'Customizer',
+    assignments: presetTable({
+      activate: 'a',
+      back: 'b',
+      up: 'up',
+      down: 'down',
+      left: 'left',
+      right: 'right',
+      fullScreen: 'start',
+      previousParameter: 'lb',
+      nextParameter: 'rb',
+      previousGroup: 'lt',
+      nextGroup: 'rt',
+      resetParameter: 'x',
+      generate: 'y',
+      nextPreset: 'select',
+    }),
+  },
   menus: {
-    name: 'Menus first',
-    assignments: {
+    name: 'Menus',
+    assignments: presetTable({
       previous: 'lb',
       next: 'rb',
       previousRegion: 'lt',
@@ -165,36 +227,16 @@ export const GAMEPAD_PRESETS = {
       zoomIn: 'y',
       zoomOut: 'x',
       fullScreen: 'start',
-      keys: 'select',
-      resetView: null,
-      viewAll: null,
-    },
-  },
-  camera: {
-    name: 'Camera first',
-    assignments: {
-      previous: 'lb',
-      next: 'rb',
-      previousRegion: null,
-      nextRegion: null,
-      activate: 'a',
-      back: 'b',
-      up: 'up',
-      down: 'down',
-      left: 'left',
-      right: 'right',
-      zoomIn: 'rt',
-      zoomOut: 'lt',
-      fullScreen: 'start',
-      keys: 'select',
-      resetView: 'x',
-      viewAll: 'y',
-    },
+      nextPreset: 'select',
+    }),
   },
 };
 
+/** The presets in the order the View button steps through them. */
+export const GAMEPAD_PRESET_ORDER = Object.freeze(Object.keys(GAMEPAD_PRESETS));
+
 /** The preset a person starts with. */
-export const DEFAULT_GAMEPAD_PRESET = 'menus';
+export const DEFAULT_GAMEPAD_PRESET = 'camera';
 
 /** The controller families whose button names the Controller tab uses. */
 export const GAMEPAD_FAMILIES = [
@@ -510,6 +552,18 @@ export function createGamepadMapping({ getPadId = () => '' } = {}) {
       if (!GAMEPAD_PRESETS[presetId]) return;
       saved = { ...saved, preset: presetId, custom: null };
       write();
+    },
+
+    /**
+     * The next preset in their order, round again, from its own table.
+     * @returns {string} the preset now on
+     */
+    nextPreset() {
+      const at = GAMEPAD_PRESET_ORDER.indexOf(saved.preset);
+      const next = GAMEPAD_PRESET_ORDER[(at + 1) % GAMEPAD_PRESET_ORDER.length];
+      saved = { ...saved, preset: next, custom: null };
+      write();
+      return next;
     },
 
     /** Name the buttons as a family does; a person's own table is kept. */

@@ -1,5 +1,5 @@
 /**
- * A game controller's assignments: the two presets, the Nintendo pad's
+ * A game controller's assignments: the three presets, the Nintendo pad's
  * printed A and B, the labels each family prints on its buttons, the saved
  * mapping a person changes one action at a time, and catching the one
  * button a person presses to assign it.
@@ -10,6 +10,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   GAMEPAD_ACTIONS,
   GAMEPAD_FAMILIES,
+  GAMEPAD_PRESETS,
+  GAMEPAD_PRESET_ORDER,
   GamepadController,
   createGamepadMapping,
   gamepadFamilyFromId,
@@ -19,8 +21,66 @@ import {
 import { STORAGE_KEY_GAMEPAD_MAPPING } from '../../src/js/storage-keys.js';
 
 describe('the presets', () => {
-  it("Menus first is the owner's layout", () => {
-    expect(presetAssignments('menus', 'xbox')).toEqual({
+  it('Camera, the default: the D-pad turns and tilts the view, the bumpers walk the standard views, the triggers zoom, X resets the view, Y fits the model, View steps to the next preset', () => {
+    expect(presetAssignments('camera', 'xbox')).toEqual({
+      previous: null,
+      next: null,
+      previousRegion: null,
+      nextRegion: null,
+      activate: 'a',
+      back: 'b',
+      up: null,
+      down: null,
+      left: null,
+      right: null,
+      zoomIn: 'rt',
+      zoomOut: 'lt',
+      fullScreen: 'start',
+      keys: null,
+      resetView: 'x',
+      viewAll: 'y',
+      turnLeft: 'left',
+      turnRight: 'right',
+      tiltUp: 'up',
+      tiltDown: 'down',
+      previousView: 'lb',
+      nextView: 'rb',
+      previousParameter: null,
+      nextParameter: null,
+      previousGroup: null,
+      nextGroup: null,
+      resetParameter: null,
+      generate: null,
+      nextPreset: 'select',
+    });
+  });
+
+  it('Customizer: the bumpers step through the parameters, the triggers through the groups, the D-pad steps a slider, X puts a parameter back, Y generates', () => {
+    expect(presetAssignments('customizer', 'xbox')).toMatchObject({
+      previous: null,
+      next: null,
+      previousParameter: 'lb',
+      nextParameter: 'rb',
+      previousGroup: 'lt',
+      nextGroup: 'rt',
+      activate: 'a',
+      back: 'b',
+      up: 'up',
+      down: 'down',
+      left: 'left',
+      right: 'right',
+      resetParameter: 'x',
+      generate: 'y',
+      zoomIn: null,
+      zoomOut: null,
+      fullScreen: 'start',
+      keys: null,
+      nextPreset: 'select',
+    });
+  });
+
+  it("Menus is the owner's layout for moving through the interface, with View stepping to the next preset", () => {
+    expect(presetAssignments('menus', 'xbox')).toMatchObject({
       previous: 'lb',
       next: 'rb',
       previousRegion: 'lt',
@@ -34,23 +94,24 @@ describe('the presets', () => {
       zoomIn: 'y',
       zoomOut: 'x',
       fullScreen: 'start',
-      keys: 'select',
+      keys: null,
       resetView: null,
       viewAll: null,
+      turnLeft: null,
+      previousView: null,
+      nextParameter: null,
+      nextPreset: 'select',
     });
   });
 
-  it('Camera first zooms with the triggers; X resets the view and Y fits the model', () => {
-    expect(presetAssignments('camera', 'xbox')).toMatchObject({
-      previous: 'lb',
-      next: 'rb',
-      previousRegion: null,
-      nextRegion: null,
-      zoomIn: 'rt',
-      zoomOut: 'lt',
-      resetView: 'x',
-      viewAll: 'y',
-    });
+  it('the presets step Camera, Customizer, Menus and round again', () => {
+    expect(GAMEPAD_PRESET_ORDER).toEqual(['camera', 'customizer', 'menus']);
+    expect(Object.keys(GAMEPAD_PRESETS)).toEqual(GAMEPAD_PRESET_ORDER);
+    expect(GAMEPAD_PRESET_ORDER.map((id) => GAMEPAD_PRESETS[id].name)).toEqual([
+      'Camera',
+      'Customizer',
+      'Menus',
+    ]);
   });
 
   it('on a Nintendo pad, the printed A activates and the printed B goes back', () => {
@@ -81,6 +142,19 @@ describe('the presets', () => {
       'Keyboard shortcuts',
       'Reset View',
       'View All',
+      'Turn left',
+      'Turn right',
+      'Tilt up',
+      'Tilt down',
+      'Previous view',
+      'Next view',
+      'Previous parameter',
+      'Next parameter',
+      'Previous group',
+      'Next group',
+      'Reset parameter',
+      'Generate',
+      'Next preset',
     ]);
     expect(GAMEPAD_FAMILIES.map((f) => f.name)).toEqual([
       'Xbox',
@@ -144,12 +218,12 @@ describe('the saved mapping', () => {
     padId = XBOX;
   });
 
-  it('starts on Menus first, the family read from the pad', () => {
+  it('starts on Camera, the family read from the pad', () => {
     const now = make().get();
-    expect(now.preset).toBe('menus');
+    expect(now.preset).toBe('camera');
     expect(now.family).toBe('xbox');
     expect(now.familyChosen).toBe(false);
-    expect(now.assignments).toEqual(presetAssignments('menus', 'xbox'));
+    expect(now.assignments).toEqual(presetAssignments('camera', 'xbox'));
     padId = PRO;
     expect(make().get().assignments.activate).toBe('b');
   });
@@ -157,12 +231,12 @@ describe('the saved mapping', () => {
   it('a change takes the button from the action that had it, which gets the old one, and is kept', () => {
     const mapping = make();
     const result = mapping.assign('activate', 'x');
-    expect(result.swappedWith).toBe('zoomOut');
+    expect(result.swappedWith).toBe('resetView');
     expect(mapping.get().assignments.activate).toBe('x');
-    expect(mapping.get().assignments.zoomOut).toBe('a');
+    expect(mapping.get().assignments.resetView).toBe('a');
     const again = make().get();
     expect(again.assignments.activate).toBe('x');
-    expect(again.assignments.zoomOut).toBe('a');
+    expect(again.assignments.resetView).toBe('a');
     expect(
       JSON.parse(localStorage.getItem(STORAGE_KEY_GAMEPAD_MAPPING))
     ).toBeTruthy();
@@ -170,9 +244,9 @@ describe('the saved mapping', () => {
 
   it('a free button moves without taking anything', () => {
     const mapping = make();
-    const result = mapping.assign('resetView', 'r3');
+    const result = mapping.assign('keys', 'r3');
     expect(result.swappedWith).toBeNull();
-    expect(mapping.get().assignments.resetView).toBe('r3');
+    expect(mapping.get().assignments.keys).toBe('r3');
   });
 
   it('Reset to preset drops the changes; a new preset starts from its own table', () => {
@@ -180,14 +254,27 @@ describe('the saved mapping', () => {
     mapping.assign('activate', 'x');
     mapping.reset();
     expect(mapping.get().assignments).toEqual(
-      presetAssignments('menus', 'xbox')
-    );
-    mapping.assign('activate', 'x');
-    mapping.setPreset('camera');
-    expect(mapping.get().preset).toBe('camera');
-    expect(mapping.get().assignments).toEqual(
       presetAssignments('camera', 'xbox')
     );
+    mapping.assign('activate', 'x');
+    mapping.setPreset('menus');
+    expect(mapping.get().preset).toBe('menus');
+    expect(mapping.get().assignments).toEqual(
+      presetAssignments('menus', 'xbox')
+    );
+  });
+
+  it('the next preset steps Camera, Customizer, Menus and round again, each from its own table, and is kept', () => {
+    const mapping = make();
+    mapping.assign('activate', 'x');
+    expect(mapping.nextPreset()).toBe('customizer');
+    expect(mapping.get().preset).toBe('customizer');
+    expect(mapping.get().assignments).toEqual(
+      presetAssignments('customizer', 'xbox')
+    );
+    expect(mapping.nextPreset()).toBe('menus');
+    expect(mapping.nextPreset()).toBe('camera');
+    expect(make().get().preset).toBe('camera');
   });
 
   it('a chosen family stays chosen whatever pad is plugged in', () => {
@@ -205,7 +292,7 @@ describe('the saved mapping', () => {
     const heard = vi.fn();
     mapping.subscribe(heard);
     mapping.assign('back', 'y');
-    mapping.setPreset('camera');
+    mapping.setPreset('menus');
     mapping.reset();
     expect(heard).toHaveBeenCalledTimes(3);
   });
@@ -213,14 +300,14 @@ describe('the saved mapping', () => {
   it('a damaged saved value falls back to the default', () => {
     localStorage.setItem(STORAGE_KEY_GAMEPAD_MAPPING, '{not json');
     expect(make().get().assignments).toEqual(
-      presetAssignments('menus', 'xbox')
+      presetAssignments('camera', 'xbox')
     );
     localStorage.setItem(
       STORAGE_KEY_GAMEPAD_MAPPING,
       JSON.stringify({ preset: 'nope', custom: { activate: 'nope' } })
     );
     const now = make().get();
-    expect(now.preset).toBe('menus');
+    expect(now.preset).toBe('camera');
     expect(now.assignments.activate).toBe('a');
   });
 });

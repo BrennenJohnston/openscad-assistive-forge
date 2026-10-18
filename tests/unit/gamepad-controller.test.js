@@ -118,18 +118,31 @@ describe('the controller moves the view', () => {
     expect(Math.abs(zoomOut.delta)).toBeCloseTo(Math.abs(zoomIn.delta) / 2, 5);
   });
 
-  it('zooms with Y and X in the Menus first preset, the default', () => {
-    pad.buttons[3] = { pressed: true, touched: true, value: 1 };
+  it('zooms with the triggers in the Camera preset, the default; Y and X do not, and in the Menus preset they do', () => {
+    pad.buttons[7] = { pressed: true, touched: true, value: 1 };
     const zoomIn = step(controller, pad, 1).find(
       (e) => e.name === 'camera:zoom'
     );
     expect(zoomIn?.delta).toBeGreaterThan(0);
+    pad.buttons[7] = { pressed: false, touched: false, value: 0 };
+    pad.buttons[3] = { pressed: true, touched: true, value: 1 };
+    expect(
+      step(controller, pad, 1).find((e) => e.name === 'camera:zoom')
+    ).toBeUndefined();
     pad.buttons[3] = { pressed: false, touched: false, value: 0 };
-    pad.buttons[2] = { pressed: true, touched: true, value: 1 };
-    const zoomOut = step(controller, pad, 1).find(
+
+    controller.setAssignments(presetAssignments('menus', 'xbox'));
+    pad.buttons[3] = { pressed: true, touched: true, value: 1 };
+    const menusIn = step(controller, pad, 1).find(
       (e) => e.name === 'camera:zoom'
     );
-    expect(zoomOut?.delta).toBeLessThan(0);
+    expect(menusIn?.delta).toBeGreaterThan(0);
+    pad.buttons[3] = { pressed: false, touched: false, value: 0 };
+    pad.buttons[2] = { pressed: true, touched: true, value: 1 };
+    const menusOut = step(controller, pad, 1).find(
+      (e) => e.name === 'camera:zoom'
+    );
+    expect(menusOut?.delta).toBeLessThan(0);
     pad.buttons[2] = { pressed: false, touched: false, value: 0 };
     pad.buttons[7] = { pressed: true, touched: true, value: 1 };
     expect(

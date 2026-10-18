@@ -60,17 +60,38 @@ const DIAL_VARIANTS = 7;
 // itself exactly.
 const DIAL_STRAY_CENTS = 10;
 // The 3D view's ticks, the same in every look: a lens detent for a zoom
-// step, a bearing for a turn, a ratchet for a tilt.
+// step, a bearing for a turn, a ratchet for a tilt, a lead screw's step for
+// a pan (the stage moved across or up).
 const CAMERA_FILES = {
   zoom: '/sounds/camera/zoom.wav',
   turn: '/sounds/camera/turn.wav',
   tilt: '/sounds/camera/tilt.wav',
+  pan: '/sounds/camera/pan.wav',
 };
 // Each tick's level in the camera group, set so the ear hears the lens
 // detent first, the ratchet a shade under it, and the bearing, the one
 // heard most as a drag goes round, under both (the files differ in length
-// and brightness, so the numbers alone are not that order).
-const CAMERA_LEVELS_DB = { zoom: 0, turn: -12, tilt: -7 };
+// and brightness, so the numbers alone are not that order). The lead
+// screw's step, a sustained 120 ms, sits at the ratchet's level as the ear
+// weighs it, 10 dB under the ratchet's number.
+const CAMERA_LEVELS_DB = { zoom: 0, turn: -12, tilt: -7, pan: -17 };
+// A pan is one motion of the stage under the lens, in parts: the motor's
+// run-up (the pan tick above), its run looping while the view keeps moving,
+// and its wind-down once the view rests. The run takes over a little before
+// the run-up ends and sits 6 dB under it as the ear weighs them (both parts
+// are sustained, so their numbers sit under the run-up's); the wind-down
+// plays at the run-up's place and trails the visual stop as a real stage
+// coasts (its loud part within 200 ms, its tail to 400), which the ear
+// binds to the stop far more readily than it would a late start. A run
+// stopped early fades over 40 ms.
+const PAN_PARTS = {
+  run: '/sounds/camera/pan-run.wav',
+  stop: '/sounds/camera/pan-stop.wav',
+};
+const PAN_RUN_DB = -30;
+const PAN_STOP_DB = -23;
+const PAN_RUN_LEAD_S = 0.03;
+const PAN_RUN_FADE_S = 0.04;
 // Each tick tells its way, left, down and out a little lower and right, up
 // and in a little higher (in cents), and strays a little in pitch and level,
 // so a run of them does not wear.
@@ -454,9 +475,12 @@ function _dialUrl(set, variant) {
   return `/sounds/dials/${set}${variant}.wav`;
 }
 
-/** Fetch the 3D view's three ticks now, once. */
+/** Fetch the 3D view's ticks and the pan's parts now, once. */
 export function preloadCameraSounds() {
-  _fetchAhead(Object.values(CAMERA_FILES), 'camera');
+  _fetchAhead(
+    [...Object.values(CAMERA_FILES), ...Object.values(PAN_PARTS)],
+    'camera'
+  );
 }
 
 function _drawerUrl(part) {
@@ -499,9 +523,9 @@ const _stray = () => Math.random() * 2 - 1;
  * Play one of the 3D view's ticks in the camera group, which keys and dial
  * clicks lower for a moment, through a level of its own. A tick tells its
  * way by its pitch and strays a little in pitch and level.
- * @param {'zoom'|'turn'|'tilt'} kind
+ * @param {'zoom'|'turn'|'tilt'|'pan'} kind
  * @param {{way?: -1|0|1}} [how] - way: left, down or out (-1); right, up
- *   or in (1)
+ *   or in (1); a pan left or down (-1), right or up (1)
  * @returns {Promise<number>} The tick's length in seconds once it has begun
  */
 export async function playCameraSound(kind, { way = 0 } = {}) {
@@ -518,6 +542,64 @@ export async function playCameraSound(kind, { way = 0 } = {}) {
     rate,
   });
   return buffer.duration / rate;
+}
+
+/**
+ * Start a pan's motion in the camera group: the motor's run-up at once,
+ * its run looping from a little before the run-up ends, both at the pan's
+ * pitch for the way. The handle's stop() winds it down: the run fades out
+ * as the wind-down starts; a motion over before the run-up ends skips the
+ * run and winds down from the run-up's end. A second stop() does nothing.
+ * @param {{way?: -1|0|1}} [how] - way: left or down (-1), right or up (1)
+ * @returns {Promise<{stop: () => void}>}
+ */
+export async function startPanMotion({ way = 0 } = {}) {
+  const context = _audioContext();
+  const running = context.resume();
+  const [start, run, stop] = await Promise.all([
+    _bufferFor(CAMERA_FILES.pan, context),
+    _bufferFor(PAN_PARTS.run, context),
+    _bufferFor(PAN_PARTS.stop, context),
+  ]);
+  const rate =
+    2 ** ((way * CAMERA_WAY_CENTS + _stray() * CAMERA_STRAY_CENTS) / 1200);
+  const stray = _stray() * CAMERA_STRAY_DB;
+  const levelDb = CAMERA_LEVELS_DB.pan + stray;
+  await _start(context, running, start, 'camera', {
+    own: true,
+    levelDb,
+    rate,
+  });
+  const startEnd = context.currentTime + start.duration / rate;
+  const runAt = startEnd - PAN_RUN_LEAD_S;
+  const running_ = _startAt(context, run, 'camera', runAt, PAN_RUN_DB + stray);
+  running_.loop = true;
+  running_.playbackRate.value = rate;
+  let stopped = false;
+  return {
+    stop() {
+      if (stopped) return;
+      stopped = true;
+      const now = context.currentTime;
+      let at = now;
+      if (now < runAt) {
+        running_.stop();
+        at = startEnd;
+      } else {
+        _holdFrom(running_.level.gain, now);
+        running_.level.gain.linearRampToValueAtTime(0, now + PAN_RUN_FADE_S);
+        running_.stop(now + PAN_RUN_FADE_S);
+      }
+      const winding = _startAt(
+        context,
+        stop,
+        'camera',
+        at,
+        PAN_STOP_DB + stray
+      );
+      winding.playbackRate.value = rate;
+    },
+  };
 }
 
 /** Ends the switch sound playing now, if any. */

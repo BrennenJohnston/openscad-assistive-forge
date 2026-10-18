@@ -21,6 +21,7 @@ import {
   playCrtSound,
   playDialSound,
   playCameraSound,
+  startPanMotion,
   playDrawerSound,
   playKeySound,
   playTypingSound,
@@ -215,15 +216,33 @@ const _hfmDials = new WeakMap();
 let _hfmDialLastClickAt = -Infinity;
 // The 3D view's own ticks while the look is on: a bearing for every 15
 // degrees it turns, a ratchet for every 10 it tilts, a lens detent for every
-// 5 % it zooms (a wheel notch). Only for a move made directly: a drag, the
-// wheel or a pinch on the view, the arrow keys on the focused preview, a
-// controller's stick or trigger. A move a pan button, a view or View All made
-// is heard as that button's key. A tick comes at most every 70 ms, a step
-// that would tick sooner is passed over, and turning back after a tick takes
-// a step and a little more, so a jitter is silent.
-const _HFM_CAMERA_STEPS = { turn: 15, tilt: 10, zoom: Math.log(1.05) };
-const _HFM_CAMERA_DEAD_BAND = { turn: 1, tilt: 1, zoom: Math.log(1.01) };
+// 5 % it zooms (a wheel notch), a lead screw's step for every 5 % of its
+// distance it is panned across or up (the stage moved under the lens). Only
+// for a move made directly: a drag, the wheel or a pinch on the view, the
+// arrow keys on the focused preview, a controller's stick or trigger. A
+// move a view or View All made is heard as that button's key. A tick comes
+// at most every 70 ms, a step that would tick sooner is passed over, and
+// turning back after a tick takes a step and a little more, so a jitter is
+// silent.
+const _HFM_CAMERA_STEPS = {
+  turn: 15,
+  tilt: 10,
+  zoom: Math.log(1.05),
+  pan: 0.05,
+};
+const _HFM_CAMERA_DEAD_BAND = {
+  turn: 1,
+  tilt: 1,
+  zoom: Math.log(1.01),
+  pan: 0.01,
+};
 const _HFM_CAMERA_TICK_GAP_MS = 70;
+// A pan is one motion of the stage rather than a tick a step: the motor
+// starts at the first step, runs while what the view looks at keeps moving
+// (a move this share of the camera's distance between frames counts), and
+// winds down once it has rested this long.
+const _HFM_PAN_REST_MS = 100;
+const _HFM_PAN_MOVE_MIN = 1e-4;
 // A drag's damping glides on after the pointer lifts; a key moves at once.
 const _HFM_CAMERA_GLIDE_MS = 1500;
 const _HFM_CAMERA_KEY_MS = 400;
@@ -238,10 +257,11 @@ const _HFM_CAMERA_KEYS = new Set([
 ]);
 // The controller's own dead zone (gamepad-controller.js).
 const _HFM_STICK_DEAD_ZONE = 0.15;
-// The camera's rotate and zoom buttons, in the panel, the phone's drawer and
-// Classic's 3D view toolbar: each press moves the view one step, heard as the
-// view's own tick for that move instead of a key, a turn by its way (left -1,
-// right 1), a tilt (down -1, up 1), a zoom (out -1, in 1).
+// The camera's rotate, pan and zoom buttons, in the panel, the phone's
+// drawer and Classic's 3D view toolbar: each press moves the view one step,
+// heard as the view's own tick for that move instead of a key, a turn by its
+// way (left -1, right 1), a tilt (down -1, up 1), a zoom (out -1, in 1), a
+// pan (left or down -1, right or up 1).
 const _HFM_CAMERA_BUTTONS = new Map([
   ['cameraRotateLeft', ['turn', -1]],
   ['cameraRotateRight', ['turn', 1]],
@@ -257,6 +277,14 @@ const _HFM_CAMERA_BUTTONS = new Map([
   ['mobileCameraZoomOut', ['zoom', -1]],
   ['classicZoomInBtn', ['zoom', 1]],
   ['classicZoomOutBtn', ['zoom', -1]],
+  ['cameraPanLeft', ['pan', -1]],
+  ['cameraPanRight', ['pan', 1]],
+  ['cameraPanUp', ['pan', 1]],
+  ['cameraPanDown', ['pan', -1]],
+  ['mobileCameraPanLeft', ['pan', -1]],
+  ['mobileCameraPanRight', ['pan', 1]],
+  ['mobileCameraPanUp', ['pan', 1]],
+  ['mobileCameraPanDown', ['pan', -1]],
 ]);
 // Scrolling by hand ticks a line at a time, as paper turns through a
 // typewriter's platen: a tick for every 40 px a list moves, going down a
@@ -501,6 +529,38 @@ export function setSoundsOn(on) {
   document.dispatchEvent(
     new CustomEvent('sounds-setting-change', { detail: { on: value } })
   );
+}
+
+// A controller's press that acts with no control of its own on screen is a
+// key the size of a camera panel button.
+const _HFM_PAD_KEY_BAND = 3;
+
+/**
+ * A controller's press that acts with no control on screen (Reset View,
+ * View All, a standard view, the next preset): a key the size of a camera
+ * panel button, its press and its release, while the look is on. A press
+ * that presses a control on screen plays that control's own sound instead,
+ * and a move of the view ticks as the view's own.
+ */
+export function playPadKey() {
+  if (!_hfmEnabled || !_soundOn('keys')) return;
+  const set = _hfmKeySet();
+  const play = (phase) =>
+    playKeySound(set, _HFM_PAD_KEY_BAND, phase).catch((error) => {
+      console.warn('[Alt View] A key sound did not play:', error);
+    });
+  play('down');
+  setTimeout(() => play('up'), _HFM_KEY_TAP_MS);
+}
+
+/**
+ * A controller is moving the view now (a stick, a trigger, a zoom button):
+ * the view's changes for the next while are its own and tick as a drag's.
+ */
+export function noteControllerMove() {
+  if (_hfmCamera) {
+    _hfmCamera.directUntil = performance.now() + _HFM_CAMERA_KEY_MS;
+  }
 }
 
 function _formatPercent(value) {
@@ -1526,7 +1586,9 @@ function _preloadLookSounds() {
 
 // Where the camera is, seen from what it looks at: its turn and tilt in
 // degrees, and how far away as a logarithm, so in and out count alike (an
-// orthographic view zooms without moving).
+// orthographic view zooms without moving); with it, what it looks at, its
+// distance, and the camera's right and up as unit vectors (Z is up; looking
+// straight down or up, right falls back to +x), the axes a pan moves along.
 function _hfmCameraPose(previewManager) {
   const camera = previewManager.getActiveCamera?.();
   const target = previewManager.controls?.target;
@@ -1540,20 +1602,40 @@ function _hfmCameraPose(previewManager) {
     previewManager.projectionMode === 'orthographic'
       ? previewManager.orthoCamera
       : null;
+  const forward = { x: -x / distance, y: -y / distance, z: -z / distance };
+  const sideways = Math.hypot(forward.y, forward.x);
+  const right =
+    sideways < 1e-6
+      ? { x: 1, y: 0, z: 0 }
+      : { x: forward.y / sideways, y: -forward.x / sideways, z: 0 };
+  const up = {
+    x: right.y * forward.z - right.z * forward.y,
+    y: right.z * forward.x - right.x * forward.z,
+    z: right.x * forward.y - right.y * forward.x,
+  };
   return {
     turn: (Math.atan2(y, x) * 180) / Math.PI,
     tilt: (Math.asin(Math.max(-1, Math.min(1, z / distance))) * 180) / Math.PI,
     zoom: Math.log(ortho ? 1 / ortho.zoom : distance),
+    distance,
+    target: { x: target.x, y: target.y, z: target.z },
+    right,
+    up,
   };
 }
 
+// A controller moving the view itself: a stick past its dead zone, a
+// trigger (the standard layout's zoom), or the D-pad (a turn or a tilt a
+// step in the Camera preset).
 function _hfmStickPushed() {
   for (const pad of navigator.getGamepads?.() ?? []) {
     if (!pad) continue;
     if (pad.axes?.some((value) => Math.abs(value) >= _HFM_STICK_DEAD_ZONE)) {
       return true;
     }
-    // The standard layout's triggers zoom.
+    if ([12, 13, 14, 15].some((index) => pad.buttons?.[index]?.pressed)) {
+      return true;
+    }
     if (
       [6, 7].some(
         (index) => (pad.buttons?.[index]?.value ?? 0) >= _HFM_STICK_DEAD_ZONE
@@ -1565,8 +1647,13 @@ function _hfmStickPushed() {
   return false;
 }
 
-// One of the view's ticks, unless one came under 70 ms ago, by its way.
+// One of the view's ticks, unless one came under 70 ms ago, by its way; a
+// pan is the stage's motion instead.
 function _playCameraTick(kind, way = 0) {
+  if (kind === 'pan') {
+    _panStart(way);
+    return;
+  }
   const now = performance.now();
   if (now - _hfmCameraTickAt < _HFM_CAMERA_TICK_GAP_MS) return;
   _hfmCameraTickAt = now;
@@ -1576,14 +1663,103 @@ function _playCameraTick(kind, way = 0) {
   });
 }
 
+// The stage's motion: started once, kept going while the view moves, and
+// wound down once it has rested; a pan with no view to watch (no controls)
+// is a short motion on its own.
+function _panStart(way) {
+  const cam = _hfmCamera;
+  const now = performance.now();
+  if (cam?.pan) {
+    cam.panMovedAt = now;
+    return;
+  }
+  if (!_soundOn('camera')) return;
+  const handle = startPanMotion({ way }).catch((error) => {
+    console.warn('[Alt View] The pan did not play:', error);
+    return null;
+  });
+  if (!cam) {
+    setTimeout(() => handle.then((h) => h?.stop()), _HFM_PAN_REST_MS);
+    return;
+  }
+  cam.pan = { handle };
+  cam.panMovedAt = now;
+  _panArm(cam);
+}
+
+function _panArm(cam) {
+  clearTimeout(cam.panTimer);
+  cam.panTimer = setTimeout(() => _panRestCheck(cam), _HFM_PAN_REST_MS + 10);
+}
+
+function _panRestCheck(cam) {
+  if (!cam.pan) return;
+  if (performance.now() - cam.panMovedAt < _HFM_PAN_REST_MS) {
+    _panArm(cam);
+    return;
+  }
+  _panStop(cam);
+}
+
+function _panStop(cam) {
+  const motion = cam.pan;
+  if (!motion) return;
+  cam.pan = null;
+  clearTimeout(cam.panTimer);
+  cam.panTimer = null;
+  motion.handle.then((h) => h?.stop());
+}
+
+// A pan carries the camera and what it looks at together, so the camera's
+// place seen from its target (its turn, tilt and distance) stays. A frame
+// that also turned, tilted or zoomed (a zoom toward the pointer re-aims the
+// target) is not a pan's.
+function _panTogether(cam, pose) {
+  const last = cam.lastPose;
+  cam.lastPose = pose;
+  if (!last) return false;
+  const turned = ((((pose.turn - last.turn) % 360) + 540) % 360) - 180;
+  return (
+    Math.abs(turned) < 0.01 &&
+    Math.abs(pose.tilt - last.tilt) < 0.01 &&
+    Math.abs(pose.zoom - last.zoom) < 1e-4
+  );
+}
+
+// What the view looks at, watched frame by frame: a move with the camera
+// keeps the stage's motion going, rest winds it down.
+function _panTrack(cam, pose, together) {
+  const last = cam.lastTarget;
+  cam.lastTarget = pose.target;
+  if (!last || !cam.pan) return;
+  const moved = together
+    ? Math.hypot(
+        pose.target.x - last.x,
+        pose.target.y - last.y,
+        pose.target.z - last.z
+      ) / pose.distance
+    : 0;
+  if (moved > _HFM_PAN_MOVE_MIN) {
+    cam.panMovedAt = performance.now();
+    _panArm(cam);
+  } else {
+    _panRestCheck(cam);
+  }
+}
+
 function _installCameraTicks(previewManager) {
   const controls = previewManager?.controls;
   if (_hfmCamera || !controls?.addEventListener) return;
   const cam = {
     from: null,
-    way: { turn: 0, tilt: 0, zoom: 0 },
+    way: { turn: 0, tilt: 0, zoom: 0, across: 0, up: 0 },
     dragging: false,
     directUntil: 0,
+    pan: null,
+    panMovedAt: 0,
+    panTimer: null,
+    lastTarget: null,
+    lastPose: null,
   };
   // A move of the view's own: a drag (and its glide after), a stick, or
   // auto-rotate turning it every frame.
@@ -1602,6 +1778,8 @@ function _installCameraTicks(previewManager) {
   const onChange = () => {
     const pose = _hfmCameraPose(previewManager);
     if (!pose) return;
+    const together = _panTogether(cam, pose);
+    _panTrack(cam, pose, together);
     if (!cam.from || !direct()) {
       cam.from = pose;
       return;
@@ -1623,12 +1801,52 @@ function _installCameraTicks(previewManager) {
       cam.way[name] = sign;
       kind ??= name;
     }
+    // A pan moves what the view looks at along the camera's right and up;
+    // each counts as a share of the camera's distance, so a pan ticks alike
+    // close up and far off. A frame that was not a pan's starts the count
+    // again from where the target is.
+    let panWay = 0;
+    const target = cam.from.target;
+    if (!together) {
+      target.x = pose.target.x;
+      target.y = pose.target.y;
+      target.z = pose.target.z;
+    }
+    const moved = {
+      x: pose.target.x - target.x,
+      y: pose.target.y - target.y,
+      z: pose.target.z - target.z,
+    };
+    for (const [name, axis] of [
+      ['across', pose.right],
+      ['up', pose.up],
+    ]) {
+      const along =
+        (moved.x * axis.x + moved.y * axis.y + moved.z * axis.z) /
+        pose.distance;
+      const sign = Math.sign(along);
+      const reach =
+        _HFM_CAMERA_STEPS.pan +
+        (sign === -cam.way[name] ? _HFM_CAMERA_DEAD_BAND.pan : 0);
+      const size = Math.abs(along) + 1e-9;
+      if (size < reach) continue;
+      const steps = Math.floor(size / _HFM_CAMERA_STEPS.pan);
+      const by = sign * steps * _HFM_CAMERA_STEPS.pan * pose.distance;
+      target.x += axis.x * by;
+      target.y += axis.y * by;
+      target.z += axis.z * by;
+      cam.way[name] = sign;
+      kind ??= 'pan';
+      panWay ||= sign;
+    }
     // The turn's angle grows as the view turns left (as Rotate left turns
-    // it), the tilt's as it tilts up, the distance as it zooms out.
+    // it), the tilt's as it tilts up, the distance as it zooms out; a pan
+    // right or up is its way.
     const ways = {
       turn: -cam.way.turn,
       tilt: cam.way.tilt,
       zoom: -cam.way.zoom,
+      pan: panWay,
     };
     if (kind) _playCameraTick(kind, ways[kind]);
   };
@@ -1679,6 +1897,7 @@ function _installCameraTicks(previewManager) {
 
 function _removeCameraTicks() {
   if (!_hfmCamera) return;
+  _panStop(_hfmCamera);
   const { controls, controlListeners, pageListeners } = _hfmCamera;
   for (const [type, fn] of controlListeners) {
     controls.removeEventListener(type, fn);

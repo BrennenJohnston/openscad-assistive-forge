@@ -12,6 +12,9 @@ import { join, resolve } from 'node:path';
 const SOUNDS_DIR = resolve(__dirname, '../../public/sounds');
 const FILES = ['crt-on.wav', 'crt-look.wav', 'crt-off.wav'];
 const DURATIONS = {
+  '/sounds/camera/pan.wav': 0.12,
+  '/sounds/camera/pan-run.wav': 0.7,
+  '/sounds/camera/pan-stop.wav': 0.42,
   '/sounds/crt-on.wav': 2.21,
   '/sounds/crt-look.wav': 0.8,
   '/sounds/crt-off.wav': 2.17,
@@ -147,19 +150,28 @@ function fakeParam(value) {
 
 // The 3D view's ticks: a lens detent, a bearing and a ratchet, one file each.
 const CAMERA_DIR = join(SOUNDS_DIR, 'camera');
-const CAMERA_FILES = ['zoom.wav', 'turn.wav', 'tilt.wav'];
+// The ticks, each under 0.3 s; the pan's run (a loop) and its run-down are
+// longer, as a motor's run and its coasting to a stop are.
+const CAMERA_FILES = {
+  'zoom.wav': 0.3,
+  'turn.wav': 0.3,
+  'tilt.wav': 0.3,
+  'pan.wav': 0.3,
+  'pan-run.wav': 0.8,
+  'pan-stop.wav': 0.5,
+};
 
 describe('the camera tick files', () => {
-  it.each(CAMERA_FILES)(
-    '%s is a 32 kHz mono 16-bit WAV under 0.3 s with its peak at or under -1 dBFS',
-    (file) => {
+  it.each(Object.entries(CAMERA_FILES))(
+    '%s is a 32 kHz mono 16-bit WAV under %d s with its peak at or under -1 dBFS',
+    (file, longest) => {
       const bytes = readFileSync(join(CAMERA_DIR, file));
       const header = wavHeader(bytes);
       expect(header.riff).toBe('RIFF');
       expect(header.channels).toBe(1);
       expect(header.rate).toBe(32000);
       expect(header.bits).toBe(16);
-      expect(header.dataBytes / 2 / 32000).toBeLessThan(0.3);
+      expect(header.dataBytes / 2 / 32000).toBeLessThan(longest);
       const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
       let peak = 0;
       for (let at = 44; at + 1 < bytes.length; at += 2) peak = Math.max(peak, Math.abs(view.getInt16(at, true)));
@@ -167,10 +179,10 @@ describe('the camera tick files', () => {
     }
   );
 
-  it('the three weigh under 40 KB together', () => {
-    const total = CAMERA_FILES.reduce((n, f) => n + statSync(join(CAMERA_DIR, f)).size, 0);
+  it('the six weigh under 120 KB together', () => {
+    const total = Object.keys(CAMERA_FILES).reduce((n, f) => n + statSync(join(CAMERA_DIR, f)).size, 0);
     expect(total).toBeGreaterThan(0);
-    expect(total).toBeLessThan(40_000);
+    expect(total).toBeLessThan(120_000);
   });
 });
 
@@ -618,7 +630,7 @@ describe('playing a switch sound', () => {
     expect(() => duck('hum', 8, 150)).toThrow('No such sound group: hum');
   });
 
-  it('plays a camera tick by its kind in the camera group, which it does not lower itself; the turn 12 dB under the zoom, the tilt 7', async () => {
+  it('plays a camera tick by its kind in the camera group, which it does not lower itself; the turn 12 dB under the zoom, the tilt 7, the pan 17', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
     const { playCameraSound, preloadCameraSounds, soundGroup } = await load();
     const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
@@ -626,17 +638,76 @@ describe('playing a switch sound', () => {
     expect(urls()).toEqual(['/sounds/camera/turn.wav']);
     await playCameraSound('tilt');
     await playCameraSound('zoom');
-    expect(urls().slice(1)).toEqual(['/sounds/camera/tilt.wav', '/sounds/camera/zoom.wav']);
-    for (const [n, level] of [db(-12), db(-7), db(0)].entries()) {
+    await playCameraSound('pan');
+    expect(urls().slice(1)).toEqual([
+      '/sounds/camera/tilt.wav',
+      '/sounds/camera/zoom.wav',
+      '/sounds/camera/pan.wav',
+    ]);
+    for (const [n, level] of [db(-12), db(-7), db(0), db(-17)].entries()) {
       expect(sources[n].connectedTo.connectedTo, 'its level, then the group').toBe(
         soundGroup('camera')
       );
       expect(sources[n].connectedTo.gain.value, `tick ${n}'s level`).toBeCloseTo(level, 6);
     }
     expect(soundGroup('camera').gain.calls, 'a tick does not duck its own group').toEqual([]);
-    await expect(playCameraSound('pan')).rejects.toThrow('No such camera sound: pan');
+    await expect(playCameraSound('dolly')).rejects.toThrow('No such camera sound: dolly');
     preloadCameraSounds();
-    expect(globalThis.fetch, 'the three fetched once').toHaveBeenCalledTimes(3);
+    expect(globalThis.fetch, 'the four ticks and the pan\'s two parts fetched once').toHaveBeenCalledTimes(6);
+    vi.restoreAllMocks();
+  });
+
+  it("a pan is one motion of the stage: the run-up at once, the run looping under it from the run-up's end until the stage rests, then the wind-down; a press over before the run-up ends skips the run and winds down from its end", async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const { startPanMotion, soundGroup } = await load();
+    const cents = (s) => Math.round(1200 * Math.log2(s.playbackRate.value));
+    const level = (s) => s.connectedTo.gain.value;
+    const rate = 2 ** (70 / 1200);
+
+    // A press: the run-up, right's way, at the pan's level; the run is
+    // scheduled to take over 30 ms before the run-up ends.
+    const press = await startPanMotion({ way: 1 });
+    expect(sources).toHaveLength(2);
+    expect(cents(sources[0])).toBe(70);
+    expect(level(sources[0])).toBeCloseTo(db(-17), 6);
+    expect(sources[0].connectedTo.connectedTo).toBe(soundGroup('camera'));
+    expect(sources[1].loop, 'the run loops').toBe(true);
+    expect(cents(sources[1]), 'at the same pitch').toBe(70);
+    expect(level(sources[1]), 'the run under the run-up').toBeCloseTo(db(-30), 6);
+    expect(sources[1].start.mock.calls[0][0]).toBeCloseTo(10 + 0.12 / rate - 0.03, 6);
+    // Over before the run-up ends: the run is called off, the wind-down
+    // starts where the run-up ends, the same way.
+    press.stop();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sources[1].stop, 'the run called off').toHaveBeenCalled();
+    expect(sources).toHaveLength(3);
+    expect(sources[2].start.mock.calls[0][0]).toBeCloseTo(10 + 0.12 / rate, 6);
+    expect(cents(sources[2])).toBe(70);
+    expect(level(sources[2]), "the wind-down at the run-up's place").toBeCloseTo(db(-23), 6);
+    expect(sources[2].connectedTo.connectedTo).toBe(soundGroup('camera'));
+    press.stop();
+    expect(sources, 'stopped once').toHaveLength(3);
+
+    // A drag: the run has begun when the stage rests; it fades over 40 ms
+    // as the wind-down starts, left's way.
+    const drag = await startPanMotion({ way: -1 });
+    expect(sources).toHaveLength(5);
+    context.currentTime = 11;
+    drag.stop();
+    await Promise.resolve();
+    await Promise.resolve();
+    const run = sources[4];
+    const faded = 11 + 0.04;
+    expect(run.connectedTo.gain.calls).toEqual([
+      ['cancel', 11],
+      ['set', run.connectedTo.gain.value, 11],
+      ['ramp', 0, faded],
+    ]);
+    expect(run.stop).toHaveBeenCalledWith(faded);
+    expect(sources).toHaveLength(6);
+    expect(sources[5].start.mock.calls[0][0]).toBe(11);
+    expect(cents(sources[5])).toBe(-70);
     vi.restoreAllMocks();
   });
 

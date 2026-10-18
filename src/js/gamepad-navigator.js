@@ -168,6 +168,20 @@ export function createGamepadNavigator({
     document.getElementById(id)?.click();
   };
 
+  // The previous or next of a list, from its first (or its last) when
+  // focus is elsewhere, round again.
+  const walk = (list, by) => {
+    if (!list.length) return;
+    const at = list.indexOf(document.activeElement);
+    const next =
+      at < 0
+        ? by > 0
+          ? 0
+          : list.length - 1
+        : (at + by + list.length) % list.length;
+    focusFromPad(list[next]);
+  };
+
   return {
     isPaused: () => isPaused(),
     next: () => step(1),
@@ -252,5 +266,59 @@ export function createGamepadNavigator({
       }[direction];
       keyTo(el, key);
     },
+
+    /**
+     * The previous or next parameter in the Customizer, as Tab reaches
+     * them: the fields and lists in its parameter rows, from the first (or
+     * the last) when focus is elsewhere, round again. A closed group's
+     * parameters are out of reach until it is opened.
+     * @param {-1|1} by
+     */
+    parameter(by) {
+      if (isPaused()) return;
+      walk(
+        focusOrder().filter(
+          (el) =>
+            /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) &&
+            el.closest('#parametersContainer .param-control') &&
+            !el.closest('details:not([open])')
+        ),
+        by
+      );
+    },
+
+    /**
+     * The previous or next parameter group in the Customizer, by its
+     * header, round again.
+     * @param {-1|1} by
+     */
+    group(by) {
+      if (isPaused()) return;
+      walk(
+        [
+          ...document.querySelectorAll(
+            '#parametersContainer .param-group > summary'
+          ),
+        ].filter(reachable),
+        by
+      );
+    },
+
+    /** The focused parameter back to its default, by its own reset button. */
+    resetParameter() {
+      if (isPaused()) return;
+      const name =
+        document.activeElement?.closest('[data-param-name]')?.dataset.paramName;
+      if (!name) return;
+      for (const button of document.querySelectorAll('.param-reset-btn')) {
+        if (button.dataset.paramName === name) {
+          button.click();
+          return;
+        }
+      }
+    },
+
+    /** Generate, as its button does. */
+    generate: () => clickById('primaryActionBtn'),
   };
 }

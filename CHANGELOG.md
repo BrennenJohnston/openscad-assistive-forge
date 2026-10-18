@@ -11,13 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Preferences > 3D View sets how solid the Customizer is when it opens over
   the preview on a phone.
-- A game controller moves through the interface: the bumpers step from
-  control to control as Tab does, the triggers jump between toolbars, A
-  presses, B goes back, and the D-pad sends the arrow keys.
+- A game controller drives the app in three presets, and its View button
+  steps from one to the next, saying which is on: Camera (the D-pad turns
+  and tilts the view, the bumpers walk the standard views, the triggers
+  zoom), Customizer (the bumpers step through the parameters, the triggers
+  through the groups, X puts a parameter back, Y generates) and Menus (the
+  bumpers step from control to control as Tab does, the triggers jump
+  between toolbars, the D-pad sends the arrow keys). In each, A presses and
+  B goes back.
 - Preferences > Controller, in place of the Axes and Buttons tabs, names the
   controller, shows its buttons for Xbox, PlayStation, Nintendo or generic
-  layouts, offers two presets, and lets each action take the button you
-  press.
+  layouts, offers the three presets, and lets each action take the button
+  you press.
 - Under 40% Focus, the Alt View draws the model as lines, bold at 35%
   and the thinnest at 0%: its creases, its outline, and its rounded parts
   as a dimmer wireframe, with a Surfaces slider for how solid the faces
@@ -28,12 +33,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the left of the Generate button's row; the stepper and level buttons beside the
   status line are gone, and the camera panel holds no sliders.
 - The Alt View has a sounds button beside its key, the same setting as Play
-  sounds. In the look the 3D view ticks as it is turned, tilted or zoomed,
-  by hand or by its camera buttons, a drawer unlatches, rolls and meets its
-  stop with a thump, checkboxes and switches flip like a lever, scrolling
-  ticks a line at a time like a typewriter's roller, and lists, menus and
-  typing each have theirs. Preferences > Advanced turns each kind off on
-  its own.
+  sounds. In the look the 3D view ticks as it is turned, tilted, zoomed or
+  panned, by hand or by its camera buttons, a drawer unlatches, rolls and
+  meets its stop with a thump, checkboxes and switches flip like a lever,
+  scrolling ticks a line at a time like a typewriter's roller, and lists,
+  menus and typing each have theirs; a controller's buttons sound as the
+  controls they stand for would. Preferences > Advanced turns each kind
+  off on its own.
 
 ### Changed
 
