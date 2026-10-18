@@ -869,6 +869,48 @@ describe('the Alt View is heard', () => {
     controller.disableAltViewWithPreview(document.createElement('button'))
   })
 
+  it("a controller's press that acts with no control on screen is a key, a 44 px button's, while the look is on; a move of the view a controller makes ticks as the view's own for 400 ms", async () => {
+    pageWithHeaderAndDpad()
+    clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const pm = previewManagerStub()
+    const { place } = viewWithControls(pm)
+    const controller = await freshController(pm)
+    const { playPadKey, noteControllerMove, setSoundKindOff } = await import(
+      '../../src/js/hfm-controller.js'
+    )
+    const toggle = document.createElement('button')
+    const settled = () => new Promise((resolve) => setTimeout(resolve, 90))
+
+    // The look off: nothing.
+    playPadKey()
+    await settled()
+    expect(await keysAsked(), 'the look off').toEqual([])
+
+    await controller.enableAltViewWithPreview(toggle)
+    place(0, 20)
+    playPadKey()
+    await settled()
+    expect(await keysAsked(), 'a press and its release').toEqual(['p 3 down', 'p 3 up'])
+
+    // A move the controller makes: the view's own tick, as a stick's.
+    noteControllerMove()
+    clock += 20
+    place(15, 20)
+    expect(await cameraAsked(), 'the controller moved the view').toEqual(['turn'])
+    clock += 500
+    place(30, 20)
+    expect(await cameraAsked(), 'a move after the controller let go').toEqual(['turn'])
+
+    // The keys turned off in Preferences: silent.
+    setSoundKindOff('keys', true)
+    playPadKey()
+    await settled()
+    expect(await keysAsked(), 'keys off').toHaveLength(2)
+    setSoundKindOff('keys', false)
+    controller.disableAltViewWithPreview(toggle)
+  })
+
   it('auto-rotate ticks the bearing every 15 degrees as the view spins, with nothing pressed', async () => {
     pageWithHeaderAndDpad()
     clock = 0
@@ -974,6 +1016,20 @@ describe('the Alt View is heard', () => {
     await soundStarted()
     expect(panMotions.map((m) => m.way), 'a third motion, up').toEqual([1, -1, 1])
     await rest(110)
+
+    // A zoom toward the pointer re-aims what the view looks at while the
+    // camera comes a little closer (under a zoom step a frame): not a pan,
+    // however far the target goes.
+    controls.fire('start')
+    for (let n = 1; n <= 12; n++) {
+      clock += 20
+      controls.target.add(right)
+      camera.position.add(right).multiplyScalar(0.998)
+      controls.fire('change')
+    }
+    controls.fire('end')
+    await soundStarted()
+    expect(panMotions, 'a zoom that re-aims the target').toHaveLength(3)
 
     // A pan the page makes, with nothing dragged: silent.
     clock += 2000

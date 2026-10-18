@@ -531,6 +531,38 @@ export function setSoundsOn(on) {
   );
 }
 
+// A controller's press that acts with no control of its own on screen is a
+// key the size of a camera panel button.
+const _HFM_PAD_KEY_BAND = 3;
+
+/**
+ * A controller's press that acts with no control on screen (Reset View,
+ * View All, a standard view, the next preset): a key the size of a camera
+ * panel button, its press and its release, while the look is on. A press
+ * that presses a control on screen plays that control's own sound instead,
+ * and a move of the view ticks as the view's own.
+ */
+export function playPadKey() {
+  if (!_hfmEnabled || !_soundOn('keys')) return;
+  const set = _hfmKeySet();
+  const play = (phase) =>
+    playKeySound(set, _HFM_PAD_KEY_BAND, phase).catch((error) => {
+      console.warn('[Alt View] A key sound did not play:', error);
+    });
+  play('down');
+  setTimeout(() => play('up'), _HFM_KEY_TAP_MS);
+}
+
+/**
+ * A controller is moving the view now (a stick, a trigger, a zoom button):
+ * the view's changes for the next while are its own and tick as a drag's.
+ */
+export function noteControllerMove() {
+  if (_hfmCamera) {
+    _hfmCamera.directUntil = performance.now() + _HFM_CAMERA_KEY_MS;
+  }
+}
+
 function _formatPercent(value) {
   return `${Math.round(value * 100)}%`;
 }
@@ -1678,18 +1710,35 @@ function _panStop(cam) {
   motion.handle.then((h) => h?.stop());
 }
 
-// What the view looks at, watched frame by frame: a move keeps the stage's
-// motion going, rest winds it down.
-function _panTrack(cam, pose) {
+// A pan carries the camera and what it looks at together, so the camera's
+// place seen from its target (its turn, tilt and distance) stays. A frame
+// that also turned, tilted or zoomed (a zoom toward the pointer re-aims the
+// target) is not a pan's.
+function _panTogether(cam, pose) {
+  const last = cam.lastPose;
+  cam.lastPose = pose;
+  if (!last) return false;
+  const turned = ((((pose.turn - last.turn) % 360) + 540) % 360) - 180;
+  return (
+    Math.abs(turned) < 0.01 &&
+    Math.abs(pose.tilt - last.tilt) < 0.01 &&
+    Math.abs(pose.zoom - last.zoom) < 1e-4
+  );
+}
+
+// What the view looks at, watched frame by frame: a move with the camera
+// keeps the stage's motion going, rest winds it down.
+function _panTrack(cam, pose, together) {
   const last = cam.lastTarget;
   cam.lastTarget = pose.target;
   if (!last || !cam.pan) return;
-  const moved =
-    Math.hypot(
-      pose.target.x - last.x,
-      pose.target.y - last.y,
-      pose.target.z - last.z
-    ) / pose.distance;
+  const moved = together
+    ? Math.hypot(
+        pose.target.x - last.x,
+        pose.target.y - last.y,
+        pose.target.z - last.z
+      ) / pose.distance
+    : 0;
   if (moved > _HFM_PAN_MOVE_MIN) {
     cam.panMovedAt = performance.now();
     _panArm(cam);
@@ -1710,6 +1759,7 @@ function _installCameraTicks(previewManager) {
     panMovedAt: 0,
     panTimer: null,
     lastTarget: null,
+    lastPose: null,
   };
   // A move of the view's own: a drag (and its glide after), a stick, or
   // auto-rotate turning it every frame.
@@ -1728,7 +1778,8 @@ function _installCameraTicks(previewManager) {
   const onChange = () => {
     const pose = _hfmCameraPose(previewManager);
     if (!pose) return;
-    _panTrack(cam, pose);
+    const together = _panTogether(cam, pose);
+    _panTrack(cam, pose, together);
     if (!cam.from || !direct()) {
       cam.from = pose;
       return;
@@ -1752,9 +1803,15 @@ function _installCameraTicks(previewManager) {
     }
     // A pan moves what the view looks at along the camera's right and up;
     // each counts as a share of the camera's distance, so a pan ticks alike
-    // close up and far off.
+    // close up and far off. A frame that was not a pan's starts the count
+    // again from where the target is.
     let panWay = 0;
     const target = cam.from.target;
+    if (!together) {
+      target.x = pose.target.x;
+      target.y = pose.target.y;
+      target.z = pose.target.z;
+    }
     const moved = {
       x: pose.target.x - target.x,
       y: pose.target.y - target.y,

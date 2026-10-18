@@ -315,6 +315,8 @@ import { showConfirmDialog, showTextToCopyDialog } from './js/dialogs.js';
 import { showLibraryInfoDialog } from './js/library-info-dialog.js';
 import {
   initHfmController,
+  noteControllerMove,
+  playPadKey,
   setSoundsOn,
   setSoundKindOff,
   soundKindsOff,
@@ -16398,8 +16400,11 @@ if (rounded) {
       const layer = document.getElementById('cityWalkLayer');
       return !!layer && !layer.hidden;
     };
+    // Each move the controller makes is the view's own to the Alt View,
+    // which ticks for it as it would for a drag.
     gamepadController.on('camera:rotate', ({ x, y }) => {
       if (previewManager && !cityWalkUp()) {
+        noteControllerMove();
         previewManager.rotateHorizontal((x * Math.PI) / 180);
         previewManager.rotateVertical((y * Math.PI) / 180);
       }
@@ -16413,12 +16418,14 @@ if (rounded) {
       const amount = orthographicCamera()
         ? (Math.sign(delta) * Math.expm1(Math.abs(delta))) / 0.02
         : delta * viewSpan();
+      noteControllerMove();
       previewManager.zoomCamera(amount);
     });
 
     gamepadController.on('camera:pan', ({ x, y }) => {
       if (previewManager && !cityWalkUp()) {
         const span = viewSpan();
+        noteControllerMove();
         previewManager.panCamera(x * span, y * span);
       }
     });
@@ -16430,7 +16437,9 @@ if (rounded) {
     // bumpers step through the parameters and the triggers through the
     // groups. In each, A presses, B does what Escape does (a render's
     // Cancel included), and View steps to the next preset. The navigator
-    // stands down while the City Walk runs.
+    // stands down while the City Walk runs. In the Alt View a press that
+    // acts with no control on screen plays a key (the rest press a control
+    // or move the view, which have their own sounds).
     const gamepadNavigator = createGamepadNavigator({
       onUnhandledBack: () => getToolbarMenuController().closeAll(),
     });
@@ -16449,6 +16458,7 @@ if (rounded) {
       standardViewAt =
         (standardViewAt + by + STANDARD_VIEWS.length) % STANDARD_VIEWS.length;
       const view = STANDARD_VIEWS[standardViewAt];
+      playPadKey();
       previewManager.setCameraView(view);
       announceCameraAction(`${view} view`);
     };
@@ -16470,8 +16480,14 @@ if (rounded) {
       right: () => gamepadNavigator.arrow('right'),
       fullScreen: gamepadNavigator.fullScreen,
       keys: gamepadNavigator.keys,
-      resetView: resetViewCommand,
-      viewAll: viewAllCommand,
+      resetView: () => {
+        playPadKey();
+        resetViewCommand();
+      },
+      viewAll: () => {
+        playPadKey();
+        viewAllCommand();
+      },
       turnLeft: () => turnView(PAD_TURN_STEP, 0),
       turnRight: () => turnView(-PAD_TURN_STEP, 0),
       tiltUp: () => turnView(0, PAD_TURN_STEP),
@@ -16485,6 +16501,7 @@ if (rounded) {
       resetParameter: gamepadNavigator.resetParameter,
       generate: gamepadNavigator.generate,
       nextPreset: () => {
+        playPadKey();
         const preset = gamepadMapping.nextPreset();
         announceImmediate(PRESET_SPOKEN[preset]);
       },

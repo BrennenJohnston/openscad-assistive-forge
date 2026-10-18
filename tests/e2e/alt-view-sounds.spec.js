@@ -55,6 +55,63 @@ const partOf = (seconds) =>
   Object.keys(DRAWER_PARTS).find((name) => Math.abs(DRAWER_PARTS[name] - seconds) < 0.005) ??
   `${seconds} s`;
 
+/** The standard mapping's indexes for the controller's buttons. */
+const PAD = { x: 2, y: 3, rb: 5, select: 8 };
+
+/**
+ * A stand-in Xbox pad the page reads through navigator.getGamepads(), and
+ * the preset to start in. Call before openBox(), which loads the page.
+ */
+async function withPad(page, preset) {
+  await page.addInitScript((chosen) => {
+    localStorage.setItem(
+      'openscad-forge-gamepad-mapping',
+      JSON.stringify({ preset: chosen })
+    );
+    window.__padButtons = Array.from({ length: 17 }, () => ({
+      pressed: false,
+      touched: false,
+      value: 0,
+    }));
+    const pad = {
+      id: 'Test pad (STANDARD GAMEPAD Vendor: 045e Product: 02ea)',
+      index: 0,
+      connected: true,
+      mapping: 'standard',
+      timestamp: 0,
+      axes: [0, 0, 0, 0],
+      get buttons() {
+        return window.__padButtons;
+      },
+    };
+    Object.defineProperty(Navigator.prototype, 'getGamepads', {
+      configurable: true,
+      value: () => [pad, null, null, null],
+    });
+  }, preset);
+}
+
+/** Tell the page the pad is plugged in. */
+async function connectPad(page) {
+  await page.evaluate(() => {
+    const e = new Event('gamepadconnected');
+    e.gamepad = navigator.getGamepads()[0];
+    window.dispatchEvent(e);
+  });
+}
+
+/** Press and release one of the pad's buttons, held this long. */
+async function padPress(page, index, holdMs = 120) {
+  await page.evaluate((i) => {
+    window.__padButtons[i] = { pressed: true, touched: true, value: 1 };
+  }, index);
+  await page.waitForTimeout(holdMs);
+  await page.evaluate((i) => {
+    window.__padButtons[i] = { pressed: false, touched: false, value: 0 };
+  }, index);
+  await page.waitForTimeout(120);
+}
+
 async function openBox(page, mode = 'standard') {
   await page.addInitScript((mode) => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
@@ -528,6 +585,52 @@ test.describe('The sounds button', () => {
     // A long turn of the wheel to the bottom: the end of the list, last.
     const end = await heard(() => page.mouse.wheel(0, 5000));
     expect(near(end.at(-1) ?? 0, PLATEN_END_SECONDS), `the end: ${end}`).toBe(true);
+  });
+
+  test("a controller's buttons sound as the controls they stand for would: Reset View and a standard view are keys, the zoom buttons tick the lens, a step of focus is silent", async ({
+    page,
+  }) => {
+    await listenForSound(page);
+    await withPad(page, 'camera');
+    await openBox(page);
+    await probeSound(page);
+    await setLook(page, true);
+    test.skip(
+      !(await canSound(page)),
+      'this machine has no sound device, so no sound can start'
+    );
+    await connectPad(page);
+    await page.waitForTimeout(500);
+    const lengths = () => page.evaluate(() => window.__sounds.map((s) => s.seconds));
+    const heardFromPad = async (index, holdMs = 120) => {
+      const before = (await lengths()).length;
+      await padPress(page, index, holdMs);
+      await page.waitForTimeout(600);
+      return (await lengths()).slice(before);
+    };
+    const isKey = (s) => s > 0.1 && s < 0.3;
+    const isTick = (s) => near(s, TURN_SECONDS) || near(s, TILT_SECONDS) || near(s, ZOOM_SECONDS);
+
+    // X is Reset View in the Camera preset: a key's press and release, no tick.
+    const reset = await heardFromPad(PAD.x);
+    expect(reset.filter(isKey), `Reset View, a key: ${reset}`).toHaveLength(2);
+    expect(reset.filter(isTick), `Reset View, no tick: ${reset}`).toHaveLength(0);
+    // RB walks to the next standard view: a key, as the View menu's item is.
+    const view = await heardFromPad(PAD.rb);
+    expect(view.filter(isKey), `a standard view, a key: ${view}`).toHaveLength(2);
+    expect(view.filter(isTick), `a jump to a view, no tick: ${view}`).toHaveLength(0);
+
+    // View twice: the Menus preset, where Y zooms and RB steps focus.
+    await padPress(page, PAD.select);
+    await padPress(page, PAD.select);
+    await page.waitForTimeout(600);
+    const zoom = await heardFromPad(PAD.y, 350);
+    expect(
+      zoom.filter((s) => near(s, ZOOM_SECONDS)).length,
+      `Y held zooms, the lens detent: ${zoom}`
+    ).toBeGreaterThanOrEqual(1);
+    const step = await heardFromPad(PAD.rb);
+    expect(step, `a step of focus, silent: ${step}`).toHaveLength(0);
   });
 
   test.describe('on a phone', () => {
