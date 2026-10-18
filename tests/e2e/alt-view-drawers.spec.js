@@ -146,10 +146,15 @@ function motionOf(samples) {
   let rest = samples.length - 1;
   while (rest > 0 && sameBox(samples[rest - 1].box, end)) rest -= 1;
   const start = samples[0].t;
+  // A motion is set going in the frame after the press, and on a slow
+  // machine frames come far apart: the latest it can still be moving is its
+  // time plus the first gap and the longest one.
+  const gaps = samples.slice(1).map((s, i) => s.t - samples[i].t);
   return {
     moving: rest,
     toRest: samples[rest].t - start,
     lastMove: rest > 0 ? samples[rest - 1].t - start : 0,
+    slack: (gaps[0] ?? 0) + Math.max(0, ...gaps),
   };
 }
 
@@ -176,7 +181,9 @@ function expectDrawerMove(samples, { name, from, opening, edge }) {
   expect(motion.toRest, `${name}: at rest no sooner than ${minMs} ms`).toBeGreaterThanOrEqual(
     minMs
   );
-  expect(motion.lastMove, `${name}: still by ${maxMs} ms`).toBeLessThanOrEqual(maxMs);
+  expect(motion.lastMove, `${name}: still by ${maxMs} ms and a frame or two`).toBeLessThanOrEqual(
+    maxMs + motion.slack
+  );
 
   // A control keeps its place against the drawer's leading edge, the one
   // that moves: a panel that grows into its room is measured from its
@@ -224,7 +231,9 @@ function expectTodaysMotion(samples, { name, ms }) {
   }
   expect(motion.moving, `${name}: seen on its way`).toBeGreaterThanOrEqual(2);
   expect(motion.toRest, `${name}: at rest no sooner than ${ms} ms`).toBeGreaterThanOrEqual(ms - 20);
-  expect(motion.lastMove, `${name}: still by ${ms} ms`).toBeLessThanOrEqual(ms + 20);
+  expect(motion.lastMove, `${name}: still by ${ms} ms and a frame or two`).toBeLessThanOrEqual(
+    ms + motion.slack
+  );
 }
 
 async function reduceMotion(page) {
