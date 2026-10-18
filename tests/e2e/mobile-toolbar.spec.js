@@ -416,7 +416,7 @@ for (const height of HEIGHTS) {
       expect(heading1.text).toContain('OpenSCAD');
 
       // The heading that stood down is still the region's accessible name.
-      const heading = page.locator('.preview-drawer-title');
+      const heading = page.locator('#preview-settings-heading');
       await expect(heading).toHaveClass(/sr-only/);
       const regionName = await page.evaluate(() => {
         const region = document.getElementById('previewInfoContent');
@@ -580,14 +580,14 @@ test.describe('The row goes home when the window grows', () => {
       'data-mobile-toolbar',
       'relocated'
     );
-    await expect(page.locator('.preview-drawer-title')).toHaveClass(/sr-only/);
+    await expect(page.locator('#preview-settings-heading')).toHaveClass(/sr-only/);
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.locator('body')).toHaveAttribute(
       'data-mobile-toolbar',
       'home'
     );
-    await expect(page.locator('.preview-drawer-title')).not.toHaveClass(
+    await expect(page.locator('#preview-settings-heading')).not.toHaveClass(
       /sr-only/
     );
     const home = await page
@@ -634,7 +634,7 @@ test.describe('The row follows the surface, not just the viewport', () => {
           .querySelector('.workflow-actions')
           ?.closest('#workflowProgress'),
         titleSrOnly: document
-          .querySelector('.preview-drawer-title')
+          .querySelector('#preview-settings-heading')
           ?.classList.contains('sr-only'),
       }));
 
@@ -711,7 +711,7 @@ test.describe('The welcome surface is left alone', () => {
         await control.evaluate((el) => el.closest('#workflowProgress') !== null)
       ).toBe(true);
     }
-    await expect(page.locator('.preview-drawer-title')).not.toHaveClass(
+    await expect(page.locator('#preview-settings-heading')).not.toHaveClass(
       /sr-only/
     );
   });
@@ -743,7 +743,7 @@ test.describe('The bottom bar toggles say their name once', () => {
     await nameOnly(page, 'cameraDrawerToggle', 'camera controls');
   });
 
-  test('ASCII, in the Alt View: a name and no description, before and after a press', async ({
+  test('Lens, in the Alt View: a name and no description, before and after a press', async ({
     page,
   }) => {
     test.setTimeout(WASM_READY_TIMEOUT + 60_000);
@@ -763,6 +763,6 @@ test.describe('The bottom bar toggles say their name once', () => {
         )
       )
       .toBe('mono');
-    await nameOnly(page, 'asciiDrawerToggle', 'ASCII controls');
+    await nameOnly(page, 'asciiDrawerToggle', 'Lens controls');
   });
 });

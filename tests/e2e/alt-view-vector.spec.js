@@ -1,5 +1,5 @@
 /**
- * The Alt View's vector look: below 30% on the Characters slider the model is
+ * The Alt View's vector look: below 40% on the Focus slider the model is
  * drawn as its edges in lines of the look's color, in place of characters.
  * The line widens with the size and 0% still draws; the faces stay dark
  * until the Surfaces slider fills them; the green look glows and keeps a
@@ -17,7 +17,7 @@ test.describe.configure({ timeout: 240_000 });
 
 const WASM_READY_TIMEOUT = 180_000;
 
-async function openBox(page, mode) {
+async function openBox(page, mode, example = 'simple-box') {
   await page.addInitScript((mode) => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
@@ -29,7 +29,7 @@ async function openBox(page, mode) {
       JSON.stringify({ mode, lastCustomMode: 'standard' })
     );
   }, mode);
-  await page.goto('/?example=simple-box');
+  await page.goto(`/?example=${example}`);
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
     timeout: WASM_READY_TIMEOUT,
@@ -205,23 +205,23 @@ async function drag(page, steps, during, readFrom = steps) {
 }
 
 test.describe('The vector look', () => {
-  test('under 30% the model is lines of the look, widening with the size; 0% still draws; Surfaces fills the faces', async ({
+  test('under 40% the model is lines of the look, widening with the size; 0% still draws; Surfaces fills the faces', async ({
     page,
   }) => {
     await openBox(page, 'standard');
     const strip = page.locator('#previewStatusAltAdjust');
     const size = page.locator('#_hfmFontScale');
 
-    await slide(page, '_hfmFontScale', 0.3);
-    await expect(strip).toContainText('SIZE 30%');
-    await expect(size).toHaveAttribute('aria-valuetext', '30%');
+    await slide(page, '_hfmFontScale', 0.4);
+    await expect(strip).toContainText('FOCUS 40%');
+    await expect(size).toHaveAttribute('aria-valuetext', '40%');
     const characters = await readScreen(page, 'characters');
 
-    await slide(page, '_hfmFontScale', 0.25);
-    await expect(strip).toContainText('LINES 25%');
-    await expect(size).toHaveAttribute('aria-valuetext', 'Vector lines, 25%');
+    await slide(page, '_hfmFontScale', 0.35);
+    await expect(strip).toContainText('LINES 35%');
+    await expect(size).toHaveAttribute('aria-valuetext', 'Vector lines, 35%');
     const wide = await readScreen(page, 'wide');
-    await slide(page, '_hfmFontScale', 0.15);
+    await slide(page, '_hfmFontScale', 0.2);
     const middle = await readScreen(page, 'middle');
     await slide(page, '_hfmFontScale', 0);
     await expect(size).toHaveAttribute('aria-valuetext', 'Vector lines, 0%');
@@ -230,15 +230,22 @@ test.describe('The vector look', () => {
 
     // The faces: what the model filled solid lights and Surfaces 1% leaves
     // dark, away from the lines.
-    await slide(page, '_hfmFontScale', 0.25);
+    await slide(page, '_hfmFontScale', 0.35);
     await readScreen(page, 'faint');
     await slide(page, '_hfmSurfaces', 1);
     await readScreen(page, 'solid');
     const faceCount = await keepFaces(page, 'solid', 'faint');
+    // At 100 % the faces are solid: they write depth and hide what is
+    // behind them, lit by the preview's own lights; under it they blend.
+    const surfacesWord = () =>
+      page.locator('.hfm-overlay-canvas').getAttribute('data-surfaces');
+    await expect.poll(surfacesWord, { timeout: 5_000 }).toBe('solid');
+    const solidFaces = await readScreen(page, 'solid-shaded', 'faces');
     await slide(page, '_hfmSurfaces', 0.5);
+    await expect.poll(surfacesWord, { timeout: 5_000 }).toBe('clear');
     const half = await readScreen(page, 'half', 'faces');
     await slide(page, '_hfmSurfaces', 0.01);
-    await slide(page, '_hfmFontScale', 0.3);
+    await slide(page, '_hfmFontScale', 0.4);
     const charactersInFaces = await readScreen(page, 'again', 'faces');
 
     const numbers = {
@@ -251,6 +258,7 @@ test.describe('The vector look', () => {
       thinCoveredByWide,
       faces: {
         pixels: faceCount,
+        solid: solidFaces.mean,
         half: half.mean,
         characters: charactersInFaces.mean,
       },
@@ -264,24 +272,69 @@ test.describe('The vector look', () => {
     console.log('vector look:', JSON.stringify(numbers));
 
     expect(thin.lit, '0% still draws').toBeGreaterThan(500);
-    expect(middle.lit, '15% wider than 0%').toBeGreaterThan(thin.lit);
-    expect(wide.lit, '25% wider than 15%').toBeGreaterThan(middle.lit);
-    expect(wide.lit / thin.lit, '25% at least twice 0%').toBeGreaterThanOrEqual(
+    expect(middle.lit, '20% wider than 0%').toBeGreaterThan(thin.lit);
+    expect(wide.lit, '35% wider than 20%').toBeGreaterThan(middle.lit);
+    expect(wide.lit / thin.lit, '35% at least twice 0%').toBeGreaterThanOrEqual(
       2
     );
     expect(thinCoveredByWide, 'the same lines, only wider').toBeGreaterThan(
       0.9
     );
     expect(faceCount, 'faces the lines leave dark').toBeGreaterThan(5000);
-    expect(half.mean, 'Surfaces 50% fills them').toBeGreaterThan(0.3);
+    // At 50 % the blended faces stack, front and back, and the lines behind
+    // show through, so their placement is not under the solid faces' (0.69
+    // against 0.63 measured); solid is checked by its own mark above.
+    expect(solidFaces.mean, 'Surfaces 100% fills them solid and lit').toBeGreaterThan(0.2);
+    expect(half.mean, 'Surfaces 50% fills them').toBeGreaterThan(0.2);
     expect(charactersInFaces.mean, 'characters fill them').toBeGreaterThan(0.3);
+  });
+
+  test('rounded parts: the logo plate gets its outline and a dim wireframe of its corners in the DOS look; at Edges 400 % every facet is a crease and the wireframe is empty', async ({
+    page,
+  }) => {
+    // The DOS look draws crisp: a dim line is half-lit, and nothing else is.
+    await openBox(page, 'classic', 'logo-plate');
+    await slide(page, '_hfmFontScale', 0.35);
+    const lines = () =>
+      page
+        .locator('.hfm-overlay-canvas')
+        .getAttribute('data-lines')
+        .then((text) => (text ?? '').split(' ').map(Number));
+    await expect
+      .poll(async () => (await lines()).length, { timeout: 10_000 })
+      .toBe(3);
+    const [creases, outline, facets] = await lines();
+    const plate = await readScreen(page, 'plate');
+    expect(creases, 'the creases as before').toBeGreaterThan(100);
+    expect(outline, 'the outline at the rounded corners').toBeGreaterThan(0);
+    expect(facets, 'the dim wireframe of the corners').toBeGreaterThan(10);
+    expect(plate.half, 'the dim lines are half-lit').toBeGreaterThan(50);
+
+    // At Edges 400 % (a crease at 1 degree) every facet is a crease, drawn
+    // bright: nothing is left for the wireframe or the outline.
+    await slide(page, '_hfmContrast', 4);
+    await expect
+      .poll(async () => (await lines())[2], { timeout: 10_000 })
+      .toBe(0);
+    const sharp = await lines();
+    const sharpScreen = await readScreen(page, 'sharp');
+    expect(sharp[0], 'every facet a crease').toBeGreaterThan(creases);
+    expect(sharp[1], 'no outline left').toBe(0);
+    expect(sharpScreen.half, 'nothing half-lit: no dim lines').toBe(0);
+    test.info().annotations.push({
+      type: 'measured',
+      description: JSON.stringify({
+        plate: { creases, outline, facets, half: plate.half },
+        sharp: { lines: sharp, half: sharpScreen.half },
+      }),
+    });
   });
 
   test("the green look's lines leave a fading trace as the view turns; the DOS look's pixels are crisp and leave none", async ({
     page,
   }) => {
     await openBox(page, 'standard');
-    await slide(page, '_hfmFontScale', 0.25);
+    await slide(page, '_hfmFontScale', 0.35);
     const greenStill = await readScreen(page, 'still');
     // The trace is a decaying maximum of the frames before, so one frame's
     // read is noisy: the strongest of the last four steps' reads stands for
@@ -298,7 +351,7 @@ test.describe('The vector look', () => {
     const classic = await page.context().newPage();
     await page.close();
     await openBox(classic, 'classic');
-    await slide(classic, '_hfmFontScale', 0.25);
+    await slide(classic, '_hfmFontScale', 0.35);
     const dosStill = await readScreen(classic, 'still');
     const dosTurning = await drag(classic, 10, () =>
       readScreen(classic, 'turning')
@@ -325,11 +378,13 @@ test.describe('The vector look', () => {
     console.log('glow and trace:', JSON.stringify(numbers));
 
     expect(dosStill.lit, 'the DOS look draws').toBeGreaterThan(500);
+    // The DOS look's dim wireframe is half-lit at rest, a small share of
+    // the picture; turning adds no trace to it.
+    expect(dosStill.half / dosStill.lit, 'the dim lines, a small share').toBeLessThan(0.2);
     expect(
       dosTurning.half / dosTurning.lit,
-      'no half-lit pixels in DOS, turning'
-    ).toBeLessThan(0.02);
-    expect(dosStill.half / dosStill.lit, 'nor still').toBeLessThan(0.02);
+      'no trace in DOS: no more half-lit turning than still'
+    ).toBeLessThanOrEqual(dosStill.half / dosStill.lit + 0.005);
     // The trace fades by the clock, the Glow's share every 33 ms, so a
     // machine that draws a frame only now and then (a test runner's software
     // drawing) shows little of it between frames. It is checked where the

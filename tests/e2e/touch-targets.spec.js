@@ -168,7 +168,7 @@ test.describe('the phone camera drawer', () => {
 
 test.describe('the Alt View’s controls on a phone', () => {
   test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
-  test('its sliders in the ASCII drawer', async ({ page }) => {
+  test('its sliders in the Lens drawer', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
     });
@@ -181,12 +181,12 @@ test.describe('the Alt View’s controls on a phone', () => {
     await expect(key).toBeVisible();
     await key.click();
     await expect(key).toHaveAttribute('aria-pressed', 'true');
-    // On a phone the four sliders sit in the ASCII drawer.
+    // On a phone the four sliders sit in the Lens drawer.
     await page.locator('#asciiDrawerToggle').click();
     await expectAtLeast(
       page,
       '#asciiDrawerBody input[type="range"]',
-      'an ASCII drawer slider'
+      'a Lens drawer slider'
     );
   });
 });

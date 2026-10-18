@@ -288,9 +288,9 @@ function _setContrastScale(st, scale) {
 
 function _setFontScale(st, scale) {
   const next = Number.isFinite(scale) ? scale : 1;
-  // Instance floor is 0.05, not the preview's 0.3: the City Walk asks
+  // Instance floor is 0.05, not the preview's 0.4: the City Walk asks
   // for characters small enough to disappear into, and hfm-controller.js
-  // still gives the preview's Alt View no characters under 0.3 (its
+  // still gives the preview's Alt View no characters under 0.4 (its
   // slider goes lower, to the vector look). Below ~0.15 the fontSizePx
   // floor takes over and the glyphs stop shrinking.
   // - Max 2.5 → larger chars, lower resolution (more legible)
@@ -1680,6 +1680,16 @@ function _renderVectorFrame(st, { renderer, previewManager, container }) {
     creaseDeg: look.creaseDeg,
     crisp: look.crisp,
   });
+  // What the frame drew, readable from the page: creases, outline, facets,
+  // and whether the faces were solid.
+  const counts = st.vectorPass.lineCounts();
+  const drawn = `${counts.creases} ${counts.outline} ${counts.facets}`;
+  if (st.overlayCanvas.dataset.lines !== drawn) {
+    st.overlayCanvas.dataset.lines = drawn;
+  }
+  if (st.overlayCanvas.dataset.surfaces !== counts.surfaces) {
+    st.overlayCanvas.dataset.surfaces = counts.surfaces;
+  }
 
   const dpr = _getDpr();
   const backingW = Math.max(1, Math.round(width * dpr));
@@ -2010,6 +2020,10 @@ export async function initAltView(previewManager, options = {}) {
         );
       }
       st.vectorLook = on ? { ...look } : null;
+      if (!on && st.overlayCanvas) {
+        delete st.overlayCanvas.dataset.lines;
+        delete st.overlayCanvas.dataset.surfaces;
+      }
       if (on && !st.vectorPass && !st.vectorLoading) {
         st.vectorLoading = import('./_hfm-vector.js').then(
           ({ createVectorPass }) => {
@@ -2034,6 +2048,8 @@ export async function initAltView(previewManager, options = {}) {
     isVectorLook: () => Boolean(st.vectorLook && st.vectorPass),
     /** How many edges the vector look drew last, or 0. */
     getVectorEdgeCount: () => st.vectorPass?.edgeCount() ?? 0,
+    /** The lines the vector look drew last, or null. */
+    getVectorLineCounts: () => st.vectorPass?.lineCounts() ?? null,
     /**
      * Palette mode. Pass an array of #rrggbb colors to render each
      * cell in the nearest palette color (one glyph atlas per entry);

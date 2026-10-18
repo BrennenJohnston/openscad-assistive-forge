@@ -763,14 +763,14 @@ test.describe("The Alt View's sliders keep the touch target", () => {
     await seed(page, { unlock: true, theme: 'dark' });
   });
 
-  test('on a desktop window: the Customizer and the camera panel', async ({
+  test('on a desktop window: the Customizer and the Lens drawer', async ({
     page,
   }) => {
     test.setTimeout(300_000);
     await page.setViewportSize({ width: 1280, height: 720 });
     await openProject(page);
     await altViewOn(page);
-    const toggle = page.locator('#cameraPanelToggle');
+    const toggle = page.locator('#lensDrawerToggle');
     if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
       await toggle.click();
     }
@@ -784,19 +784,19 @@ test.describe("The Alt View's sliders keep the touch target", () => {
     // No isMobile: Firefox rejects it when the browser context is created.
     test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
 
-    test('the ASCII drawer and the Customizer', async ({ page }) => {
+    test('the Lens drawer and the Customizer', async ({ page }) => {
       test.setTimeout(300_000);
       await openProject(page);
       await altViewOn(page);
       await page.locator('#asciiDrawerToggle').click();
       await page.waitForTimeout(600);
       const ascii = await page.evaluate(shortSliders);
-      expect(ascii.count, 'sliders in the ASCII drawer').toBeGreaterThanOrEqual(
+      expect(ascii.count, 'sliders in the Lens drawer').toBeGreaterThanOrEqual(
         3
       );
       expect(
         ascii.short,
-        `ASCII drawer sliders under the ${ascii.target} px target`
+        `Lens drawer sliders under the ${ascii.target} px target`
       ).toEqual([]);
 
       await page.locator('#mobileDrawerToggle').click();

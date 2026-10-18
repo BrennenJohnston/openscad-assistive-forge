@@ -232,9 +232,9 @@ test.describe('The sounds button', () => {
       await page.waitForTimeout(700);
       return page.evaluate((from) => window.__sounds.slice(from).map((s) => s.seconds), before);
     };
-    // The Characters slider is in the camera panel; its drawer sound, still
-    // on, is let finish before the count starts.
-    await page.locator('#cameraPanelToggle').click();
+    // The Focus slider is in the Lens drawer; its drawer sound, still on,
+    // is let finish before the count starts.
+    await page.locator('#lensDrawerToggle').click();
     await page.waitForTimeout(1500);
     const characters = page.locator('#_hfmFontScale');
     await expect(characters).toBeVisible();
@@ -250,7 +250,7 @@ test.describe('The sounds button', () => {
       await page.mouse.up();
     });
     expect(dragged, 'the slider is silent').toEqual([]);
-    const pressed = await heard(() => page.locator('#cameraResetView').click());
+    const pressed = await heard(() => page.locator('#expandAllGroupsBtn').click());
     expect(pressed, 'a key still plays, down and up').toHaveLength(2);
 
     // The page loaded again, as any case begins.

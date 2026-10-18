@@ -974,7 +974,7 @@ test.describe('The Alt View and pan adjust speak plainly', () => {
     );
     await page.waitForTimeout(600);
     expect(await spoken(page, mark)).toEqual([
-      'Pan arrows now adjust the Alt View: up and down for edges, left and right for size, Shift with up and down for glow.',
+      'Pan arrows now adjust the Alt View: up and down for edges, left and right for focus, Shift with up and down for glow.',
     ]);
 
     mark = await announcementMark(page);
@@ -989,86 +989,6 @@ test.describe('The Alt View and pan adjust speak plainly', () => {
     expect(await spoken(page, mark)).toEqual([
       'Pan arrows move the view again.',
     ]);
-  });
-});
-
-// The character size has a control where its value shows: a stepper in the
-// preview's status strip with three named steps, present only in the Alt
-// View, kept in step with the camera panel's slider.
-test.describe('The Characters control beside the status line', () => {
-  test('steps through Fine, Normal and Bold, and the slider follows', async ({
-    page,
-  }) => {
-    test.setTimeout(240_000);
-    await page.addInitScript(() => {
-      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
-    });
-    await page.goto('/?example=simple-box');
-    await skipWithoutWebGL(page, NEEDS_WEBGL);
-    await page.waitForFunction(() => window.previewManager?.mesh, null, {
-      timeout: 180_000,
-    });
-    const notNow = page.locator('#saveProjectNotNow');
-    try {
-      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
-      await notNow.click();
-    } catch {
-      // No save-project prompt to dismiss.
-    }
-    const uiToggle = page.locator('#uiModeToggle');
-    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
-      await uiToggle.click();
-    }
-    const controls = page.locator('#altViewControls');
-    await expect(controls).toBeHidden();
-
-    const key = page.locator('#_hfmToggle');
-    await key.click();
-    await expect(key).toHaveAttribute('aria-pressed', 'true');
-    await expect(controls).toBeVisible();
-    const smaller = page.getByRole('button', { name: 'Smaller characters' });
-    const larger = page.getByRole('button', { name: 'Larger characters' });
-    const value = page.locator('#altViewCharactersValue');
-    const status = page.locator('#previewStatusAltAdjust');
-    const slider = page.locator('#_hfmFontScale');
-
-    // Start from a known step, whatever the default is.
-    await slider.evaluate((el) => {
-      el.value = '0.6';
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await expect(value).toHaveText('Normal');
-
-    await larger.click();
-    await expect(value).toHaveText('Bold');
-    await expect(status).toContainText('SIZE 100%');
-    await expect(slider).toHaveValue('1');
-
-    await larger.click();
-    await expect(value).toHaveText('Bold');
-
-    await smaller.click();
-    await expect(value).toHaveText('Normal');
-    await expect(status).toContainText('SIZE 60%');
-    await expect(slider).toHaveValue('0.6');
-
-    await smaller.click();
-    await expect(value).toHaveText('Fine');
-    await expect(status).toContainText('SIZE 50%');
-
-    await smaller.click();
-    await expect(value).toHaveText('Fine');
-
-    // A value set elsewhere shows as its percentage.
-    await slider.evaluate((el) => {
-      el.value = '0.75';
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await expect(value).toHaveText('75%');
-
-    await key.click();
-    await expect(key).toHaveAttribute('aria-pressed', 'false');
-    await expect(controls).toBeHidden();
   });
 });
 
@@ -1100,13 +1020,12 @@ test.describe('The character-size shortcuts', () => {
     }
     const key = page.locator('#_hfmToggle');
     const slider = page.locator('#_hfmFontScale');
-    const value = page.locator('#altViewCharactersValue');
 
-    // Off: the keys change nothing.
+    // Off: the keys change nothing, and the Lens drawer's toggle is away.
     await page.locator('h1').click();
     await page.keyboard.press('=');
     await page.waitForTimeout(300);
-    await expect(page.locator('#altViewControls')).toBeHidden();
+    await expect(page.locator('#lensDrawerToggle')).toBeHidden();
 
     await key.click();
     await expect(key).toHaveAttribute('aria-pressed', 'true');
@@ -1114,105 +1033,31 @@ test.describe('The character-size shortcuts', () => {
       el.value = '0.6';
       el.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    await expect(value).toHaveText('Normal');
+    await expect(slider).toHaveValue('0.6');
 
+    // The named steps: Fine 50%, Normal 60%, Bold 100%.
     await page.locator('h1').click();
     await page.keyboard.press('=');
-    await expect(value).toHaveText('Bold');
+    await expect(slider).toHaveValue('1');
     await page.keyboard.press('-');
-    await expect(value).toHaveText('Normal');
+    await expect(slider).toHaveValue('0.6');
     await page.keyboard.press('-');
-    await expect(value).toHaveText('Fine');
+    await expect(slider).toHaveValue('0.5');
 
     // A text field keeps the keys for typing.
     const search = page.locator('#paramSearchInput');
     await search.click();
     await search.pressSequentially('=');
     await page.waitForTimeout(300);
-    await expect(value).toHaveText('Fine');
+    await expect(slider).toHaveValue('0.5');
     await expect(search).toHaveValue('=');
-
-    // The buttons advertise the keys.
-    await expect(
-      page.getByRole('button', { name: 'Larger characters' })
-    ).toHaveAttribute('aria-keyshortcuts', '=');
   });
 });
 
-// The contrast becomes a named control: three levels beside Characters, the
-// slider kept in step, and the camera panel's sliders named plainly.
-test.describe('The Edges control beside the status line', () => {
-  test('sets a level by name, follows the slider, and the panel says Characters, Edges, Glow', async ({
-    page,
-  }) => {
-    test.setTimeout(240_000);
-    await page.addInitScript(() => {
-      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
-    });
-    await page.goto('/?example=simple-box');
-    await skipWithoutWebGL(page, NEEDS_WEBGL);
-    await page.waitForFunction(() => window.previewManager?.mesh, null, {
-      timeout: 180_000,
-    });
-    const notNow = page.locator('#saveProjectNotNow');
-    try {
-      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
-      await notNow.click();
-    } catch {
-      // No save-project prompt to dismiss.
-    }
-    const uiToggle = page.locator('#uiModeToggle');
-    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
-      await uiToggle.click();
-    }
-    const key = page.locator('#_hfmToggle');
-    await key.click();
-    await expect(key).toHaveAttribute('aria-pressed', 'true');
-
-    const edges = page.locator('#altViewEdges');
-    await expect(edges).toBeVisible();
-    const soft = edges.getByRole('button', { name: 'Soft' });
-    const normal = edges.getByRole('button', { name: 'Normal' });
-    const sharp = edges.getByRole('button', { name: 'Sharp' });
-    const status = page.locator('#previewStatusAltAdjust');
-    const slider = page.locator('#_hfmContrast');
-
-    await sharp.click();
-    await expect(sharp).toHaveAttribute('aria-pressed', 'true');
-    await expect(normal).toHaveAttribute('aria-pressed', 'false');
-    await expect(status).toContainText('EDGE 160%');
-    await expect(slider).toHaveValue('1.6');
-
-    await soft.click();
-    await expect(soft).toHaveAttribute('aria-pressed', 'true');
-    await expect(sharp).toHaveAttribute('aria-pressed', 'false');
-    await expect(status).toContainText('EDGE 70%');
-
-    // A value set elsewhere lights the matching level, or none.
-    await slider.evaluate((el) => {
-      el.value = '1';
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await expect(normal).toHaveAttribute('aria-pressed', 'true');
-    await slider.evaluate((el) => {
-      el.value = '2';
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await expect(normal).toHaveAttribute('aria-pressed', 'false');
-    await expect(soft).toHaveAttribute('aria-pressed', 'false');
-    await expect(sharp).toHaveAttribute('aria-pressed', 'false');
-
-    await page.locator('#cameraPanelToggle').click();
-    await expect(page.locator('#_hfmContrast-label')).toHaveText('Edges');
-    await expect(page.locator('#_hfmFontScale-label')).toHaveText('Characters');
-    await expect(page.locator('#_hfmPersistFade-label')).toHaveText('Glow');
-  });
-});
-
-// On a phone the Alt View's ASCII drawer holds its four sliders and
+// On a phone the Alt View's Lens drawer holds its four sliders and
 // nothing else; they change the one size and the one level the strip shows
 // on a desktop window, and the minus and equals keys still step the size.
-test.describe('The Alt View controls in the phone ASCII drawer', () => {
+test.describe('The Alt View controls in the phone Lens drawer', () => {
   // No isMobile: Firefox rejects it when the browser context is created.
   test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
 
@@ -1238,7 +1083,8 @@ test.describe('The Alt View controls in the phone ASCII drawer', () => {
     const key = page.locator('#_hfmToggle');
     await key.click();
     await expect(key).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#altViewControls')).toBeHidden();
+    // The desktop's Lens drawer is not for a phone.
+    await expect(page.locator('#lensDrawerToggle')).toBeHidden();
 
     await page.locator('#asciiDrawerToggle').click();
     const section = page.locator('#asciiDrawerBody');
@@ -1247,23 +1093,20 @@ test.describe('The Alt View controls in the phone ASCII drawer', () => {
     await expect(section.locator('button')).toHaveCount(0);
     await expect(section.locator('.alt-view-stepper')).toHaveCount(0);
 
-    const stripValue = page.locator('#altViewCharactersValue');
     const slider = page.locator('#_hfmFontScaleMobile');
     await slider.evaluate((el) => {
       el.value = '0.6';
       el.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    await expect(stripValue).toHaveText('Normal');
     await expect(page.locator('#_hfmFontScale')).toHaveValue('0.6');
 
-    // The minus key steps the size down to the next named step, from the
-    // preview as from anywhere outside a text field.
+    // The minus key steps the size down to the next named step (Fine, 50%),
+    // from the preview as from anywhere outside a text field.
     await page.locator('#previewContainer').click();
     await page.keyboard.press('-');
-    await expect(stripValue).toHaveText('Fine');
     await expect(slider).toHaveValue('0.5');
     await page.keyboard.press('=');
-    await expect(stripValue).toHaveText('Normal');
+    await expect(slider).toHaveValue('0.6');
 
     const edges = page.locator('#_hfmContrastMobile');
     await edges.evaluate((el) => {
@@ -1351,12 +1194,12 @@ test.describe('The Alt View starts with finer characters', () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#previewStatusAltAdjust')).toContainText(
-      'SIZE 60%'
+      'FOCUS 60%'
     );
     await expect(page.locator('#_hfmFontScale')).toHaveValue('0.6');
   });
 
-  test('on a phone shows 40% characters when nothing is saved', async ({
+  test('on a phone shows 45% characters when nothing is saved', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -1377,9 +1220,9 @@ test.describe('The Alt View starts with finer characters', () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#previewStatusAltAdjust')).toContainText(
-      'SIZE 40%'
+      'FOCUS 45%'
     );
-    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.4');
+    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.45');
   });
 });
 

@@ -827,7 +827,7 @@ function initMobileCameraDrawer() {
       drawerId: 'asciiDrawer',
       toggleId: 'asciiDrawerToggle',
       bodyId: 'asciiDrawerBody',
-      label: 'ASCII controls',
+      label: 'Lens controls',
     },
   ]) {
     const d = initPhoneDrawer({ ...cfg, onChange });

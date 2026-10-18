@@ -58,17 +58,22 @@ let _hfmContrastScale = _HFM_CONTRAST_RANGE.default;
 let _hfmContrastControls = null;
 
 // The default is finer than the renderer's own 1: at full size the first
-// frame drew the model as a blob with no faces. A saved size wins. At 30%
-// a phone's cell meets the renderer's 3 px font floor (a 3 x 5 px cell,
-// 16,000 of them on a 398 x 622 preview), so below it the characters give
-// way to the vector look.
-const _HFM_FONT_SCALE_RANGE = { min: 0, max: 2.5, step: 0.05, default: 0.6 };
-// Under 30% the model is drawn as its edges, the way a vector monitor's beam
-// drew lines. The line's width follows the size: 1 px at 0%, 0.6 px wider for
-// every 5%, 4 px at 25% (CSS px, the same on every screen).
-const _HFM_VECTOR_BELOW = 0.3;
+// frame drew the model as a blob with no faces. A saved size wins. The top
+// is where the characters stop growing: the renderer caps its font at
+// 24 px, met at 170% of the 14 px base a preview gets. Under 40% the
+// characters give way to the vector look: that is where an eye on a phone
+// stops telling them apart.
+const _HFM_FONT_SCALE_RANGE = { min: 0, max: 1.7, step: 0.05, default: 0.6 };
+// Under 40% the model is drawn as its edges, the way a vector monitor's beam
+// drew lines. The line's width follows the size: 1 px at 0% and 4 px at the
+// first step under the edge, 35%, straight between (CSS px, the same on
+// every screen).
+const _HFM_VECTOR_BELOW = 0.4;
 const _HFM_VECTOR_WIDTH_AT_0 = 1;
-const _HFM_VECTOR_WIDTH_PER_SCALE = 12;
+const _HFM_VECTOR_WIDTH_TOP = 4;
+const _HFM_VECTOR_WIDTH_PER_SCALE =
+  (_HFM_VECTOR_WIDTH_TOP - _HFM_VECTOR_WIDTH_AT_0) /
+  (_HFM_VECTOR_BELOW - _HFM_FONT_SCALE_RANGE.step);
 // In the vector look the Edges slider chooses which creases are lines: its
 // named levels at 30, 15 and 5 degrees, its ends at 40 and 1, straight lines
 // between.
@@ -84,9 +89,10 @@ const _HFM_VECTOR_CREASE = [
 const _HFM_SURFACE_RANGE = { min: 0.01, max: 1, step: 0.01, default: 0.01 };
 let _hfmSurfaceOpacity = _HFM_SURFACE_RANGE.default;
 let _hfmSurfaceControls = null;
-// A phone starts finer: 40% is the finest size whose glyphs still read on a
-// phone's screen. A saved size wins on every device.
-const _HFM_FONT_SCALE_PHONE_DEFAULT = 0.4;
+// A phone starts finer: 45% is one step above the edge where the characters
+// give way to lines, the most detail that still reads on a phone's screen.
+// A saved size wins on every device.
+const _HFM_FONT_SCALE_PHONE_DEFAULT = 0.45;
 const _HFM_PHONE_MAX_WIDTH_PX = 768;
 let _hfmFontScale = _HFM_FONT_SCALE_RANGE.default;
 let _hfmFontScaleControls = null;
@@ -174,6 +180,7 @@ const _HFM_SOUNDING_DRAWERS = new Set([
   'phone-camera',
   'phone-ascii',
   'preview-settings',
+  'lens',
   'classic-customizer',
   'classic-right-top',
   'classic-right-bottom',
@@ -187,6 +194,7 @@ const _HFM_DRAWER_BUTTONS = [
   '#collapseParamPanelBtn',
   '#cameraPanelToggle',
   '#previewDrawerToggle',
+  '#lensDrawerToggle',
   '#mobileDrawerToggle',
   '#drawerCloseBtn',
   '#cameraDrawerToggle',
@@ -305,7 +313,7 @@ const _HFM_NO_GRAPHICS_SENTENCE =
 // the preview's status line, and each change is spoken on its own.
 const _HFM_PAN_ADJUST_NAME = 'Adjust the Alt View with the pan arrows';
 const _HFM_PAN_ADJUST_ON_SENTENCE =
-  'Pan arrows now adjust the Alt View: up and down for edges, left and right for size, Shift with up and down for glow.';
+  'Pan arrows now adjust the Alt View: up and down for edges, left and right for focus, Shift with up and down for glow.';
 const _HFM_PAN_ADJUST_OFF_SENTENCE = 'Pan arrows move the view again.';
 
 // The character sizes a person steps through from the status strip. The
@@ -316,17 +324,6 @@ const _HFM_CHARACTER_STEPS = [
   { name: 'Bold', scale: 1 },
 ];
 const _HFM_STEP_TOLERANCE = 0.001;
-let _hfmCharacterStepper = null;
-
-// The edge levels a person chooses by name from the status strip; the slider
-// still moves in 5% steps between them. The curve itself is unchanged.
-const _HFM_EDGE_LEVELS = [
-  { level: 'soft', scale: 0.7 },
-  { level: 'normal', scale: 1 },
-  { level: 'sharp', scale: 1.6 },
-];
-let _hfmEdgeLevels = null;
-
 // The first Alt View in a page draws in from the top and the status line
 // types a greeting before its ordinary line; later ones start at once. The
 // line is not live, so the greeting is for the eye only.
@@ -539,21 +536,28 @@ function _updateHfmStatusBar() {
   if (!statusBar || !altAdjustEl) return;
   delete altAdjustEl.dataset.notice;
 
-  // The strip's controls, and the phone's ASCII drawer that holds their
-  // twins; the drawer closes before it hides.
-  const controls = document.getElementById('altViewControls');
+  // The desktop's Lens drawer (its toggle and title at the left of the
+  // actions bar) and the phone's, which hold the sliders; each closes
+  // before it hides.
+  const lensToggle = document.getElementById('actionsLens');
+  const lens = document.getElementById('lensDrawer');
   const asciiDrawer = document.getElementById('asciiDrawer');
   if (!isMono || !_hfmEnabled) {
     statusBar.classList.remove('has-alt-adjust');
     altAdjustEl.textContent = '';
-    if (controls) controls.hidden = true;
+    if (lens && !lens.hidden) {
+      setLookDrawer('lens', false, { instant: true });
+      lens.hidden = true;
+    }
+    if (lensToggle) lensToggle.hidden = true;
     if (asciiDrawer && !asciiDrawer.hidden) {
       closePhoneDrawer('ascii');
       asciiDrawer.hidden = true;
     }
     return;
   }
-  if (controls) controls.hidden = false;
+  if (lensToggle) lensToggle.hidden = false;
+  if (lens) lens.hidden = false;
   if (asciiDrawer) asciiDrawer.hidden = false;
 
   let displayText;
@@ -565,7 +569,7 @@ function _updateHfmStatusBar() {
   } else {
     const edge = _formatPercent(_hfmContrastScale);
     const size = _formatPercent(_hfmFontScale);
-    const sizeWord = _hfmIsVector() ? 'LINES' : 'SIZE';
+    const sizeWord = _hfmIsVector() ? 'LINES' : 'FOCUS';
     const glow = _formatPercent(_prefersReducedMotion() ? 0 : _hfmPersistFade);
     displayText = `[ALT VIEW] EDGE ${edge} \u00B7 ${sizeWord} ${size} \u00B7 GLOW ${glow}`;
   }
@@ -637,7 +641,6 @@ function _applyHfmContrastScale(scale) {
   }
 
   _hfmContrastControls?.sync?.(clamped);
-  _initHfmEdgeLevels()?.sync(clamped);
   _syncHfmVectorLook();
   _syncHfmPanToggleUi();
   _debouncedSave(STORAGE_KEY_HFM_CONTRAST_SCALE, clamped);
@@ -654,15 +657,14 @@ function _applyHfmFontScale(scale) {
   );
   _hfmFontScale = clamped;
 
-  // The characters themselves never go under 30%: there they are lines, and
-  // a look whose lines cannot load keeps its 30% characters.
+  // The characters themselves never go under 40%: there they are lines, and
+  // a look whose lines cannot load keeps its 40% characters.
   if (_hfmAltView?.setFontScale) {
     _hfmAltView.setFontScale(Math.max(clamped, _HFM_VECTOR_BELOW));
     _hfmAltView.invalidate?.();
   }
 
   _hfmFontScaleControls?.sync?.(clamped);
-  _initHfmCharacterStepper()?.sync(clamped);
   _syncHfmVectorLook();
   _syncHfmPanToggleUi();
   _debouncedSave(STORAGE_KEY_HFM_FONT_SCALE, clamped);
@@ -671,7 +673,7 @@ function _applyHfmFontScale(scale) {
 }
 
 /**
- * True when a size is under 30%, where the model is drawn as lines.
+ * True when a size is under 40%, where the model is drawn as lines.
  * @param {number} [scale]
  * @returns {boolean}
  */
@@ -680,15 +682,15 @@ function _hfmIsVector(scale = _hfmFontScale) {
 }
 
 /**
- * What a size is called aloud: "Characters 40%", or under 30% "Vector
- * lines, 25%".
+ * What a size is called aloud: "Focus 60%", or under 40% "Vector lines,
+ * 35%".
  * @param {number} scale
  * @returns {string}
  */
 function _hfmSizeWords(scale) {
   return _hfmIsVector(scale)
     ? `Vector lines, ${_formatPercent(scale)}`
-    : `Characters ${_formatPercent(scale)}`;
+    : `Focus ${_formatPercent(scale)}`;
 }
 
 /**
@@ -717,8 +719,12 @@ function _hfmCreaseDeg(scale) {
 function _hfmVectorLook() {
   if (!_hfmIsVector()) return null;
   return {
+    // To a hundredth: the slope is a fraction, and 4 px should be 4 px.
     widthPx:
-      _HFM_VECTOR_WIDTH_AT_0 + _HFM_VECTOR_WIDTH_PER_SCALE * _hfmFontScale,
+      Math.round(
+        (_HFM_VECTOR_WIDTH_AT_0 + _HFM_VECTOR_WIDTH_PER_SCALE * _hfmFontScale) *
+          100
+      ) / 100,
     surfaceOpacity: _hfmSurfaceOpacity,
     creaseDeg: Math.round(_hfmCreaseDeg(_hfmContrastScale) * 10) / 10,
     // Classic's look draws crisp, as a raster card did; the phosphor looks
@@ -865,14 +871,16 @@ function _buildHfmSliderControls({
     });
   };
 
-  // The camera panel keeps an area of its own under its controls for these.
+  // On a desktop the Lens drawer, risen from the actions bar's row, holds
+  // these sliders and nothing else: a slider's note is its description
+  // there, read but not shown.
   buildSection({
-    container: document.getElementById('cameraPanelExtras'),
+    container: document.getElementById('lensDrawerBody'),
     insertBefore: null,
-    sectionClass: `camera-control-section hfm-slider-section ${idBase}-section`,
-    titleClass: 'camera-control-section-title',
+    sectionClass: `lens-drawer-section hfm-slider-section ${idBase}-section`,
+    titleClass: 'lens-drawer-section-title',
     inputId: idBase,
-    noteVisible: true,
+    noteVisible: false,
   });
 
   // The phone's ASCII drawer holds these sliders and nothing else: a
@@ -960,86 +968,6 @@ function _stepHfmCharacters(direction) {
   return next;
 }
 
-/**
- * The Characters stepper in the preview's status strip (a desktop window;
- * on a phone the ASCII drawer has the slider alone): Smaller and Larger move
- * to the next named step; the value shows the step's name, or the percentage
- * when the size was set between steps elsewhere.
- * @returns {{ sync: (scale: number) => void }|null} null when it is not on
- *   the page
- */
-function _initHfmCharacterStepper() {
-  if (_hfmCharacterStepper) return _hfmCharacterStepper;
-  const sets = [
-    {
-      smaller: document.getElementById('altViewCharactersSmaller'),
-      larger: document.getElementById('altViewCharactersLarger'),
-      valueEl: document.getElementById('altViewCharactersValue'),
-    },
-  ].filter((set) => set.smaller && set.larger && set.valueEl);
-  if (!sets.length) return null;
-
-  for (const { smaller, larger } of sets) {
-    smaller.addEventListener('click', () => _stepHfmCharacters(-1));
-    larger.addEventListener('click', () => _stepHfmCharacters(1));
-  }
-
-  _hfmCharacterStepper = {
-    sync(scale) {
-      const step = _HFM_CHARACTER_STEPS.find(
-        (s) => Math.abs(s.scale - scale) < _HFM_STEP_TOLERANCE
-      );
-      for (const { valueEl } of sets) {
-        valueEl.textContent = step ? step.name : _formatPercent(scale);
-      }
-    },
-  };
-  _hfmCharacterStepper.sync(_hfmFontScale);
-  return _hfmCharacterStepper;
-}
-
-/**
- * The Edges level buttons in the preview's status strip (a desktop window):
- * each sets its level's scale and says it; the button whose level the
- * current scale matches reads pressed, none when the slider sits between
- * levels.
- * @returns {{ sync: (scale: number) => void }|null} null when they are not
- *   on the page
- */
-function _initHfmEdgeLevels() {
-  if (_hfmEdgeLevels) return _hfmEdgeLevels;
-  const buttons = [
-    ...document.querySelectorAll('#altViewEdges .alt-view-level-btn'),
-  ];
-  if (!buttons.length) return null;
-
-  buttons.forEach((button) => {
-    const level = _HFM_EDGE_LEVELS.find(
-      (entry) => entry.level === button.dataset.level
-    );
-    if (!level) return;
-    button.addEventListener('click', () => {
-      const next = _applyHfmContrastScale(level.scale);
-      announceImmediate(`Edges ${_formatPercent(next)}`);
-    });
-  });
-
-  _hfmEdgeLevels = {
-    sync(scale) {
-      buttons.forEach((button) => {
-        const level = _HFM_EDGE_LEVELS.find(
-          (entry) => entry.level === button.dataset.level
-        );
-        const pressed =
-          Boolean(level) && Math.abs(level.scale - scale) < _HFM_STEP_TOLERANCE;
-        button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
-      });
-    },
-  };
-  _hfmEdgeLevels.sync(_hfmContrastScale);
-  return _hfmEdgeLevels;
-}
-
 function _initHfmContrastControls() {
   if (_hfmContrastControls) return _hfmContrastControls;
   _hfmContrastControls = _buildHfmSliderControls({
@@ -1056,7 +984,7 @@ function _initHfmFontScaleControls() {
   if (_hfmFontScaleControls) return _hfmFontScaleControls;
   _hfmFontScaleControls = _buildHfmSliderControls({
     idBase: '_hfmFontScale',
-    titleText: 'Characters',
+    titleText: 'Focus',
     range: _HFM_FONT_SCALE_RANGE,
     getValue: () => _hfmFontScale,
     onInput: (value) => _applyHfmFontScale(value),
@@ -1098,7 +1026,7 @@ function _initHfmSurfaceControls() {
     range: _HFM_SURFACE_RANGE,
     getValue: () => _hfmSurfaceOpacity,
     onInput: (value) => _applyHfmSurfaceOpacity(value),
-    note: 'Below 30% Characters: how solid the faces under the lines are.',
+    note: 'Below 40% Focus: how solid the faces under the lines are.',
   });
   return _hfmSurfaceControls;
 }

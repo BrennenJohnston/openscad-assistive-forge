@@ -333,13 +333,13 @@ shows is never spoken.
 |---|---|---|
 | When the key appears: "A key appeared next to the theme button." once, about 4 s after the last press when sounds are on (it waits for a short tune), or at once with Preferences > Advanced > Play sounds off | ☐ | |
 | The key reads "Alt View, toggle button, not pressed"; pressing it says "Alt View on. The preview is drawn with characters and the interface follows." then "pressed"; again, "Alt View off." | ☐ | |
-| Beside the preview, "Characters" groups "Smaller characters" and "Larger characters"; a press says "Characters 50%" or the new size, once | ☐ | |
+| At the left of the Generate button's row, under the preview, "Expand Lens controls" (beside the heading "Lens") opens the Lens drawer; Tab goes through Edges, Focus, Glow and Surfaces with their values, Surfaces with its description; Escape closes the drawer and returns to the button, now "Collapse Lens controls" no longer | ☐ | |
 | "Edges" groups the toggle buttons Soft, Normal and Sharp; a press says "Edges 70%" (or 100%, 160%), once | ☐ | |
-| In focus mode, the minus and equals keys step Characters and say the size, once | ☐ | |
+| In focus mode, the minus and equals keys step Focus and say the size, once | ☐ | |
 | The sounds button, just before the key, reads "Sounds, toggle button, pressed"; a press turns the sounds off and it says "not pressed" | ☐ | |
-| Under 30% the Characters slider's value reads "Vector lines, 25%" (at 30% and over, "30%"); the Surfaces slider reads its value and then "Below 30% Characters: how solid the faces under the lines are." | ☐ | |
-| In Classic, the 3D view toolbar's "ASCII settings" button moves to the "ASCII" grouping, "Edges, slider, 100%"; the grouping is heard once while Tab goes through its four sliders; in the Simplified view the same group sits at the foot of the Customizer | ☐ | |
-| The pan D-pad's center reads "Adjust the Alt View with the pan arrows"; on, it says "Pan arrows now adjust the Alt View: up and down for edges, left and right for size, Shift with up and down for glow."; each arrow says one value ("Edges 105%", "Characters 55%", "Glow 20%"); off, "Pan arrows move the view again." | ☐ | |
+| Under 40% the Focus slider's value reads "Vector lines, 35%" (at 40% and over, "40%"); the Surfaces slider reads its value and then "Below 40% Focus: how solid the faces under the lines are." | ☐ | |
+| In Classic, the 3D view toolbar's "Lens settings" button moves to the "Lens" grouping, "Edges, slider, 100%"; the grouping is heard once while Tab goes through its four sliders; in the Simplified view the same group sits at the foot of the Customizer | ☐ | |
+| The pan D-pad's center reads "Adjust the Alt View with the pan arrows"; on, it says "Pan arrows now adjust the Alt View: up and down for edges, left and right for focus, Shift with up and down for glow."; each arrow says one value ("Edges 105%", "Focus 55%", "Glow 20%"); off, "Pan arrows move the view again." | ☐ | |
 
 ## The last run
 

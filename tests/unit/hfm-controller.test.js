@@ -105,7 +105,7 @@ function pageWithHeaderAndDpad() {
     <div id="cameraPanelBody">
       <div class="camera-control-dpad"><button id="cameraPanUp"></button></div>
       <div class="camera-shortcuts-help"><button id="projectionToggle"></button></div>
-      <div id="cameraPanelExtras"></div>
+      <div id="actionsLens" hidden><button id="lensDrawerToggle"></button></div><div id="lensDrawer" class="lens-drawer collapsed" hidden><div id="lensDrawerBody"></div></div>
     </div>
     <div id="previewStatusBar"><span id="previewStatusAltAdjust"></span></div>
   `
@@ -161,14 +161,14 @@ describe('the character size the Alt View starts with', () => {
     controller2.disableAltViewWithPreview(toggle)
   })
 
-  it('on a phone starts at 40% when nothing is saved, and a saved size still wins', async () => {
+  it('on a phone starts at 45% when nothing is saved, and a saved size still wins', async () => {
     const width = Object.getOwnPropertyDescriptor(window, 'innerWidth')
     Object.defineProperty(window, 'innerWidth', { value: 412, configurable: true })
     try {
       const toggle = document.createElement('button')
       const controller = await freshController(previewManagerStub())
       await controller.enableAltViewWithPreview(toggle)
-      expect((await lastAltView()).setFontScale).toHaveBeenLastCalledWith(0.4)
+      expect((await lastAltView()).setFontScale).toHaveBeenLastCalledWith(0.45)
       controller.disableAltViewWithPreview(toggle)
 
       localStorage.setItem('openscad-forge-hfm-font-scale', '1.2')
@@ -182,7 +182,7 @@ describe('the character size the Alt View starts with', () => {
     }
   })
 
-  it('under 30% draws the model as lines, 4 px wide at 25% and 1 px at 0%; Edges picks the creases, Surfaces the faces, Classic draws crisp; 30% is characters again', async () => {
+  it('under 40% draws the model as lines, 4 px wide at 35% and 1 px at 0%; Edges picks the creases, Surfaces the faces, Classic draws crisp; 40% is characters again', async () => {
     pageWithHeaderAndDpad()
     const toggle = document.createElement('button')
     const controller = await freshController(previewManagerStub())
@@ -198,15 +198,16 @@ describe('the character size the Alt View starts with', () => {
     const strip = document.getElementById('previewStatusAltAdjust')
     const size = document.getElementById('_hfmFontScale')
 
-    set('_hfmFontScale', 0.25)
+    set('_hfmFontScale', 0.35)
     expect(altView.setVectorLook).toHaveBeenLastCalledWith({
       widthPx: 4,
       surfaceOpacity: 0.01,
       creaseDeg: 15,
       crisp: false,
     })
-    expect(size.getAttribute('aria-valuetext')).toBe('Vector lines, 25%')
-    expect(strip.textContent).toContain('LINES 25%')
+    expect(size.getAttribute('aria-valuetext')).toBe('Vector lines, 35%')
+    expect(strip.textContent).toContain('LINES 35%')
+    expect(size.getAttribute('aria-label') ?? document.getElementById('_hfmFontScale-label')?.textContent, 'the slider is Focus').toContain('Focus')
     set('_hfmFontScale', 0)
     expect(altView.setVectorLook).toHaveBeenLastCalledWith(expect.objectContaining({ widthPx: 1 }))
     set('_hfmContrast', 0.7)
@@ -222,14 +223,14 @@ describe('the character size the Alt View starts with', () => {
     // Classic is a look of its own: its greeting types again.
     await vi.advanceTimersByTimeAsync(3000)
 
-    set('_hfmFontScale', 0.3)
+    set('_hfmFontScale', 0.4)
     expect(altView.setVectorLook).toHaveBeenLastCalledWith(null)
-    expect(size.getAttribute('aria-valuetext')).toBe('30%')
-    expect(strip.textContent).toContain('SIZE 30%')
+    expect(size.getAttribute('aria-valuetext')).toBe('40%')
+    expect(strip.textContent).toContain('FOCUS 40%')
     controller.disableAltViewWithPreview(toggle)
   })
 
-  it('under 30% the characters stay at 30%, so a look whose lines cannot load draws no smaller characters', async () => {
+  it('under 40% the characters stay at 40%, so a look whose lines cannot load draws no smaller characters', async () => {
     pageWithHeaderAndDpad()
     const toggle = document.createElement('button')
     const controller = await freshController(previewManagerStub())
@@ -241,12 +242,12 @@ describe('the character size the Alt View starts with', () => {
       input.dispatchEvent(new Event('input'))
     }
 
-    set(0.25)
-    expect(altView.setFontScale).toHaveBeenLastCalledWith(0.3)
-    set(0)
-    expect(altView.setFontScale).toHaveBeenLastCalledWith(0.3)
-    set(0.4)
+    set(0.35)
     expect(altView.setFontScale).toHaveBeenLastCalledWith(0.4)
+    set(0)
+    expect(altView.setFontScale).toHaveBeenLastCalledWith(0.4)
+    set(0.45)
+    expect(altView.setFontScale).toHaveBeenLastCalledWith(0.45)
     controller.disableAltViewWithPreview(toggle)
   })
 })
@@ -1913,14 +1914,14 @@ describe('the Alt View and pan adjust speak plainly', () => {
       'Adjust the Alt View with the pan arrows'
     )
     expect(written).toEqual([
-      'Pan arrows now adjust the Alt View: up and down for edges, left and right for size, Shift with up and down for glow.',
+      'Pan arrows now adjust the Alt View: up and down for edges, left and right for focus, Shift with up and down for glow.',
     ])
 
     expect(controller.onPanControl({ direction: 'up', shiftKey: false })).toBe(
       'Edges 105%'
     )
     expect(controller.onPanControl({ direction: 'left', shiftKey: false })).toBe(
-      'Characters 55%'
+      'Focus 55%'
     )
     // One step up from the 15% the glow starts at.
     expect(controller.onPanControl({ direction: 'up', shiftKey: true })).toBe(

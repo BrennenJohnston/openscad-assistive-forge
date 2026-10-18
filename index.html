@@ -1035,7 +1035,7 @@
               type="button"
               class="btn classic-tb-btn"
               id="classicAsciiSettingsBtn"
-              title="ASCII settings"
+              title="Lens settings"
             >
               <svg
                 class="classic-tb-svg"
@@ -1073,7 +1073,7 @@
                   fill="currentColor"
                 ></rect>
               </svg>
-              <span class="sr-only">ASCII settings</span>
+              <span class="sr-only">Lens settings</span>
             </button>
           </div>
           <div class="classic-tb-group" role="group" aria-label="Projection">
@@ -2715,7 +2715,7 @@
                   class="classic-vp-group classic-ascii-group"
                   id="vpAsciiGroup"
                 >
-                  <legend>ASCII</legend>
+                  <legend>Lens</legend>
                 </fieldset>
                 <fieldset class="classic-vp-group">
                   <legend>Aspect Ratio</legend>
@@ -4420,7 +4420,7 @@
                 class="classic-vp-group classic-ascii-group"
                 id="classicAsciiSimplified"
               >
-                <legend>ASCII</legend>
+                <legend>Lens</legend>
               </fieldset>
               <!-- The whole stencil set in one download. Shown only
                    when the loaded tile makes plates; main.js reveals it. -->
@@ -5409,60 +5409,18 @@
                     class="preview-status-alt-adjust"
                     id="previewStatusAltAdjust"
                   ></span>
-                  <!-- The Alt View's own controls, beside the line that shows
-                       their values; shown only while the Alt View is on. -->
-                  <div class="alt-view-controls" id="altViewControls" hidden>
-                    <fieldset class="alt-view-stepper" id="altViewCharacters">
-                      <legend class="alt-view-stepper-label">Characters</legend>
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-icon forge-control alt-view-stepper-btn"
-                        id="altViewCharactersSmaller"
-                        aria-label="Smaller characters"
-                      >
-                        <span aria-hidden="true">&minus;</span>
-                      </button>
-                      <span
-                        class="alt-view-stepper-value"
-                        id="altViewCharactersValue"
-                      ></span>
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-icon forge-control alt-view-stepper-btn"
-                        id="altViewCharactersLarger"
-                        aria-label="Larger characters"
-                      >
-                        <span aria-hidden="true">+</span>
-                      </button>
-                    </fieldset>
-                    <fieldset class="alt-view-stepper" id="altViewEdges">
-                      <legend class="alt-view-stepper-label">Edges</legend>
-                      <button
-                        type="button"
-                        class="btn btn-sm forge-control alt-view-level-btn"
-                        data-level="soft"
-                        aria-pressed="false"
-                      >
-                        Soft
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-sm forge-control alt-view-level-btn"
-                        data-level="normal"
-                        aria-pressed="false"
-                      >
-                        Normal
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-sm forge-control alt-view-level-btn"
-                        data-level="sharp"
-                        aria-pressed="false"
-                      >
-                        Sharp
-                      </button>
-                    </fieldset>
-                  </div>
+                </div>
+                <!-- The Alt View's Lens drawer on a desktop: its four sliders,
+                     risen from the actions bar's row; shown only while the Alt
+                     View is on (on a phone the bar's Lens drawer serves). -->
+                <div
+                  class="lens-drawer collapsed"
+                  id="lensDrawer"
+                  role="region"
+                  aria-labelledby="lens-drawer-heading"
+                  hidden
+                >
+                  <div class="lens-drawer-body" id="lensDrawerBody"></div>
                 </div>
                 <!-- ECHO message drawer (console output display) -->
                 <div class="echo-drawer collapsed" id="echoDrawer">
@@ -5516,6 +5474,38 @@
               role="toolbar"
               aria-label="Model actions"
             >
+              <!-- The Alt View's Lens drawer rises from this row: its toggle at
+                   the left, the mirror of Preview Settings & Info's at the
+                   left of its row above, its title beside it; shown only
+                   while the Alt View is on. -->
+              <div class="actions-lens" id="actionsLens" hidden>
+                <button
+                  type="button"
+                  id="lensDrawerToggle"
+                  data-travel-open="up"
+                  class="btn btn-sm btn-icon btn-collapse-panel preview-drawer-toggle-btn forge-control"
+                  aria-expanded="false"
+                  aria-controls="lensDrawerBody"
+                  aria-label="Expand Lens controls"
+                >
+                  <svg
+                    class="drawer-arrow"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <polygon
+                      points="6,4 18,12 6,20"
+                      fill="currentColor"
+                    ></polygon>
+                  </svg>
+                </button>
+                <h2 class="preview-drawer-title" id="lens-drawer-heading">
+                  Lens
+                </h2>
+              </div>
               <!-- Primary actions (always visible, right side) -->
               <div class="actions-primary">
                 <button
@@ -5602,7 +5592,7 @@
                 class="camera-drawer ascii-drawer collapsed"
                 id="asciiDrawer"
                 role="region"
-                aria-label="ASCII controls"
+                aria-label="Lens controls"
                 hidden
               >
                 <button
@@ -5612,7 +5602,7 @@
                   class="btn btn-sm camera-drawer-toggle-btn forge-control"
                   aria-expanded="false"
                   aria-controls="asciiDrawerBody"
-                  aria-label="Expand ASCII controls"
+                  aria-label="Expand Lens controls"
                 >
                   <svg
                     class="drawer-arrow"
@@ -5627,7 +5617,7 @@
                       fill="currentColor"
                     ></polygon>
                   </svg>
-                  <span class="camera-drawer-label">ASCII</span>
+                  <span class="camera-drawer-label">Lens</span>
                 </button>
                 <!-- Filled when the page starts with the Alt View's four
                      sliders. -->
@@ -6861,9 +6851,6 @@
                   </dl>
                 </div>
               </div>
-              <!-- The Alt View's sliders, under the controls, in an area that
-                   scrolls on its own so the D-pads never move sideways. -->
-              <div class="camera-panel-extras" id="cameraPanelExtras"></div>
             </div>
           </div>
         </div>
@@ -7824,9 +7811,9 @@
               look of a phosphor screen. It is a hidden extra: finding it is
               part of the fun, and the keyboard finds it with the same moves as
               the camera buttons. When it is on, a key button sits next to the
-              theme button; the Characters and Edges controls beside the preview
-              set how fine the drawing is and how strong its outlines are, and
-              the camera panel has sliders for fine steps.
+              theme button, and a Lens button at the left of the Generate
+              button's row opens the sliders that set how fine the drawing is
+              and how strong its outlines are.
             </p>
             <h4>What to know</h4>
             <ul class="features-list">
@@ -7854,7 +7841,7 @@
               </li>
               <li>
                 <strong>Drawers</strong>: the Customizer, Preview Settings,
-                Camera and ASCII drawers and Classic's panes slide open and shut
+                Camera and Lens drawers and Classic's panes slide open and shut
                 like desk drawers, their controls riding inside; when Alt View
                 comes on they start shut, then the ones you had open come back,
                 left to right; when your system asks for reduced motion they
@@ -7918,8 +7905,8 @@
               </div>
             </div>
             <p class="altview-adjust-legend">
-              <strong>While adjusting:</strong> ▲/▼ = Edges ±, ◄/► = Characters
-              ±, Shift+▲/▼ = Glow ±
+              <strong>While adjusting:</strong> ▲/▼ = Edges ±, ◄/► = Focus ±,
+              Shift+▲/▼ = Glow ±
             </p>
             <h4>Adjust with the pan arrows</h4>
             <p>
@@ -7932,11 +7919,10 @@
                 <strong>Off (to begin with)</strong>: the arrows move the view
               </li>
               <li>
-                <strong>On</strong>: the arrows adjust Edges, Characters and
-                Glow
+                <strong>On</strong>: the arrows adjust Edges, Focus and Glow
               </li>
             </ul>
-            <h4>Edges, Characters and Glow</h4>
+            <h4>Edges, Focus and Glow</h4>
             <p>While adjusting, the Pan D-pad's arrows set:</p>
             <ul class="features-list">
               <li>
@@ -7956,45 +7942,49 @@
               </li>
             </ul>
             <p>
-              Edges go from 50% to 400%, Characters from 0% to 250%, and Glow
-              from 0% to 100%. They start at Edges 100%, Characters 60% and Glow
-              15% (on a phone, Characters 40%); when your system asks for
-              reduced motion, Glow stays at 0%.
+              Edges go from 50% to 400%, Focus from 0% to 170%, and Glow from 0%
+              to 100%. They start at Edges 100%, Focus 60% and Glow 15% (on a
+              phone, Focus 45%); when your system asks for reduced motion, Glow
+              stays at 0%.
             </p>
-            <h4>Under 30%: lines</h4>
+            <h4>Under 40%: lines</h4>
             <p>
-              Below 30%, Characters draws the model as lines instead, the way an
-              early vector arcade screen did: bold at 25%, the thinnest at 0%.
+              Below 40%, Focus draws the model as lines instead, the way an
+              early vector arcade screen did: bold at 35%, the thinnest at 0%.
               Edges then chooses which creases become lines (Soft, Normal or
-              Sharp), and the Surfaces slider sets how solid the faces under
-              them are, from a faint 1%. The green and amber screens glow; the
-              blue one in Classic draws crisp pixels.
+              Sharp); the model's outline is drawn too, where its surface turns
+              away from you, and its rounded parts show as a dimmer wireframe of
+              a few lines, the way the low-polygon models of that era looked.
+              The Surfaces slider sets how solid the faces under them are, from
+              a faint 1% to solid at 100%, lit as the main view lights a model,
+              with cavities darker. The green and amber screens glow; the blue
+              one in Classic draws crisp pixels.
             </p>
             <h4>Beside the preview</h4>
             <p>
               The status line under the preview shows the current values, for
               example
-              <code>[ALT VIEW] EDGE 100% · SIZE 60% · GLOW 15%</code> (under
-              30%, LINES in place of SIZE). Beside it, Characters steps through
-              Fine, Normal and Bold (the minus and equals keys do the same), and
-              Edges chooses Soft, Normal or Sharp.
+              <code>[ALT VIEW] EDGE 100% · FOCUS 60% · GLOW 15%</code> (under
+              40%, LINES in place of FOCUS). The minus and equals keys step
+              Focus through Fine, Normal and Bold.
             </p>
             <h4>Sliders</h4>
             <p>
-              While Alt View is on, four sliders appear in the camera panel (on
-              a phone, in the ASCII drawer beside the camera drawer): Edges,
-              Characters, Glow and Surfaces, for fine steps. In Classic they are
-              under ASCII in Viewport-Control, and the ASCII settings button on
-              the 3D view toolbar opens it on the first slider; the Simplified
-              view has no Viewport-Control, so there they sit at the foot of the
-              Customizer. The Glow slider is hidden when your system asks for
-              reduced motion.
+              While Alt View is on, a Lens button sits at the left of the
+              Generate button's row, under the preview, and opens a drawer with
+              four sliders (on a phone, the Lens drawer beside the camera
+              drawer): Edges, Focus, Glow and Surfaces, for fine steps. In
+              Classic they are under Lens in Viewport-Control, and the Lens
+              settings button on the 3D view toolbar opens it on the first
+              slider; the Simplified view has no Viewport-Control, so there they
+              sit at the foot of the Customizer. The Glow slider is hidden when
+              your system asks for reduced motion.
             </p>
             <h4>Tips</h4>
             <ul class="features-list">
               <li>
-                Double-click the adjust button to put Edges, Characters, Glow
-                and Surfaces back where they start
+                Double-click the adjust button to put Edges, Focus, Glow and
+                Surfaces back where they start
               </li>
               <li>Your settings are kept for the next time you turn it on</li>
               <li>

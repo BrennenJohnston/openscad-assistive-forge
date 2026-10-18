@@ -1,5 +1,5 @@
 /**
- * The Features Guide's Alt View tab says where Edges, Characters and Glow
+ * The Features Guide's Alt View tab says where Edges, Focus and Glow
  * start. Those numbers live in the controller too, and must stay the same.
  *
  * @license GPL-3.0-or-later
@@ -23,14 +23,14 @@ function rangeField(name, field) {
 const RANGES = ['_HFM_CONTRAST_RANGE', '_HFM_FONT_SCALE_RANGE', '_HFM_PERSIST_FADE_RANGE'];
 
 describe("the Features Guide's Alt View tab", () => {
-  it('says where Edges, Characters and Glow start, as the controller does', () => {
-    const said = /They start at Edges (\d+)%, Characters (\d+)% and Glow (\d+)%/.exec(html);
+  it('says where Edges, Focus and Glow start, as the controller does', () => {
+    const said = /They start at Edges (\d+)%, Focus (\d+)% and Glow (\d+)%/.exec(html);
     expect(said, 'the sentence that says where they start').not.toBeNull();
     expect(said.slice(1).map(Number)).toEqual(RANGES.map((name) => rangeField(name, 'default')));
   });
 
   it("says a phone's starting characters, as the controller does", () => {
-    const said = /\(on a phone, Characters (\d+)%\)/.exec(html);
+    const said = /\(on a phone, Focus (\d+)%\)/.exec(html);
     expect(said, "the phone's starting size").not.toBeNull();
     const m = /const _HFM_FONT_SCALE_PHONE_DEFAULT = ([0-9.]+)/.exec(controller);
     expect(m, 'the phone default in the controller').not.toBeNull();
@@ -39,7 +39,7 @@ describe("the Features Guide's Alt View tab", () => {
 
   it('says how far each goes, as the controller does', () => {
     const said =
-      /Edges go from (\d+)% to (\d+)%, Characters from (\d+)% to (\d+)%, and Glow from (\d+)% to (\d+)%/.exec(
+      /Edges go from (\d+)% to (\d+)%, Focus from (\d+)% to (\d+)%, and Glow from (\d+)% to (\d+)%/.exec(
         html
       );
     expect(said, 'the sentence that says how far they go').not.toBeNull();
