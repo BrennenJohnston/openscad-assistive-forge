@@ -159,7 +159,8 @@ export const MEASURED_SECONDS = {
   'alt-view-icon-states.spec.js': 748.0,
   // Five cases, each loading the box and turning the look on (one drags the
   // view for a second and a half): 45 s locally; booked at 100 for the
-  // look's software drawing on CI.
+  // look's software drawing on CI. A sixth (a drawer's slide and a menu's
+  // latch, about 16 s locally) adds 40.
   'alt-view-sounds.spec.js': 140.0,
   // Two cases, each loading the box, turning the look on and watching about
   // twenty drawer presses for 1.2 s each: 48 s locally; booked at 110 for
@@ -169,6 +170,10 @@ export const MEASURED_SECONDS = {
   // and watching its drawers for up to nine seconds: about 80 s locally;
   // booked at 150 for the look's software drawing on CI.
   'alt-view-entry.spec.js': 150.0,
+  // Two cases, each loading the box (the second again in Classic), the look
+  // drawn as lines at five sizes and read pixel by pixel, and turned: 25 s
+  // locally; booked at 90 for the look's software drawing on CI.
+  'alt-view-vector.spec.js': 90.0,
   'editor-content-sync.spec.js': 70.4,
   'saved-projects.spec.js': 68.5,
   'classic-stow.spec.js': 66.8,

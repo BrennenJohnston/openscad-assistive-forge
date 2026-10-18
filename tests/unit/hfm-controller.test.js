@@ -57,6 +57,7 @@ vi.mock('../../src/js/_hfm.js', () => ({
     setPersistFade: vi.fn(),
     setReducedMotion: vi.fn(),
     clearPersistence: vi.fn(),
+    setVectorLook: vi.fn(),
   })),
 }))
 
@@ -177,6 +178,74 @@ describe('the character size the Alt View starts with', () => {
       if (width) Object.defineProperty(window, 'innerWidth', width)
       else delete window.innerWidth
     }
+  })
+
+  it('under 30% draws the model as lines, 4 px wide at 25% and 1 px at 0%; Edges picks the creases, Surfaces the faces, Classic draws crisp; 30% is characters again', async () => {
+    pageWithHeaderAndDpad()
+    const toggle = document.createElement('button')
+    const controller = await freshController(previewManagerStub())
+    await controller.enableAltViewWithPreview(toggle)
+    // Past the greeting the status line types first.
+    await vi.advanceTimersByTimeAsync(3000)
+    const altView = await lastAltView()
+    const set = (id, value) => {
+      const input = document.getElementById(id)
+      input.value = String(value)
+      input.dispatchEvent(new Event('input'))
+    }
+    const strip = document.getElementById('previewStatusAltAdjust')
+    const size = document.getElementById('_hfmFontScale')
+
+    set('_hfmFontScale', 0.25)
+    expect(altView.setVectorLook).toHaveBeenLastCalledWith({
+      widthPx: 4,
+      surfaceOpacity: 0.01,
+      creaseDeg: 15,
+      crisp: false,
+    })
+    expect(size.getAttribute('aria-valuetext')).toBe('Vector lines, 25%')
+    expect(strip.textContent).toContain('LINES 25%')
+    set('_hfmFontScale', 0)
+    expect(altView.setVectorLook).toHaveBeenLastCalledWith(expect.objectContaining({ widthPx: 1 }))
+    set('_hfmContrast', 0.7)
+    expect(altView.setVectorLook, 'Soft').toHaveBeenLastCalledWith(expect.objectContaining({ creaseDeg: 30 }))
+    set('_hfmContrast', 1.6)
+    expect(altView.setVectorLook, 'Sharp').toHaveBeenLastCalledWith(expect.objectContaining({ creaseDeg: 5 }))
+    set('_hfmSurfaces', 0.5)
+    expect(altView.setVectorLook).toHaveBeenLastCalledWith(expect.objectContaining({ surfaceOpacity: 0.5 }))
+    document.body.dataset.uiMode = 'classic'
+    document.dispatchEvent(new CustomEvent('ui-mode-changed', { detail: { mode: 'classic' } }))
+    expect(altView.setVectorLook, 'Classic').toHaveBeenLastCalledWith(expect.objectContaining({ crisp: true }))
+    delete document.body.dataset.uiMode
+    // Classic is a look of its own: its greeting types again.
+    await vi.advanceTimersByTimeAsync(3000)
+
+    set('_hfmFontScale', 0.3)
+    expect(altView.setVectorLook).toHaveBeenLastCalledWith(null)
+    expect(size.getAttribute('aria-valuetext')).toBe('30%')
+    expect(strip.textContent).toContain('SIZE 30%')
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('under 30% the characters stay at 30%, so a look whose lines cannot load draws no smaller characters', async () => {
+    pageWithHeaderAndDpad()
+    const toggle = document.createElement('button')
+    const controller = await freshController(previewManagerStub())
+    await controller.enableAltViewWithPreview(toggle)
+    const altView = await lastAltView()
+    const set = (value) => {
+      const input = document.getElementById('_hfmFontScale')
+      input.value = String(value)
+      input.dispatchEvent(new Event('input'))
+    }
+
+    set(0.25)
+    expect(altView.setFontScale).toHaveBeenLastCalledWith(0.3)
+    set(0)
+    expect(altView.setFontScale).toHaveBeenLastCalledWith(0.3)
+    set(0.4)
+    expect(altView.setFontScale).toHaveBeenLastCalledWith(0.4)
+    controller.disableAltViewWithPreview(toggle)
   })
 })
 

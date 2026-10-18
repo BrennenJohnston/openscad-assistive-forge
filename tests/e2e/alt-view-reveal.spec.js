@@ -18,12 +18,12 @@ const GREETING = 'ALT VIEW ONLINE';
 const ON_SECONDS = 2.21;
 const LOOK_SECONDS = 0.8;
 const OFF_SECONDS = 2.17;
-// The phosphor look's fifth dial click, in seconds: the file's data bytes
+// The phosphor look's sixth dial click, in seconds: the file's data bytes
 // over two (16-bit mono) over its rate. The browser decodes it at its own
 // rate, so a played click is known by its length to a couple of
 // milliseconds (the neighbouring tones are 15 ms longer and shorter).
-const P5_SECONDS =
-  readFileSync(fileURLToPath(new URL('../../public/sounds/dials/p5.wav', import.meta.url)))
+const P6_SECONDS =
+  readFileSync(fileURLToPath(new URL('../../public/sounds/dials/p6.wav', import.meta.url)))
     .readUInt32LE(40) /
   2 /
   32000;
@@ -277,13 +277,13 @@ test.describe('The Alt View is heard', () => {
     await expect.poll(async () => (await heard()).keys, { timeout: 5_000 }).toBe(2);
 
     // A slider in the look, dragged: a click as the steps go by, the same
-    // file every time (the Characters slider's steps give it the fifth tone,
-    // the file p5.wav), fifteen a second at most, and silence once let go.
+    // file every time (the Characters slider's fifty steps give it the sixth
+    // tone, the file p6.wav), fifteen a second at most, and silence once let go.
     const characters = page.locator('#_hfmFontScale');
     await expect(characters).toBeVisible();
     await characters.scrollIntoViewIfNeeded();
     const box = await characters.boundingBox();
-    const thumbX = box.x + (box.width * (0.6 - 0.3)) / (2.5 - 0.3);
+    const thumbX = box.x + (box.width * 0.6) / 2.5;
     const y = box.y + box.height / 2;
     // The drag's clicks, once they have all started (each waits its turn on
     // the decoder): the count is read every half second until it holds.
@@ -323,7 +323,7 @@ test.describe('The Alt View is heard', () => {
     await page.mouse.up();
     const dragged = await settled(flicked.clicks.length + 4);
     expect(new Set(dragged.clicks).size, 'one click file for the whole drag').toBe(1);
-    expect(Math.abs(dragged.clicks[0] - P5_SECONDS), 'the fifth tone').toBeLessThan(0.002);
+    expect(Math.abs(dragged.clicks[0] - P6_SECONDS), 'the sixth tone').toBeLessThan(0.002);
     expect(dragged.keys, 'a slider is not a key').toBe(2);
     await page.waitForTimeout(500);
     expect((await heard()).clicks.length, 'silence once let go').toBe(dragged.clicks.length);

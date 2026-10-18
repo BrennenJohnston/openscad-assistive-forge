@@ -10,6 +10,7 @@ import {
   STORAGE_KEY_HFM_CONTRAST_SCALE,
   STORAGE_KEY_HFM_FONT_SCALE,
   STORAGE_KEY_HFM_PERSIST_FADE,
+  STORAGE_KEY_HFM_SURFACES,
   STORAGE_KEY_SOUNDS,
 } from './storage-keys.js';
 import { announce, announceImmediate } from './announcer.js';
@@ -54,11 +55,32 @@ let _hfmContrastScale = _HFM_CONTRAST_RANGE.default;
 let _hfmContrastControls = null;
 
 // The default is finer than the renderer's own 1: at full size the first
-// frame drew the model as a blob with no faces. A saved size wins. The
-// floor is where a phone's cell meets the renderer's 3 px font floor (at
-// 30% a 3 x 5 px cell, 16,000 of them on a 398 x 622 preview); below it
-// nothing shrinks.
-const _HFM_FONT_SCALE_RANGE = { min: 0.3, max: 2.5, step: 0.05, default: 0.6 };
+// frame drew the model as a blob with no faces. A saved size wins. At 30%
+// a phone's cell meets the renderer's 3 px font floor (a 3 x 5 px cell,
+// 16,000 of them on a 398 x 622 preview), so below it the characters give
+// way to the vector look.
+const _HFM_FONT_SCALE_RANGE = { min: 0, max: 2.5, step: 0.05, default: 0.6 };
+// Under 30% the model is drawn as its edges, the way a vector monitor's beam
+// drew lines. The line's width follows the size: 1 px at 0%, 0.6 px wider for
+// every 5%, 4 px at 25% (CSS px, the same on every screen).
+const _HFM_VECTOR_BELOW = 0.3;
+const _HFM_VECTOR_WIDTH_AT_0 = 1;
+const _HFM_VECTOR_WIDTH_PER_SCALE = 12;
+// In the vector look the Edges slider chooses which creases are lines: its
+// named levels at 30, 15 and 5 degrees, its ends at 40 and 1, straight lines
+// between.
+const _HFM_VECTOR_CREASE = [
+  [0.5, 40],
+  [0.7, 30],
+  [1, 15],
+  [1.6, 5],
+  [4, 1],
+];
+// How solid the vector look draws the model's surfaces: faint by default, so
+// the lines read as a wireframe.
+const _HFM_SURFACE_RANGE = { min: 0.01, max: 1, step: 0.01, default: 0.01 };
+let _hfmSurfaceOpacity = _HFM_SURFACE_RANGE.default;
+let _hfmSurfaceControls = null;
 // A phone starts finer: 40% is the finest size whose glyphs still read on a
 // phone's screen. A saved size wins on every device.
 const _HFM_FONT_SCALE_PHONE_DEFAULT = 0.4;
@@ -403,8 +425,9 @@ function _updateHfmStatusBar() {
   } else {
     const edge = _formatPercent(_hfmContrastScale);
     const size = _formatPercent(_hfmFontScale);
+    const sizeWord = _hfmIsVector() ? 'LINES' : 'SIZE';
     const glow = _formatPercent(_prefersReducedMotion() ? 0 : _hfmPersistFade);
-    displayText = `[ALT VIEW] EDGE ${edge} \u00B7 SIZE ${size} \u00B7 GLOW ${glow}`;
+    displayText = `[ALT VIEW] EDGE ${edge} \u00B7 ${sizeWord} ${size} \u00B7 GLOW ${glow}`;
   }
 
   altAdjustEl.textContent = displayText;
@@ -431,6 +454,7 @@ function _setHfmPanAdjustEnabled(enabled) {
     _initHfmContrastControls().setEnabled(!_hfmPanAdjustEnabled);
     _initHfmFontScaleControls().setEnabled(!_hfmPanAdjustEnabled);
     _initHfmPersistFadeControls().setEnabled(!_hfmPanAdjustEnabled);
+    _initHfmSurfaceControls().setEnabled(!_hfmPanAdjustEnabled);
   }
 
   _syncHfmPanToggleUi();
@@ -441,12 +465,14 @@ function _resetHfmSettings() {
     localStorage.removeItem(STORAGE_KEY_HFM_CONTRAST_SCALE);
     localStorage.removeItem(STORAGE_KEY_HFM_FONT_SCALE);
     localStorage.removeItem(STORAGE_KEY_HFM_PERSIST_FADE);
+    localStorage.removeItem(STORAGE_KEY_HFM_SURFACES);
   } catch (_) {
     // Storage unavailable
   }
   _applyHfmContrastScale(_HFM_CONTRAST_RANGE.default);
   _applyHfmFontScale(_HFM_FONT_SCALE_RANGE.default);
   _applyHfmPersistFade(_HFM_PERSIST_FADE_RANGE.default);
+  _applyHfmSurfaceOpacity(_HFM_SURFACE_RANGE.default);
   if (import.meta.env.DEV) {
     console.log('[Alt View] Settings reset to defaults');
   }
@@ -472,6 +498,7 @@ function _applyHfmContrastScale(scale) {
 
   _hfmContrastControls?.sync?.(clamped);
   _initHfmEdgeLevels()?.sync(clamped);
+  _syncHfmVectorLook();
   _syncHfmPanToggleUi();
   _debouncedSave(STORAGE_KEY_HFM_CONTRAST_SCALE, clamped);
 
@@ -487,16 +514,94 @@ function _applyHfmFontScale(scale) {
   );
   _hfmFontScale = clamped;
 
+  // The characters themselves never go under 30%: there they are lines, and
+  // a look whose lines cannot load keeps its 30% characters.
   if (_hfmAltView?.setFontScale) {
-    _hfmAltView.setFontScale(clamped);
+    _hfmAltView.setFontScale(Math.max(clamped, _HFM_VECTOR_BELOW));
     _hfmAltView.invalidate?.();
   }
 
   _hfmFontScaleControls?.sync?.(clamped);
   _initHfmCharacterStepper()?.sync(clamped);
+  _syncHfmVectorLook();
   _syncHfmPanToggleUi();
   _debouncedSave(STORAGE_KEY_HFM_FONT_SCALE, clamped);
 
+  return clamped;
+}
+
+/**
+ * True when a size is under 30%, where the model is drawn as lines.
+ * @param {number} [scale]
+ * @returns {boolean}
+ */
+function _hfmIsVector(scale = _hfmFontScale) {
+  return scale < _HFM_VECTOR_BELOW - _HFM_STEP_TOLERANCE;
+}
+
+/**
+ * What a size is called aloud: "Characters 40%", or under 30% "Vector
+ * lines, 25%".
+ * @param {number} scale
+ * @returns {string}
+ */
+function _hfmSizeWords(scale) {
+  return _hfmIsVector(scale)
+    ? `Vector lines, ${_formatPercent(scale)}`
+    : `Characters ${_formatPercent(scale)}`;
+}
+
+/**
+ * The crease angle the Edges slider chooses in the vector look.
+ * @param {number} scale - the Edges slider's value
+ * @returns {number} degrees
+ */
+function _hfmCreaseDeg(scale) {
+  const points = _HFM_VECTOR_CREASE;
+  if (scale <= points[0][0]) return points[0][1];
+  for (let i = 1; i < points.length; i++) {
+    const [x1, y1] = points[i];
+    if (scale <= x1) {
+      const [x0, y0] = points[i - 1];
+      return y0 + ((scale - x0) / (x1 - x0)) * (y1 - y0);
+    }
+  }
+  return points[points.length - 1][1];
+}
+
+/**
+ * The vector look as the sliders set it, or null at 30% and above.
+ * @returns {{widthPx: number, surfaceOpacity: number, creaseDeg: number,
+ *   crisp: boolean}|null}
+ */
+function _hfmVectorLook() {
+  if (!_hfmIsVector()) return null;
+  return {
+    widthPx:
+      _HFM_VECTOR_WIDTH_AT_0 + _HFM_VECTOR_WIDTH_PER_SCALE * _hfmFontScale,
+    surfaceOpacity: _hfmSurfaceOpacity,
+    creaseDeg: Math.round(_hfmCreaseDeg(_hfmContrastScale) * 10) / 10,
+    // Classic's look draws crisp, as a raster card did; the phosphor looks
+    // glow.
+    crisp: document.body?.dataset.uiMode === 'classic',
+  };
+}
+
+function _syncHfmVectorLook() {
+  _hfmAltView?.setVectorLook?.(_hfmVectorLook());
+}
+
+function _applyHfmSurfaceOpacity(value) {
+  const raw = Number(value);
+  const next = Number.isFinite(raw) ? raw : _HFM_SURFACE_RANGE.default;
+  const clamped = Math.max(
+    _HFM_SURFACE_RANGE.min,
+    Math.min(_HFM_SURFACE_RANGE.max, next)
+  );
+  _hfmSurfaceOpacity = clamped;
+  _hfmSurfaceControls?.sync?.(clamped);
+  _syncHfmVectorLook();
+  _debouncedSave(STORAGE_KEY_HFM_SURFACES, clamped);
   return clamped;
 }
 
@@ -546,6 +651,8 @@ function _buildHfmSliderControls({
   range,
   getValue,
   onInput,
+  speak = _formatPercent,
+  note = null,
 }) {
   const inputs = [];
   const valueEls = [];
@@ -558,6 +665,7 @@ function _buildHfmSliderControls({
     sectionClass,
     titleClass,
     inputId,
+    noteVisible,
   }) => {
     if (!container || document.getElementById(inputId)) return;
 
@@ -590,6 +698,14 @@ function _buildHfmSliderControls({
     sliderContainer.appendChild(valueEl);
     section.appendChild(title);
     section.appendChild(sliderContainer);
+    if (note) {
+      const noteEl = document.createElement('p');
+      noteEl.id = `${inputId}-note`;
+      noteEl.className = noteVisible ? 'hfm-slider-note' : 'sr-only';
+      noteEl.textContent = note;
+      section.appendChild(noteEl);
+      input.setAttribute('aria-describedby', noteEl.id);
+    }
 
     if (insertBefore) {
       container.insertBefore(section, insertBefore);
@@ -613,15 +729,18 @@ function _buildHfmSliderControls({
     sectionClass: `camera-control-section hfm-slider-section ${idBase}-section`,
     titleClass: 'camera-control-section-title',
     inputId: idBase,
+    noteVisible: true,
   });
 
-  // The phone's ASCII drawer holds these three and nothing else.
+  // The phone's ASCII drawer holds these sliders and nothing else: a
+  // slider's note is its description there, read but not shown.
   buildSection({
     container: document.getElementById('asciiDrawerBody'),
     insertBefore: null,
     sectionClass: `camera-drawer-section hfm-slider-section ${idBase}-drawer-section`,
     titleClass: 'camera-drawer-section-title',
     inputId: `${idBase}Mobile`,
+    noteVisible: false,
   });
 
   const controls = {
@@ -641,7 +760,7 @@ function _buildHfmSliderControls({
         if (input.value !== rawValue) {
           input.value = rawValue;
         }
-        input.setAttribute('aria-valuetext', formatted);
+        input.setAttribute('aria-valuetext', speak(value));
       });
       valueEls.forEach((el) => {
         el.textContent = formatted;
@@ -676,7 +795,7 @@ function _stepHfmCharacters(direction) {
     if (above) target = above.scale;
   }
   const next = _applyHfmFontScale(target);
-  announceImmediate(`Characters ${_formatPercent(next)}`);
+  announceImmediate(_hfmSizeWords(next));
   return next;
 }
 
@@ -780,6 +899,10 @@ function _initHfmFontScaleControls() {
     range: _HFM_FONT_SCALE_RANGE,
     getValue: () => _hfmFontScale,
     onInput: (value) => _applyHfmFontScale(value),
+    speak: (value) =>
+      _hfmIsVector(value)
+        ? `Vector lines, ${_formatPercent(value)}`
+        : _formatPercent(value),
   });
   return _hfmFontScaleControls;
 }
@@ -805,10 +928,25 @@ function _initHfmPersistFadeControls() {
   return _hfmPersistFadeControls;
 }
 
+// The vector look's surfaces: the last of the look's sliders.
+function _initHfmSurfaceControls() {
+  if (_hfmSurfaceControls) return _hfmSurfaceControls;
+  _hfmSurfaceControls = _buildHfmSliderControls({
+    idBase: '_hfmSurfaces',
+    titleText: 'Surfaces',
+    range: _HFM_SURFACE_RANGE,
+    getValue: () => _hfmSurfaceOpacity,
+    onInput: (value) => _applyHfmSurfaceOpacity(value),
+    note: 'Below 30% Characters: how solid the faces under the lines are.',
+  });
+  return _hfmSurfaceControls;
+}
+
 function _setHfmSlidersEnabled(enabled) {
   _initHfmContrastControls().setEnabled(enabled);
   _initHfmFontScaleControls().setEnabled(enabled);
   _initHfmPersistFadeControls().setEnabled(enabled);
+  _initHfmSurfaceControls().setEnabled(enabled);
 }
 
 // ---------------------------------------------------------------------------
@@ -879,10 +1017,12 @@ function _loadSavedHfmSettings() {
   let savedContrast = null;
   let savedFont = null;
   let savedPersistFade = null;
+  let savedSurfaces = null;
   try {
     savedContrast = localStorage.getItem(STORAGE_KEY_HFM_CONTRAST_SCALE);
     savedFont = localStorage.getItem(STORAGE_KEY_HFM_FONT_SCALE);
     savedPersistFade = localStorage.getItem(STORAGE_KEY_HFM_PERSIST_FADE);
+    savedSurfaces = localStorage.getItem(STORAGE_KEY_HFM_SURFACES);
   } catch (_) {
     // Private browsing or storage unavailable
   }
@@ -915,6 +1055,15 @@ function _loadSavedHfmSettings() {
     parsedPersistFade <= _HFM_PERSIST_FADE_RANGE.max
   ) {
     _hfmPersistFade = parsedPersistFade;
+  }
+  const parsedSurfaces =
+    savedSurfaces !== null ? parseFloat(savedSurfaces) : NaN;
+  if (
+    Number.isFinite(parsedSurfaces) &&
+    parsedSurfaces >= _HFM_SURFACE_RANGE.min &&
+    parsedSurfaces <= _HFM_SURFACE_RANGE.max
+  ) {
+    _hfmSurfaceOpacity = parsedSurfaces;
   }
 }
 
@@ -1771,6 +1920,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
   let lastMode = document.body?.dataset.uiMode;
   _hfmModeListener = (event) => {
     _hfmAltView?.rebuildGlyphs?.();
+    _syncHfmVectorLook();
     _hfmAltView?.invalidate?.();
     const mode = event?.detail?.mode;
     const classicCrossed = mode === 'classic' || lastMode === 'classic';
@@ -1786,6 +1936,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
 
   _applyHfmContrastScale(_hfmContrastScale);
   _applyHfmFontScale(_hfmFontScale);
+  _applyHfmSurfaceOpacity(_hfmSurfaceOpacity);
   if (_prefersReducedMotion()) {
     // Afterglow is motion: held at 0 without saving, so the person's own
     // value is there when motion is allowed again.
@@ -2255,13 +2406,13 @@ export function initHfmController({
         const next = _applyHfmFontScale(
           _hfmFontScale - _HFM_FONT_SCALE_RANGE.step
         );
-        return `Characters ${_formatPercent(next)}`;
+        return _hfmSizeWords(next);
       }
       if (direction === 'right') {
         const next = _applyHfmFontScale(
           _hfmFontScale + _HFM_FONT_SCALE_RANGE.step
         );
-        return `Characters ${_formatPercent(next)}`;
+        return _hfmSizeWords(next);
       }
       return true;
     },

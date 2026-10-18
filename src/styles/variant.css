@@ -933,6 +933,18 @@ body[data-ui-mode='classic'] {
   text-align: right;
 }
 
+/* A slider's note: when it applies (Surfaces, to the lines under 30%). */
+:root[data-ui-variant='mono'] .hfm-slider-note {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+}
+
+:root[data-ui-variant='mono'][data-high-contrast='true'] .hfm-slider-note {
+  color: var(--color-text-primary);
+}
+
 /* Alt adjust info line - visible only in mono variant */
 :root[data-ui-variant='mono']
   .preview-status-bar.has-alt-adjust

@@ -535,6 +535,13 @@ export const STORAGE_KEY_HFM_FONT_SCALE = 'openscad-forge-hfm-font-scale';
 export const STORAGE_KEY_HFM_PERSIST_FADE = 'openscad-forge-hfm-persist-fade';
 
 /**
+ * localStorage key for how solid the Alt View's vector look draws the model's
+ * surfaces. Value is a decimal string in [0.01, 1] matching
+ * _HFM_SURFACE_RANGE in hfm-controller.js.
+ */
+export const STORAGE_KEY_HFM_SURFACES = 'openscad-forge-hfm-surfaces';
+
+/**
  * localStorage key for the grid while the Alt View is on: 'true' only after
  * a person turns the grid on there; absent means hidden. One key for both
  * interfaces, apart from the ordinary per-interface grid preference.

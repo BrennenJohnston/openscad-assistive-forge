@@ -7844,8 +7844,8 @@
             <h4>Adjust with the pan arrows</h4>
             <p>
               On a desktop window the adjust button sits beside the projection
-              button in the camera panel (a phone has the three sliders
-              instead). It switches the Pan D-pad between two jobs:
+              button in the camera panel (a phone has the four sliders instead).
+              It switches the Pan D-pad between two jobs:
             </p>
             <ul class="features-list">
               <li>
@@ -7876,31 +7876,41 @@
               </li>
             </ul>
             <p>
-              Edges go from 50% to 400%, Characters from 30% to 250%, and Glow
+              Edges go from 50% to 400%, Characters from 0% to 250%, and Glow
               from 0% to 100%. They start at Edges 100%, Characters 60% and Glow
               15% (on a phone, Characters 40%); when your system asks for
               reduced motion, Glow stays at 0%.
+            </p>
+            <h4>Under 30%: lines</h4>
+            <p>
+              Below 30%, Characters draws the model as lines instead, the way an
+              early vector arcade screen did: bold at 25%, the thinnest at 0%.
+              Edges then chooses which creases become lines (Soft, Normal or
+              Sharp), and the Surfaces slider sets how solid the faces under
+              them are, from a faint 1%. The green and amber screens glow; the
+              blue one in Classic draws crisp pixels.
             </p>
             <h4>Beside the preview</h4>
             <p>
               The status line under the preview shows the current values, for
               example
-              <code>[ALT VIEW] EDGE 100% · SIZE 60% · GLOW 15%</code>. Beside
-              it, Characters steps through Fine, Normal and Bold (the minus and
-              equals keys do the same), and Edges chooses Soft, Normal or Sharp.
+              <code>[ALT VIEW] EDGE 100% · SIZE 60% · GLOW 15%</code> (under
+              30%, LINES in place of SIZE). Beside it, Characters steps through
+              Fine, Normal and Bold (the minus and equals keys do the same), and
+              Edges chooses Soft, Normal or Sharp.
             </p>
             <h4>Sliders</h4>
             <p>
-              While Alt View is on, three sliders appear in the camera panel (on
+              While Alt View is on, four sliders appear in the camera panel (on
               a phone, in the ASCII drawer beside the camera drawer): Edges,
-              Characters and Glow, for fine steps. The Glow slider is hidden
-              when your system asks for reduced motion.
+              Characters, Glow and Surfaces, for fine steps. The Glow slider is
+              hidden when your system asks for reduced motion.
             </p>
             <h4>Tips</h4>
             <ul class="features-list">
               <li>
-                Double-click the adjust button to put Edges, Characters and Glow
-                back where they start
+                Double-click the adjust button to put Edges, Characters, Glow
+                and Surfaces back where they start
               </li>
               <li>Your settings are kept for the next time you turn it on</li>
               <li>
