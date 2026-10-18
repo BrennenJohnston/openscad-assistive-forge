@@ -83,6 +83,22 @@ export function initLensDrawer() {
     toggleBtn.focus();
   });
 
+  // Classic hides the drawer with the actions bar and holds the sliders in
+  // its Viewport-Control panel: entering Classic shuts the drawer at once
+  // (the saved choice untouched), and leaving it opens the drawer again
+  // when it was open before. Document event, not a controller import: see
+  // the dispatch note in ui-mode-controller.applyMode().
+  let openBeforeClassic = false;
+  document.addEventListener('ui-mode-changed', (event) => {
+    if (event.detail?.mode === 'classic') {
+      openBeforeClassic = isOpen;
+      if (isOpen) close({ instant: true, remember: false });
+    } else if (openBeforeClassic) {
+      openBeforeClassic = false;
+      open({ instant: true, remember: false });
+    }
+  });
+
   registerLookDrawer('lens', {
     place: () => drawer,
     isOpen: () => isOpen && drawer.offsetHeight > 0,
