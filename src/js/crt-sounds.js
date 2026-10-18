@@ -4,8 +4,10 @@
  * press and release for every button of the look, chosen by the button's
  * size; the dial clicks a slider makes step by step, one click per look at
  * seven speeds; the 3D view's ticks as it is turned, tilted or zoomed; a
- * drawer's latch, roll and stop in time with its slide; a switch's snap, a
- * selector's click, a latch, and a quiet key for typing (the recordings and their
+ * drawer's latch, roll and stop in time with its slide; a lever flipped for
+ * a checkbox or a switch, a radio button's snap, a selector's click, a
+ * latch, a quiet key for typing, and a typewriter platen's line for a scroll
+ * (the recordings and their
  * makers are named in THIRD_PARTY_NOTICES.md). A file is fetched ahead or
  * the first time it is wanted, decoded once and kept. The switch sounds
  * play one at a time, the newest one asked for winning, and so does each
@@ -54,6 +56,9 @@ const KEY_SETS = {
 // the highest (one of many).
 const DIAL_SETS = ['p', 'd'];
 const DIAL_VARIANTS = 7;
+// Each click strays a little in pitch, so a fast drag does not repeat
+// itself exactly.
+const DIAL_STRAY_CENTS = 10;
 // The 3D view's ticks, the same in every look: a lens detent for a zoom
 // step, a bearing for a turn, a ratchet for a tilt.
 const CAMERA_FILES = {
@@ -62,14 +67,14 @@ const CAMERA_FILES = {
   tilt: '/sounds/camera/tilt.wav',
 };
 // Each tick's level in the camera group: the turn, the one heard most as a
-// drag goes round, sits well under the other two.
-const CAMERA_LEVELS_DB = { zoom: 0, turn: -8, tilt: 0 };
-// The turn tells its way, left a little lower and right a little higher (in
-// cents), and each tick strays a little in pitch and level, so a run of
-// them does not wear.
-const TURN_WAY_CENTS = 70;
-const TURN_STRAY_CENTS = 15;
-const TURN_STRAY_DB = 1;
+// drag goes round, well under the zoom, and the tilt between.
+const CAMERA_LEVELS_DB = { zoom: 0, turn: -8, tilt: -4 };
+// Each tick tells its way, left, down and out a little lower and right, up
+// and in a little higher (in cents), and strays a little in pitch and level,
+// so a run of them does not wear.
+const CAMERA_WAY_CENTS = 70;
+const CAMERA_STRAY_CENTS = 15;
+const CAMERA_STRAY_DB = 1;
 // A drawer, the same in every look, in parts played in time with its slide:
 // opening, the latch let go at the press, the glide out on its rollers, the
 // thump of the stop it meets; shutting, the latch gripped open at the press,
@@ -105,33 +110,59 @@ const DRAWER_STILL_STOP_S = 0.06;
 const DRAWER_ROLL_FADE_S = 0.04;
 const DRAWER_ROLL_RISE_S = 0.015;
 // The other controls' sounds, the same in every look, each in its group: a
-// switch's snap on and off, a selector's click as a list opens and as a
-// choice is made, a latch as a menu or a dialog opens and closes.
+// radio button's snap as it is chosen, a selector's click as a list opens
+// and as a choice is made, a latch as a menu or a dialog opens and closes,
+// and a lever a checkbox or a switch flips up for on and down for off, its
+// takes in turn at a level of its own, each flip straying a little.
 const CONTROL_FILES = {
-  'snap-on': ['/sounds/switches/snap-on.wav', 'snaps'],
-  'snap-off': ['/sounds/switches/snap-off.wav', 'snaps'],
-  'select-open': ['/sounds/switches/select-open.wav', 'selectors'],
-  'select-choose': ['/sounds/switches/select-choose.wav', 'selectors'],
-  'latch-open': ['/sounds/switches/latch-open.wav', 'latches'],
-  'latch-close': ['/sounds/switches/latch-close.wav', 'latches'],
+  'snap-on': [['/sounds/switches/snap-on.wav'], 'snaps'],
+  'select-open': [['/sounds/switches/select-open.wav'], 'selectors'],
+  'select-choose': [['/sounds/switches/select-choose.wav'], 'selectors'],
+  'latch-open': [['/sounds/switches/latch-open.wav'], 'latches'],
+  'latch-close': [['/sounds/switches/latch-close.wav'], 'latches'],
+  'lever-on': [
+    ['/sounds/switches/lever-on-1.wav', '/sounds/switches/lever-on-2.wav'],
+    'snaps',
+    -5,
+  ],
+  'lever-off': [
+    ['/sounds/switches/lever-off-1.wav', '/sounds/switches/lever-off-2.wav'],
+    'snaps',
+    -5,
+  ],
 };
+const LEVER_STRAY_CENTS = 15;
+const LEVER_STRAY_DB = 1;
+// A scroll's tick, a typewriter platen turned a line: four takes in turn,
+// down a little lower and up a little higher, each straying a little; the
+// end of the list a tick of its own, lower and duller.
+const SCROLL_FILES = [1, 2, 3, 4].map((n) => `/sounds/scroll/platen-${n}.wav`);
+const SCROLL_END_FILE = '/sounds/scroll/platen-end.wav';
+const SCROLL_END_DB = -2;
+const SCROLL_WAY_CENTS = 70;
+const SCROLL_STRAY_CENTS = 15;
+const SCROLL_STRAY_DB = 1;
 // A browser that has not let the page make sound yet leaves the audio
 // context waiting; past this the sound is given up.
 const START_TIMEOUT_MS = 1000;
 
-// The groups a sound plays in, each at its own level under the master: the
-// camera's sounds 12 dB under the keys, a drawer 10 dB under them, typing a quiet key 12 dB under, a latch under the key that
+// The groups a sound plays in, each at its own level under the master, the
+// sounds heard most the quietest: the power sound 5 dB under the keys; the
+// dials, as often as fifteen a second, 6 dB; the lists 5; the latches 9,
+// under the key that opens a menu; the snaps 2; a scroll's ticks 16, in the
+// background; the camera's sounds 12 dB under the keys, a drawer 10 dB under them, typing a quiet key 12 dB under, a latch under the key that
 // opened its menu.
 const GROUP_LEVELS_DB = {
-  switch: 0,
+  switch: -5,
   keys: 0,
-  dials: 0,
+  dials: -6,
   camera: -12,
   drawers: -10,
   typing: -12,
-  snaps: 0,
-  selectors: 0,
-  latches: -3,
+  snaps: -2,
+  selectors: -5,
+  latches: -9,
+  scroll: -16,
 };
 // Muting fades the master out over this, so a sound stops without a click.
 const MUTE_RAMP_S = 0.02;
@@ -320,7 +351,7 @@ function _startAt(context, buffer, group, when, levelDb, offset = 0) {
 
 /**
  * The gain a group's sounds pass through, or null before the first sound.
- * @param {'switch'|'keys'|'dials'|'camera'|'drawers'|'typing'|'snaps'|'selectors'|'latches'} name
+ * @param {'switch'|'keys'|'dials'|'camera'|'drawers'|'typing'|'snaps'|'selectors'|'latches'|'scroll'} name
  * @returns {GainNode|null}
  */
 export function soundGroup(name) {
@@ -444,20 +475,29 @@ export function preloadDrawerSounds() {
   }
 }
 
-/** Fetch the switches', selectors' and latches' sounds now, once. */
+/** Fetch the snaps', selectors', latches' and lever's sounds now, once. */
 export function preloadControlSounds() {
   _fetchAhead(
-    Object.values(CONTROL_FILES).map(([url]) => url),
+    Object.values(CONTROL_FILES).flatMap(([urls]) => urls),
     'control'
   );
 }
 
+/** Fetch the scroll's ticks now, once. */
+export function preloadScrollSounds() {
+  _fetchAhead([...SCROLL_FILES, SCROLL_END_FILE], 'scroll');
+}
+
+// A share of a sound's stray, between -1 and 1.
+const _stray = () => Math.random() * 2 - 1;
+
 /**
  * Play one of the 3D view's ticks in the camera group, which keys and dial
- * clicks lower for a moment, through a level of its own. A turn tells its
+ * clicks lower for a moment, through a level of its own. A tick tells its
  * way by its pitch and strays a little in pitch and level.
  * @param {'zoom'|'turn'|'tilt'} kind
- * @param {{way?: -1|0|1}} [how] - way: a turn left (-1) or right (1)
+ * @param {{way?: -1|0|1}} [how] - way: left, down or out (-1); right, up
+ *   or in (1)
  * @returns {Promise<number>} The tick's length in seconds once it has begun
  */
 export async function playCameraSound(kind, { way = 0 } = {}) {
@@ -465,13 +505,9 @@ export async function playCameraSound(kind, { way = 0 } = {}) {
   const context = _audioContext();
   const running = context.resume();
   const buffer = await _bufferFor(CAMERA_FILES[kind], context);
-  let levelDb = CAMERA_LEVELS_DB[kind];
-  let rate = 1;
-  if (kind === 'turn') {
-    const stray = () => Math.random() * 2 - 1;
-    rate = 2 ** ((way * TURN_WAY_CENTS + stray() * TURN_STRAY_CENTS) / 1200);
-    levelDb += stray() * TURN_STRAY_DB;
-  }
+  const rate =
+    2 ** ((way * CAMERA_WAY_CENTS + _stray() * CAMERA_STRAY_CENTS) / 1200);
+  const levelDb = CAMERA_LEVELS_DB[kind] + _stray() * CAMERA_STRAY_DB;
   await _start(context, running, buffer, 'camera', {
     own: true,
     levelDb,
@@ -556,9 +592,10 @@ export async function playDialSound(set, variant) {
   const context = _audioContext();
   const running = context.resume();
   const buffer = await _bufferFor(_dialUrl(set, tone), context);
-  await _start(context, running, buffer, 'dials');
+  const rate = 2 ** ((_stray() * DIAL_STRAY_CENTS) / 1200);
+  await _start(context, running, buffer, 'dials', { rate });
   duck('camera');
-  return buffer.duration;
+  return buffer.duration / rate;
 }
 
 // A drawer's sound turned round with the drawer: its parts still to come
@@ -671,19 +708,63 @@ export async function playDrawerSound(
 }
 
 /**
- * Play a switch's snap, a selector's click or a latch.
+ * Play a radio button's snap, a selector's click, a latch, or the lever a
+ * checkbox or a switch flips (its takes in turn, each straying a little).
  * @param {keyof typeof CONTROL_FILES} kind
  * @returns {Promise<number>} The sound's length in seconds once it has begun
  */
 export async function playControlSound(kind) {
   if (!CONTROL_FILES[kind]) throw new Error(`No such control sound: ${kind}`);
-  const [url, group] = CONTROL_FILES[kind];
+  const [urls, group, levelDb] = CONTROL_FILES[kind];
+  const slot = `control-${kind}`;
+  const turn = _turn.get(slot) ?? 0;
+  _turn.set(slot, (turn + 1) % urls.length);
+  const context = _audioContext();
+  const running = context.resume();
+  const buffer = await _bufferFor(urls[turn], context);
+  let rate = 1;
+  if (levelDb === undefined) {
+    await _start(context, running, buffer, group);
+  } else {
+    rate = 2 ** ((_stray() * LEVER_STRAY_CENTS) / 1200);
+    await _start(context, running, buffer, group, {
+      own: true,
+      levelDb: levelDb + _stray() * LEVER_STRAY_DB,
+      rate,
+    });
+  }
+  duck('camera');
+  return buffer.duration / rate;
+}
+
+/**
+ * Play a scroll's tick, a typewriter platen turned a line, its takes in
+ * turn; or the end of the list.
+ * @param {{way?: -1|0|1, end?: boolean}} [how] - way: down (-1), a little
+ *   lower, or up (1), a little higher
+ * @returns {Promise<number>} The sound's length in seconds once it has begun
+ */
+export async function playScrollSound({ way = 0, end = false } = {}) {
+  let url = SCROLL_END_FILE;
+  let rate = 1;
+  let levelDb = SCROLL_END_DB;
+  if (!end) {
+    const turn = _turn.get('scroll') ?? 0;
+    _turn.set('scroll', (turn + 1) % SCROLL_FILES.length);
+    url = SCROLL_FILES[turn];
+    rate =
+      2 ** ((way * SCROLL_WAY_CENTS + _stray() * SCROLL_STRAY_CENTS) / 1200);
+    levelDb = _stray() * SCROLL_STRAY_DB;
+  }
   const context = _audioContext();
   const running = context.resume();
   const buffer = await _bufferFor(url, context);
-  await _start(context, running, buffer, group);
-  duck('camera');
-  return buffer.duration;
+  await _start(context, running, buffer, 'scroll', {
+    own: true,
+    levelDb,
+    rate,
+  });
+  return buffer.duration / rate;
 }
 
 /**

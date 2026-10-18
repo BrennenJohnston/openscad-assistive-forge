@@ -38,6 +38,8 @@ vi.mock('../../src/js/crt-sounds.js', () => ({
   preloadDrawerSounds: vi.fn(),
   playControlSound: vi.fn(async () => 0.08),
   preloadControlSounds: vi.fn(),
+  playScrollSound: vi.fn(async () => 0.055),
+  preloadScrollSounds: vi.fn(),
   playTypingSound: vi.fn(async () => 0.1),
 }))
 
@@ -811,6 +813,7 @@ describe('the Alt View is heard', () => {
       place(45, tilt)
     }
     expect((await cameraAsked()).slice(3)).toEqual(['tilt', 'tilt'])
+    expect((await cameraWays()).slice(3), 'tilted up: up\'s tick').toEqual([1, 1])
 
     // The wheel: three notches of 5 % closer, each a lens detent.
     for (const distance of [95, 90.25, 85.7]) {
@@ -820,6 +823,7 @@ describe('the Alt View is heard', () => {
       controls.fire('end')
     }
     expect((await cameraAsked()).slice(5)).toEqual(['zoom', 'zoom', 'zoom'])
+    expect((await cameraWays()).slice(5), 'zoomed in: in\'s tick').toEqual([1, 1, 1])
 
     // A jitter back and forth of under a step says nothing.
     controls.fire('start')
@@ -962,8 +966,8 @@ describe('the Alt View is heard', () => {
       el.click()
     }
     expect(await cameraAsked()).toEqual(buttons.map(({ kind }) => kind))
-    expect(await cameraWays(), 'left lower, right higher').toEqual([
-      -1, 1, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    expect(await cameraWays(), 'left, down and out lower; right, up and in higher').toEqual([
+      -1, 1, -1, 1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1,
     ])
     expect(await keysAsked(), 'no key for any of them').toEqual([])
 
@@ -1010,6 +1014,79 @@ describe('the Alt View is heard', () => {
     expect(await cameraAsked(), 'sounds off').toHaveLength(17)
     expect(await keysAsked(), 'still no key').toEqual([])
     navigator.getGamepads = hadPads
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('a list scrolled by hand ticks a line at a time, down lower and up higher, fourteen a second at most, and its end once; a scroll the page makes is silent', async () => {
+    pageWithHeaderAndDpad()
+    clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const list = document.createElement('div')
+    let top = 0
+    Object.defineProperty(list, 'scrollTop', { get: () => top, configurable: true })
+    Object.defineProperty(list, 'scrollHeight', { value: 1000, configurable: true })
+    Object.defineProperty(list, 'clientHeight', { value: 400, configurable: true })
+    document.body.appendChild(list)
+    const scrollTo = (y) => {
+      top = y
+      list.dispatchEvent(new Event('scroll'))
+    }
+    const wheel = (deltaY) =>
+      list.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY }))
+    const scrollsAsked = async () => {
+      const { playScrollSound } = await import('../../src/js/crt-sounds.js')
+      return playScrollSound.mock.calls.map(([how]) => (how.end ? 'end' : how.way))
+    }
+    const controller = await freshController(previewManagerStub())
+    const { preloadScrollSounds } = await import('../../src/js/crt-sounds.js')
+    const toggle = document.createElement('button')
+
+    wheel(100)
+    scrollTo(100)
+    expect(await scrollsAsked(), 'nothing while the look is off').toEqual([])
+
+    await controller.enableAltViewWithPreview(toggle)
+    expect(preloadScrollSounds, 'the platen fetched at switch-on').toHaveBeenCalled()
+    // The page's own scroll (a field brought into view): silent.
+    clock += 2000
+    scrollTo(150)
+    expect(await scrollsAsked(), "the page's own scroll").toEqual([])
+
+    // The wheel: a tick for every 40 px line, going down a little lower.
+    wheel(100)
+    for (const y of [190, 230, 270]) {
+      clock += 100
+      scrollTo(y)
+    }
+    expect(await scrollsAsked()).toEqual([-1, -1, -1])
+
+    // A fast fling: a line a tick at most every 70 ms; the rest passed over.
+    clock += 100
+    for (const y of [310, 350, 390, 430]) {
+      clock += 20
+      scrollTo(y)
+    }
+    expect(await scrollsAsked(), 'fourteen a second at most').toHaveLength(4)
+
+    // On to the end: its line, then the end of the list, once.
+    clock += 100
+    scrollTo(600)
+    clock += 100
+    scrollTo(600)
+    expect((await scrollsAsked()).slice(4)).toEqual([-1, 'end'])
+
+    // Back up a line, a little higher; the end is behind it.
+    wheel(-100)
+    clock += 100
+    scrollTo(550)
+    expect((await scrollsAsked()).slice(6)).toEqual([1])
+
+    // Sounds off: nothing.
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    wheel(-100)
+    clock += 100
+    scrollTo(450)
+    expect(await scrollsAsked(), 'sounds off').toHaveLength(7)
     controller.disableAltViewWithPreview(toggle)
   })
 
@@ -1144,7 +1221,7 @@ describe('the Alt View is heard', () => {
     controller.disableAltViewWithPreview(toggle)
   })
 
-  it('a checkbox, a radio button and a switch snap on and off, never a key', async () => {
+  it('a checkbox and a switch flip a lever, up for on and down for off; a radio button snaps on; never a key', async () => {
     pageWithHeaderAndDpad()
     const box = document.createElement('input')
     box.type = 'checkbox'
@@ -1178,11 +1255,11 @@ describe('the Alt View is heard', () => {
     paramSwitch.click()
     expect(await controlsAsked()).toEqual([
       // the box was checked once while the look was off
-      'snap-off',
+      'lever-off',
+      'lever-on',
       'snap-on',
       'snap-on',
-      'snap-on',
-      'snap-on',
+      'lever-on',
     ])
     press(modeSwitch, 'pointerdown')
     press(modeSwitch, 'pointerup')
@@ -1190,8 +1267,8 @@ describe('the Alt View is heard', () => {
     modeSwitch.setAttribute('aria-checked', 'true')
     modeSwitch.click()
     expect((await controlsAsked()).slice(5), 'by the state it leaves').toEqual([
-      'snap-on',
-      'snap-off',
+      'lever-on',
+      'lever-off',
     ])
     expect(await keysAsked(), 'a switch is never a key').toEqual([])
     controller.disableAltViewWithPreview(toggle)

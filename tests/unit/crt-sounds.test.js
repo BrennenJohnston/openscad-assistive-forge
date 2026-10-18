@@ -22,6 +22,8 @@ const DURATIONS = {
   '/sounds/drawers/slide-close.wav': 0.45,
   '/sounds/drawers/stop-close.wav': 0.24,
   '/sounds/drawers/latch-close.wav': 0.3,
+  '/sounds/switches/lever-on-1.wav': 0.13,
+  '/sounds/switches/lever-on-2.wav': 0.131,
 };
 
 function wavHeader(bytes) {
@@ -232,6 +234,29 @@ const SWITCH_FILES = [
   'latch-open.wav',
   'latch-close.wav',
 ];
+
+// The lever a checkbox or a switch flips, two takes each way, and the
+// typewriter platen's ticks a scroll makes, four takes and the end of the
+// list: 48 kHz, as cut from the recordings.
+const LEVER_FILES = ['lever-on-1.wav', 'lever-on-2.wav', 'lever-off-1.wav', 'lever-off-2.wav'];
+const SCROLL_DIR = join(SOUNDS_DIR, 'scroll');
+const SCROLL_FILES = ['platen-1.wav', 'platen-2.wav', 'platen-3.wav', 'platen-4.wav', 'platen-end.wav'];
+
+describe('the lever and scroll files', () => {
+  it.each([
+    ...LEVER_FILES.map((f) => [join(SWITCHES_DIR, f), 0.2]),
+    ...SCROLL_FILES.map((f) => [join(SCROLL_DIR, f), 0.1]),
+  ])('%s is a 48 kHz mono 16-bit WAV under %d s, its peak at or under -1 dBFS', (path, longest) => {
+    const bytes = readFileSync(path);
+    const header = wavHeader(bytes);
+    expect(header.riff).toBe('RIFF');
+    expect(header.channels).toBe(1);
+    expect(header.rate).toBe(48000);
+    expect(header.bits).toBe(16);
+    expect(header.dataBytes / 2 / 48000).toBeLessThan(longest);
+    expect(peakOf(bytes)).toBeLessThanOrEqual(10 ** (-1 / 20));
+  });
+});
 
 describe('the switch, selector and latch files', () => {
   it.each(SWITCH_FILES)(
@@ -529,6 +554,15 @@ describe('playing a switch sound', () => {
     expect(soundGroup('camera').gain.value, 'the camera 12 dB under the keys').toBeCloseTo(db(-12), 6);
     expect(soundGroup('typing').gain.value, 'typing a quiet key').toBeCloseTo(db(-12), 6);
     expect(soundGroup('drawers').gain.value, 'the drawers 10 dB under the keys').toBeCloseTo(db(-10), 6);
+    // The most heard sounds the quietest: the power sound 5 dB down, the
+    // dials 6, the lists 5, the latches 9 (under the key that opens a menu),
+    // the snaps 2, and a scroll's ticks 16, in the background.
+    expect(soundGroup('switch').gain.value).toBeCloseTo(db(-5), 6);
+    expect(soundGroup('dials').gain.value).toBeCloseTo(db(-6), 6);
+    expect(soundGroup('selectors').gain.value).toBeCloseTo(db(-5), 6);
+    expect(soundGroup('latches').gain.value).toBeCloseTo(db(-9), 6);
+    expect(soundGroup('snaps').gain.value).toBeCloseTo(db(-2), 6);
+    expect(soundGroup('scroll').gain.value).toBeCloseTo(db(-16), 6);
     await playKeySound('p', 2, 'down');
     await playDialSound('p', 4);
     const masters = gains.filter((node) => node.connectedTo === context.destination);
@@ -548,6 +582,7 @@ describe('playing a switch sound', () => {
       'snaps',
       'selectors',
       'latches',
+      'scroll',
     ]) {
       expect(soundGroup(name).connectedTo, `${name} into the master`).toBe(masters[0]);
     }
@@ -583,7 +618,7 @@ describe('playing a switch sound', () => {
     expect(() => duck('hum', 8, 150)).toThrow('No such sound group: hum');
   });
 
-  it('plays a camera tick by its kind in the camera group, which it does not lower itself; the turn 8 dB under the tilt and the zoom', async () => {
+  it('plays a camera tick by its kind in the camera group, which it does not lower itself; the turn 8 dB under the zoom, the tilt 4', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
     const { playCameraSound, preloadCameraSounds, soundGroup } = await load();
     const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
@@ -592,7 +627,7 @@ describe('playing a switch sound', () => {
     await playCameraSound('tilt');
     await playCameraSound('zoom');
     expect(urls().slice(1)).toEqual(['/sounds/camera/tilt.wav', '/sounds/camera/zoom.wav']);
-    for (const [n, level] of [db(-8), db(0), db(0)].entries()) {
+    for (const [n, level] of [db(-8), db(-4), db(0)].entries()) {
       expect(sources[n].connectedTo.connectedTo, 'its level, then the group').toBe(
         soundGroup('camera')
       );
@@ -605,7 +640,7 @@ describe('playing a switch sound', () => {
     vi.restoreAllMocks();
   });
 
-  it('the turn tells its way, left 70 cents lower and right 70 higher, and each tick strays up to 15 cents and 1 dB; the tilt and the zoom do not', async () => {
+  it('each tick tells its way, 70 cents lower turning left, tilting down and zooming out, 70 higher the other way, and strays up to 15 cents and 1 dB', async () => {
     const random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
     const { playCameraSound } = await load();
     const cents = (s) => Math.round(1200 * Math.log2(s.playbackRate.value));
@@ -620,10 +655,23 @@ describe('playing a switch sound', () => {
     const last = sources.at(-1);
     expect(cents(last), 'strayed up').toBe(85);
     expect(last.connectedTo.gain.value, 'and a decibel louder').toBeCloseTo(db(-7), 6);
+    random.mockReturnValue(0.5);
     await playCameraSound('tilt', { way: 1 });
     await playCameraSound('zoom', { way: -1 });
-    expect(sources.slice(-2).map(cents), 'the others as they are').toEqual([0, 0]);
-    expect(sources.slice(-2).map((s) => s.connectedTo.gain.value)).toEqual([1, 1]);
+    expect(sources.slice(-2).map(cents), 'up higher, out lower').toEqual([70, -70]);
+    expect(sources.at(-2).connectedTo.gain.value, 'the tilt 4 dB under').toBeCloseTo(db(-4), 6);
+    expect(sources.at(-1).connectedTo.gain.value).toBeCloseTo(db(0), 6);
+    vi.restoreAllMocks();
+  });
+
+  it('a dial click strays up to 10 cents in pitch, so a fast drag does not repeat itself exactly', async () => {
+    const random = vi.spyOn(Math, 'random').mockReturnValue(1);
+    const { playDialSound } = await load();
+    const cents = (s) => Math.round(1200 * Math.log2(s.playbackRate.value));
+    await playDialSound('p', 3);
+    random.mockReturnValue(0);
+    await expect(playDialSound('p', 3)).resolves.toBeCloseTo(0.16 / 2 ** (-10 / 1200), 6);
+    expect(sources.map(cents)).toEqual([10, -10]);
     vi.restoreAllMocks();
   });
 
@@ -768,7 +816,7 @@ describe('playing a switch sound', () => {
       soundGroup('latches'),
     ]);
     expect(soundGroup('camera').gain.calls.length, 'each lowers the camera').toBeGreaterThan(0);
-    expect(soundGroup('latches').gain.value, 'a latch 3 dB under its key').toBeCloseTo(db(-3), 6);
+    expect(soundGroup('latches').gain.value, 'a latch under the key that opened its menu').toBeCloseTo(db(-9), 6);
     await expect(playControlSound('slam')).rejects.toThrow('No such control sound: slam');
 
     globalThis.fetch.mockClear();
@@ -788,11 +836,69 @@ describe('playing a switch sound', () => {
 
     globalThis.fetch.mockClear();
     preloadControlSounds();
-    expect(urls(), 'the six, the three played already kept').toEqual([
-      '/sounds/switches/snap-off.wav',
+    expect(urls(), 'the rest, the three played already kept').toEqual([
       '/sounds/switches/select-choose.wav',
       '/sounds/switches/latch-open.wav',
+      '/sounds/switches/lever-on-1.wav',
+      '/sounds/switches/lever-on-2.wav',
+      '/sounds/switches/lever-off-1.wav',
+      '/sounds/switches/lever-off-2.wav',
     ]);
+  });
+
+  it('a lever flips up for on and down for off, its takes in turn, in the snaps group 5 dB further down, each flip straying up to 15 cents and 1 dB', async () => {
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const { playControlSound, soundGroup } = await load();
+    const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
+    const cents = (s) => Math.round(1200 * Math.log2(s.playbackRate.value));
+    await playControlSound('lever-on');
+    await playControlSound('lever-off');
+    await playControlSound('lever-on');
+    await playControlSound('lever-off');
+    expect(urls()).toEqual([
+      '/sounds/switches/lever-on-1.wav',
+      '/sounds/switches/lever-off-1.wav',
+      '/sounds/switches/lever-on-2.wav',
+      '/sounds/switches/lever-off-2.wav',
+    ]);
+    for (const source of sources) {
+      expect(source.connectedTo.connectedTo).toBe(soundGroup('snaps'));
+      expect(source.connectedTo.gain.value).toBeCloseTo(db(-5), 6);
+    }
+    expect(sources.map(cents)).toEqual([0, 0, 0, 0]);
+    random.mockReturnValue(0);
+    await playControlSound('lever-on');
+    expect(sources.at(-1).buffer.duration, 'round again to the first take').toBe(0.13);
+    expect(cents(sources.at(-1))).toBe(-15);
+    expect(sources.at(-1).connectedTo.gain.value).toBeCloseTo(db(-6), 6);
+    vi.restoreAllMocks();
+  });
+
+  it('a scroll ticks a typewriter platen\'s line, its takes in turn: down 70 cents lower, up 70 higher, straying a little; the end of the list a tick of its own', async () => {
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const { playScrollSound, preloadScrollSounds, soundGroup } = await load();
+    const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
+    const cents = (s) => Math.round(1200 * Math.log2(s.playbackRate.value));
+    for (let n = 0; n < 5; n++) await playScrollSound({ way: n < 3 ? -1 : 1 });
+    expect(urls()).toEqual([
+      '/sounds/scroll/platen-1.wav',
+      '/sounds/scroll/platen-2.wav',
+      '/sounds/scroll/platen-3.wav',
+      '/sounds/scroll/platen-4.wav',
+    ]);
+    expect(sources.map(cents)).toEqual([-70, -70, -70, 70, 70]);
+    for (const source of sources) {
+      expect(source.connectedTo.connectedTo).toBe(soundGroup('scroll'));
+      expect(source.connectedTo.gain.value).toBeCloseTo(db(0), 6);
+    }
+    await playScrollSound({ end: true });
+    expect(urls().at(-1)).toBe('/sounds/scroll/platen-end.wav');
+    expect(cents(sources.at(-1)), 'the end as it is').toBe(0);
+    expect(sources.at(-1).connectedTo.gain.value).toBeCloseTo(db(-2), 6);
+    globalThis.fetch.mockClear();
+    preloadScrollSounds();
+    expect(globalThis.fetch, 'all five fetched already').not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 
   it('mutes through the master: silent within 20 ms, before or after the first sound', async () => {

@@ -381,7 +381,9 @@ key by key, by Ico Doornekamp for bucklespring, a program that plays that
 keyboard's sound while you type: https://github.com/zevv/bucklespring. The
 files `p1a` to `p7a` (`-down` the press, `-up` the release) are the keys K, L,
 C, S, D, B, Tab, Left Alt, Left Ctrl, Caps Lock, Backspace, Enter, Right Shift
-and Space, each cut to 160 ms with a short fade and resampled to 32 kHz mono.
+and Space, each cut to 160 ms with a short fade and resampled to 32 kHz mono;
+each press levelled to the others of its size, each release set a little
+under its press, and any silence before a press trimmed.
 
 - **Author**: Ico Doornekamp
 - **Source**: https://github.com/zevv/bucklespring (the `wav/` files)
@@ -395,7 +397,8 @@ The blue DOS look uses two recordings by G.M_Isaac on Freesound, each
 released under Creative Commons 0: "Retro Keyboard Keystroke"
 (https://freesound.org/s/860241/, the small key, `d1.wav`) and "Retro Enter
 Key" (https://freesound.org/s/860239/, the wide key, `d2.wav`), their leading
-silence cut and the pair resampled to 32 kHz mono.
+silence cut and the pair resampled to 32 kHz mono, the wide key's top end
+softened.
 
 - **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
 - **Note**: CC0 asks for no credit; it is given with thanks.
@@ -429,7 +432,8 @@ copyc4t: https://freesound.org/s/275958/
 - **License**: Creative Commons Attribution 4.0 International,
   https://creativecommons.org/licenses/by/4.0/
 - **Changes**: one click of the recording cut out (75 ms, with short fades),
-  played at seven speeds from 0.6 to 1.6, resampled to 32 kHz mono, levelled.
+  played at seven speeds from 0.6 to 1.6, resampled to 32 kHz mono, levelled,
+  its DC offset removed and its top end softened.
 
 ---
 
@@ -449,7 +453,8 @@ https://freesound.org/s/445483/
 - **License**: Creative Commons Attribution 3.0 Unported,
   https://creativecommons.org/licenses/by/3.0/
 - **Changes**: the click cut out (18 ms, with short fades), resampled to
-  32 kHz mono, levelled.
+  32 kHz mono, levelled; its upper part made to die away sooner and its top
+  end softened.
 
 ### Ratchet and turnstile (CC0-1.0)
 
@@ -457,7 +462,8 @@ The tilt's tick, `tilt.wav`, is cut from "Single_Ratchet-05.wav" by CallFlan
 (https://freesound.org/s/495238/), and the turn's, `turn.wav`, from the
 turnstile in "Subway, card swipe, double beep and turnstile.wav" by
 SpliceSound (https://freesound.org/s/369875/), each released under Creative
-Commons 0.
+Commons 0. Each tick's upper part dies away sooner and its top end is
+softened.
 
 - **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
 - **Note**: CC0 asks for no credit; it is given with thanks.
@@ -505,11 +511,12 @@ The latch gripped open, `grip-close.wav`, is cut from "Door-Handle-Open-01.wav"
 
 ## Switch, Selector and Latch Sounds (CC-BY-3.0, CC0-1.0)
 
-While the Alt View is on, a switch, a checkbox or a radio button snaps on
-and off, a list clicks as it opens and as a choice is made, and a menu or a
-dialog latches open and shut, under `public/sounds/switches/`. Each is one
-event cut from a recording on Freesound, resampled to 32 kHz mono and
-levelled:
+While the Alt View is on, a checkbox or a switch flips a lever up for on
+and down for off, a radio button snaps as it is chosen, a list clicks as it
+opens and as a choice is made, and a menu or a dialog latches open and shut,
+under `public/sounds/switches/`. Each is one event cut from a recording on
+Freesound and levelled, the lever's at 48 kHz mono, the others resampled to
+32 kHz mono:
 
 ### SMALL SIZE TOGGLE SWITCH (CC-BY-3.0)
 
@@ -520,7 +527,8 @@ SIZE TOGGLE SWITCH.wav" by StevenBrown: https://freesound.org/s/128437/
 - **License**: Creative Commons Attribution 3.0 Unported,
   https://creativecommons.org/licenses/by/3.0/
 - **Changes**: each click cut out (32 and 42 ms, with short fades),
-  resampled to 32 kHz mono, levelled.
+  resampled to 32 kHz mono, levelled to each other, the on click's top end
+  softened.
 
 ### Radio switch and latches (CC0-1.0)
 
@@ -533,6 +541,38 @@ released under Creative Commons 0.
 
 - **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
 - **Note**: CC0 asks for no credit; it is given with thanks.
+
+### Heavy metal light switch (CC0-1.0)
+
+The lever, `lever-on-1.wav` and `lever-on-2.wav` (flipped up) and
+`lever-off-1.wav` and `lever-off-2.wav` (flipped down), are four flips of
+"Heavy metal light switch, flipping.wav" by SpliceSound
+(https://freesound.org/s/188194/), released under Creative Commons 0, each
+cut out, its ring shortened and its top end softened.
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+- **Note**: CC0 asks for no credit; it is given with thanks.
+
+---
+
+## Scroll Ticks (CC-BY-4.0)
+
+While the Alt View is on, a list scrolled by hand ticks a line at a time,
+as paper turns through a typewriter, under `public/sounds/scroll/`.
+
+### typewriter_manual_platen_01 (CC-BY-4.0)
+
+The ticks, `platen-1.wav` to `platen-4.wav`, are four clicks of a manual
+typewriter's platen turning, from "typewriter_manual_platen_01.wav" by
+magedu: https://freesound.org/s/277300/
+
+- **Author**: magedu
+- **License**: Creative Commons Attribution 4.0 International,
+  https://creativecommons.org/licenses/by/4.0/
+- **Changes**: four clicks cut out (55 ms each, with short fades), their
+  upper part made to die away sooner and their top end softened, levelled,
+  at 48 kHz mono; the end of a list, `platen-end.wav`, is the first click
+  played 700 cents lower through a low-pass filter.
 
 ---
 

@@ -38,6 +38,13 @@ const DRAWER_PARTS = {
   'stop-close': 0.24,
   'latch-close': 0.3,
 };
+// The lever's flips and the scroll's ticks, in seconds, as
+// public/sounds/switches/ and public/sounds/scroll/ hold them.
+const LEVER_ON_SECONDS = 0.13;
+const LEVER_OFF_SECONDS = 0.12;
+const PLATEN_SECONDS = 0.055;
+const PLATEN_END_SECONDS = 0.0824;
+const near = (seconds, target) => Math.abs(seconds - target) < 0.005;
 const partOf = (seconds) =>
   Object.keys(DRAWER_PARTS).find((name) => Math.abs(DRAWER_PARTS[name] - seconds) < 0.005) ??
   `${seconds} s`;
@@ -376,6 +383,69 @@ test.describe('The sounds button', () => {
     const shut = await heard(() => page.keyboard.press('Escape'));
     expect(shut, 'the latch shut').toHaveLength(1);
     expect(shut[0].seconds).toBeLessThan(0.25);
+  });
+
+  test("a switch in the Customizer flips a lever, down for off and up for on; the wheel over it ticks a line at a time and the end of the list once", async ({
+    page,
+  }) => {
+    await listenForSound(page);
+    await openBox(page);
+    await probeSound(page);
+    await setLook(page, true);
+    test.skip(
+      !(await canSound(page)),
+      'this machine has no sound device, so no sound can start'
+    );
+    await drawersBack(page);
+    await page.locator('#expandAllGroupsBtn').click();
+    await page.waitForTimeout(600);
+    const heard = async (act) => {
+      await page.waitForTimeout(500);
+      const before = await page.evaluate(() => window.__sounds.length);
+      await act();
+      await page.waitForTimeout(800);
+      return page.evaluate(
+        (from) => window.__sounds.slice(from).map((s) => s.seconds),
+        before
+      );
+    };
+
+    // The lid starts on: off first, then on; the lever alone, no key.
+    const lid = page.locator('label[for="param-include_lid"]');
+    await lid.scrollIntoViewIfNeeded();
+    const off = await heard(() => lid.click());
+    expect(off.length === 1 && near(off[0], LEVER_OFF_SECONDS), `off: ${off}`).toBe(true);
+    const on = await heard(() => lid.click());
+    expect(on.length === 1 && near(on[0], LEVER_ON_SECONDS), `on: ${on}`).toBe(true);
+
+    // The Customizer scrolled back to its top by the page: silent.
+    const scroller = await page.evaluateHandle(() => {
+      let el = document.getElementById('parametersContainer');
+      while (
+        el &&
+        !(el.scrollHeight > el.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(el).overflowY))
+      ) {
+        el = el.parentElement;
+      }
+      return el;
+    });
+    const quiet = await heard(() => scroller.evaluate((el) => el.scrollTo(0, 0)));
+    expect(quiet, "the page's own scroll").toEqual([]);
+
+    // The wheel, a few notches down: a platen line a tick.
+    const box = await scroller.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    const ticks = await heard(async () => {
+      for (let n = 0; n < 4; n++) {
+        await page.mouse.wheel(0, 60);
+        await page.waitForTimeout(150);
+      }
+    });
+    expect(ticks.length, `a tick a line: ${ticks}`).toBeGreaterThanOrEqual(3);
+    expect(ticks.every((s) => near(s, PLATEN_SECONDS)), `the platen: ${ticks}`).toBe(true);
+    // A long turn of the wheel to the bottom: the end of the list, last.
+    const end = await heard(() => page.mouse.wheel(0, 5000));
+    expect(near(end.at(-1) ?? 0, PLATEN_END_SECONDS), `the end: ${end}`).toBe(true);
   });
 
   test.describe('on a phone', () => {

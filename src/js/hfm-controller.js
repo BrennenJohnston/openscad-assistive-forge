@@ -25,6 +25,8 @@ import {
   playTypingSound,
   preloadCameraSounds,
   preloadControlSounds,
+  playScrollSound,
+  preloadScrollSounds,
   preloadCrtSounds,
   preloadDialSounds,
   preloadDrawerSounds,
@@ -230,23 +232,46 @@ const _HFM_STICK_DEAD_ZONE = 0.15;
 // The camera's rotate and zoom buttons, in the panel, the phone's drawer and
 // Classic's 3D view toolbar: each press moves the view one step, heard as the
 // view's own tick for that move instead of a key, a turn by its way (left -1,
-// right 1).
+// right 1), a tilt (down -1, up 1), a zoom (out -1, in 1).
 const _HFM_CAMERA_BUTTONS = new Map([
   ['cameraRotateLeft', ['turn', -1]],
   ['cameraRotateRight', ['turn', 1]],
   ['mobileCameraRotateLeft', ['turn', -1]],
   ['mobileCameraRotateRight', ['turn', 1]],
-  ['cameraRotateUp', ['tilt', 0]],
-  ['cameraRotateDown', ['tilt', 0]],
-  ['mobileCameraRotateUp', ['tilt', 0]],
-  ['mobileCameraRotateDown', ['tilt', 0]],
-  ['cameraZoomIn', ['zoom', 0]],
-  ['cameraZoomOut', ['zoom', 0]],
-  ['mobileCameraZoomIn', ['zoom', 0]],
-  ['mobileCameraZoomOut', ['zoom', 0]],
-  ['classicZoomInBtn', ['zoom', 0]],
-  ['classicZoomOutBtn', ['zoom', 0]],
+  ['cameraRotateUp', ['tilt', 1]],
+  ['cameraRotateDown', ['tilt', -1]],
+  ['mobileCameraRotateUp', ['tilt', 1]],
+  ['mobileCameraRotateDown', ['tilt', -1]],
+  ['cameraZoomIn', ['zoom', 1]],
+  ['cameraZoomOut', ['zoom', -1]],
+  ['mobileCameraZoomIn', ['zoom', 1]],
+  ['mobileCameraZoomOut', ['zoom', -1]],
+  ['classicZoomInBtn', ['zoom', 1]],
+  ['classicZoomOutBtn', ['zoom', -1]],
 ]);
+// Scrolling by hand ticks a line at a time, as paper turns through a
+// typewriter's platen: a tick for every 40 px a list moves, going down a
+// little lower and up a little higher, at most every 70 ms (a line that
+// would tick sooner is passed over), and the end of the list once as it is
+// reached. Only a scroll by hand: the wheel, a finger, the scrollbar or a
+// key that scrolls, and the glide after them; a scroll the page makes (a
+// field brought into view, a jump to a group) is silent.
+const _HFM_SCROLL_LINE_PX = 40;
+const _HFM_SCROLL_TICK_GAP_MS = 70;
+const _HFM_SCROLL_HAND_MS = 1000;
+const _HFM_SCROLL_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'PageUp',
+  'PageDown',
+  'Home',
+  'End',
+  ' ',
+]);
+let _hfmScrollHandUntil = 0;
+let _hfmScrollTickAt = -Infinity;
+const _hfmScrolls = new WeakMap();
+let _hfmScrollListeners = null;
 let _hfmCamera = null;
 // When the view last ticked, by hand or by a camera button.
 let _hfmCameraTickAt = -Infinity;
@@ -1487,6 +1512,7 @@ function _preloadLookSounds() {
   preloadCameraSounds();
   preloadDrawerSounds();
   preloadControlSounds();
+  preloadScrollSounds();
 }
 
 // Where the camera is, seen from what it looks at: its turn and tilt in
@@ -1530,8 +1556,7 @@ function _hfmStickPushed() {
   return false;
 }
 
-// One of the view's ticks, unless one came under 70 ms ago; a turn by its
-// way, left -1 or right 1.
+// One of the view's ticks, unless one came under 70 ms ago, by its way.
 function _playCameraTick(kind, way = 0) {
   const now = performance.now();
   if (now - _hfmCameraTickAt < _HFM_CAMERA_TICK_GAP_MS) return;
@@ -1584,8 +1609,14 @@ function _installCameraTicks(previewManager) {
       cam.way[name] = sign;
       kind ??= name;
     }
-    // The turn's angle grows as the view turns left (as Rotate left turns it).
-    if (kind) _playCameraTick(kind, kind === 'turn' ? -cam.way.turn : 0);
+    // The turn's angle grows as the view turns left (as Rotate left turns
+    // it), the tilt's as it tilts up, the distance as it zooms out.
+    const ways = {
+      turn: -cam.way.turn,
+      tilt: cam.way.tilt,
+      zoom: -cam.way.zoom,
+    };
+    if (kind) _playCameraTick(kind, ways[kind]);
   };
   // Any other press is not a direct move of the view: what it moves, it
   // moves as a button, a menu or a shortcut does.
@@ -1703,17 +1734,17 @@ function _installKeySounds() {
     _playKeySound(el, 'down');
     setTimeout(() => _playKeySound(el, 'up'), _HFM_KEY_TAP_MS);
   };
-  // A checkbox or a radio button snaps once it has changed; a switch or a
-  // radio drawn as a button snaps as it is pressed, by the state it leaves.
+  // A checkbox flips its lever once it has changed, up for on and down for
+  // off, and a radio button snaps as it is chosen; a switch or a radio drawn
+  // as a button does so as it is pressed, by the state it leaves.
   const snapChange = (event) => {
     const el = event.target;
-    if (
-      !(el instanceof HTMLInputElement) ||
-      (el.type !== 'checkbox' && el.type !== 'radio')
-    ) {
-      return;
+    if (!(el instanceof HTMLInputElement)) return;
+    if (el.type === 'radio') {
+      _playControlSound('snap-on');
+    } else if (el.type === 'checkbox') {
+      _playControlSound(el.checked ? 'lever-on' : 'lever-off');
     }
-    _playControlSound(el.checked ? 'snap-on' : 'snap-off');
   };
   const snapClick = (event) => {
     const el = event.target?.closest?.(
@@ -1728,9 +1759,12 @@ function _installKeySounds() {
       return;
     }
     const on = el.getAttribute('aria-checked') === 'true';
-    // A radio button already chosen does nothing when pressed again.
-    if (on && el.getAttribute('role') === 'radio') return;
-    _playControlSound(on ? 'snap-off' : 'snap-on');
+    if (el.getAttribute('role') === 'radio') {
+      // A radio button already chosen does nothing when pressed again.
+      if (!on) _playControlSound('snap-on');
+      return;
+    }
+    _playControlSound(on ? 'lever-off' : 'lever-on');
   };
   // A list clicks as it opens, by a press or by the keys that open it, and
   // again as a choice is made.
@@ -1850,9 +1884,99 @@ function _installKeySounds() {
     attributeOldValue: true,
   });
   onDrawerMove(_playDrawerSound);
+  _installScrollTicks();
+}
+
+function _playScrollTick(way) {
+  const now = performance.now();
+  if (now - _hfmScrollTickAt < _HFM_SCROLL_TICK_GAP_MS) return;
+  _hfmScrollTickAt = now;
+  if (!_soundsOn()) return;
+  playScrollSound({ way }).catch((error) => {
+    console.warn('[Alt View] A scroll tick did not play:', error);
+  });
+}
+
+function _playScrollEnd() {
+  if (!_soundsOn()) return;
+  playScrollSound({ end: true }).catch((error) => {
+    console.warn("[Alt View] The end of a list's sound did not play:", error);
+  });
+}
+
+function _installScrollTicks() {
+  if (_hfmScrollListeners) return;
+  const hand = () => {
+    _hfmScrollHandUntil = performance.now() + _HFM_SCROLL_HAND_MS;
+  };
+  const key = (event) => {
+    if (_HFM_SCROLL_KEYS.has(event.key)) hand();
+  };
+  // A press on a scrollbar lands on the element that scrolls, outside its
+  // content.
+  const bar = (event) => {
+    const el = event.target;
+    if (
+      el instanceof Element &&
+      el.clientWidth > 0 &&
+      (event.offsetX > el.clientWidth || event.offsetY > el.clientHeight)
+    ) {
+      hand();
+    }
+  };
+  const scrolled = (event) => {
+    const el =
+      event.target === document ? document.scrollingElement : event.target;
+    if (!(el instanceof Element)) return;
+    const top = el.scrollTop;
+    const seen = _hfmScrolls.get(el);
+    if (!seen) {
+      _hfmScrolls.set(el, { top, carry: 0, end: null });
+      return;
+    }
+    const moved = top - seen.top;
+    seen.top = top;
+    if (!moved) return;
+    if (performance.now() > _hfmScrollHandUntil) {
+      seen.carry = 0;
+      seen.end = null;
+      return;
+    }
+    seen.carry =
+      Math.sign(seen.carry) === Math.sign(moved) ? seen.carry + moved : moved;
+    if (Math.abs(seen.carry) >= _HFM_SCROLL_LINE_PX) {
+      seen.carry %= _HFM_SCROLL_LINE_PX;
+      _playScrollTick(moved > 0 ? -1 : 1);
+    }
+    const bottom = el.scrollHeight - el.clientHeight;
+    const end = top <= 0 ? 'top' : top >= bottom - 1 ? 'bottom' : null;
+    if (end && end !== seen.end) _playScrollEnd();
+    seen.end = end;
+  };
+  _hfmScrollListeners = [
+    ['wheel', hand],
+    ['touchstart', hand],
+    ['touchmove', hand],
+    ['touchend', hand],
+    ['keydown', key],
+    ['pointerdown', bar],
+    ['scroll', scrolled],
+  ];
+  for (const [type, fn] of _hfmScrollListeners) {
+    document.addEventListener(type, fn, { capture: true, passive: true });
+  }
+}
+
+function _removeScrollTicks() {
+  if (!_hfmScrollListeners) return;
+  for (const [type, fn] of _hfmScrollListeners) {
+    document.removeEventListener(type, fn, { capture: true });
+  }
+  _hfmScrollListeners = null;
 }
 
 function _removeKeySounds() {
+  _removeScrollTicks();
   if (!_hfmKeyListeners) return;
   for (const [type, fn] of _hfmKeyListeners) {
     document.removeEventListener(type, fn, true);
