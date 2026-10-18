@@ -132,14 +132,16 @@ describe('the Controller tab', () => {
       'Controller detected: Xbox Wireless Controller.'
     );
     expect(document.getElementById('prefsGamepadFamily').value).toBe('xbox');
-    expect(document.getElementById('prefsGamepadPreset').value).toBe('menus');
+    expect(document.getElementById('prefsGamepadPreset').value).toBe('camera');
     const rows = document.querySelectorAll('#prefsGamepadAssignments tbody tr');
-    expect(rows).toHaveLength(16);
+    expect(rows).toHaveLength(29);
     expect(row('previous').querySelector('th').textContent.trim()).toBe(
       'Previous control'
     );
-    expect(buttonOf('previous')).toBe('LB');
-    expect(buttonOf('resetView')).toBe('Not assigned');
+    expect(buttonOf('previous')).toBe('Not assigned');
+    expect(buttonOf('nextView')).toBe('RB');
+    expect(buttonOf('resetView')).toBe('X');
+    expect(buttonOf('nextPreset')).toBe('View');
     const change = row('activate').querySelector('button');
     expect(change.textContent.trim()).toBe('Change');
     // Its name says which action it changes.
@@ -167,8 +169,8 @@ describe('the Controller tab', () => {
     pending('x');
     await flush();
     expect(buttonOf('activate')).toBe('X');
-    expect(buttonOf('zoomOut')).toBe('A');
-    expect(announce).toHaveBeenLastCalledWith('Activate: X. Zoom out: A.');
+    expect(buttonOf('resetView')).toBe('A');
+    expect(announce).toHaveBeenLastCalledWith('Activate: X. Reset View: A.');
     expect(mapping.get().assignments.activate).toBe('x');
   });
 
@@ -204,10 +206,18 @@ describe('the Controller tab', () => {
     ).toBe('L1');
 
     const preset = document.getElementById('prefsGamepadPreset');
-    preset.value = 'camera';
+    expect(
+      [...preset.options].map((o) => [o.value, o.textContent.trim()])
+    ).toEqual([
+      ['camera', 'Camera'],
+      ['customizer', 'Customizer'],
+      ['menus', 'Menus'],
+    ]);
+    preset.value = 'menus';
     preset.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(buttonOf('zoomIn')).toBe('R2');
-    expect(buttonOf('resetView')).toBe('Square');
+    expect(buttonOf('zoomIn')).toBe('Triangle');
+    expect(buttonOf('resetView')).toBe('Not assigned');
+    expect(buttonOf('previous')).toBe('L1');
 
     row('back').querySelector('button').click();
     pending('r3');

@@ -1585,13 +1585,18 @@ function _hfmCameraPose(previewManager) {
   };
 }
 
+// A controller moving the view itself: a stick past its dead zone, a
+// trigger (the standard layout's zoom), or the D-pad (a turn or a tilt a
+// step in the Camera preset).
 function _hfmStickPushed() {
   for (const pad of navigator.getGamepads?.() ?? []) {
     if (!pad) continue;
     if (pad.axes?.some((value) => Math.abs(value) >= _HFM_STICK_DEAD_ZONE)) {
       return true;
     }
-    // The standard layout's triggers zoom.
+    if ([12, 13, 14, 15].some((index) => pad.buttons?.[index]?.pressed)) {
+      return true;
+    }
     if (
       [6, 7].some(
         (index) => (pad.buttons?.[index]?.value ?? 0) >= _HFM_STICK_DEAD_ZONE

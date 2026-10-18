@@ -235,3 +235,81 @@ describe('the controller drives focus', () => {
     expect(focused()).toBe('mainPage');
   });
 });
+
+// The Customizer as the controller sees it: parameters in their groups,
+// each parameter's own reset button, and the Generate button. A group's
+// header is focusable in a browser; jsdom needs it told.
+const CUSTOMIZER = `
+  <div id="parametersContainer">
+    <details class="param-group" open>
+      <summary class="param-group-summary" tabindex="0">Size</summary>
+      <div class="param-control" data-param-name="height">
+        <input id="height" type="range" min="0" max="10" value="5" />
+        <button class="param-reset-btn" data-param-name="height">Reset</button>
+      </div>
+      <div class="param-control" data-param-name="depth">
+        <input id="depth" type="number" value="3" />
+      </div>
+    </details>
+    <details class="param-group">
+      <summary class="param-group-summary" tabindex="0">Text</summary>
+      <div class="param-control"><input id="label" type="text" value="x" /></div>
+    </details>
+  </div>
+  <button id="primaryActionBtn">Generate</button>
+`;
+
+describe('the controller drives the Customizer', () => {
+  beforeEach(() => {
+    document
+      .getElementById('paramPanel')
+      .insertAdjacentHTML('beforeend', CUSTOMIZER);
+  });
+
+  it("the bumpers step through the parameters, the first from anywhere, round again, and a closed group's stay out of reach", () => {
+    const nav = createGamepadNavigator();
+    nav.parameter(1);
+    expect(focused()).toBe('height');
+    nav.parameter(1);
+    expect(focused()).toBe('depth');
+    nav.parameter(1);
+    expect(focused(), 'the closed group skipped').toBe('height');
+    nav.parameter(-1);
+    expect(focused()).toBe('depth');
+    document.getElementById('mainPage').focus();
+    nav.parameter(-1);
+    expect(focused(), 'the last from anywhere, going back').toBe('depth');
+  });
+
+  it('the triggers step through the groups by their headers, round again', () => {
+    const nav = createGamepadNavigator();
+    nav.group(1);
+    expect(document.activeElement.textContent).toBe('Size');
+    nav.group(1);
+    expect(document.activeElement.textContent).toBe('Text');
+    nav.group(1);
+    expect(document.activeElement.textContent).toBe('Size');
+    nav.group(-1);
+    expect(document.activeElement.textContent).toBe('Text');
+  });
+
+  it('X presses the focused parameter\'s own reset button, Y presses Generate', () => {
+    const nav = createGamepadNavigator();
+    const reset = vi.fn();
+    const generate = vi.fn();
+    document
+      .querySelector('.param-reset-btn')
+      .addEventListener('click', reset);
+    document
+      .getElementById('primaryActionBtn')
+      .addEventListener('click', generate);
+    document.getElementById('height').focus();
+    nav.resetParameter();
+    expect(reset).toHaveBeenCalledTimes(1);
+    document.getElementById('depth').focus();
+    nav.resetParameter();
+    expect(reset, 'a parameter without one').toHaveBeenCalledTimes(1);
+    nav.generate();
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+});

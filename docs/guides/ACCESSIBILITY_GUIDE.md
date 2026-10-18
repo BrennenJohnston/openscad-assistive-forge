@@ -335,29 +335,31 @@ no keyboard or mouse. Connect it and press any button; the status line says
 when it is found. Preferences > Controller names the controller, shows a
 picture of its buttons, and lists what each button does.
 
-### Two presets
+### Three presets
 
-The table uses the names an Xbox controller prints. Preferences > Controller
-shows your own controller's names.
+Each preset gives the buttons to one part of the work, and the View button
+steps to the next one, Camera, Customizer, Menus and round again, saying
+which is on. The table uses the names an Xbox controller prints.
+Preferences > Controller shows your own controller's names.
 
-| Action | Menus first | Camera first |
-|---|---|---|
-| Previous and next control, as Shift+Tab and Tab do | LB and RB | LB and RB |
-| Previous and next toolbar | LT and RT | not assigned |
-| Press the focused control | A | A |
-| Back, as Escape does | B | B |
-| The arrow keys, to the focused control (a slider steps) | D-pad | D-pad |
-| Zoom in and out | Y and X | RT and LT, by how far each is pressed |
-| Reset View and View All | not assigned | X and Y |
-| Full Screen | Menu | Menu |
-| Keyboard shortcuts | View | View |
+| Action | Camera | Customizer | Menus |
+|---|---|---|---|
+| Press the focused control | A | A | A |
+| Back, as Escape does | B | B | B |
+| D-pad | turn and tilt the view a step | the arrow keys, to the focused control (a slider steps) | the arrow keys, to the focused control |
+| LB and RB | the previous and next standard view (Front, Right, Back, Left, Top, Bottom) | the previous and next parameter | the previous and next control, as Shift+Tab and Tab do |
+| LT and RT | zoom out and in, by how far each is pressed | the previous and next parameter group | the previous and next toolbar |
+| X | Reset View | the focused parameter back to its default | zoom out |
+| Y | View All | Generate | zoom in |
+| Menu | Full Screen | Full Screen | Full Screen |
+| View | the next preset | the next preset | the next preset |
 
-In both, the right stick turns the view the way you push it and the left
-stick pans it, at the same speed whatever the computer's frame rate. Menus
-first is the default: it gives the most buttons to moving through the
-interface, so every control is in reach. Camera first suits time spent
-turning and zooming a model. A held direction or bumper repeats after half a
-second, as a held key does, and focus shows the same ring the keyboard gives.
+In every preset the right stick turns the view the way you push it and the
+left stick pans it, at the same speed whatever the computer's frame rate.
+Camera is the preset you start with. The keyboard shortcuts open with F1 or
+from the Help menu; give them a button in Preferences > Controller if you
+want one. A held direction or bumper repeats after half a second, as a held
+key does, and focus shows the same ring the keyboard gives.
 
 ### Changing a button
 

@@ -1,19 +1,20 @@
 import { test, expect } from '@playwright/test';
 import { skipWithoutWebGL } from './helpers/webgl.js';
 
-// A game controller drives the interface as a keyboard would: the right
-// bumper steps to the next control and its focus ring shows, A presses the
-// File menu's button, B closes the menu again, and the right trigger jumps
-// to the next part of the window. The pad is a stand-in the page reads
-// through navigator.getGamepads().
+// A game controller drives the interface as a keyboard would: in the Menus
+// preset the right bumper steps to the next control and its focus ring
+// shows, A presses the File menu's button, B closes the menu again, and the
+// right trigger jumps to the next part of the window; the View button steps
+// from the Camera preset, the default, to the next and says which one is
+// on. The pad is a stand-in the page reads through navigator.getGamepads().
 
 const WASM_READY_TIMEOUT = 180_000;
 
 /** The standard mapping's indexes for the buttons these cases press. */
-const BUTTON = { a: 0, b: 1, rb: 5, rt: 7 };
+const BUTTON = { a: 0, b: 1, rb: 5, rt: 7, select: 8 };
 
-async function openWithPad(page) {
-  await page.addInitScript(() => {
+async function openWithPad(page, { preset = null } = {}) {
+  await page.addInitScript((chosen) => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     localStorage.setItem('openscad-forge-theme', 'dark');
@@ -21,6 +22,12 @@ async function openWithPad(page) {
       'openscad-forge-ui-mode',
       JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
     );
+    if (chosen) {
+      localStorage.setItem(
+        'openscad-forge-gamepad-mapping',
+        JSON.stringify({ preset: chosen })
+      );
+    }
     window.__padButtons = Array.from({ length: 17 }, () => ({
       pressed: false,
       touched: false,
@@ -41,7 +48,7 @@ async function openWithPad(page) {
       configurable: true,
       value: () => [pad, null, null, null],
     });
-  });
+  }, preset);
   await page.goto('/?example=simple-box', { timeout: 60_000 });
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
@@ -81,11 +88,36 @@ async function press(page, index) {
 
 const activeId = (page) => page.evaluate(() => document.activeElement?.id);
 
+/** What the page has said aloud, both of its live regions together. */
+const said = (page) =>
+  page.evaluate(() =>
+    ['srAnnouncer', 'srAnnouncerAssertive']
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ')
+  );
+
 test.describe('A game controller drives the interface', () => {
-  test('the right bumper steps to the next control, its ring showing', async ({
+  test('View steps from the Camera preset to the Customizer, to Menus and round again, saying which is on', async ({
     page,
   }) => {
     await openWithPad(page);
+    await press(page, BUTTON.select);
+    await expect.poll(() => said(page)).toContain('Customizer controls');
+    await press(page, BUTTON.select);
+    await expect.poll(() => said(page)).toContain('Menu controls');
+    await press(page, BUTTON.select);
+    await expect.poll(() => said(page)).toContain('Camera controls');
+    // Preferences > Controller shows the preset the button chose.
+    const stored = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem('openscad-forge-gamepad-mapping') ?? '{}')
+    );
+    expect(stored.preset).toBe('camera');
+  });
+
+  test('the right bumper steps to the next control, its ring showing', async ({
+    page,
+  }) => {
+    await openWithPad(page, { preset: 'menus' });
     // Where Tab goes from the File menu's button is where the bumper goes.
     await page.locator('#fileMenuBtn').focus();
     await page.keyboard.press('Tab');
@@ -122,7 +154,7 @@ test.describe('A game controller drives the interface', () => {
   test('the right trigger jumps from the preview to the camera panel', async ({
     page,
   }) => {
-    await openWithPad(page);
+    await openWithPad(page, { preset: 'menus' });
     await skipWithoutWebGL(
       page,
       'no WebGL context: this browser draws no preview canvas to start from'
