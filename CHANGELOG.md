@@ -60,6 +60,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- In Classic, the Alt View's DOS look has cursors of its own, in its
+  yellow; the green look's no longer follow it in.
+- In the Alt View, auto-rotate ticks as the view turns, as a drag does.
 - A game controller's right stick turns the view the way it is pushed (up
   turned it down), at the same speed at any frame rate, and the left stick
   pans both ways.

@@ -3,7 +3,7 @@
   Cursor adapted from Retrosmart X11 Cursors by mdomlop
   Source: https://github.com/mdomlop/retrosmart-x11-cursors
   License: GPL-3.0
-  Modified: Colors changed to amber (#ffb000) for high-contrast mono theme
+  Modified: Colors changed to amber (#ffb000) for the amber look (the light theme's mono variant)
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
   <!-- Outline (black) -->

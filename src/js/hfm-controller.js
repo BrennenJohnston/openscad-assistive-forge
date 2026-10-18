@@ -1585,8 +1585,13 @@ function _installCameraTicks(previewManager) {
     dragging: false,
     directUntil: 0,
   };
+  // A move of the view's own: a drag (and its glide after), a stick, or
+  // auto-rotate turning it every frame.
   const direct = () =>
-    cam.dragging || performance.now() < cam.directUntil || _hfmStickPushed();
+    cam.dragging ||
+    performance.now() < cam.directUntil ||
+    _hfmStickPushed() ||
+    Boolean(previewManager.isAutoRotateEnabled?.());
   const onStart = () => {
     cam.dragging = true;
   };
