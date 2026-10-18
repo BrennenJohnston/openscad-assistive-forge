@@ -1680,6 +1680,12 @@ function _renderVectorFrame(st, { renderer, previewManager, container }) {
     creaseDeg: look.creaseDeg,
     crisp: look.crisp,
   });
+  // What the frame drew, readable from the page: creases, outline, facets.
+  const counts = st.vectorPass.lineCounts();
+  const drawn = `${counts.creases} ${counts.outline} ${counts.facets}`;
+  if (st.overlayCanvas.dataset.lines !== drawn) {
+    st.overlayCanvas.dataset.lines = drawn;
+  }
 
   const dpr = _getDpr();
   const backingW = Math.max(1, Math.round(width * dpr));
@@ -2010,6 +2016,7 @@ export async function initAltView(previewManager, options = {}) {
         );
       }
       st.vectorLook = on ? { ...look } : null;
+      if (!on && st.overlayCanvas) delete st.overlayCanvas.dataset.lines;
       if (on && !st.vectorPass && !st.vectorLoading) {
         st.vectorLoading = import('./_hfm-vector.js').then(
           ({ createVectorPass }) => {
@@ -2034,6 +2041,8 @@ export async function initAltView(previewManager, options = {}) {
     isVectorLook: () => Boolean(st.vectorLook && st.vectorPass),
     /** How many edges the vector look drew last, or 0. */
     getVectorEdgeCount: () => st.vectorPass?.edgeCount() ?? 0,
+    /** The lines the vector look drew last, or null. */
+    getVectorLineCounts: () => st.vectorPass?.lineCounts() ?? null,
     /**
      * Palette mode. Pass an array of #rrggbb colors to render each
      * cell in the nearest palette color (one glyph atlas per entry);

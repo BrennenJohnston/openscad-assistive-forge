@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   layouts, offers two presets, and lets each action take the button you
   press.
 - Under 40% Characters, the Alt View draws the model as lines, bold at 35%
-  and the thinnest at 0%, with a Surfaces slider for how solid the faces
+  and the thinnest at 0%: its creases, its outline, and its rounded parts
+  as a dimmer wireframe, with a Surfaces slider for how solid the faces
   under them are; Characters goes up to 170%, where the characters stop
   growing, and a phone starts at 45%.
 - The Alt View has a sounds button beside its key, the same setting as Play

@@ -17,7 +17,7 @@ test.describe.configure({ timeout: 240_000 });
 
 const WASM_READY_TIMEOUT = 180_000;
 
-async function openBox(page, mode) {
+async function openBox(page, mode, example = 'simple-box') {
   await page.addInitScript((mode) => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
@@ -29,7 +29,7 @@ async function openBox(page, mode) {
       JSON.stringify({ mode, lastCustomMode: 'standard' })
     );
   }, mode);
-  await page.goto('/?example=simple-box');
+  await page.goto(`/?example=${example}`);
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
     timeout: WASM_READY_TIMEOUT,
@@ -277,6 +277,47 @@ test.describe('The vector look', () => {
     expect(charactersInFaces.mean, 'characters fill them').toBeGreaterThan(0.3);
   });
 
+  test('rounded parts: the logo plate gets its outline and a dim wireframe of its corners in the DOS look; at Edges 400 % every facet is a crease and the wireframe is empty', async ({
+    page,
+  }) => {
+    // The DOS look draws crisp: a dim line is half-lit, and nothing else is.
+    await openBox(page, 'classic', 'logo-plate');
+    await slide(page, '_hfmFontScale', 0.35);
+    const lines = () =>
+      page
+        .locator('.hfm-overlay-canvas')
+        .getAttribute('data-lines')
+        .then((text) => (text ?? '').split(' ').map(Number));
+    await expect
+      .poll(async () => (await lines()).length, { timeout: 10_000 })
+      .toBe(3);
+    const [creases, outline, facets] = await lines();
+    const plate = await readScreen(page, 'plate');
+    expect(creases, 'the creases as before').toBeGreaterThan(100);
+    expect(outline, 'the outline at the rounded corners').toBeGreaterThan(0);
+    expect(facets, 'the dim wireframe of the corners').toBeGreaterThan(10);
+    expect(plate.half, 'the dim lines are half-lit').toBeGreaterThan(50);
+
+    // At Edges 400 % (a crease at 1 degree) every facet is a crease, drawn
+    // bright: nothing is left for the wireframe or the outline.
+    await slide(page, '_hfmContrast', 4);
+    await expect
+      .poll(async () => (await lines())[2], { timeout: 10_000 })
+      .toBe(0);
+    const sharp = await lines();
+    const sharpScreen = await readScreen(page, 'sharp');
+    expect(sharp[0], 'every facet a crease').toBeGreaterThan(creases);
+    expect(sharp[1], 'no outline left').toBe(0);
+    expect(sharpScreen.half, 'nothing half-lit: no dim lines').toBe(0);
+    test.info().annotations.push({
+      type: 'measured',
+      description: JSON.stringify({
+        plate: { creases, outline, facets, half: plate.half },
+        sharp: { lines: sharp, half: sharpScreen.half },
+      }),
+    });
+  });
+
   test("the green look's lines leave a fading trace as the view turns; the DOS look's pixels are crisp and leave none", async ({
     page,
   }) => {
@@ -325,11 +366,13 @@ test.describe('The vector look', () => {
     console.log('glow and trace:', JSON.stringify(numbers));
 
     expect(dosStill.lit, 'the DOS look draws').toBeGreaterThan(500);
+    // The DOS look's dim wireframe is half-lit at rest, a small share of
+    // the picture; turning adds no trace to it.
+    expect(dosStill.half / dosStill.lit, 'the dim lines, a small share').toBeLessThan(0.2);
     expect(
       dosTurning.half / dosTurning.lit,
-      'no half-lit pixels in DOS, turning'
-    ).toBeLessThan(0.02);
-    expect(dosStill.half / dosStill.lit, 'nor still').toBeLessThan(0.02);
+      'no trace in DOS: no more half-lit turning than still'
+    ).toBeLessThanOrEqual(dosStill.half / dosStill.lit + 0.005);
     // The trace fades by the clock, the Glow's share every 33 ms, so a
     // machine that draws a frame only now and then (a test runner's software
     // drawing) shows little of it between frames. It is checked where the
