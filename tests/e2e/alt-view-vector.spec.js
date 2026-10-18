@@ -1,5 +1,5 @@
 /**
- * The Alt View's vector look: below 30% on the Characters slider the model is
+ * The Alt View's vector look: below 40% on the Characters slider the model is
  * drawn as its edges in lines of the look's color, in place of characters.
  * The line widens with the size and 0% still draws; the faces stay dark
  * until the Surfaces slider fills them; the green look glows and keeps a
@@ -205,23 +205,23 @@ async function drag(page, steps, during, readFrom = steps) {
 }
 
 test.describe('The vector look', () => {
-  test('under 30% the model is lines of the look, widening with the size; 0% still draws; Surfaces fills the faces', async ({
+  test('under 40% the model is lines of the look, widening with the size; 0% still draws; Surfaces fills the faces', async ({
     page,
   }) => {
     await openBox(page, 'standard');
     const strip = page.locator('#previewStatusAltAdjust');
     const size = page.locator('#_hfmFontScale');
 
-    await slide(page, '_hfmFontScale', 0.3);
-    await expect(strip).toContainText('SIZE 30%');
-    await expect(size).toHaveAttribute('aria-valuetext', '30%');
+    await slide(page, '_hfmFontScale', 0.4);
+    await expect(strip).toContainText('SIZE 40%');
+    await expect(size).toHaveAttribute('aria-valuetext', '40%');
     const characters = await readScreen(page, 'characters');
 
-    await slide(page, '_hfmFontScale', 0.25);
-    await expect(strip).toContainText('LINES 25%');
-    await expect(size).toHaveAttribute('aria-valuetext', 'Vector lines, 25%');
+    await slide(page, '_hfmFontScale', 0.35);
+    await expect(strip).toContainText('LINES 35%');
+    await expect(size).toHaveAttribute('aria-valuetext', 'Vector lines, 35%');
     const wide = await readScreen(page, 'wide');
-    await slide(page, '_hfmFontScale', 0.15);
+    await slide(page, '_hfmFontScale', 0.2);
     const middle = await readScreen(page, 'middle');
     await slide(page, '_hfmFontScale', 0);
     await expect(size).toHaveAttribute('aria-valuetext', 'Vector lines, 0%');
@@ -230,7 +230,7 @@ test.describe('The vector look', () => {
 
     // The faces: what the model filled solid lights and Surfaces 1% leaves
     // dark, away from the lines.
-    await slide(page, '_hfmFontScale', 0.25);
+    await slide(page, '_hfmFontScale', 0.35);
     await readScreen(page, 'faint');
     await slide(page, '_hfmSurfaces', 1);
     await readScreen(page, 'solid');
@@ -238,7 +238,7 @@ test.describe('The vector look', () => {
     await slide(page, '_hfmSurfaces', 0.5);
     const half = await readScreen(page, 'half', 'faces');
     await slide(page, '_hfmSurfaces', 0.01);
-    await slide(page, '_hfmFontScale', 0.3);
+    await slide(page, '_hfmFontScale', 0.4);
     const charactersInFaces = await readScreen(page, 'again', 'faces');
 
     const numbers = {
@@ -264,9 +264,9 @@ test.describe('The vector look', () => {
     console.log('vector look:', JSON.stringify(numbers));
 
     expect(thin.lit, '0% still draws').toBeGreaterThan(500);
-    expect(middle.lit, '15% wider than 0%').toBeGreaterThan(thin.lit);
-    expect(wide.lit, '25% wider than 15%').toBeGreaterThan(middle.lit);
-    expect(wide.lit / thin.lit, '25% at least twice 0%').toBeGreaterThanOrEqual(
+    expect(middle.lit, '20% wider than 0%').toBeGreaterThan(thin.lit);
+    expect(wide.lit, '35% wider than 20%').toBeGreaterThan(middle.lit);
+    expect(wide.lit / thin.lit, '35% at least twice 0%').toBeGreaterThanOrEqual(
       2
     );
     expect(thinCoveredByWide, 'the same lines, only wider').toBeGreaterThan(
@@ -281,7 +281,7 @@ test.describe('The vector look', () => {
     page,
   }) => {
     await openBox(page, 'standard');
-    await slide(page, '_hfmFontScale', 0.25);
+    await slide(page, '_hfmFontScale', 0.35);
     const greenStill = await readScreen(page, 'still');
     // The trace is a decaying maximum of the frames before, so one frame's
     // read is noisy: the strongest of the last four steps' reads stands for
@@ -298,7 +298,7 @@ test.describe('The vector look', () => {
     const classic = await page.context().newPage();
     await page.close();
     await openBox(classic, 'classic');
-    await slide(classic, '_hfmFontScale', 0.25);
+    await slide(classic, '_hfmFontScale', 0.35);
     const dosStill = await readScreen(classic, 'still');
     const dosTurning = await drag(classic, 10, () =>
       readScreen(classic, 'turning')

@@ -337,7 +337,7 @@ shows is never spoken.
 | "Edges" groups the toggle buttons Soft, Normal and Sharp; a press says "Edges 70%" (or 100%, 160%), once | ☐ | |
 | In focus mode, the minus and equals keys step Characters and say the size, once | ☐ | |
 | The sounds button, just before the key, reads "Sounds, toggle button, pressed"; a press turns the sounds off and it says "not pressed" | ☐ | |
-| Under 30% the Characters slider's value reads "Vector lines, 25%" (at 30% and over, "30%"); the Surfaces slider reads its value and then "Below 30% Characters: how solid the faces under the lines are." | ☐ | |
+| Under 40% the Characters slider's value reads "Vector lines, 35%" (at 40% and over, "40%"); the Surfaces slider reads its value and then "Below 40% Characters: how solid the faces under the lines are." | ☐ | |
 | In Classic, the 3D view toolbar's "ASCII settings" button moves to the "ASCII" grouping, "Edges, slider, 100%"; the grouping is heard once while Tab goes through its four sliders; in the Simplified view the same group sits at the foot of the Customizer | ☐ | |
 | The pan D-pad's center reads "Adjust the Alt View with the pan arrows"; on, it says "Pan arrows now adjust the Alt View: up and down for edges, left and right for size, Shift with up and down for glow."; each arrow says one value ("Edges 105%", "Characters 55%", "Glow 20%"); off, "Pan arrows move the view again." | ☐ | |
 

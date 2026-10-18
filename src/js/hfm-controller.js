@@ -58,17 +58,22 @@ let _hfmContrastScale = _HFM_CONTRAST_RANGE.default;
 let _hfmContrastControls = null;
 
 // The default is finer than the renderer's own 1: at full size the first
-// frame drew the model as a blob with no faces. A saved size wins. At 30%
-// a phone's cell meets the renderer's 3 px font floor (a 3 x 5 px cell,
-// 16,000 of them on a 398 x 622 preview), so below it the characters give
-// way to the vector look.
-const _HFM_FONT_SCALE_RANGE = { min: 0, max: 2.5, step: 0.05, default: 0.6 };
-// Under 30% the model is drawn as its edges, the way a vector monitor's beam
-// drew lines. The line's width follows the size: 1 px at 0%, 0.6 px wider for
-// every 5%, 4 px at 25% (CSS px, the same on every screen).
-const _HFM_VECTOR_BELOW = 0.3;
+// frame drew the model as a blob with no faces. A saved size wins. The top
+// is where the characters stop growing: the renderer caps its font at
+// 24 px, met at 170% of the 14 px base a preview gets. Under 40% the
+// characters give way to the vector look: that is where an eye on a phone
+// stops telling them apart.
+const _HFM_FONT_SCALE_RANGE = { min: 0, max: 1.7, step: 0.05, default: 0.6 };
+// Under 40% the model is drawn as its edges, the way a vector monitor's beam
+// drew lines. The line's width follows the size: 1 px at 0% and 4 px at the
+// first step under the edge, 35%, straight between (CSS px, the same on
+// every screen).
+const _HFM_VECTOR_BELOW = 0.4;
 const _HFM_VECTOR_WIDTH_AT_0 = 1;
-const _HFM_VECTOR_WIDTH_PER_SCALE = 12;
+const _HFM_VECTOR_WIDTH_TOP = 4;
+const _HFM_VECTOR_WIDTH_PER_SCALE =
+  (_HFM_VECTOR_WIDTH_TOP - _HFM_VECTOR_WIDTH_AT_0) /
+  (_HFM_VECTOR_BELOW - _HFM_FONT_SCALE_RANGE.step);
 // In the vector look the Edges slider chooses which creases are lines: its
 // named levels at 30, 15 and 5 degrees, its ends at 40 and 1, straight lines
 // between.
@@ -84,9 +89,10 @@ const _HFM_VECTOR_CREASE = [
 const _HFM_SURFACE_RANGE = { min: 0.01, max: 1, step: 0.01, default: 0.01 };
 let _hfmSurfaceOpacity = _HFM_SURFACE_RANGE.default;
 let _hfmSurfaceControls = null;
-// A phone starts finer: 40% is the finest size whose glyphs still read on a
-// phone's screen. A saved size wins on every device.
-const _HFM_FONT_SCALE_PHONE_DEFAULT = 0.4;
+// A phone starts finer: 45% is one step above the edge where the characters
+// give way to lines, the most detail that still reads on a phone's screen.
+// A saved size wins on every device.
+const _HFM_FONT_SCALE_PHONE_DEFAULT = 0.45;
 const _HFM_PHONE_MAX_WIDTH_PX = 768;
 let _hfmFontScale = _HFM_FONT_SCALE_RANGE.default;
 let _hfmFontScaleControls = null;
@@ -654,8 +660,8 @@ function _applyHfmFontScale(scale) {
   );
   _hfmFontScale = clamped;
 
-  // The characters themselves never go under 30%: there they are lines, and
-  // a look whose lines cannot load keeps its 30% characters.
+  // The characters themselves never go under 40%: there they are lines, and
+  // a look whose lines cannot load keeps its 40% characters.
   if (_hfmAltView?.setFontScale) {
     _hfmAltView.setFontScale(Math.max(clamped, _HFM_VECTOR_BELOW));
     _hfmAltView.invalidate?.();
@@ -671,7 +677,7 @@ function _applyHfmFontScale(scale) {
 }
 
 /**
- * True when a size is under 30%, where the model is drawn as lines.
+ * True when a size is under 40%, where the model is drawn as lines.
  * @param {number} [scale]
  * @returns {boolean}
  */
@@ -680,8 +686,8 @@ function _hfmIsVector(scale = _hfmFontScale) {
 }
 
 /**
- * What a size is called aloud: "Characters 40%", or under 30% "Vector
- * lines, 25%".
+ * What a size is called aloud: "Characters 60%", or under 40% "Vector
+ * lines, 35%".
  * @param {number} scale
  * @returns {string}
  */
@@ -717,8 +723,12 @@ function _hfmCreaseDeg(scale) {
 function _hfmVectorLook() {
   if (!_hfmIsVector()) return null;
   return {
+    // To a hundredth: the slope is a fraction, and 4 px should be 4 px.
     widthPx:
-      _HFM_VECTOR_WIDTH_AT_0 + _HFM_VECTOR_WIDTH_PER_SCALE * _hfmFontScale,
+      Math.round(
+        (_HFM_VECTOR_WIDTH_AT_0 + _HFM_VECTOR_WIDTH_PER_SCALE * _hfmFontScale) *
+          100
+      ) / 100,
     surfaceOpacity: _hfmSurfaceOpacity,
     creaseDeg: Math.round(_hfmCreaseDeg(_hfmContrastScale) * 10) / 10,
     // Classic's look draws crisp, as a raster card did; the phosphor looks
@@ -1098,7 +1108,7 @@ function _initHfmSurfaceControls() {
     range: _HFM_SURFACE_RANGE,
     getValue: () => _hfmSurfaceOpacity,
     onInput: (value) => _applyHfmSurfaceOpacity(value),
-    note: 'Below 30% Characters: how solid the faces under the lines are.',
+    note: 'Below 40% Characters: how solid the faces under the lines are.',
   });
   return _hfmSurfaceControls;
 }

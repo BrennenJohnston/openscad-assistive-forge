@@ -288,9 +288,9 @@ function _setContrastScale(st, scale) {
 
 function _setFontScale(st, scale) {
   const next = Number.isFinite(scale) ? scale : 1;
-  // Instance floor is 0.05, not the preview's 0.3: the City Walk asks
+  // Instance floor is 0.05, not the preview's 0.4: the City Walk asks
   // for characters small enough to disappear into, and hfm-controller.js
-  // still gives the preview's Alt View no characters under 0.3 (its
+  // still gives the preview's Alt View no characters under 0.4 (its
   // slider goes lower, to the vector look). Below ~0.15 the fontSizePx
   // floor takes over and the glyphs stop shrinking.
   // - Max 2.5 → larger chars, lower resolution (more legible)

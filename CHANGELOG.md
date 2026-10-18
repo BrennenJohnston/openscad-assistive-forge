@@ -18,9 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   controller, shows its buttons for Xbox, PlayStation, Nintendo or generic
   layouts, offers two presets, and lets each action take the button you
   press.
-- Under 30% Characters, the Alt View draws the model as lines, bold at 25%
+- Under 40% Characters, the Alt View draws the model as lines, bold at 35%
   and the thinnest at 0%, with a Surfaces slider for how solid the faces
-  under them are.
+  under them are; Characters goes up to 170%, where the characters stop
+  growing, and a phone starts at 45%.
 - The Alt View has a sounds button beside its key, the same setting as Play
   sounds. In the look the 3D view ticks as it is turned, tilted or zoomed,
   by hand or by its camera buttons, a drawer unlatches, rolls and meets its

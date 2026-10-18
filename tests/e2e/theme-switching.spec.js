@@ -1356,7 +1356,7 @@ test.describe('The Alt View starts with finer characters', () => {
     await expect(page.locator('#_hfmFontScale')).toHaveValue('0.6');
   });
 
-  test('on a phone shows 40% characters when nothing is saved', async ({
+  test('on a phone shows 45% characters when nothing is saved', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -1377,9 +1377,9 @@ test.describe('The Alt View starts with finer characters', () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#previewStatusAltAdjust')).toContainText(
-      'SIZE 40%'
+      'SIZE 45%'
     );
-    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.4');
+    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.45');
   });
 });
 
