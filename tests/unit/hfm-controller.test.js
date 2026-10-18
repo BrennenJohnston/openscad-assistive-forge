@@ -1035,7 +1035,7 @@ describe('the Alt View is heard', () => {
   }
   const drawersAsked = async () => {
     const { playDrawerSound } = await import('../../src/js/crt-sounds.js')
-    return playDrawerSound.mock.calls.map((c) => c.slice(0, 3).join(' '))
+    return playDrawerSound.mock.calls.map(([name, phase, how]) => `${name} ${phase} ${how.stopAt} ${how.whole}`)
   }
   const controlsAsked = async () => {
     const { playControlSound } = await import('../../src/js/crt-sounds.js')
@@ -1046,7 +1046,7 @@ describe('the Alt View is heard', () => {
     return playTypingSound.mock.calls.map(([set]) => set)
   }
 
-  it('a drawer opening plays its own opening once and closing its own closing, in the look\'s set, without motion too; not one laid out at once', async () => {
+  it('a drawer opening plays the opening once and closing the closing, with when it meets its stop, without motion too; not one laid out at once', async () => {
     pageWithHeaderAndDpad()
     const panel = drawerPanel()
     const controller = await freshController(previewManagerStub())
@@ -1061,32 +1061,32 @@ describe('the Alt View is heard', () => {
     expect(await drawersAsked(), 'nothing while the look is off').toEqual([])
 
     await controller.enableAltViewWithPreview(toggle)
-    expect(preloadDrawerSounds, 'the phosphor drawers fetched at switch-on').toHaveBeenCalledWith('p')
+    expect(preloadDrawerSounds, 'the drawer fetched at switch-on').toHaveBeenCalled()
     move('customizer', true)
     move('customizer', false)
     move('preview-settings', true)
     move('phone-ascii', true)
     move('phone-camera', false)
     expect(await drawersAsked()).toEqual([
-      'p customizer open',
-      'p customizer close',
-      'p preview-settings open',
-      'p ascii open',
-      'p camera close',
+      'customizer open 0 true',
+      'customizer close 0 true',
+      'preview-settings open 0 true',
+      'phone-ascii open 0 true',
+      'phone-camera close 0 true',
     ])
     move('camera', true, { instant: true })
     slideDrawer([{ el: panel }], { from: 'left', open: true })
     expect(await drawersAsked(), 'laid out at once, or a room with no name').toHaveLength(5)
 
-    // Classic is the DOS look, with drawers of its own.
+    // Classic's drawers are the same drawer.
     document.body.dataset.uiMode = 'classic'
     move('classic-console', true)
     move('classic-editor', false)
     move('classic-right-top', true)
     expect((await drawersAsked()).slice(5)).toEqual([
-      'd console open',
-      'd editor close',
-      'd customizer open',
+      'classic-console open 0 true',
+      'classic-editor close 0 true',
+      'classic-right-top open 0 true',
     ])
     delete document.body.dataset.uiMode
 
@@ -1098,6 +1098,39 @@ describe('the Alt View is heard', () => {
     await controller.enableAltViewWithPreview(toggle)
     move('customizer', false)
     expect(await drawersAsked(), 'nothing with sounds off').toHaveLength(8)
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it("a drawer's own buttons play no key: the drawer they move is the sound", async () => {
+    pageWithHeaderAndDpad()
+    const ids = [
+      'collapseParamPanelBtn',
+      'cameraPanelToggle',
+      'previewDrawerToggle',
+      'mobileDrawerToggle',
+      'drawerCloseBtn',
+      'cameraDrawerToggle',
+      'asciiDrawerToggle',
+      'classicEditorCloseBtn',
+      'classicCustomizerCloseBtn',
+    ]
+    const buttons = ids.map((id) => sizedButton(id, 36, 36))
+    const stow = sizedButton('stowLeft', 24, 24)
+    stow.className = 'btn classic-pane-btn classic-stow-btn'
+    const other = sizedButton('otherBtn', 36, 36)
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    for (const el of [...buttons, stow, other]) {
+      press(el, 'pointerdown')
+      press(el, 'pointerup')
+      el.click()
+    }
+    const enter = buttons[0]
+    enter.focus()
+    enter.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    enter.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }))
+    expect(await keysAsked(), 'only the other button').toEqual(['p 2 down', 'p 2 up'])
     controller.disableAltViewWithPreview(toggle)
   })
 

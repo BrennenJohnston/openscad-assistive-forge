@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { skipWithoutWebGL } from './helpers/webgl.js';
 import { canSound, listenForSound, probeSound } from './helpers/sound.js';
+import { drawersBack } from './helpers/alt-view.js';
 
 const GREETING = 'ALT VIEW ONLINE';
 // The three switch sounds, in seconds, as public/sounds/ holds them.
@@ -272,9 +273,18 @@ test.describe('The Alt View is heard', () => {
     expect(onLead, 'switch-on: the screen right after it').toBeLessThan(SOUND_LEAD_MAX_MS);
     expect((await heard()).keys, 'the look\'s own key makes no key sound').toBe(0);
 
-    // A button in the look: a key goes down, then up.
+    // The drawers the look opens again, and the camera panel opened by its own
+    // button, are heard as drawers (a latch among them is a key's length), so
+    // the keys are counted from here.
+    await drawersBack(page);
     await page.locator('#cameraPanelToggle').click();
-    await expect.poll(async () => (await heard()).keys, { timeout: 5_000 }).toBe(2);
+    await page.waitForTimeout(1_200);
+    const keysFrom = (await heard()).keys;
+
+    // A button in the look: a key goes down, then up.
+    const reset = page.locator('#cameraResetView');
+    await reset.click();
+    await expect.poll(async () => (await heard()).keys - keysFrom, { timeout: 5_000 }).toBe(2);
 
     // A slider in the look, dragged: a click as the steps go by, the same
     // file every time (the Characters slider's fifty steps give it the sixth
@@ -324,7 +334,7 @@ test.describe('The Alt View is heard', () => {
     const dragged = await settled(flicked.clicks.length + 4);
     expect(new Set(dragged.clicks).size, 'one click file for the whole drag').toBe(1);
     expect(Math.abs(dragged.clicks[0] - P6_SECONDS), 'the sixth tone').toBeLessThan(0.002);
-    expect(dragged.keys, 'a slider is not a key').toBe(2);
+    expect(dragged.keys - keysFrom, 'a slider is not a key').toBe(2);
     await page.waitForTimeout(500);
     expect((await heard()).clicks.length, 'silence once let go').toBe(dragged.clicks.length);
     // The keyboard: an arrow is a step, so a click.
@@ -334,8 +344,8 @@ test.describe('The Alt View is heard', () => {
       .poll(async () => (await heard()).clicks.length, { timeout: 5_000 })
       .toBe(dragged.clicks.length + 1);
     expect((await heard()).clicks.at(-1), 'the same file').toBe(dragged.clicks[0]);
-    await page.locator('#cameraPanelToggle').click();
-    await expect.poll(async () => (await heard()).keys, { timeout: 5_000 }).toBe(4);
+    await reset.click();
+    await expect.poll(async () => (await heard()).keys - keysFrom, { timeout: 5_000 }).toBe(4);
 
     await expect(page.locator('html')).not.toHaveAttribute('data-alt-view-reveal', {
       timeout: 5_000,
@@ -346,7 +356,7 @@ test.describe('The Alt View is heard', () => {
     await expect
       .poll(async () => (await heard()).long, { timeout: 5_000 })
       .toEqual([ON_SECONDS, LOOK_SECONDS]);
-    expect((await heard()).keys, 'the theme button is a key too').toBe(6);
+    expect((await heard()).keys - keysFrom, 'the theme button is a key too').toBe(6);
     await expect.poll(async () => (await seen(page)).revealed, { timeout: 5_000 }).toBe(true);
     const lookLead = await screenAfterSoundMs(page);
     expect(lookLead, 'a look change: the sound first').toBeGreaterThanOrEqual(0);
@@ -360,7 +370,7 @@ test.describe('The Alt View is heard', () => {
     await page.waitForTimeout(1_500);
     const last = await heard();
     expect(last.long).toEqual([ON_SECONDS, LOOK_SECONDS, OFF_SECONDS]);
-    expect(last.keys).toBe(6);
+    expect(last.keys - keysFrom).toBe(6);
     expect(last.clicks.length).toBe(dragged.clicks.length + 1);
   });
 });

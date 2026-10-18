@@ -160,24 +160,38 @@ let _hfmGripLastAt = -Infinity;
 const _HFM_LATCH_BY_ARIA_HIDDEN = '[role="dialog"], .toolbar-menu-modal';
 const _HFM_LATCH_BY_HIDDEN = '.camera-shortcuts-panel, [role="menu"]';
 let _hfmLatches = null;
-// The look's drawers by the names they move by, and the drawer each sounds
-// as in its set: the phosphor looks' Customizer, camera, ASCII and Preview
-// Settings, the DOS look's Customizer, editor and console (Classic's fields:
-// the left one the editor's, the right ones the Customizer's).
-const _HFM_DRAWER_SOUNDS = {
-  customizer: 'customizer',
-  'phone-customizer': 'customizer',
-  camera: 'camera',
-  'phone-camera': 'camera',
-  'phone-ascii': 'ascii',
-  'preview-settings': 'preview-settings',
-  'classic-customizer': 'customizer',
-  'classic-right-top': 'customizer',
-  'classic-right-bottom': 'customizer',
-  'classic-editor': 'editor',
-  'classic-left': 'editor',
-  'classic-console': 'console',
-};
+// The look's drawers that sound, by the names they move by: the
+// Customizer, camera, ASCII and Preview Settings drawers, and Classic's
+// Customizer, editor and console and the fields that hold them. Each is the
+// same drawer: a latch, a roll, a stop.
+const _HFM_SOUNDING_DRAWERS = new Set([
+  'customizer',
+  'phone-customizer',
+  'camera',
+  'phone-camera',
+  'phone-ascii',
+  'preview-settings',
+  'classic-customizer',
+  'classic-right-top',
+  'classic-right-bottom',
+  'classic-editor',
+  'classic-left',
+  'classic-console',
+]);
+// A drawer's own buttons, which open and shut it: their press is heard as
+// the drawer itself, not as a key.
+const _HFM_DRAWER_BUTTONS = [
+  '#collapseParamPanelBtn',
+  '#cameraPanelToggle',
+  '#previewDrawerToggle',
+  '#mobileDrawerToggle',
+  '#drawerCloseBtn',
+  '#cameraDrawerToggle',
+  '#asciiDrawerToggle',
+  '#classicEditorCloseBtn',
+  '#classicCustomizerCloseBtn',
+  '.classic-stow-btn',
+].join(', ');
 // A slider moved while the look is on clicks as a dial does, its tone by
 // how many steps the slider has: the edges of the seven tones, a slider of
 // eight steps or fewer the lowest, one of more than a hundred the highest.
@@ -1347,17 +1361,11 @@ function _playTypingSound() {
 }
 
 // A drawer the look heard move: its own sound in the look's set.
-function _playDrawerSound(name, open, share) {
-  const drawer = _HFM_DRAWER_SOUNDS[name];
-  if (!drawer || !_soundsOn()) return;
-  playDrawerSound(_hfmKeySet(), drawer, open ? 'open' : 'close', share).catch(
-    (error) => {
-      console.warn(
-        `[Alt View] The ${name} drawer's sound did not play:`,
-        error
-      );
-    }
-  );
+function _playDrawerSound(name, open, move) {
+  if (!_HFM_SOUNDING_DRAWERS.has(name) || !_soundsOn()) return;
+  playDrawerSound(name, open ? 'open' : 'close', move).catch((error) => {
+    console.warn(`[Alt View] The ${name} drawer's sound did not play:`, error);
+  });
 }
 
 // Whether a latch's pop-up shows, by the attribute that hides it.
@@ -1420,7 +1428,13 @@ function _stopGripWatch() {
 }
 
 function _playKeySound(el, phase) {
-  if (!_soundsOn() || _HFM_CAMERA_BUTTONS.has(el.id)) return;
+  if (
+    !_soundsOn() ||
+    _HFM_CAMERA_BUTTONS.has(el.id) ||
+    el.matches(_HFM_DRAWER_BUTTONS)
+  ) {
+    return;
+  }
   playKeySound(_hfmKeySet(), _hfmKeyBand(el), phase).catch((error) => {
     console.warn(`[Alt View] A key sound did not play:`, error);
   });
@@ -1470,7 +1484,7 @@ function _preloadLookSounds() {
   preloadKeySounds(set);
   preloadDialSounds(set);
   preloadCameraSounds();
-  preloadDrawerSounds(set);
+  preloadDrawerSounds();
   preloadControlSounds();
 }
 

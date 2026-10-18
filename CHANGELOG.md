@@ -23,8 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under them are.
 - The Alt View has a sounds button beside its key, the same setting as Play
   sounds. In the look the 3D view ticks as it is turned, tilted or zoomed,
-  by hand or by its camera buttons, each drawer slides with a sound of its
-  own, and switches, lists, menus and typing each have theirs.
+  by hand or by its camera buttons, a drawer unlatches, rolls and meets its
+  stop with a thump, and switches, lists, menus and typing each have theirs.
 
 ### Changed
 

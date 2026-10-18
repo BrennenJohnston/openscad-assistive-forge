@@ -25,6 +25,9 @@
 /** How far back from its stop a drawer settles, as a share of its travel. */
 const SETTLE = 0.02;
 
+/** When a drawer coming out meets its stop, as a share of its slide's time. */
+const STOP_AT = 0.8;
+
 /** @typedef {'left'|'right'|'top'|'bottom'} DrawerEdge */
 
 /**
@@ -50,16 +53,24 @@ const SETTLE = 0.02;
 const running = new WeakMap();
 
 /**
+ * @typedef {Object} DrawerMove
+ * @property {number} stopAt - seconds until the drawer meets its stop on
+ *   screen: out, at four fifths of its slide; shut, at its end; 0 when it
+ *   changes at once
+ * @property {boolean} whole - whether it goes the whole way, from shut or
+ *   from open, not turned round in mid-slide
+ */
+
+/**
  * Told of each drawer that opens or closes by the name it goes by, whether
  * it slides or changes at once because less motion was asked for (the
  * look's sounds), but not of one laid out at once (`instant`).
- * @type {((name: string, open: boolean, share: number) => void)|null}
+ * @type {((name: string, open: boolean, move: DrawerMove) => void)|null}
  */
 let movesHeard = null;
 
 /**
- * @param {((name: string, open: boolean, share: number) => void)|null} listener
- *   - share: how much of the drawer's way the move covers, 0.2 to 1
+ * @param {((name: string, open: boolean, move: DrawerMove) => void)|null} listener
  */
 export function onDrawerMove(listener) {
   movesHeard = listener;
@@ -71,7 +82,7 @@ export function onDrawerMove(listener) {
  * @param {boolean} open
  */
 export function drawerChanged(name, open) {
-  if (name) movesHeard?.(name, open, 1);
+  if (name) movesHeard?.(name, open, { stopAt: 0, whole: true });
 }
 
 /**
@@ -161,7 +172,7 @@ function keyframesFor(part, from, travel, fromP, toP, ease) {
   if (toP === 1) {
     return [
       { ...at(fromP), offset: 0, easing: ease },
-      { ...at(1), offset: 0.8, easing: 'ease-out' },
+      { ...at(1), offset: STOP_AT, easing: 'ease-out' },
       { ...at(1 - SETTLE), offset: 0.9, easing: 'ease-in-out' },
       { ...at(1), offset: 1 },
     ];
@@ -335,14 +346,19 @@ export function slideDrawer(
     : !room || Object.values(room.props ?? {}).every(sameSizes);
   const toP = open ? 1 : 0;
   const share = Math.max(0.2, Math.abs(toP - fromP));
-  if (name && !instant && !still) movesHeard?.(name, open, share);
   const pace = instant ? null : drawerPace();
+  const duration = pace ? (open ? pace.open : pace.close) * share : 0;
+  if (name && !instant && !still) {
+    movesHeard?.(name, open, {
+      stopAt: (duration * (open ? STOP_AT : 1)) / 1000,
+      whole: Math.abs(toP - fromP) > 0.999,
+    });
+  }
   if (!pace || still) {
     if (!open) whenClosed?.();
     return null;
   }
 
-  const duration = (open ? pace.open : pace.close) * share;
   const animations = present.map((part) =>
     part.el.animate(keyframesFor(part, from, travel, fromP, toP, pace.ease), {
       duration,

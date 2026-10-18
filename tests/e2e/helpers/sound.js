@@ -6,8 +6,9 @@
  */
 
 /**
- * Every sound the page starts from now on: when, and how long it lasts.
- * Read them back from `window.__sounds`.
+ * Every sound the page starts from now on: when it was started (`at`, ms on
+ * the page's clock), how far ahead it was scheduled to play (`delay`, s),
+ * and how long it lasts (`seconds`). Read them back from `window.__sounds`.
  * @param {import('@playwright/test').Page} page
  */
 export async function listenForSound(page) {
@@ -15,7 +16,11 @@ export async function listenForSound(page) {
     window.__sounds = [];
     const start = AudioBufferSourceNode.prototype.start;
     AudioBufferSourceNode.prototype.start = function (...args) {
-      window.__sounds.push({ at: performance.now(), seconds: this.buffer?.duration ?? null });
+      window.__sounds.push({
+        at: performance.now(),
+        delay: Math.max(0, (args[0] ?? 0) - this.context.currentTime),
+        seconds: this.buffer?.duration ?? null,
+      });
       return start.apply(this, args);
     };
   });

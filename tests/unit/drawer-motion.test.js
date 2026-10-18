@@ -243,22 +243,24 @@ describe('drawer motion', () => {
     expect(slides).toHaveLength(2);
   });
 
-  it('tells the look of a named drawer that opens or closes, moving or not, with how much of its way it covers', () => {
+  it('tells the look of a named drawer that opens or closes, moving or not, when it meets its stop and whether it goes the whole way', () => {
     const heard = [];
-    onDrawerMove((name, open, share) => heard.push([name, open, share]));
+    onDrawerMove((name, open, how) => heard.push([name, open, how]));
     try {
       const { el } = makeDrawer();
       slideDrawer([{ el }], { from: 'left', open: true, name: 'camera' });
       setPace();
       slideDrawer([{ el }], { from: 'left', open: false, name: 'camera' });
-      expect(heard, 'without the pace and with it').toEqual([
-        ['camera', true, 1],
-        ['camera', false, 1],
+      expect(heard, 'without the pace (at once) and with it (450 ms shut)').toEqual([
+        ['camera', true, { stopAt: 0, whole: true }],
+        ['camera', false, { stopAt: 0.45, whole: true }],
       ]);
       slideDrawer([{ el }], { from: 'left', open: true, name: 'camera' });
       expect(heard[2][0], 'turned round').toBe('camera');
-      expect(heard[2][2]).toBeGreaterThanOrEqual(0.2);
-      expect(heard[2][2]).toBeLessThanOrEqual(1);
+      expect(heard[2][2].whole).toBe(false);
+      // Out, it meets the stop at four fifths of its slide: 500 ms at most.
+      expect(heard[2][2].stopAt).toBeGreaterThanOrEqual(0.2 * 0.5 * 0.8 - 1e-9);
+      expect(heard[2][2].stopAt).toBeLessThanOrEqual(0.4);
       slideDrawer([{ el }], { from: 'left', open: false, name: 'camera', instant: true });
       slideDrawer([{ el }], { from: 'left', open: true });
       const flat = makeDrawer({ width: 0, height: 0 });
@@ -266,7 +268,7 @@ describe('drawer motion', () => {
       expect(heard, 'laid out at once, unnamed, or with nowhere to go: not told').toHaveLength(3);
       drawerChanged('classic-console', false);
       drawerChanged(undefined, true);
-      expect(heard.at(-1)).toEqual(['classic-console', false, 1]);
+      expect(heard.at(-1)).toEqual(['classic-console', false, { stopAt: 0, whole: true }]);
       expect(heard).toHaveLength(4);
       onDrawerMove(null);
       drawerChanged('classic-console', true);

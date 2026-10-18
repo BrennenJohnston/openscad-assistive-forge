@@ -6,7 +6,8 @@
  * press that turns sounds on plays a key, so a person hears that it worked;
  * the press that turns them off plays nothing. In the look a drag of the
  * view ticks, and so does a camera button that turns, tilts or zooms it; a
- * drawer slides with a sound of its own, and a menu latches.
+ * drawer's own button is heard as the drawer, a latch, a roll and a stop in
+ * time with its slide; and a menu latches.
  *
  * @license GPL-3.0-or-later
  */
@@ -27,6 +28,18 @@ const TILT_SECONDS = 0.03;
 const ZOOM_SECONDS = 0.018;
 const oneTick = (heard, seconds) =>
   heard.length === 1 && Math.abs(heard[0] - seconds) < 0.005;
+// The drawer's parts, in seconds, as public/sounds/drawers/ holds them.
+const DRAWER_PARTS = {
+  'latch-open': 0.172,
+  'slide-open': 0.4,
+  'stop-open': 0.295,
+  'slide-close': 0.45,
+  'stop-close': 0.325,
+  'latch-close': 0.115,
+};
+const partOf = (seconds) =>
+  Object.keys(DRAWER_PARTS).find((name) => Math.abs(DRAWER_PARTS[name] - seconds) < 0.005) ??
+  `${seconds} s`;
 
 async function openBox(page, mode = 'standard') {
   await page.addInitScript((mode) => {
@@ -287,7 +300,7 @@ test.describe('The sounds button', () => {
     }
   });
 
-  test("a drawer's button plays its key, then the drawer's own slide as long as the slide; a menu latches open and shut", async ({
+  test("a drawer's own button is heard as the drawer alone: shut, its roll, the thump as it stops and the latch; open, the latch and roll, the thump at its stop; a menu latches", async ({
     page,
   }) => {
     await listenForSound(page);
@@ -306,24 +319,45 @@ test.describe('The sounds button', () => {
       });
       const at = await page.evaluate(() => performance.now());
       await press();
-      await page.waitForTimeout(900);
+      await page.waitForTimeout(1_200);
       return page.evaluate(
-        (from) => window.__sounds.map((s) => ({ after: s.at - from, seconds: s.seconds })),
+        (from) =>
+          window.__sounds.map((s) => ({
+            plays: s.at - from + s.delay * 1000,
+            seconds: s.seconds,
+          })),
         at
       );
     };
-    const slides = (sounds) => sounds.filter((s) => s.seconds > 0.3);
 
     const button = page.locator('#collapseParamPanelBtn');
     await expect(button).toHaveAttribute('aria-expanded', 'true');
+    // Shut: no key; the roll with the press, the thump as the 450 ms slide
+    // ends, the latch 80 ms after it.
     const closing = await heard(() => button.click());
-    expect(slides(closing), 'one slide shut').toHaveLength(1);
-    expect(slides(closing)[0].seconds, 'as long as the slide shut, s').toBeCloseTo(0.45, 2);
-    expect(slides(closing)[0].after, 'with the press, ms').toBeLessThan(300);
-    expect(closing.length - 1, 'and the key, down and up').toBe(2);
+    expect(closing.map((s) => partOf(s.seconds))).toEqual([
+      'slide-close',
+      'stop-close',
+      'latch-close',
+    ]);
+    const [roll, thump, latch] = closing.map((s) => s.plays);
+    expect(roll, 'the roll with the press, ms').toBeLessThan(300);
+    expect(thump - roll, 'the thump as the slide ends, ms').toBeGreaterThan(420);
+    expect(thump - roll, 'the thump as the slide ends, ms').toBeLessThan(480);
+    expect(latch - thump, 'the latch after the thump, ms').toBeGreaterThan(65);
+    expect(latch - thump, 'the latch after the thump, ms').toBeLessThan(95);
+    // Open: the latch and the roll with the press, the thump as the drawer
+    // meets its stop, four fifths into its 500 ms slide.
     const opening = await heard(() => button.click());
-    expect(slides(opening), 'one slide open').toHaveLength(1);
-    expect(slides(opening)[0].seconds, 'as long as the slide open, s').toBeCloseTo(0.5, 2);
+    expect(opening.map((s) => partOf(s.seconds))).toEqual([
+      'latch-open',
+      'slide-open',
+      'stop-open',
+    ]);
+    const [letGo, rollOut, stop] = opening.map((s) => s.plays);
+    expect(Math.abs(rollOut - letGo), 'together, ms').toBeLessThan(15);
+    expect(stop - letGo, 'the thump at the stop, ms').toBeGreaterThan(370);
+    expect(stop - letGo, 'the thump at the stop, ms').toBeLessThan(430);
 
     const menu = await heard(() => page.locator('#editMenuBtn').click());
     expect(menu.length, 'the key, down and up, and the latch').toBe(3);

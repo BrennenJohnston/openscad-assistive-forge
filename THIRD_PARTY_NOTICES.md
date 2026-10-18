@@ -466,17 +466,25 @@ Commons 0.
 
 ## Drawer Sounds (CC0-1.0)
 
-While the Alt View is on, each drawer slides open and shut with a sound of
-its own, under `public/sounds/drawers/`. Each is one slide cut from a
-recording on Freesound, played at a speed of its own for its pitch (0.85 to
-1.15), fitted to the drawer's slide (500 ms open, 450 ms shut, the stop at
-400 ms), resampled to 32 kHz mono and levelled:
+While the Alt View is on, a drawer opening is heard as a latch letting go,
+its roll out on steel rails and the thump of its stop, and a drawer shutting
+as the faintest roll, the thump of the closed stop and the latch catching,
+under `public/sounds/drawers/`. Each part is cut from a recording on
+Freesound at its own speed and pitch, levelled, at 48 kHz mono:
 
-- The green and amber looks' drawers (`p-*.wav`): one opening and one
-  closing from "Drawer opening/closing - Ball Bearing rails" by leocb,
-  https://freesound.org/s/710648/
-- The blue DOS look's drawers (`d-*.wav`): the opening and the closing of
-  "CD-tray, open & close.wav" by Ryding, https://freesound.org/s/109308/
+- The latches (`latch-open.wav`, `latch-close.wav`): a spring latch letting
+  go and snapping shut, from "briefcase latch open close click.wav" by
+  rsellick, https://freesound.org/s/545521/
+- The rolls (`slide-open.wav`, `slide-close.wav`): from "Metal drawer" by
+  LloydEvans09, https://freesound.org/s/185842/, its level evened out and
+  then shaped to the drawer's speed on screen
+- The stops (`stop-open.wav`, `stop-close.wav`): from "Ball-bearing latched
+  cupboard door" by wlabarron, https://freesound.org/s/509108/
+
+The earlier per-drawer slides (`p-*.wav`, `d-*.wav`) are cut from "Drawer
+opening/closing - Ball Bearing rails" by leocb,
+https://freesound.org/s/710648/, and "CD-tray, open & close.wav" by Ryding,
+https://freesound.org/s/109308/.
 
 Each is released under Creative Commons 0.
 

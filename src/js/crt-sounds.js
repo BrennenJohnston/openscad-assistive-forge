@@ -3,9 +3,9 @@
  * going off, each a short recording played whole; the keys, a keyboard's
  * press and release for every button of the look, chosen by the button's
  * size; the dial clicks a slider makes step by step, one click per look at
- * seven speeds; the 3D view's ticks as it is turned, tilted or zoomed by
- * hand; the drawers sliding open and shut; a switch's snap, a selector's
- * click, a latch, and a quiet key for typing (the recordings and their
+ * seven speeds; the 3D view's ticks as it is turned, tilted or zoomed; a
+ * drawer's latch, roll and stop in time with its slide; a switch's snap, a
+ * selector's click, a latch, and a quiet key for typing (the recordings and their
  * makers are named in THIRD_PARTY_NOTICES.md). A file is fetched ahead or
  * the first time it is wanted, decoded once and kept. The switch sounds
  * play one at a time, the newest one asked for winning, and so does each
@@ -64,13 +64,32 @@ const CAMERA_FILES = {
 // Each tick's level in the camera group: the turn, the fullest of the
 // three, sits a little under the other two.
 const CAMERA_LEVELS_DB = { zoom: 0, turn: -3, tilt: 0 };
-// The drawers, by the look: p (the phosphor looks) a rack drawer on slide
-// rails, d (the DOS look) its own; each drawer an opening and a closing as
-// long as its slide, told apart by pitch and length, the biggest lowest.
-const DRAWER_SETS = {
-  p: ['customizer', 'camera', 'ascii', 'preview-settings'],
-  d: ['customizer', 'editor', 'console'],
+// A drawer, the same in every look, in parts played in time with its slide:
+// opening, a latch letting go, the roll out on its rails, the thump of the
+// stop it meets; shutting, the faintest roll, the thump of the closed stop,
+// the latch catching. A roll is as long as the way it covers (400 ms out to
+// the stop, 450 ms shut). Each part has its level in the drawers group.
+const DRAWER_PARTS = {
+  open: { latch: 'latch-open', roll: 'slide-open', stop: 'stop-open' },
+  close: { latch: 'latch-close', roll: 'slide-close', stop: 'stop-close' },
 };
+const DRAWER_LEVELS_DB = {
+  'latch-open': -3,
+  'slide-open': -6,
+  'stop-open': -1,
+  'slide-close': -9,
+  'stop-close': -1,
+  'latch-close': -3,
+};
+// Shutting, the latch catches this long after the stop. A drawer that
+// changes at once (less motion asked for) meets its stop this long after
+// its latch lets go.
+const DRAWER_LATCH_LAG_S = 0.08;
+const DRAWER_STILL_STOP_S = 0.06;
+// A roll turned round in mid-slide fades out over this; a roll begun part of
+// the way in rises over the other, so neither starts or ends with a click.
+const DRAWER_ROLL_FADE_S = 0.04;
+const DRAWER_ROLL_RISE_S = 0.015;
 // The other controls' sounds, the same in every look, each in its group: a
 // switch's snap on and off, a selector's click as a list opens and as a
 // choice is made, a latch as a menu or a dialog opens and closes.
@@ -82,23 +101,19 @@ const CONTROL_FILES = {
   'latch-open': ['/sounds/switches/latch-open.wav', 'latches'],
   'latch-close': ['/sounds/switches/latch-close.wav', 'latches'],
 };
-// A drawer's sound cut short, by a press that turns the drawer round, fades
-// out over this instead of stopping with a click.
-const CUT_FADE_S = 0.015;
 // A browser that has not let the page make sound yet leaves the audio
 // context waiting; past this the sound is given up.
 const START_TIMEOUT_MS = 1000;
 
 // The groups a sound plays in, each at its own level under the master: the
-// camera's sounds 12 dB under the keys, a drawer's slide 6 dB under the key
-// that moved it, typing a quiet key 12 dB under, a latch under the key that
+// camera's sounds 12 dB under the keys, a drawer 10 dB under them, typing a quiet key 12 dB under, a latch under the key that
 // opened its menu.
 const GROUP_LEVELS_DB = {
   switch: 0,
   keys: 0,
   dials: 0,
   camera: -12,
-  drawers: -6,
+  drawers: -10,
   typing: -12,
   snaps: 0,
   selectors: 0,
@@ -121,7 +136,7 @@ let _playing = null;
 let _asked = 0;
 let _armed = false;
 const _turn = new Map();
-/** The sound each drawer is making now, by set and drawer. */
+/** The sound each drawer is making now, by drawer: its parts. */
 const _drawerPlaying = new Map();
 
 function _contextClass() {
@@ -234,17 +249,8 @@ function _holdFrom(param, at) {
   param.setValueAtTime(param.value, at);
 }
 
-// Waits for the context to run, a second at most, then starts the buffer in
-// its group, `offset` seconds in. With `own`, the sound has a level of its
-// own (`source.level`, `levelDb` to start) between it and the group, so it
-// can be set apart from the group or faded out.
-async function _start(
-  context,
-  running,
-  buffer,
-  group,
-  { offset = 0, own = false, levelDb = 0 } = {}
-) {
+// Waits for the context to run, a second at most.
+async function _whenRunning(running) {
   let timer = null;
   await Promise.race([
     running,
@@ -255,6 +261,20 @@ async function _start(
       );
     }),
   ]).finally(() => clearTimeout(timer));
+}
+
+// Waits for the context to run, then starts the buffer in its group,
+// `offset` seconds in. With `own`, the sound has a level of its
+// own (`source.level`, `levelDb` to start) between it and the group, so it
+// can be set apart from the group or faded out.
+async function _start(
+  context,
+  running,
+  buffer,
+  group,
+  { offset = 0, own = false, levelDb = 0 } = {}
+) {
+  await _whenRunning(running);
   const source = context.createBufferSource();
   source.buffer = buffer;
   const into = _mixerFor(context).groups[group];
@@ -270,12 +290,17 @@ async function _start(
   return source;
 }
 
-// Fades a sound with a level of its own out, then stops it.
-function _fadeOut(source, context) {
-  const now = context.currentTime;
-  _holdFrom(source.level.gain, now);
-  source.level.gain.linearRampToValueAtTime(0, now + CUT_FADE_S);
-  source.stop(now + CUT_FADE_S);
+// Starts a buffer through a level of its own into its group at `when` on
+// the context's clock, `offset` seconds in.
+function _startAt(context, buffer, group, when, levelDb, offset = 0) {
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.level = context.createGain();
+  source.level.gain.value = _gainOf(levelDb);
+  source.level.connect(_mixerFor(context).groups[group]);
+  source.connect(source.level);
+  source.start(when, offset);
+  return source;
 }
 
 /**
@@ -384,28 +409,13 @@ export function preloadCameraSounds() {
   _fetchAhead(Object.values(CAMERA_FILES), 'camera');
 }
 
-function _drawerUrl(set, drawer, phase) {
-  return `/sounds/drawers/${set}-${drawer}-${phase}.wav`;
+function _drawerUrl(part) {
+  return `/sounds/drawers/${part}.wav`;
 }
 
-function _checkDrawer(set, drawer) {
-  if (!DRAWER_SETS[set]) throw new Error(`No such drawer set: ${set}`);
-  if (!DRAWER_SETS[set].includes(drawer)) {
-    throw new Error(`No ${drawer} drawer in set ${set}`);
-  }
-}
-
-/**
- * Fetch a look's drawer sounds now, once.
- * @param {'p'|'d'} set
- */
-export function preloadDrawerSounds(set) {
-  if (!DRAWER_SETS[set]) throw new Error(`No such drawer set: ${set}`);
-  const urls = DRAWER_SETS[set].flatMap((drawer) => [
-    _drawerUrl(set, drawer, 'open'),
-    _drawerUrl(set, drawer, 'close'),
-  ]);
-  _fetchAhead(urls, 'drawer');
+/** Fetch the drawer's parts now, once. */
+export function preloadDrawerSounds() {
+  _fetchAhead(Object.keys(DRAWER_LEVELS_DB).map(_drawerUrl), 'drawer');
 }
 
 /** Fetch the switches', selectors' and latches' sounds now, once. */
@@ -515,48 +525,114 @@ export async function playDialSound(set, variant) {
   return buffer.duration;
 }
 
-/**
- * Play a drawer opening or closing. A drawer still sounding from before (a
- * press that turned it round) fades out first. A slide that covers only
- * part of the way starts its sound that far in, so the stop at its end
- * comes as the drawer arrives.
- * @param {'p'|'d'} set - The look's drawer set
- * @param {string} drawer - The drawer, by its name in the set
- * @param {'open'|'close'} phase
- * @param {number} [share=1] - How much of the way the slide covers, 0 to 1
- * @returns {Promise<number>} The seconds it plays for once it has begun;
- *   0 when a later sound for the drawer was asked for before this one began
- */
-export async function playDrawerSound(set, drawer, phase, share = 1) {
-  _checkDrawer(set, drawer);
-  if (phase !== 'open' && phase !== 'close') {
-    throw new Error(`No such drawer phase: ${phase}`);
+// A drawer's sound turned round with the drawer: its parts still to come
+// are called off and the roll it is in fades out; a latch or a thump already
+// sounding rings on, as it would.
+function _turnRound(sound) {
+  const now = sound.context.currentTime;
+  for (const part of sound.parts) {
+    if (part.at > now) {
+      part.source.stop();
+    } else if (part.roll && part.end > now) {
+      _holdFrom(part.source.level.gain, now);
+      part.source.level.gain.linearRampToValueAtTime(
+        0,
+        now + DRAWER_ROLL_FADE_S
+      );
+      part.source.stop(now + DRAWER_ROLL_FADE_S);
+    }
   }
-  const slot = `${set}-${drawer}`;
-  const asked = {};
-  const before = _drawerPlaying.get(slot);
-  _drawerPlaying.set(slot, asked);
-  if (before?.source) _fadeOut(before.source, before.context);
+}
+
+// When each of a drawer's parts plays, in seconds from the press, and the
+// roll's span: opening, the latch (from shut) and the roll at once, the stop
+// as the drawer meets it; shutting, the roll, the stop, then the latch.
+function _drawerTimeline(phase, stopAt, whole) {
+  const { latch, roll, stop } = DRAWER_PARTS[phase];
+  const parts = [];
+  if (phase === 'open' && whole) parts.push({ name: latch, at: 0 });
+  if (stopAt > 0) parts.push({ name: roll, at: 0, until: stopAt, roll: true });
+  const still = phase === 'open' && whole ? DRAWER_STILL_STOP_S : 0;
+  parts.push({ name: stop, at: stopAt > 0 ? stopAt : still });
+  if (phase === 'close') {
+    parts.push({ name: latch, at: stopAt + DRAWER_LATCH_LAG_S });
+  }
+  return parts;
+}
+
+/**
+ * Play a drawer opening or shutting, in time with its slide on screen.
+ * Opening from shut: the latch lets go and the roll begins at once, the
+ * roll ends as the drawer meets its stop, and the stop's thump comes then.
+ * Shutting: the faintest roll, the thump of the closed stop, the latch
+ * catching. A slide over part of the way (a press that turned the drawer
+ * round) plays only the end of its roll, rising in, and opens no latch; a
+ * drawer that changes at once has no roll. The sound the drawer was making
+ * is turned round with it.
+ * @param {string} drawer - Which drawer: a sound turns round only its own
+ * @param {'open'|'close'} phase
+ * @param {{stopAt?: number, whole?: boolean}} [timing]
+ *   - stopAt: seconds from now until the drawer meets its stop on screen; 0
+ *     when it changes at once
+ *   - whole: whether it goes the whole way, from shut or from open
+ * @returns {Promise<number>} Seconds from now until its last part ends; 0
+ *   when a later sound for the drawer was asked for before this one began
+ */
+export async function playDrawerSound(
+  drawer,
+  phase,
+  { stopAt = 0, whole = true } = {}
+) {
+  if (!DRAWER_PARTS[phase]) throw new Error(`No such drawer phase: ${phase}`);
+  const askedAt = performance.now();
+  const asked = { parts: [] };
+  const before = _drawerPlaying.get(drawer);
+  _drawerPlaying.set(drawer, asked);
+  if (before?.context) _turnRound(before);
   const context = _audioContext();
   const running = context.resume();
-  const buffer = await _bufferFor(_drawerUrl(set, drawer, phase), context);
-  if (_drawerPlaying.get(slot) !== asked) return 0;
-  const part = Math.max(0, Math.min(1, share));
-  const offset = buffer.duration * (1 - part);
-  const source = await _start(context, running, buffer, 'drawers', {
-    offset,
-    own: true,
-  });
-  if (_drawerPlaying.get(slot) !== asked) {
-    source.stop();
-    return 0;
-  }
-  asked.source = source;
+  const timeline = _drawerTimeline(phase, stopAt, whole);
+  const buffers = await Promise.all(
+    timeline.map((part) => _bufferFor(_drawerUrl(part.name), context))
+  );
+  await _whenRunning(running);
+  if (_drawerPlaying.get(drawer) !== asked) return 0;
+  // The press was a moment ago: what was to play by now plays now.
+  const now = context.currentTime;
+  const pressed = now - (performance.now() - askedAt) / 1000;
+  let last = now;
+  let lastSource = null;
   asked.context = context;
-  source.addEventListener('ended', () => {
-    if (_drawerPlaying.get(slot) === asked) _drawerPlaying.delete(slot);
+  timeline.forEach((part, n) => {
+    const buffer = buffers[n];
+    const level = DRAWER_LEVELS_DB[part.name];
+    let at = Math.max(now, pressed + part.at);
+    let offset = 0;
+    if (part.roll) {
+      // The roll ends as the drawer meets its stop.
+      const from = pressed + part.until - buffer.duration;
+      at = Math.max(now, from);
+      offset = at - from;
+    }
+    const source = _startAt(context, buffer, 'drawers', at, level, offset);
+    if (offset > 0) {
+      source.level.gain.setValueAtTime(0, at);
+      source.level.gain.linearRampToValueAtTime(
+        _gainOf(level),
+        at + DRAWER_ROLL_RISE_S
+      );
+    }
+    const end = at + buffer.duration - offset;
+    asked.parts.push({ source, at, end, roll: Boolean(part.roll) });
+    if (end >= last) {
+      last = end;
+      lastSource = source;
+    }
   });
-  return buffer.duration - offset;
+  lastSource?.addEventListener('ended', () => {
+    if (_drawerPlaying.get(drawer) === asked) _drawerPlaying.delete(drawer);
+  });
+  return last - now;
 }
 
 /**

@@ -36,7 +36,7 @@ spoken sentence: what a control says, it still says.
 
 | Input | Where | Sound |
 |---|---|---|
-| A drawer opening or closing | the Customizer, Preview Settings, the camera panel, the phone's camera and ASCII drawers; in Classic the editor, the bottom strip and the Customizer | The drawer sliding out on its rails, or sliding shut onto its stop, as long as its slide. Each drawer sounds a little different: the Customizer longest and lowest, Preview Settings shortest. The phosphor looks have one set, the DOS look its own. The button that moved the drawer still plays its key. When the look comes on, the drawers that open again one by one each play their opening |
+| A drawer opening or closing | the Customizer, Preview Settings, the camera panel, the phone's camera and ASCII drawers; in Classic the editor, the bottom strip and the Customizer | Opening: a latch letting go and the roll out on steel rails together, then the thump of the stop as the drawer meets it on screen. Shutting: the faintest roll, the thump of the closed stop as the drawer arrives, then the latch catching. The same drawer in every look, well under the keys. The drawer's own button plays no key: the drawer is the sound. A drawer turned round in mid-slide fades its roll out and drops the parts still to come; with reduced motion there is no roll, only the latch and the thump. When the look comes on, the drawers that open again one by one each play their opening |
 | A menu or a dialog opening or closing | the menus, Preferences, the guide, every dialog, the camera's keyboard shortcuts | A latch opening, or a latch closing |
 
 ## Silent, and why
