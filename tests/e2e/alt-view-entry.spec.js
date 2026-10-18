@@ -241,7 +241,8 @@ test.describe('The Alt View comes on with its drawers shut', () => {
   });
 
   test.describe('on a phone', () => {
-    test.use({ viewport: { width: 412, height: 915 }, hasTouch: true, isMobile: true });
+    // No isMobile: Firefox rejects it when the browser context is created.
+    test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
 
     test('the open camera drawer shuts, and opens again once the picture is on; the ASCII drawer never opens', async ({
       page,

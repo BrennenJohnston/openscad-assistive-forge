@@ -299,7 +299,8 @@ test.describe('Drawers in the Alt View', () => {
   });
 
   test.describe('on a phone', () => {
-    test.use({ viewport: { width: 412, height: 915 }, hasTouch: true, isMobile: true });
+    // No isMobile: Firefox rejects it when the browser context is created.
+    test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
 
     test('the Customizer from the left, Preview Settings from the top, Camera and ASCII from the bar', async ({
       page,
