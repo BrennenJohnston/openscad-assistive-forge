@@ -66,9 +66,11 @@ const CAMERA_FILES = {
   turn: '/sounds/camera/turn.wav',
   tilt: '/sounds/camera/tilt.wav',
 };
-// Each tick's level in the camera group: the turn, the one heard most as a
-// drag goes round, well under the zoom, and the tilt between.
-const CAMERA_LEVELS_DB = { zoom: 0, turn: -8, tilt: -4 };
+// Each tick's level in the camera group, set so the ear hears the lens
+// detent first, the ratchet a shade under it, and the bearing, the one
+// heard most as a drag goes round, under both (the files differ in length
+// and brightness, so the numbers alone are not that order).
+const CAMERA_LEVELS_DB = { zoom: 0, turn: -12, tilt: -7 };
 // Each tick tells its way, left, down and out a little lower and right, up
 // and in a little higher (in cents), and strays a little in pitch and level,
 // so a run of them does not wear.
@@ -146,18 +148,20 @@ const SCROLL_STRAY_DB = 1;
 // context waiting; past this the sound is given up.
 const START_TIMEOUT_MS = 1000;
 
-// The groups a sound plays in, each at its own level under the master, the
-// sounds heard most the quietest: the power sound 5 dB under the keys; the
-// dials, as often as fifteen a second, 6 dB; the lists 5; the latches 9,
-// under the key that opens a menu; the snaps 2; a scroll's ticks 16, in the
-// background; the camera's sounds 12 dB under the keys, a drawer 10 dB under them, typing a quiet key 12 dB under, a latch under the key that
-// opened its menu.
+// The groups a sound plays in, each at its own level under the master. The
+// levels are set by how loud each sound is as the ear weighs it (A-weighted
+// over 200 ms), against the median key press at 0: the power sound, rare
+// and long, a few dB over it; the snaps, the lists and the latches a little
+// under; the dials, as often as fifteen a second, and a drawer's parts
+// further under; the camera's ticks, typing and a scroll's ticks, in the
+// background, the furthest. Every sound stays within 20 dB of every other,
+// so none stands out and none is lost when the volume moves.
 const GROUP_LEVELS_DB = {
-  switch: -5,
+  switch: -7,
   keys: 0,
-  dials: -6,
-  camera: -12,
-  drawers: -10,
+  dials: -8,
+  camera: -9,
+  drawers: -6,
   typing: -12,
   snaps: -2,
   selectors: -5,

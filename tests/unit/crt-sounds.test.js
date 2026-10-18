@@ -550,14 +550,15 @@ describe('playing a switch sound', () => {
     expect(soundGroup('keys'), 'no mixer before the first sound').toBeNull();
     await playCrtSound('on');
     expect(soundGroup('keys').gain.value).toBe(1);
-    expect(soundGroup('camera').gain.value, 'the camera 12 dB under the keys').toBeCloseTo(db(-12), 6);
+    expect(soundGroup('camera').gain.value, 'the camera 9 dB under the keys').toBeCloseTo(db(-9), 6);
     expect(soundGroup('typing').gain.value, 'typing a quiet key').toBeCloseTo(db(-12), 6);
-    expect(soundGroup('drawers').gain.value, 'the drawers 10 dB under the keys').toBeCloseTo(db(-10), 6);
-    // The most heard sounds the quietest: the power sound 5 dB down, the
-    // dials 6, the lists 5, the latches 9 (under the key that opens a menu),
-    // the snaps 2, and a scroll's ticks 16, in the background.
-    expect(soundGroup('switch').gain.value).toBeCloseTo(db(-5), 6);
-    expect(soundGroup('dials').gain.value).toBeCloseTo(db(-6), 6);
+    expect(soundGroup('drawers').gain.value, 'the drawers 6 dB under the keys').toBeCloseTo(db(-6), 6);
+    // Levelled as the ear weighs them against a key press: the power sound
+    // 7 dB down in its group (its long files still play a few dB over a
+    // key), the dials 8, the lists 5, the latches 9 (under the key that
+    // opens a menu), the snaps 2, and a scroll's ticks 16, in the background.
+    expect(soundGroup('switch').gain.value).toBeCloseTo(db(-7), 6);
+    expect(soundGroup('dials').gain.value).toBeCloseTo(db(-8), 6);
     expect(soundGroup('selectors').gain.value).toBeCloseTo(db(-5), 6);
     expect(soundGroup('latches').gain.value).toBeCloseTo(db(-9), 6);
     expect(soundGroup('snaps').gain.value).toBeCloseTo(db(-2), 6);
@@ -592,7 +593,7 @@ describe('playing a switch sound', () => {
     const { playKeySound, playDialSound, soundGroup, duck } = await load();
     await playKeySound('p', 1, 'down');
     const camera = soundGroup('camera');
-    const level = db(-12);
+    const level = db(-9);
     const low = level * db(-8);
     expect(rounded(camera.gain.calls)).toEqual(
       rounded([
@@ -617,7 +618,7 @@ describe('playing a switch sound', () => {
     expect(() => duck('hum', 8, 150)).toThrow('No such sound group: hum');
   });
 
-  it('plays a camera tick by its kind in the camera group, which it does not lower itself; the turn 8 dB under the zoom, the tilt 4', async () => {
+  it('plays a camera tick by its kind in the camera group, which it does not lower itself; the turn 12 dB under the zoom, the tilt 7', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
     const { playCameraSound, preloadCameraSounds, soundGroup } = await load();
     const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
@@ -626,7 +627,7 @@ describe('playing a switch sound', () => {
     await playCameraSound('tilt');
     await playCameraSound('zoom');
     expect(urls().slice(1)).toEqual(['/sounds/camera/tilt.wav', '/sounds/camera/zoom.wav']);
-    for (const [n, level] of [db(-8), db(-4), db(0)].entries()) {
+    for (const [n, level] of [db(-12), db(-7), db(0)].entries()) {
       expect(sources[n].connectedTo.connectedTo, 'its level, then the group').toBe(
         soundGroup('camera')
       );
@@ -653,12 +654,12 @@ describe('playing a switch sound', () => {
     await playCameraSound('turn', { way: 1 });
     const last = sources.at(-1);
     expect(cents(last), 'strayed up').toBe(85);
-    expect(last.connectedTo.gain.value, 'and a decibel louder').toBeCloseTo(db(-7), 6);
+    expect(last.connectedTo.gain.value, 'and a decibel louder').toBeCloseTo(db(-11), 6);
     random.mockReturnValue(0.5);
     await playCameraSound('tilt', { way: 1 });
     await playCameraSound('zoom', { way: -1 });
     expect(sources.slice(-2).map(cents), 'up higher, out lower').toEqual([70, -70]);
-    expect(sources.at(-2).connectedTo.gain.value, 'the tilt 4 dB under').toBeCloseTo(db(-4), 6);
+    expect(sources.at(-2).connectedTo.gain.value, 'the tilt 7 dB under').toBeCloseTo(db(-7), 6);
     expect(sources.at(-1).connectedTo.gain.value).toBeCloseTo(db(0), 6);
     vi.restoreAllMocks();
   });

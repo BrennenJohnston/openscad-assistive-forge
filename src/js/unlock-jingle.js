@@ -11,7 +11,10 @@
 const SPEED = 0.75;
 const STRETCH = 1 / SPEED;
 const SAMPLE_RATE = 44100;
-const PEAK = 0.8;
+// The tune's peak, 16 dB under full scale: it then plays a few dB over the
+// look's power sound, inside the band the other sounds keep
+// (crt-sounds.js), instead of over a video playing in another tab.
+const PEAK = 0.16;
 // A browser that has not let the page make sound yet leaves a new audio
 // context waiting; past this the tune is given up.
 const START_TIMEOUT_MS = 1000;
