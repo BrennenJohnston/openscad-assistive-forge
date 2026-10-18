@@ -3,8 +3,9 @@
  */
 // The Alt View's vector look. Below its smallest characters the model is
 // drawn as its edges, as a vector monitor's beam drew lines: fat lines in
-// the look's color over faint surfaces that write no depth, so every edge
-// shows through. The lines are the creases (the Edges slider's angle), the
+// the look's color over the model's faces, faint by default and solid at
+// Surfaces 100 %, lit as the main preview lights a model. The lines are the
+// creases (the Edges slider's angle), the
 // silhouette for the camera's place, bright as the creases, and a dim
 // wireframe of the rounded parts, which the creases leave out
 // (`_hfm-edges.js`). Each frame is rendered to the preview's WebGL canvas;
@@ -21,10 +22,11 @@ import {
   DoubleSide,
   EdgesGeometry,
   Float32BufferAttribute,
+  Group,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
+  MeshPhongMaterial,
   NearestFilter,
   OrthographicCamera,
   PlaneGeometry,
@@ -62,6 +64,19 @@ const _EDGE_TABLE_MAX_TRIANGLES = 100_000;
 // of their width.
 const _FACET_OPACITY = 0.4;
 const _FACET_WIDTH = 0.5;
+// The faces' color against the lines' (a face fully lit stays under a
+// line), the backs' and cavities' against the faces', and the Surfaces
+// setting from which the faces are solid: they write depth and hide what
+// is behind them.
+const _FACE_SHADE = 0.75;
+const _BACK_SHADE = 0.45;
+const _SOLID_FROM = 0.995;
+// The main preview's lights, as preview.js sets them: an ambient and two
+// lights that ride with the camera, their strengths scaled by pi to cancel
+// the shading's divisor, the pair 1.5 times that, measured against the
+// desktop OpenSCAD.
+const _AMBIENT = 0.2 * Math.PI;
+const _LIGHT = 1.5 * Math.PI;
 
 /**
  * A soft round spot, bright in the middle, for the dwell points.
@@ -113,13 +128,26 @@ export function createVectorPass(previewManager) {
   const { renderer } = previewManager;
   const scene = new Scene();
 
-  const surfaceMaterial = new MeshLambertMaterial({
+  // The faces: the preview's own shading in the look's color, a little
+  // under the lines, cavities and the backs of faces darker, as the main
+  // preview tints them (its shader, so the tint reads the same `aIsInner`
+  // flag). Under 100 % the faces blend and write no depth, so every line
+  // shows through; at 100 % they are solid. The offset keeps a line on a
+  // face in front of it.
+  const surfaceMaterial = new MeshPhongMaterial({
+    specular: 0x000000,
+    shininess: 30,
     transparent: true,
     depthWrite: false,
     side: DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
   });
+  previewManager._applyBackfaceColoring?.(surfaceMaterial, 0x000000);
   const surface = new Mesh(new BufferGeometry(), surfaceMaterial);
   surface.matrixAutoUpdate = false;
+  let solid = false;
 
   const lineMaterial = new LineMaterial({ linewidth: 1, worldUnits: false });
   let lineGeometry = new LineSegmentsGeometry();
@@ -151,21 +179,17 @@ export function createVectorPass(previewManager) {
   const dwell = new Points(new BufferGeometry(), dwellMaterial);
   dwell.matrixAutoUpdate = false;
 
-  // A light from the eye, so a solid surface reads as a shape: a face turned
-  // to the eye comes out in the line's own color, one at 60 degrees about two
-  // thirds of it (three.js divides a light's strength by pi).
-  const ambient = new AmbientLight(0xffffff, 1);
-  const headlight = new DirectionalLight(0xffffff, 2.2);
-  scene.add(
-    surface,
-    facets,
-    lines,
-    outline,
-    dwell,
-    ambient,
-    headlight,
-    headlight.target
-  );
+  // The lights ride with the camera, as the main preview's do: a rig that
+  // takes the camera's place each frame carries them.
+  const ambient = new AmbientLight(0xffffff, _AMBIENT);
+  const rig = new Group();
+  rig.matrixAutoUpdate = false;
+  const lightA = new DirectionalLight(0xffffff, _LIGHT);
+  lightA.position.set(-1, 1, 1);
+  const lightB = new DirectionalLight(0xffffff, _LIGHT);
+  lightB.position.set(1, -1, -1);
+  rig.add(lightA, lightA.target, lightB, lightB.target);
+  scene.add(surface, facets, lines, outline, dwell, ambient, rig);
 
   // The DOS look renders at one texel per CSS pixel and is shown unsmoothed.
   let raster = null;
@@ -179,6 +203,7 @@ export function createVectorPass(previewManager) {
 
   let edgeKey = '';
   let edgeCount = 0;
+  const faceColor = new Color();
   // The edge table for the model drawn, the wireframe built from it for the
   // crease angle, and the eye the silhouette was last found for.
   let table = null;
@@ -190,7 +215,6 @@ export function createVectorPass(previewManager) {
   const lastEye = new Vector3(NaN, NaN, NaN);
   let lastEyeMode = '';
   const intoLocal = new Matrix4();
-  const forward = new Vector3();
   scene.background = new Color();
 
   function _syncTable(mesh, creaseDeg) {
@@ -335,6 +359,15 @@ export function createVectorPass(previewManager) {
       facets.visible = facets.visible && facetCount > 0;
 
       scene.background.set(background);
+      solid = surfaceOpacity >= _SOLID_FROM;
+      faceColor.set(line);
+      surfaceMaterial.color.copy(faceColor).multiplyScalar(_FACE_SHADE);
+      const back = surfaceMaterial.userData.backfaceColorUniform;
+      if (back) back.value.copy(faceColor).multiplyScalar(_BACK_SHADE);
+      surfaceMaterial.opacity = solid ? 1 : surfaceOpacity;
+      surfaceMaterial.transparent = !solid;
+      surfaceMaterial.depthWrite = solid;
+      rig.matrix.copy(camera.matrixWorld);
       lineMaterial.color.set(line);
       lineMaterial.linewidth = widthPx;
       lineMaterial.resolution.set(width, height);
@@ -344,16 +377,10 @@ export function createVectorPass(previewManager) {
       facetMaterial.color.set(line);
       facetMaterial.linewidth = Math.max(1, widthPx * _FACET_WIDTH);
       facetMaterial.resolution.set(width, height);
-      surfaceMaterial.color.set(line);
-      surfaceMaterial.opacity = surfaceOpacity;
       surface.visible = surface.visible && surfaceOpacity > 0;
       dwell.visible = dwell.visible && !crisp;
       dwellMaterial.color.set(line);
       dwellMaterial.size = widthPx * _DWELL_SCALE;
-
-      camera.getWorldDirection(forward);
-      headlight.position.copy(camera.position);
-      headlight.target.position.copy(camera.position).add(forward);
 
       if (!crisp) {
         renderer.render(scene, camera);
@@ -377,11 +404,15 @@ export function createVectorPass(previewManager) {
     },
     /** How many edges the last model drew. */
     edgeCount: () => edgeCount,
-    /** The lines drawn last: the creases, the silhouette, the wireframe. */
+    /**
+     * The lines drawn last: the creases, the silhouette, the wireframe; and
+     * whether the faces were solid or blended.
+     */
     lineCounts: () => ({
       creases: edgeCount,
       outline: outlineCount,
       facets: facetCount,
+      surfaces: solid ? 'solid' : 'clear',
     }),
     dispose() {
       lineGeometry.dispose();

@@ -1680,11 +1680,15 @@ function _renderVectorFrame(st, { renderer, previewManager, container }) {
     creaseDeg: look.creaseDeg,
     crisp: look.crisp,
   });
-  // What the frame drew, readable from the page: creases, outline, facets.
+  // What the frame drew, readable from the page: creases, outline, facets,
+  // and whether the faces were solid.
   const counts = st.vectorPass.lineCounts();
   const drawn = `${counts.creases} ${counts.outline} ${counts.facets}`;
   if (st.overlayCanvas.dataset.lines !== drawn) {
     st.overlayCanvas.dataset.lines = drawn;
+  }
+  if (st.overlayCanvas.dataset.surfaces !== counts.surfaces) {
+    st.overlayCanvas.dataset.surfaces = counts.surfaces;
   }
 
   const dpr = _getDpr();
@@ -2016,7 +2020,10 @@ export async function initAltView(previewManager, options = {}) {
         );
       }
       st.vectorLook = on ? { ...look } : null;
-      if (!on && st.overlayCanvas) delete st.overlayCanvas.dataset.lines;
+      if (!on && st.overlayCanvas) {
+        delete st.overlayCanvas.dataset.lines;
+        delete st.overlayCanvas.dataset.surfaces;
+      }
       if (on && !st.vectorPass && !st.vectorLoading) {
         st.vectorLoading = import('./_hfm-vector.js').then(
           ({ createVectorPass }) => {
