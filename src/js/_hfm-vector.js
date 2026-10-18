@@ -64,19 +64,22 @@ const _EDGE_TABLE_MAX_TRIANGLES = 100_000;
 // of their width.
 const _FACET_OPACITY = 0.4;
 const _FACET_WIDTH = 0.5;
-// The faces' color against the lines' (a face fully lit stays under a
-// line), the backs' and cavities' against the faces', and the Surfaces
-// setting from which the faces are solid: they write depth and hide what
-// is behind them.
-const _FACE_SHADE = 0.75;
-const _BACK_SHADE = 0.45;
+// The faces' color against the lines' (a face fully lit stays well under
+// a line, so the lines on a solid model read, and the phosphor looks'
+// bloom does not lift the mass to the line's color), the backs' and
+// cavities' against the faces', and the Surfaces setting from which the
+// faces are solid: they write depth and hide what is behind them.
+const _FACE_SHADE = 0.55;
+const _BACK_SHADE = 0.3;
 const _SOLID_FROM = 0.995;
-// The main preview's lights, as preview.js sets them: an ambient and two
-// lights that ride with the camera, their strengths scaled by pi to cancel
-// the shading's divisor, the pair 1.5 times that, measured against the
-// desktop OpenSCAD.
+// The main preview's lights, as preview.js places them: an ambient and
+// two lights that ride with the camera, from above left and below right,
+// their strengths scaled by pi to cancel the shading's divisor. The main
+// preview drives the pair at 1.5, which lights nearly every face to the
+// full and flattens a one-color model; here a face's brightness follows
+// its angle to the light, from the ambient's fifth to the full.
 const _AMBIENT = 0.2 * Math.PI;
-const _LIGHT = 1.5 * Math.PI;
+const _LIGHT = 0.8 * Math.PI;
 
 /**
  * A soft round spot, bright in the middle, for the dwell points.
