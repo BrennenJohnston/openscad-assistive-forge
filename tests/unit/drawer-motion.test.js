@@ -10,7 +10,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   drawerPace,
+  openLookDrawers,
   poseAt,
+  registerLookDrawer,
+  setLookDrawer,
   sidePanelParts,
   slideDrawer,
   stripWidth,
@@ -266,6 +269,58 @@ describe('drawer motion', () => {
     expect(rider.slides).toHaveLength(1);
     expect(rider.slides[0].keyframes[0]).not.toHaveProperty('clipPath');
     expect(rider.slides[0].keyframes[0].transform).toBe('translateX(-300px)');
+  });
+
+  it('lists the open drawers left to right, and only those', () => {
+    const at = (left) => {
+      const el = document.createElement('div');
+      el.getBoundingClientRect = () => ({ left });
+      return el;
+    };
+    const drawer = (left, open) => ({
+      place: () => at(left),
+      isOpen: () => open,
+      open: vi.fn(() => null),
+      close: vi.fn(() => null),
+    });
+    registerLookDrawer('test-right', drawer(1100, true));
+    registerLookDrawer('test-shut', drawer(500, false));
+    registerLookDrawer('test-left', drawer(0, true));
+    registerLookDrawer('test-middle', drawer(517, true));
+    expect(openLookDrawers().filter((name) => name.startsWith('test-'))).toEqual([
+      'test-left',
+      'test-middle',
+      'test-right',
+    ]);
+  });
+
+  it('opens and closes a known drawer the way it is asked, and ignores an unknown one', () => {
+    const open = vi.fn(() => 'slide');
+    const close = vi.fn(() => undefined);
+    registerLookDrawer('test-asked', {
+      place: () => null,
+      isOpen: () => true,
+      open,
+      close,
+    });
+    const how = { instant: true, quiet: true, remember: false };
+    expect(setLookDrawer('test-asked', false, how)).toBeNull();
+    expect(close).toHaveBeenCalledWith(how);
+    expect(setLookDrawer('test-asked', true)).toBe('slide');
+    expect(open).toHaveBeenCalledWith({});
+    expect(setLookDrawer('no-such-drawer', true)).toBeNull();
+  });
+
+  it('sizes a grid room track by track', () => {
+    expect(
+      poseAt(
+        { role: 'space', props: { gridTemplateRows: [[540, 40, 0], [340, 40, 200]] } },
+        'bottom',
+        200,
+        0.5
+      )
+    ).toEqual({ gridTemplateRows: '440px 40px 100px' });
+    expect(poseAt({ role: 'clip' }, 'right', 100, 0.3)).toEqual({ clipPath: 'inset(0px)' });
   });
 
   it('reads the strip width from its token', () => {

@@ -14,6 +14,7 @@
 
 import { test, expect } from '@playwright/test';
 import { skipWithoutWebGL } from './helpers/webgl.js';
+import { drawersBack } from './helpers/alt-view.js';
 
 test.describe.configure({ timeout: 300_000 });
 
@@ -75,6 +76,7 @@ async function setLook(page) {
   await key.waitFor({ state: 'attached', timeout: 60_000 });
   if ((await key.getAttribute('aria-pressed')) !== 'true') await key.click();
   await expect(page.locator('html')).toHaveAttribute('data-ui-variant', 'mono');
+  await drawersBack(page);
   await settled(page);
 }
 

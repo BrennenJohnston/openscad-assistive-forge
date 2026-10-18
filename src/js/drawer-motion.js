@@ -30,15 +30,18 @@ const SETTLE = 0.02;
 /**
  * @typedef {Object} DrawerPart
  * @property {HTMLElement|null|undefined} el
- * @property {'drawer'|'rider'|'held'|'space'} [role] - `drawer` (the
+ * @property {'drawer'|'rider'|'held'|'clip'|'space'} [role] - `drawer` (the
  *   default) moves and is not drawn past the edge; `rider` moves with it and
  *   is drawn whole (a grip on its edge, a tint behind it, a panel's children
  *   inside the panel that clips them); `held` only keeps its open size (a
  *   panel's children laid out from the edge that moves already ride it);
- *   `space` stays put and is the drawer's room in the layout, sized with
- *   the drawer
- * @property {Object<string, number[]>} [props] - a space's sizes in px by
- *   style property, closed then open, e.g. `{ width: [36, 508] }`
+ *   `clip` stays put and cuts what it holds at its own box while the drawer
+ *   moves; `space` stays put and is the drawer's room in the layout, sized
+ *   with the drawer
+ * @property {Object<string, Array<number|number[]>>} [props] - a space's
+ *   sizes in px by style property, closed then open, e.g. `{ width: [36,
+ *   508] }`, or for a grid's tracks a list each, `{ gridTemplateRows:
+ *   [[540, 0], [340, 200]] }`
  * @property {Object<string, string>} [hold] - styles a moving part keeps
  *   while it moves (its open width, so its contents do not reflow)
  */
@@ -56,6 +59,9 @@ const begun = new WeakMap();
 const across = (from) => from === 'left' || from === 'right';
 const round = (px) => Math.round(px * 100) / 100;
 const moves = (part) => ['drawer', 'rider'].includes(part.role ?? 'drawer');
+const lerp = (closed, open, p) => round(closed + (open - closed) * p);
+const sameSizes = ([closed, open]) =>
+  JSON.stringify(closed) === JSON.stringify(open);
 
 /**
  * @param {CSSStyleDeclaration} style
@@ -96,10 +102,13 @@ export function drawerPace() {
  */
 export function poseAt(part, from, travel, p) {
   if (part.role === 'held') return { ...part.hold };
+  if (part.role === 'clip') return { clipPath: 'inset(0px)' };
   if (!moves(part)) {
     const pose = {};
     for (const [prop, [closed, open]] of Object.entries(part.props ?? {})) {
-      pose[prop] = `${round(closed + (open - closed) * p)}px`;
+      pose[prop] = Array.isArray(closed)
+        ? closed.map((px, i) => `${lerp(px, open[i], p)}px`).join(' ')
+        : `${lerp(closed, open, p)}px`;
     }
     return pose;
   }
@@ -157,8 +166,14 @@ function progressOf(part, from, travel) {
     }
   } else {
     const [prop, [closed, open]] = Object.entries(part.props)[0];
-    if (open !== closed)
-      p = (parseFloat(style[prop]) - closed) / (open - closed);
+    const now = String(style[prop]).split(/\s+/).map(parseFloat);
+    const at = Array.isArray(closed)
+      ? closed.findIndex((px, i) => px !== open[i])
+      : 0;
+    const [from0, to0] = Array.isArray(closed)
+      ? [closed[at], open[at]]
+      : [closed, open];
+    if (at >= 0 && to0 !== from0) p = (now[at] - from0) / (to0 - from0);
   }
   return Math.min(1, Math.max(0, p));
 }
@@ -168,6 +183,15 @@ function stop(el) {
   const animations = running.get(el);
   if (!animations) return;
   for (const animation of animations) animation.cancel();
+}
+
+/**
+ * Stop a drawer where it is, its parts back in their own layout at once;
+ * its `whenClosed` does not run.
+ * @param {HTMLElement|null|undefined} el - any part of it
+ */
+export function cancelSlide(el) {
+  if (el) stop(el);
 }
 
 /**
@@ -238,12 +262,22 @@ export function restingRect(el) {
  *   while the drawer slides away
  * @param {boolean} [options.instant] - change at once (the layout itself is
  *   changing under the drawer)
+ * @param {number} [options.travel] - px a moving part travels, when neither
+ *   its own size nor a width or height room says (a grid track's growth)
  * @returns {Promise<boolean>|null} null when nothing moves; else true once
  *   the slide has ended, false when another press turned it round
  */
 export function slideDrawer(
   parts,
-  { from, open, keep = 0, whenClosed, inert = [], instant = false }
+  {
+    from,
+    open,
+    keep = 0,
+    whenClosed,
+    inert = [],
+    instant = false,
+    travel: given,
+  }
 ) {
   const present = parts
     .filter((part) => part.el?.isConnected)
@@ -258,7 +292,7 @@ export function slideDrawer(
   // A drawer with a room along its way travels as far as the room grows:
   // a panel is wider than its children by its border and scrollbar.
   const grows = room?.props?.[across(from) ? 'width' : 'height'];
-  const travel = lead && grows ? grows[1] - grows[0] : size - keep;
+  const travel = given ?? (lead && grows ? grows[1] - grows[0] : size - keep);
   const guide = lead ?? room;
   const fromP =
     guide && running.has(guide.el) && (!lead || travel > 0)
@@ -271,8 +305,7 @@ export function slideDrawer(
   const pace = instant ? null : drawerPace();
   const still = lead
     ? travel <= 0
-    : !room ||
-      Object.values(room.props ?? {}).every(([closed, to]) => closed === to);
+    : !room || Object.values(room.props ?? {}).every(sameSizes);
   if (!pace || still) {
     if (!open) whenClosed?.();
     return null;
@@ -311,4 +344,54 @@ export function slideDrawer(
       });
       if (!open) reach.forEach((el) => (el.inert = false));
     });
+}
+
+/**
+ * The drawers the look lays out when it comes on, by name. Each says whether
+ * it is open where the page is now (a drawer the layout hides is not), where
+ * it sits, so they open left to right, and how to open and close it: at
+ * once or with its slide, quietly, and without remembering the change.
+ * @typedef {{instant?: boolean, quiet?: boolean, remember?: boolean}} DrawerHow
+ * @typedef {Object} LookDrawer
+ * @property {() => boolean} isOpen
+ * @property {() => HTMLElement|null} place - the element whose left edge
+ *   orders it
+ * @property {(how: DrawerHow) => Promise<boolean>|null|void} open
+ * @property {(how: DrawerHow) => Promise<boolean>|null|void} close
+ */
+const lookDrawers = new Map();
+
+/**
+ * @param {string} name
+ * @param {LookDrawer} drawer
+ */
+export function registerLookDrawer(name, drawer) {
+  lookDrawers.set(name, drawer);
+}
+
+/**
+ * The drawers open now, left to right.
+ * @returns {string[]}
+ */
+export function openLookDrawers() {
+  const left = (name) =>
+    lookDrawers.get(name).place()?.getBoundingClientRect().left ?? 0;
+  return [...lookDrawers.keys()]
+    .filter((name) => lookDrawers.get(name).isOpen())
+    .map((name, order) => ({ name, order, x: left(name) }))
+    .sort((a, b) => a.x - b.x || a.order - b.order)
+    .map(({ name }) => name);
+}
+
+/**
+ * Open or close a drawer the look knows.
+ * @param {string} name
+ * @param {boolean} open
+ * @param {DrawerHow} [how]
+ * @returns {Promise<boolean>|null} the slide, or null when it changed at once
+ */
+export function setLookDrawer(name, open, how = {}) {
+  const drawer = lookDrawers.get(name);
+  if (!drawer) return null;
+  return (open ? drawer.open(how) : drawer.close(how)) ?? null;
 }

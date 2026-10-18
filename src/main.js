@@ -162,7 +162,12 @@ import { startTutorial } from './js/tutorial-sandbox.js';
 import { initWelcomeSpotlight } from './js/welcome-spotlight.js';
 import { initTourNudge } from './js/tour-nudge.js';
 import { initDrawerController } from './js/drawer-controller.js';
-import { sidePanelParts, slideDrawer, stripWidth } from './js/drawer-motion.js';
+import {
+  registerLookDrawer,
+  sidePanelParts,
+  slideDrawer,
+  stripWidth,
+} from './js/drawer-motion.js';
 import { initPreviewSettingsDrawer } from './js/preview-settings-drawer.js';
 import { initCameraPanelController } from './js/camera-panel-controller.js';
 import { initSequenceDetector } from './js/_seq.js';
@@ -9954,14 +9959,22 @@ if (rounded) {
       collapseParamPanelBtn.title = 'Expand panel';
     }
 
-    // Toggle function (assigned to outer scope variable)
-    toggleParamPanel = function () {
-      // Only allow collapse on desktop (>= 768px)
-      if (window.innerWidth < 768) {
+    /**
+     * Close or open the panel (desktop only, >= 768px).
+     * @param {boolean} collapsed
+     * @param {import('./js/drawer-motion.js').DrawerHow} [how]
+     * @returns {Promise<boolean>|null|undefined} its slide
+     */
+    const setParamPanelCollapsed = (
+      collapsed,
+      { instant = false, remember = true } = {}
+    ) => {
+      if (window.innerWidth < 768 || collapsed === isCollapsed) {
         return;
       }
 
-      isCollapsed = !isCollapsed;
+      isCollapsed = collapsed;
+      let slide;
 
       if (isCollapsed) {
         // Check if focus is inside the panel body
@@ -9980,10 +9993,11 @@ if (rounded) {
         if (isFocusInBody) {
           collapseParamPanelBtn.focus();
         }
-        slideDrawer(sidePanelParts(paramPanel, 'left'), {
+        slide = slideDrawer(sidePanelParts(paramPanel, 'left'), {
           from: 'left',
           open: false,
           keep: stripWidth(),
+          instant,
           inert: [paramPanelBody],
           whenClosed: () => {
             if (!isCollapsed) return;
@@ -10001,15 +10015,18 @@ if (rounded) {
           'Collapse customizer panel'
         );
         collapseParamPanelBtn.title = 'Collapse panel';
-        slideDrawer(sidePanelParts(paramPanel, 'left'), {
+        slide = slideDrawer(sidePanelParts(paramPanel, 'left'), {
           from: 'left',
           open: true,
           keep: stripWidth(),
+          instant,
         });
       }
 
       // Persist state
-      safeSetItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED, String(isCollapsed));
+      if (remember) {
+        safeSetItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED, String(isCollapsed));
+      }
 
       // Trigger preview resize after transition
       setTimeout(() => {
@@ -10017,7 +10034,23 @@ if (rounded) {
           previewManager.handleResize();
         }
       }, 300); // Match CSS transition duration
+      return slide;
     };
+
+    // Toggle function (assigned to outer scope variable)
+    toggleParamPanel = function () {
+      setParamPanelCollapsed(!isCollapsed);
+    };
+
+    registerLookDrawer('customizer', {
+      place: () => paramPanel,
+      isOpen: () =>
+        !isCollapsed &&
+        window.innerWidth >= 768 &&
+        document.body.dataset.uiMode !== 'classic',
+      open: (how) => setParamPanelCollapsed(false, how),
+      close: (how) => setParamPanelCollapsed(true, how),
+    });
 
     // Add click listener
     collapseParamPanelBtn.addEventListener('click', toggleParamPanel);

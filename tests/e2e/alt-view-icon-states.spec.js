@@ -24,6 +24,7 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { skipWithoutWebGL } from './helpers/webgl.js';
+import { drawersBack } from './helpers/alt-view.js';
 
 test.describe.configure({ timeout: 300_000 });
 
@@ -117,6 +118,7 @@ async function lookOn(page, look) {
   if (look.classic) {
     await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
   }
+  await drawersBack(page);
   await page.evaluate(() =>
     Promise.race([
       Promise.allSettled(

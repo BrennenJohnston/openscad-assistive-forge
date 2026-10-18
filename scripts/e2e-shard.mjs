@@ -165,6 +165,10 @@ export const MEASURED_SECONDS = {
   // twenty drawer presses for 1.2 s each: 48 s locally; booked at 110 for
   // the look's software drawing on CI.
   'alt-view-drawers.spec.js': 110.0,
+  // Three cases, each loading the box (one in Classic), turning the look on
+  // and watching its drawers for up to nine seconds: about 80 s locally;
+  // booked at 150 for the look's software drawing on CI.
+  'alt-view-entry.spec.js': 150.0,
   'editor-content-sync.spec.js': 70.4,
   'saved-projects.spec.js': 68.5,
   'classic-stow.spec.js': 66.8,
