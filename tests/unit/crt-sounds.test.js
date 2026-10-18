@@ -510,7 +510,7 @@ describe('playing a switch sound', () => {
     expect(soundGroup('keys'), 'no mixer before the first sound').toBeNull();
     await playCrtSound('on');
     expect(soundGroup('keys').gain.value).toBe(1);
-    expect(soundGroup('camera').gain.value, 'the camera 9 dB under the keys').toBeCloseTo(db(-9), 6);
+    expect(soundGroup('camera').gain.value, 'the camera 12 dB under the keys').toBeCloseTo(db(-12), 6);
     expect(soundGroup('typing').gain.value, 'typing a quiet key').toBeCloseTo(db(-12), 6);
     await playKeySound('p', 2, 'down');
     await playDialSound('p', 4);
@@ -541,7 +541,7 @@ describe('playing a switch sound', () => {
     const { playKeySound, playDialSound, soundGroup, duck } = await load();
     await playKeySound('p', 1, 'down');
     const camera = soundGroup('camera');
-    const level = db(-9);
+    const level = db(-12);
     const low = level * db(-8);
     expect(rounded(camera.gain.calls)).toEqual(
       rounded([
@@ -566,15 +566,20 @@ describe('playing a switch sound', () => {
     expect(() => duck('hum', 8, 150)).toThrow('No such sound group: hum');
   });
 
-  it('plays a camera tick by its kind in the camera group, which it does not lower itself', async () => {
+  it('plays a camera tick by its kind in the camera group, which it does not lower itself; the turn 3 dB under the tilt and the zoom', async () => {
     const { playCameraSound, preloadCameraSounds, soundGroup } = await load();
     const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
     await expect(playCameraSound('turn')).resolves.toBeGreaterThan(0);
     expect(urls()).toEqual(['/sounds/camera/turn.wav']);
-    expect(sources[0].connectedTo).toBe(soundGroup('camera'));
     await playCameraSound('tilt');
     await playCameraSound('zoom');
     expect(urls().slice(1)).toEqual(['/sounds/camera/tilt.wav', '/sounds/camera/zoom.wav']);
+    for (const [n, level] of [db(-3), db(0), db(0)].entries()) {
+      expect(sources[n].connectedTo.connectedTo, 'its level, then the group').toBe(
+        soundGroup('camera')
+      );
+      expect(sources[n].connectedTo.gain.value, `tick ${n}'s level`).toBeCloseTo(level, 6);
+    }
     expect(soundGroup('camera').gain.calls, 'a tick does not duck its own group').toEqual([]);
     await expect(playCameraSound('pan')).rejects.toThrow('No such camera sound: pan');
     preloadCameraSounds();

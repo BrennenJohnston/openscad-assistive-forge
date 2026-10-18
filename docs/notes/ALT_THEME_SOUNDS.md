@@ -27,7 +27,8 @@ spoken sentence: what a control says, it still says.
 | A number box's arrows | the Customizer, Classic's Viewport-Control | A dial click per step, as a slider |
 | Typing in a field | text and number boxes, search, the code editor | A quiet key per keystroke (the look's smallest key, 12 dB under the others), 15 a second at most |
 | A grip | the Customizer's width on a phone, the desktop divider, Classic's dividers | A slide tick for every 2 % of the window it moves, 15 a second at most |
-| The 3D view, moved by hand | a drag, the wheel, a pinch, the arrow keys on the view, a controller's sticks | A bearing every 15 degrees turned, a ratchet every 10 tilted, a lens detent every 5 % zoomed, 9 dB under the keys |
+| The 3D view, moved by hand | a drag, the wheel, a pinch, the arrow keys on the view, a controller's sticks | A bearing every 15 degrees turned, a ratchet every 10 tilted, a lens detent every 5 % zoomed, 12 dB under the keys; the bearing 3 dB under the other two |
+| A camera button that turns, tilts or zooms the view | the camera panel and the phone's camera drawer (rotate and zoom), Classic's 3D view toolbar (zoom) | The view's own tick for the move instead of a key: the bearing for left and right, the ratchet for up and down, the lens detent for in and out. Pan, reset and the views are keys |
 | The Alt View key | the header | A screen coming on, changing look, or going off |
 | The Sounds button | the header | A key when it turns sounds on; nothing when it turns them off |
 

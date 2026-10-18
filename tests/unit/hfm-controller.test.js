@@ -848,7 +848,7 @@ describe('the Alt View is heard', () => {
     controller.disableAltViewWithPreview(document.createElement('button'))
   })
 
-  it('a move a button, a view or View All made plays no camera tick; the arrow keys on the preview and a controller stick do', async () => {
+  it('a move a pan button, a view or View All made plays no camera tick; the arrow keys on the preview and a controller stick do', async () => {
     pageWithHeaderAndDpad()
     clock = 0
     vi.spyOn(performance, 'now').mockImplementation(() => clock)
@@ -858,17 +858,17 @@ describe('the Alt View is heard', () => {
     container.tabIndex = 0
     document.body.appendChild(container)
     pm.container = container
-    const rotate = document.getElementById('cameraPanUp')
+    const pan = document.getElementById('cameraPanUp')
     const controller = await freshController(pm)
     await controller.enableAltViewWithPreview(document.createElement('button'))
     place(0, 20)
 
-    // A camera button pressed: its move is the button's, heard as its key.
+    // A pan button pressed: its move is the button's, heard as its key.
     clock += 100
-    press(rotate, 'pointerdown')
+    press(pan, 'pointerdown')
     place(45, 20)
-    press(rotate, 'pointerup')
-    rotate.click()
+    press(pan, 'pointerup')
+    pan.click()
     clock += 100
     place(90, 20)
     // A view chosen from a menu or a shortcut: no drag, no tick.
@@ -910,6 +910,97 @@ describe('the Alt View is heard', () => {
     place(300, -30)
     expect(await cameraAsked(), 'sounds off').toHaveLength(4)
     controller.disableAltViewWithPreview(document.createElement('button'))
+  })
+
+  it("the camera's rotate and zoom buttons play the view's tick for their move, not a key: a turn, a tilt, a zoom, wherever they sit", async () => {
+    pageWithHeaderAndDpad()
+    clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const pm = previewManagerStub()
+    viewWithControls(pm)
+    const buttons = [
+      ['cameraRotateLeft', 'turn'],
+      ['cameraRotateRight', 'turn'],
+      ['mobileCameraRotateLeft', 'turn'],
+      ['mobileCameraRotateRight', 'turn'],
+      ['cameraRotateUp', 'tilt'],
+      ['cameraRotateDown', 'tilt'],
+      ['mobileCameraRotateUp', 'tilt'],
+      ['mobileCameraRotateDown', 'tilt'],
+      ['cameraZoomIn', 'zoom'],
+      ['cameraZoomOut', 'zoom'],
+      ['mobileCameraZoomIn', 'zoom'],
+      ['mobileCameraZoomOut', 'zoom'],
+      ['classicZoomInBtn', 'zoom'],
+      ['classicZoomOutBtn', 'zoom'],
+    ].map(([id, kind]) => ({ el: sizedButton(id, 36, 36), kind }))
+    const left = buttons[0].el
+    const hadPads = navigator.getGamepads
+    let held = false
+    navigator.getGamepads = () => [{ axes: [0, 0, 0, 0], buttons: [{ pressed: held, value: held ? 1 : 0 }] }]
+    const controller = await freshController(pm)
+    const toggle = document.createElement('button')
+
+    press(left, 'pointerdown')
+    press(left, 'pointerup')
+    left.click()
+    expect(await cameraAsked(), 'nothing while the look is off').toEqual([])
+
+    await controller.enableAltViewWithPreview(toggle)
+    // A pointer's press and release, then the click that moves the view.
+    for (const { el } of buttons) {
+      clock += 100
+      press(el, 'pointerdown')
+      press(el, 'pointerup')
+      el.click()
+    }
+    expect(await cameraAsked()).toEqual(buttons.map(({ kind }) => kind))
+    expect(await keysAsked(), 'no key for any of them').toEqual([])
+
+    // Enter on the focused button: its keydown, the click it makes, its keyup.
+    left.focus()
+    clock += 100
+    left.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    left.click()
+    left.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }))
+    expect((await cameraAsked()).slice(14), 'Enter').toEqual(['turn'])
+
+    // The page's own click stays quiet; a controller's A button is a press.
+    clock += 100
+    left.click()
+    expect(await cameraAsked(), "the page's own click").toHaveLength(15)
+    held = true
+    clock += 100
+    left.click()
+    held = false
+    expect((await cameraAsked()).slice(15), 'a controller').toEqual(['turn'])
+
+    // Pressed and let go off the button: no click, so no move and no tick.
+    clock += 100
+    press(left, 'pointerdown')
+    press(document.body, 'pointerup')
+    expect(await cameraAsked(), 'let go elsewhere').toHaveLength(16)
+
+    // Two presses closer than a tick allows: the second is passed over.
+    clock += 100
+    for (let n = 0; n < 2; n++) {
+      clock += 30
+      press(left, 'pointerdown')
+      press(left, 'pointerup')
+      left.click()
+    }
+    expect((await cameraAsked()).slice(16), 'fourteen a second at most').toEqual(['turn'])
+
+    // Sounds off: nothing at all.
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    clock += 100
+    press(left, 'pointerdown')
+    press(left, 'pointerup')
+    left.click()
+    expect(await cameraAsked(), 'sounds off').toHaveLength(17)
+    expect(await keysAsked(), 'still no key').toEqual([])
+    navigator.getGamepads = hadPads
+    controller.disableAltViewWithPreview(toggle)
   })
 
   it('a page that starts with sounds off starts muted', async () => {

@@ -5,7 +5,8 @@
  * same setting as Preferences > Play sounds, and the two always agree. The
  * press that turns sounds on plays a key, so a person hears that it worked;
  * the press that turns them off plays nothing. In the look a drag of the
- * view ticks, a drawer slides with a sound of its own, and a menu latches.
+ * view ticks, and so does a camera button that turns, tilts or zooms it; a
+ * drawer slides with a sound of its own, and a menu latches.
  *
  * @license GPL-3.0-or-later
  */
@@ -18,18 +19,26 @@ import { drawersBack } from './helpers/alt-view.js';
 test.describe.configure({ timeout: 240_000 });
 
 const WASM_READY_TIMEOUT = 180_000;
+// The 3D view's three ticks, in seconds, as public/sounds/camera/ holds
+// them. The browser decodes at its own rate, so a played tick is known by
+// its length to a few milliseconds (a key is 160 ms).
+const TURN_SECONDS = 0.2;
+const TILT_SECONDS = 0.03;
+const ZOOM_SECONDS = 0.018;
+const oneTick = (heard, seconds) =>
+  heard.length === 1 && Math.abs(heard[0] - seconds) < 0.005;
 
-async function openBox(page) {
-  await page.addInitScript(() => {
+async function openBox(page, mode = 'standard') {
+  await page.addInitScript((mode) => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     localStorage.setItem('openscad-forge-theme', 'dark');
     localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
     localStorage.setItem(
       'openscad-forge-ui-mode',
-      JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+      JSON.stringify({ mode, lastCustomMode: 'standard' })
     );
-  });
+  }, mode);
   await page.goto('/?example=simple-box');
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
@@ -196,7 +205,7 @@ test.describe('The sounds button', () => {
     expect(await page.evaluate(() => window.__sounds.length), 'one key').toBe(1);
   });
 
-  test('a drag of the view ticks as it turns, without sawing; a camera button sounds only its key', async ({
+  test("a drag of the view ticks as it turns, without sawing; a camera button that turns, tilts or zooms ticks as the view, a pan button is a key", async ({
     page,
   }) => {
     await listenForSound(page);
@@ -233,12 +242,49 @@ test.describe('The sounds button', () => {
       60
     );
 
-    // Rotate left, pressed: its key's press and release, and no tick.
-    await page.waitForTimeout(500);
-    const beforeButton = (await started()).length;
-    await page.locator('#cameraRotateLeft').click();
-    await page.waitForTimeout(800);
-    expect((await started()).length - beforeButton, 'the key, down and up').toBe(2);
+    // Each camera button pressed: the view's own tick for its move and no
+    // key, by the tick's length; a pan button has no tick and is a key.
+    const lengths = () => page.evaluate(() => window.__sounds.map((s) => s.seconds));
+    const heard = async (id) => {
+      await page.waitForTimeout(500);
+      const before = (await lengths()).length;
+      await page.locator(`#${id}`).click();
+      await page.waitForTimeout(800);
+      return (await lengths()).slice(before);
+    };
+    const left = await heard('cameraRotateLeft');
+    expect(oneTick(left, TURN_SECONDS), `rotate left, the turn: ${left}`).toBe(true);
+    const down = await heard('cameraRotateDown');
+    expect(oneTick(down, TILT_SECONDS), `rotate down, the tilt: ${down}`).toBe(true);
+    const zoom = await heard('cameraZoomIn');
+    expect(oneTick(zoom, ZOOM_SECONDS), `zoom in, the zoom: ${zoom}`).toBe(true);
+    expect(await heard('cameraPanLeft'), 'pan left: its key, down and up').toHaveLength(2);
+  });
+
+  test("in Classic the 3D view toolbar's zoom buttons tick as the view's zoom", async ({
+    page,
+  }) => {
+    await listenForSound(page);
+    await openBox(page, 'classic');
+    await probeSound(page);
+    await setLook(page, true);
+    test.skip(
+      !(await canSound(page)),
+      'this machine has no sound device, so no sound can start'
+    );
+    // The panes slide back in after the look comes on, each with its sound.
+    await drawersBack(page);
+    for (const id of ['classicZoomInBtn', 'classicZoomOutBtn']) {
+      await page.waitForTimeout(500);
+      const before = await page.evaluate(() => window.__sounds.length);
+      await page.locator(`#${id}`).click();
+      await page.waitForTimeout(800);
+      const heard = await page.evaluate(
+        (from) => window.__sounds.slice(from).map((s) => s.seconds),
+        before
+      );
+      expect(oneTick(heard, ZOOM_SECONDS), `${id}: ${heard}`).toBe(true);
+    }
   });
 
   test("a drawer's button plays its key, then the drawer's own slide as long as the slide; a menu latches open and shut", async ({

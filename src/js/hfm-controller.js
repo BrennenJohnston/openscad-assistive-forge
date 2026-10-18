@@ -192,10 +192,10 @@ let _hfmDialLastClickAt = -Infinity;
 // degrees it turns, a ratchet for every 10 it tilts, a lens detent for every
 // 5 % it zooms (a wheel notch). Only for a move made directly: a drag, the
 // wheel or a pinch on the view, the arrow keys on the focused preview, a
-// controller's stick or trigger. A move a button, a view or View All made is
-// heard as that button's key. A tick comes at most every 70 ms, a step that
-// would tick sooner is passed over, and turning back after a tick takes a
-// step and a little more, so a jitter is silent.
+// controller's stick or trigger. A move a pan button, a view or View All made
+// is heard as that button's key. A tick comes at most every 70 ms, a step
+// that would tick sooner is passed over, and turning back after a tick takes
+// a step and a little more, so a jitter is silent.
 const _HFM_CAMERA_STEPS = { turn: 15, tilt: 10, zoom: Math.log(1.05) };
 const _HFM_CAMERA_DEAD_BAND = { turn: 1, tilt: 1, zoom: Math.log(1.01) };
 const _HFM_CAMERA_TICK_GAP_MS = 70;
@@ -213,7 +213,28 @@ const _HFM_CAMERA_KEYS = new Set([
 ]);
 // The controller's own dead zone (gamepad-controller.js).
 const _HFM_STICK_DEAD_ZONE = 0.15;
+// The camera's rotate and zoom buttons, in the panel, the phone's drawer and
+// Classic's 3D view toolbar: each press moves the view one step, heard as the
+// view's own tick for that move instead of a key.
+const _HFM_CAMERA_BUTTONS = new Map([
+  ['cameraRotateLeft', 'turn'],
+  ['cameraRotateRight', 'turn'],
+  ['mobileCameraRotateLeft', 'turn'],
+  ['mobileCameraRotateRight', 'turn'],
+  ['cameraRotateUp', 'tilt'],
+  ['cameraRotateDown', 'tilt'],
+  ['mobileCameraRotateUp', 'tilt'],
+  ['mobileCameraRotateDown', 'tilt'],
+  ['cameraZoomIn', 'zoom'],
+  ['cameraZoomOut', 'zoom'],
+  ['mobileCameraZoomIn', 'zoom'],
+  ['mobileCameraZoomOut', 'zoom'],
+  ['classicZoomInBtn', 'zoom'],
+  ['classicZoomOutBtn', 'zoom'],
+]);
 let _hfmCamera = null;
+// When the view last ticked, by hand or by a camera button.
+let _hfmCameraTickAt = -Infinity;
 
 // The key's name says what it is; what it does is said once it is pressed.
 const _HFM_TOGGLE_NAME = 'Alt View';
@@ -1399,7 +1420,7 @@ function _stopGripWatch() {
 }
 
 function _playKeySound(el, phase) {
-  if (!_soundsOn()) return;
+  if (!_soundsOn() || _HFM_CAMERA_BUTTONS.has(el.id)) return;
   playKeySound(_hfmKeySet(), _hfmKeyBand(el), phase).catch((error) => {
     console.warn(`[Alt View] A key sound did not play:`, error);
   });
@@ -1494,6 +1515,17 @@ function _hfmStickPushed() {
   return false;
 }
 
+// One of the view's ticks, unless one came under 70 ms ago.
+function _playCameraTick(kind) {
+  const now = performance.now();
+  if (now - _hfmCameraTickAt < _HFM_CAMERA_TICK_GAP_MS) return;
+  _hfmCameraTickAt = now;
+  if (!_soundsOn()) return;
+  playCameraSound(kind).catch((error) => {
+    console.warn('[Alt View] A camera tick did not play:', error);
+  });
+}
+
 function _installCameraTicks(previewManager) {
   const controls = previewManager?.controls;
   if (_hfmCamera || !controls?.addEventListener) return;
@@ -1502,7 +1534,6 @@ function _installCameraTicks(previewManager) {
     way: { turn: 0, tilt: 0, zoom: 0 },
     dragging: false,
     directUntil: 0,
-    lastTickAt: -Infinity,
   };
   const direct = () =>
     cam.dragging || performance.now() < cam.directUntil || _hfmStickPushed();
@@ -1537,13 +1568,7 @@ function _installCameraTicks(previewManager) {
       cam.way[name] = sign;
       kind ??= name;
     }
-    const now = performance.now();
-    if (!kind || now - cam.lastTickAt < _HFM_CAMERA_TICK_GAP_MS) return;
-    cam.lastTickAt = now;
-    if (!_soundsOn()) return;
-    playCameraSound(kind).catch((error) => {
-      console.warn('[Alt View] A camera tick did not play:', error);
-    });
+    if (kind) _playCameraTick(kind);
   };
   // Any other press is not a direct move of the view: what it moves, it
   // moves as a button, a menu or a shortcut does.
@@ -1636,20 +1661,28 @@ function _installKeySounds() {
   // A click no press of ours came before: a screen reader's Enter in browse
   // mode, which the page gets as a click alone, or a controller's A button.
   // Anything else the page clicks for itself stays quiet. A label's click
-  // is passed on to its file input, and the two are one press.
+  // is passed on to its file input, and the two are one press. A camera
+  // button's click, after its press or alone, is its move: heard as the
+  // view's tick instead of a key.
   const click = (event) => {
     const el = _hfmKeyTarget(event);
     if (!el) return;
     const control = el instanceof HTMLLabelElement ? el.control : null;
     const passing = control !== null && event.target !== control;
+    const camera = _HFM_CAMERA_BUTTONS.get(el.id);
     if (el === _hfmKeyHeard) {
       if (!passing) _hfmKeyHeard = null;
+      if (camera) _playCameraTick(camera);
       return;
     }
     // A file input another control opens: that control has sounded.
     if (control && !passing && control !== document.activeElement) return;
     if (!event.isTrusted && !_hfmPadButtonHeld()) return;
     if (passing) _hfmKeyHeard = el;
+    if (camera) {
+      _playCameraTick(camera);
+      return;
+    }
     _playKeySound(el, 'down');
     setTimeout(() => _playKeySound(el, 'up'), _HFM_KEY_TAP_MS);
   };

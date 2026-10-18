@@ -162,8 +162,10 @@ export const MEASURED_SECONDS = {
   // Five cases, each loading the box and turning the look on (one drags the
   // view for a second and a half): 45 s locally; booked at 100 for the
   // look's software drawing on CI. A sixth (a drawer's slide and a menu's
-  // latch, about 16 s locally) adds 40.
-  'alt-view-sounds.spec.js': 140.0,
+  // latch, about 16 s locally) adds 40. A seventh (Classic's zoom buttons,
+  // about 14 s locally) adds 40, and four camera presses in the drag's case
+  // about 10.
+  'alt-view-sounds.spec.js': 190.0,
   // Two cases, each loading the box, turning the look on and watching about
   // twenty drawer presses for 1.2 s each: 48 s locally; booked at 110 for
   // the look's software drawing on CI.

@@ -61,6 +61,9 @@ const CAMERA_FILES = {
   turn: '/sounds/camera/turn.wav',
   tilt: '/sounds/camera/tilt.wav',
 };
+// Each tick's level in the camera group: the turn, the fullest of the
+// three, sits a little under the other two.
+const CAMERA_LEVELS_DB = { zoom: 0, turn: -3, tilt: 0 };
 // The drawers, by the look: p (the phosphor looks) a rack drawer on slide
 // rails, d (the DOS look) its own; each drawer an opening and a closing as
 // long as its slide, told apart by pitch and length, the biggest lowest.
@@ -87,14 +90,14 @@ const CUT_FADE_S = 0.015;
 const START_TIMEOUT_MS = 1000;
 
 // The groups a sound plays in, each at its own level under the master: the
-// camera's sounds 9 dB under the keys, a drawer's slide 6 dB under the key
+// camera's sounds 12 dB under the keys, a drawer's slide 6 dB under the key
 // that moved it, typing a quiet key 12 dB under, a latch under the key that
 // opened its menu.
 const GROUP_LEVELS_DB = {
   switch: 0,
   keys: 0,
   dials: 0,
-  camera: -9,
+  camera: -12,
   drawers: -6,
   typing: -12,
   snaps: 0,
@@ -233,13 +236,14 @@ function _holdFrom(param, at) {
 
 // Waits for the context to run, a second at most, then starts the buffer in
 // its group, `offset` seconds in. With `own`, the sound has a level of its
-// own (`source.level`) between it and the group, so it can be faded out.
+// own (`source.level`, `levelDb` to start) between it and the group, so it
+// can be set apart from the group or faded out.
 async function _start(
   context,
   running,
   buffer,
   group,
-  { offset = 0, own = false } = {}
+  { offset = 0, own = false, levelDb = 0 } = {}
 ) {
   let timer = null;
   await Promise.race([
@@ -256,6 +260,7 @@ async function _start(
   const into = _mixerFor(context).groups[group];
   if (own) {
     source.level = context.createGain();
+    source.level.gain.value = _gainOf(levelDb);
     source.level.connect(into);
     source.connect(source.level);
   } else {
@@ -413,7 +418,7 @@ export function preloadControlSounds() {
 
 /**
  * Play one of the 3D view's ticks in the camera group, which keys and dial
- * clicks lower for a moment.
+ * clicks lower for a moment, through a level of its own.
  * @param {'zoom'|'turn'|'tilt'} kind
  * @returns {Promise<number>} The tick's length in seconds once it has begun
  */
@@ -422,7 +427,10 @@ export async function playCameraSound(kind) {
   const context = _audioContext();
   const running = context.resume();
   const buffer = await _bufferFor(CAMERA_FILES[kind], context);
-  await _start(context, running, buffer, 'camera');
+  await _start(context, running, buffer, 'camera', {
+    own: true,
+    levelDb: CAMERA_LEVELS_DB[kind],
+  });
   return buffer.duration;
 }
 
