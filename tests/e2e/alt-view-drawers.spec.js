@@ -157,8 +157,14 @@ function motionOf(samples) {
     toRest: samples[rest].t - start,
     lastMove: rest > 0 ? samples[rest - 1].t - start : 0,
     slack: (gaps[0] ?? 0) + Math.max(0, ...gaps),
+    longestGap: Math.max(0, ...gaps),
   };
 }
+
+// A slide of half a second is seen in three frames or more where frames
+// come as they should; a starved runner can show two frames 150 ms or more
+// apart, and the slide's time still tells it was there.
+const SLOW_FRAME_MS = 150;
 
 // A clip of inset(top right bottom left) in px, as the browser reports it.
 function insetOf(clip) {
@@ -179,7 +185,11 @@ function insetOf(clip) {
 function expectDrawerMove(samples, { name, from, opening, edge }) {
   const motion = motionOf(samples);
   const [minMs, maxMs] = opening ? [450, 550] : [400, 500];
-  expect(motion.moving, `${name}: seen on its way`).toBeGreaterThanOrEqual(3);
+  const slow = motion.longestGap >= SLOW_FRAME_MS;
+  expect(
+    motion.moving,
+    `${name}: seen on its way (frames up to ${Math.round(motion.longestGap)} ms apart)`
+  ).toBeGreaterThanOrEqual(slow ? 2 : 3);
   expect(motion.toRest, `${name}: at rest no sooner than ${minMs} ms`).toBeGreaterThanOrEqual(
     minMs
   );
