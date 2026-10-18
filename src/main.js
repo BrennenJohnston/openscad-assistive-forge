@@ -312,7 +312,12 @@ import { TextareaEditor } from './js/textarea-editor.js';
 import { CodeMirrorEditor } from './js/codemirror-editor.js';
 import { showConfirmDialog, showTextToCopyDialog } from './js/dialogs.js';
 import { showLibraryInfoDialog } from './js/library-info-dialog.js';
-import { initHfmController, setSoundsOn } from './js/hfm-controller.js';
+import {
+  initHfmController,
+  setSoundsOn,
+  setSoundKindOff,
+  soundKindsOff,
+} from './js/hfm-controller.js';
 import {
   EXAMPLE_DEFINITIONS,
   PROGRAM_DEFINITIONS,
@@ -7138,6 +7143,22 @@ async function initApp() {
     });
     document.addEventListener('sounds-setting-change', (event) => {
       soundsToggle.checked = event.detail.on;
+    });
+  }
+  // Each kind of Alt View sound on its own, under Play sounds.
+  const kindBoxes = document.querySelectorAll('input[data-sound-kind]');
+  if (kindBoxes.length) {
+    const off = new Set(soundKindsOff());
+    for (const box of kindBoxes) {
+      box.checked = !off.has(box.dataset.soundKind);
+      box.addEventListener('change', () => {
+        setSoundKindOff(box.dataset.soundKind, !box.checked);
+      });
+    }
+    document.addEventListener('sound-kinds-change', (event) => {
+      const now = new Set(event.detail.off);
+      for (const box of kindBoxes)
+        box.checked = !now.has(box.dataset.soundKind);
     });
   }
 

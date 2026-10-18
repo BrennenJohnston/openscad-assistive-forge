@@ -520,15 +520,14 @@ Freesound and levelled, the lever's at 48 kHz mono, the others resampled to
 
 ### SMALL SIZE TOGGLE SWITCH (CC-BY-3.0)
 
-The snaps, `snap-on.wav` and `snap-off.wav`, are the two clicks of "SMALL
-SIZE TOGGLE SWITCH.wav" by StevenBrown: https://freesound.org/s/128437/
+The radio button's snap, `snap-on.wav`, is one click of "SMALL SIZE
+TOGGLE SWITCH.wav" by StevenBrown: https://freesound.org/s/128437/
 
 - **Author**: StevenBrown
 - **License**: Creative Commons Attribution 3.0 Unported,
   https://creativecommons.org/licenses/by/3.0/
-- **Changes**: each click cut out (32 and 42 ms, with short fades),
-  resampled to 32 kHz mono, levelled to each other, the on click's top end
-  softened.
+- **Changes**: the click cut out (42 ms, with short fades), resampled to
+  32 kHz mono, levelled, its top end softened.
 
 ### Radio switch and latches (CC0-1.0)
 

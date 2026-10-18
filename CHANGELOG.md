@@ -26,7 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by hand or by its camera buttons, a drawer unlatches, rolls and meets its
   stop with a thump, checkboxes and switches flip like a lever, scrolling
   ticks a line at a time like a typewriter's roller, and lists, menus and
-  typing each have theirs.
+  typing each have theirs. Preferences > Advanced turns each kind off on
+  its own.
 
 ### Changed
 

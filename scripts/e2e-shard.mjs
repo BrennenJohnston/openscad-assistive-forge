@@ -165,7 +165,7 @@ export const MEASURED_SECONDS = {
   // latch, about 16 s locally) adds 40. A seventh (Classic's zoom buttons,
   // about 14 s locally) adds 40, and four camera presses in the drag's case
   // about 10.
-  'alt-view-sounds.spec.js': 190.0,
+  'alt-view-sounds.spec.js': 220.0,
   // Two cases, each loading the box, turning the look on and watching about
   // twenty drawer presses for 1.2 s each: 48 s locally; booked at 110 for
   // the look's software drawing on CI.

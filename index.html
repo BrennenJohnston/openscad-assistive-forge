@@ -7849,7 +7849,8 @@
                 roller, lists click, menus latch, typing is a quiet key, and the
                 3D view ticks as you turn, tilt or zoom it; the sounds button
                 just before the key turns them all off and on, the same setting
-                as Play sounds in Preferences
+                as Play sounds in Preferences, where each kind of sound can also
+                be turned off on its own
               </li>
               <li>
                 <strong>Drawers</strong>: the Customizer, Preview Settings,
@@ -8796,6 +8797,88 @@
               <input type="checkbox" id="soundsToggle" checked />
               <label for="soundsToggle">Play sounds</label>
             </div>
+            <!-- Each kind of Alt View sound on its own; Play sounds, above,
+                 turns them all off. The look's switch sounds follow Play
+                 sounds alone. -->
+            <fieldset class="preferences-fieldset" id="soundKindsGroup">
+              <legend>Sounds in Alt View</legend>
+              <p class="preferences-field-note">
+                Each kind can be turned off on its own. Play sounds, above,
+                turns them all off.
+              </p>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindKeys"
+                  data-sound-kind="keys"
+                  checked
+                />
+                <label for="soundKindKeys">Keys</label>
+              </div>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindDials"
+                  data-sound-kind="dials"
+                  checked
+                />
+                <label for="soundKindDials">Sliders and grips</label>
+              </div>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindCamera"
+                  data-sound-kind="camera"
+                  checked
+                />
+                <label for="soundKindCamera">3D view</label>
+              </div>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindDrawers"
+                  data-sound-kind="drawers"
+                  checked
+                />
+                <label for="soundKindDrawers">Drawers</label>
+              </div>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindSwitches"
+                  data-sound-kind="switches"
+                  checked
+                />
+                <label for="soundKindSwitches">Switches and lists</label>
+              </div>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindMenus"
+                  data-sound-kind="menus"
+                  checked
+                />
+                <label for="soundKindMenus">Menus and dialogs</label>
+              </div>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindTyping"
+                  data-sound-kind="typing"
+                  checked
+                />
+                <label for="soundKindTyping">Typing</label>
+              </div>
+              <div class="preferences-check-row">
+                <input
+                  type="checkbox"
+                  id="soundKindScroll"
+                  data-sound-kind="scroll"
+                  checked
+                />
+                <label for="soundKindScroll">Scrolling</label>
+              </div>
+            </fieldset>
             <div class="preferences-check-row">
               <button
                 type="button"

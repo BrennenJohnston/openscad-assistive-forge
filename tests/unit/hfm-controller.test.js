@@ -20,7 +20,7 @@ import {
 } from 'three'
 import { PreviewManager } from '../../src/js/preview.js'
 import { announce } from '../../src/js/announcer.js'
-import { STORAGE_KEY_SOUNDS } from '../../src/js/storage-keys.js'
+import { STORAGE_KEY_SOUNDS, STORAGE_KEY_SOUND_KINDS_OFF } from '../../src/js/storage-keys.js'
 
 vi.mock('../../src/js/crt-sounds.js', () => ({
   playCrtSound: vi.fn(async () => 1),
@@ -1090,6 +1090,75 @@ describe('the Alt View is heard', () => {
     controller.disableAltViewWithPreview(toggle)
   })
 
+  it('a kind of sound turned off in Preferences stays silent while the rest play; the choice is kept, read at start, and told to the page', async () => {
+    pageWithHeaderAndDpad()
+    clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const button = sizedButton('plainBtn', 36, 36)
+    const slider = document.createElement('input')
+    slider.type = 'range'
+    slider.min = '0'
+    slider.max = '10'
+    slider.step = '1'
+    slider.value = '0'
+    const box = document.createElement('input')
+    box.type = 'checkbox'
+    document.body.append(slider, box)
+    const controller = await freshController(previewManagerStub())
+    const { setSoundKindOff, soundKindsOff } = await import('../../src/js/hfm-controller.js')
+    const told = []
+    const listen = (event) => told.push([...event.detail.off])
+    document.addEventListener('sound-kinds-change', listen)
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    const step = (value) => {
+      slider.value = String(value)
+      slider.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+
+    expect(soundKindsOff(), 'everything on to begin with').toEqual([])
+    setSoundKindOff('dials', true)
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY_SOUND_KINDS_OFF))).toEqual(['dials'])
+    expect(told).toEqual([['dials']])
+    clock += 100
+    step(1)
+    clock += 100
+    step(2)
+    expect(await dialsAsked(), 'the slider is silent').toEqual([])
+    press(button, 'pointerdown')
+    press(button, 'pointerup')
+    expect(await keysAsked(), 'a key still plays').toEqual(['p 2 down', 'p 2 up'])
+    box.click()
+    expect(await controlsAsked(), 'a switch still flips').toEqual(['lever-on'])
+
+    setSoundKindOff('switches', true)
+    setSoundKindOff('dials', false)
+    expect(soundKindsOff()).toEqual(['switches'])
+    expect(told.at(-1)).toEqual(['switches'])
+    box.click()
+    expect(await controlsAsked(), 'the switch is silent now').toEqual(['lever-on'])
+    clock += 100
+    step(3)
+    expect(await dialsAsked(), 'the slider clicks again').toEqual(['p 2'])
+    expect(() => setSoundKindOff('music', true)).toThrow('No such kind of sound: music')
+    document.removeEventListener('sound-kinds-change', listen)
+    controller.disableAltViewWithPreview(toggle)
+
+    // Read at start: a choice kept from before, and a bad value ignored.
+    localStorage.setItem(STORAGE_KEY_SOUND_KINDS_OFF, JSON.stringify(['keys', 'nonsense']))
+    const again = await freshController(previewManagerStub())
+    const fresh = await import('../../src/js/hfm-controller.js')
+    expect(fresh.soundKindsOff(), 'known kinds only').toEqual(['keys'])
+    await again.enableAltViewWithPreview(toggle)
+    // The sound mock outlives the module reset: count from here.
+    const { playKeySound } = await import('../../src/js/crt-sounds.js')
+    playKeySound.mockClear()
+    press(button, 'pointerdown')
+    press(button, 'pointerup')
+    expect(await keysAsked(), 'keys off from the start').toEqual([])
+    again.disableAltViewWithPreview(toggle)
+  })
+
   it('a page that starts with sounds off starts muted', async () => {
     localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
     pageWithHeaderAndDpad()
@@ -1123,6 +1192,10 @@ describe('the Alt View is heard', () => {
   const drawersAsked = async () => {
     const { playDrawerSound } = await import('../../src/js/crt-sounds.js')
     return playDrawerSound.mock.calls.map(([name, phase, how]) => `${name} ${phase} ${how.stopAt} ${how.whole}`)
+  }
+  const dialsAsked = async () => {
+    const { playDialSound } = await import('../../src/js/crt-sounds.js')
+    return playDialSound.mock.calls.map((c) => c.join(' '))
   }
   const controlsAsked = async () => {
     const { playControlSound } = await import('../../src/js/crt-sounds.js')

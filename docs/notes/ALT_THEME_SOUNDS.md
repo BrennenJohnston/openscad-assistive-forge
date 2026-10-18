@@ -8,7 +8,11 @@ the sound it plays or the reason it plays none.
 
 Every sound follows Preferences > Play sounds and the look's Sounds
 button, plays only while the look is on, and passes through its group's
-level and one master (`src/js/crt-sounds.js`). Reduced motion changes how
+level and one master (`src/js/crt-sounds.js`). Under Play sounds,
+Preferences > Advanced > Sounds in Alt View turns each kind off on its
+own: keys, sliders and grips, the 3D view, drawers, switches and lists,
+menus and dialogs, typing, scrolling; the look's own switch sounds follow
+Play sounds alone. Reduced motion changes how
 things move, not what they sound like. A sound never stands in for a
 spoken sentence: what a control says, it still says.
 

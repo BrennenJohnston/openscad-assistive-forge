@@ -12,6 +12,7 @@ import {
   STORAGE_KEY_HFM_PERSIST_FADE,
   STORAGE_KEY_HFM_SURFACES,
   STORAGE_KEY_SOUNDS,
+  STORAGE_KEY_SOUND_KINDS_OFF,
 } from './storage-keys.js';
 import { announce, announceImmediate } from './announcer.js';
 import { playUnlockJingle } from './unlock-jingle.js';
@@ -393,6 +394,84 @@ function _soundsOn() {
   } catch (_) {
     return true;
   }
+}
+
+// The kinds of sound a person can turn off one by one (Preferences ▸
+// Advanced ▸ Sounds in Alt View), each the sounds of one set of controls;
+// the look's own switch sounds follow Play sounds alone.
+const _HFM_SOUND_KINDS = [
+  'keys',
+  'dials',
+  'camera',
+  'drawers',
+  'switches',
+  'menus',
+  'typing',
+  'scroll',
+];
+const _hfmKindsOff = _readKindsOff();
+
+function _readKindsOff() {
+  let raw = null;
+  try {
+    raw = localStorage.getItem(STORAGE_KEY_SOUND_KINDS_OFF);
+  } catch (_) {
+    return new Set();
+  }
+  if (!raw) return new Set();
+  try {
+    const list = JSON.parse(raw);
+    return new Set(
+      Array.isArray(list)
+        ? list.filter((kind) => _HFM_SOUND_KINDS.includes(kind))
+        : []
+    );
+  } catch (error) {
+    console.warn(
+      '[Alt View] The sound kinds setting could not be read:',
+      error
+    );
+    return new Set();
+  }
+}
+
+// Whether a kind of sound plays: the sounds on, and this kind not turned
+// off.
+function _soundOn(kind) {
+  return _soundsOn() && !_hfmKindsOff.has(kind);
+}
+
+/**
+ * The kinds of sound turned off, in the order they are listed.
+ * @returns {string[]}
+ */
+export function soundKindsOff() {
+  return _HFM_SOUND_KINDS.filter((kind) => _hfmKindsOff.has(kind));
+}
+
+/**
+ * Turn one kind of sound off or on: the setting is kept, and anything
+ * showing it listens for `sound-kinds-change` on the document.
+ * @param {'keys'|'dials'|'camera'|'drawers'|'switches'|'menus'|'typing'|'scroll'} kind
+ * @param {boolean} off
+ */
+export function setSoundKindOff(kind, off) {
+  if (!_HFM_SOUND_KINDS.includes(kind)) {
+    throw new Error(`No such kind of sound: ${kind}`);
+  }
+  if (off) _hfmKindsOff.add(kind);
+  else _hfmKindsOff.delete(kind);
+  try {
+    localStorage.setItem(
+      STORAGE_KEY_SOUND_KINDS_OFF,
+      JSON.stringify(soundKindsOff())
+    );
+  } catch (error) {
+    console.warn('[Alt View] Could not save the sound kinds setting:', error);
+  }
+  document.dispatchEvent(
+    new CustomEvent('sound-kinds-change', { detail: { off: soundKindsOff() } })
+  );
 }
 
 function _syncSoundsButton(on) {
@@ -1372,15 +1451,17 @@ function _hfmSelector(el) {
   return el instanceof HTMLInputElement && el.type === 'color';
 }
 
+// A latch is a menu's or a dialog's; the snaps, levers and selectors are
+// the switches' and lists'.
 function _playControlSound(kind) {
-  if (!_soundsOn()) return;
+  if (!_soundOn(kind.startsWith('latch') ? 'menus' : 'switches')) return;
   playControlSound(kind).catch((error) => {
     console.warn(`[Alt View] The ${kind} sound did not play:`, error);
   });
 }
 
 function _playTypingSound() {
-  if (!_soundsOn()) return;
+  if (!_soundOn('typing')) return;
   playTypingSound(_hfmKeySet()).catch((error) => {
     console.warn('[Alt View] A typing sound did not play:', error);
   });
@@ -1388,7 +1469,7 @@ function _playTypingSound() {
 
 // A drawer the look heard move: its own sound in the look's set.
 function _playDrawerSound(name, open, move) {
-  if (!_HFM_SOUNDING_DRAWERS.has(name) || !_soundsOn()) return;
+  if (!_HFM_SOUNDING_DRAWERS.has(name) || !_soundOn('drawers')) return;
   playDrawerSound(name, open ? 'open' : 'close', move).catch((error) => {
     console.warn(`[Alt View] The ${name} drawer's sound did not play:`, error);
   });
@@ -1455,7 +1536,7 @@ function _stopGripWatch() {
 
 function _playKeySound(el, phase) {
   if (
-    !_soundsOn() ||
+    !_soundOn('keys') ||
     _HFM_CAMERA_BUTTONS.has(el.id) ||
     el.matches(_HFM_DRAWER_BUTTONS)
   ) {
@@ -1498,7 +1579,7 @@ function _hfmDial(el) {
 }
 
 function _playDialSound(variant) {
-  if (!_soundsOn()) return;
+  if (!_soundOn('dials')) return;
   playDialSound(_hfmKeySet(), variant).catch((error) => {
     console.warn(`[Alt View] A dial click did not play:`, error);
   });
@@ -1561,7 +1642,7 @@ function _playCameraTick(kind, way = 0) {
   const now = performance.now();
   if (now - _hfmCameraTickAt < _HFM_CAMERA_TICK_GAP_MS) return;
   _hfmCameraTickAt = now;
-  if (!_soundsOn()) return;
+  if (!_soundOn('camera')) return;
   playCameraSound(kind, { way }).catch((error) => {
     console.warn('[Alt View] A camera tick did not play:', error);
   });
@@ -1891,14 +1972,14 @@ function _playScrollTick(way) {
   const now = performance.now();
   if (now - _hfmScrollTickAt < _HFM_SCROLL_TICK_GAP_MS) return;
   _hfmScrollTickAt = now;
-  if (!_soundsOn()) return;
+  if (!_soundOn('scroll')) return;
   playScrollSound({ way }).catch((error) => {
     console.warn('[Alt View] A scroll tick did not play:', error);
   });
 }
 
 function _playScrollEnd() {
-  if (!_soundsOn()) return;
+  if (!_soundOn('scroll')) return;
   playScrollSound({ end: true }).catch((error) => {
     console.warn("[Alt View] The end of a list's sound did not play:", error);
   });

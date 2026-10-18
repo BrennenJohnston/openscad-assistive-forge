@@ -368,6 +368,9 @@ export const STORAGE_KEY_LAZY_UNION = getAppPrefKey('lazy-union');
 export const STORAGE_KEY_MANIFOLD_ENGINE = getAppPrefKey('manifold-engine');
 // Preferences ▸ Advanced ▸ Play sounds; on unless set to 'false'.
 export const STORAGE_KEY_SOUNDS = getAppPrefKey('sounds');
+// Preferences ▸ Advanced ▸ Sounds in Alt View: the kinds turned off, a JSON
+// list of their names (hfm-controller.js); none unless set.
+export const STORAGE_KEY_SOUND_KINDS_OFF = getAppPrefKey('sound-kinds-off');
 
 // --- UI mode (ui-mode-controller.js) ---
 // The controller has always persisted under this name; centralized here so

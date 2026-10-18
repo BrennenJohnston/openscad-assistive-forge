@@ -228,7 +228,6 @@ describe('the drawer sound files', () => {
 const SWITCHES_DIR = join(SOUNDS_DIR, 'switches');
 const SWITCH_FILES = [
   'snap-on.wav',
-  'snap-off.wav',
   'select-open.wav',
   'select-choose.wav',
   'latch-open.wav',
@@ -273,7 +272,7 @@ describe('the switch, selector and latch files', () => {
     }
   );
 
-  it('the six weigh under 40 KB together', () => {
+  it('the five weigh under 40 KB together', () => {
     const total = SWITCH_FILES.reduce((n, f) => n + statSync(join(SWITCHES_DIR, f)).size, 0);
     expect(total).toBeGreaterThan(0);
     expect(total).toBeLessThan(40_000);

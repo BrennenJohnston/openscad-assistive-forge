@@ -192,6 +192,78 @@ test.describe('The sounds button', () => {
     await expect(button).toHaveAttribute('aria-pressed', 'false');
   });
 
+  test('Preferences lists each kind of sound; one turned off stays silent while a key still plays, and the choice survives a reload', async ({
+    page,
+  }) => {
+    await listenForSound(page);
+    await openBox(page);
+    await probeSound(page);
+    await setLook(page, true);
+    test.skip(
+      !(await canSound(page)),
+      'this machine has no sound device, so no sound can start'
+    );
+    await drawersBack(page);
+    await page.locator('#editMenuBtn').click();
+    await page.getByRole('menuitem', { name: /Preferences/ }).first().click();
+    await page.locator('#prefs-tab-advanced').click();
+    const group = page.getByRole('group', { name: 'Sounds in Alt View' });
+    await expect(group).toBeVisible();
+    for (const name of [
+      'Keys',
+      'Sliders and grips',
+      '3D view',
+      'Drawers',
+      'Switches and lists',
+      'Menus and dialogs',
+      'Typing',
+      'Scrolling',
+    ]) {
+      await expect(group.getByRole('checkbox', { name }), name).toBeChecked();
+    }
+    await group.getByRole('checkbox', { name: 'Sliders and grips' }).uncheck();
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(600);
+
+    const heard = async (act) => {
+      await page.waitForTimeout(400);
+      const before = await page.evaluate(() => window.__sounds.length);
+      await act();
+      await page.waitForTimeout(700);
+      return page.evaluate((from) => window.__sounds.slice(from).map((s) => s.seconds), before);
+    };
+    // The Characters slider is in the camera panel; its drawer sound, still
+    // on, is let finish before the count starts.
+    await page.locator('#cameraPanelToggle').click();
+    await page.waitForTimeout(1500);
+    const characters = page.locator('#_hfmFontScale');
+    await expect(characters).toBeVisible();
+    const box = await characters.boundingBox();
+    const y = box.y + box.height / 2;
+    const dragged = await heard(async () => {
+      await page.mouse.move(box.x + box.width * 0.24, y);
+      await page.mouse.down();
+      for (let n = 1; n <= 8; n++) {
+        await page.mouse.move(box.x + box.width * (0.24 + n * 0.03), y);
+        await page.waitForTimeout(40);
+      }
+      await page.mouse.up();
+    });
+    expect(dragged, 'the slider is silent').toEqual([]);
+    const pressed = await heard(() => page.locator('#cameraResetView').click());
+    expect(pressed, 'a key still plays, down and up').toHaveLength(2);
+
+    // The page loaded again, as any case begins.
+    await openBox(page);
+    await page.locator('#editMenuBtn').click();
+    await page.getByRole('menuitem', { name: /Preferences/ }).first().click();
+    await page.locator('#prefs-tab-advanced').click();
+    await expect(
+      page.getByRole('group', { name: 'Sounds in Alt View' }).getByRole('checkbox', { name: 'Sliders and grips' }),
+      'kept across a reload'
+    ).not.toBeChecked();
+  });
+
   test('the press that turns sounds on plays a key; the one that turns them off, nothing', async ({
     page,
   }) => {
