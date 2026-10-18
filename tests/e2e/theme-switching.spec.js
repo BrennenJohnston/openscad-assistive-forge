@@ -974,7 +974,7 @@ test.describe('The Alt View and pan adjust speak plainly', () => {
     );
     await page.waitForTimeout(600);
     expect(await spoken(page, mark)).toEqual([
-      'Pan arrows now adjust the Alt View: up and down for edges, left and right for size, Shift with up and down for glow.',
+      'Pan arrows now adjust the Alt View: up and down for edges, left and right for focus, Shift with up and down for glow.',
     ]);
 
     mark = await announcementMark(page);
@@ -995,7 +995,7 @@ test.describe('The Alt View and pan adjust speak plainly', () => {
 // The character size has a control where its value shows: a stepper in the
 // preview's status strip with three named steps, present only in the Alt
 // View, kept in step with the camera panel's slider.
-test.describe('The Characters control beside the status line', () => {
+test.describe('The Focus control beside the status line', () => {
   test('steps through Fine, Normal and Bold, and the slider follows', async ({
     page,
   }) => {
@@ -1026,8 +1026,8 @@ test.describe('The Characters control beside the status line', () => {
     await key.click();
     await expect(key).toHaveAttribute('aria-pressed', 'true');
     await expect(controls).toBeVisible();
-    const smaller = page.getByRole('button', { name: 'Smaller characters' });
-    const larger = page.getByRole('button', { name: 'Larger characters' });
+    const smaller = page.getByRole('button', { name: 'Finer focus' });
+    const larger = page.getByRole('button', { name: 'Coarser focus' });
     const value = page.locator('#altViewCharactersValue');
     const status = page.locator('#previewStatusAltAdjust');
     const slider = page.locator('#_hfmFontScale');
@@ -1041,7 +1041,7 @@ test.describe('The Characters control beside the status line', () => {
 
     await larger.click();
     await expect(value).toHaveText('Bold');
-    await expect(status).toContainText('SIZE 100%');
+    await expect(status).toContainText('FOCUS 100%');
     await expect(slider).toHaveValue('1');
 
     await larger.click();
@@ -1049,12 +1049,12 @@ test.describe('The Characters control beside the status line', () => {
 
     await smaller.click();
     await expect(value).toHaveText('Normal');
-    await expect(status).toContainText('SIZE 60%');
+    await expect(status).toContainText('FOCUS 60%');
     await expect(slider).toHaveValue('0.6');
 
     await smaller.click();
     await expect(value).toHaveText('Fine');
-    await expect(status).toContainText('SIZE 50%');
+    await expect(status).toContainText('FOCUS 50%');
 
     await smaller.click();
     await expect(value).toHaveText('Fine');
@@ -1134,7 +1134,7 @@ test.describe('The character-size shortcuts', () => {
 
     // The buttons advertise the keys.
     await expect(
-      page.getByRole('button', { name: 'Larger characters' })
+      page.getByRole('button', { name: 'Coarser focus' })
     ).toHaveAttribute('aria-keyshortcuts', '=');
   });
 });
@@ -1142,7 +1142,7 @@ test.describe('The character-size shortcuts', () => {
 // The contrast becomes a named control: three levels beside Characters, the
 // slider kept in step, and the camera panel's sliders named plainly.
 test.describe('The Edges control beside the status line', () => {
-  test('sets a level by name, follows the slider, and the panel says Characters, Edges, Glow', async ({
+  test('sets a level by name, follows the slider, and the panel says Focus, Edges, Glow', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -1204,15 +1204,15 @@ test.describe('The Edges control beside the status line', () => {
 
     await page.locator('#cameraPanelToggle').click();
     await expect(page.locator('#_hfmContrast-label')).toHaveText('Edges');
-    await expect(page.locator('#_hfmFontScale-label')).toHaveText('Characters');
+    await expect(page.locator('#_hfmFontScale-label')).toHaveText('Focus');
     await expect(page.locator('#_hfmPersistFade-label')).toHaveText('Glow');
   });
 });
 
-// On a phone the Alt View's ASCII drawer holds its four sliders and
+// On a phone the Alt View's Lens drawer holds its four sliders and
 // nothing else; they change the one size and the one level the strip shows
 // on a desktop window, and the minus and equals keys still step the size.
-test.describe('The Alt View controls in the phone ASCII drawer', () => {
+test.describe('The Alt View controls in the phone Lens drawer', () => {
   // No isMobile: Firefox rejects it when the browser context is created.
   test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
 
@@ -1351,7 +1351,7 @@ test.describe('The Alt View starts with finer characters', () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#previewStatusAltAdjust')).toContainText(
-      'SIZE 60%'
+      'FOCUS 60%'
     );
     await expect(page.locator('#_hfmFontScale')).toHaveValue('0.6');
   });
@@ -1377,7 +1377,7 @@ test.describe('The Alt View starts with finer characters', () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#previewStatusAltAdjust')).toContainText(
-      'SIZE 45%'
+      'FOCUS 45%'
     );
     await expect(page.locator('#_hfmFontScale')).toHaveValue('0.45');
   });

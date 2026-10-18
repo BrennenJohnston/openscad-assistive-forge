@@ -207,6 +207,7 @@ describe('the character size the Alt View starts with', () => {
     })
     expect(size.getAttribute('aria-valuetext')).toBe('Vector lines, 35%')
     expect(strip.textContent).toContain('LINES 35%')
+    expect(size.getAttribute('aria-label') ?? document.getElementById('_hfmFontScale-label')?.textContent, 'the slider is Focus').toContain('Focus')
     set('_hfmFontScale', 0)
     expect(altView.setVectorLook).toHaveBeenLastCalledWith(expect.objectContaining({ widthPx: 1 }))
     set('_hfmContrast', 0.7)
@@ -225,7 +226,7 @@ describe('the character size the Alt View starts with', () => {
     set('_hfmFontScale', 0.4)
     expect(altView.setVectorLook).toHaveBeenLastCalledWith(null)
     expect(size.getAttribute('aria-valuetext')).toBe('40%')
-    expect(strip.textContent).toContain('SIZE 40%')
+    expect(strip.textContent).toContain('FOCUS 40%')
     controller.disableAltViewWithPreview(toggle)
   })
 
@@ -1913,14 +1914,14 @@ describe('the Alt View and pan adjust speak plainly', () => {
       'Adjust the Alt View with the pan arrows'
     )
     expect(written).toEqual([
-      'Pan arrows now adjust the Alt View: up and down for edges, left and right for size, Shift with up and down for glow.',
+      'Pan arrows now adjust the Alt View: up and down for edges, left and right for focus, Shift with up and down for glow.',
     ])
 
     expect(controller.onPanControl({ direction: 'up', shiftKey: false })).toBe(
       'Edges 105%'
     )
     expect(controller.onPanControl({ direction: 'left', shiftKey: false })).toBe(
-      'Characters 55%'
+      'Focus 55%'
     )
     // One step up from the 15% the glow starts at.
     expect(controller.onPanControl({ direction: 'up', shiftKey: true })).toBe(

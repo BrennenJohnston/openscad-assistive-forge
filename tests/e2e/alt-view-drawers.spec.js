@@ -312,7 +312,7 @@ test.describe('Drawers in the Alt View', () => {
     // No isMobile: Firefox rejects it when the browser context is created.
     test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
 
-    test('the Customizer from the left, Preview Settings from the top, Camera and ASCII from the bar', async ({
+    test('the Customizer from the left, Preview Settings from the top, Camera and Lens from the bar', async ({
       page,
     }) => {
       await openBox(page);
@@ -354,8 +354,8 @@ test.describe('Drawers in the Alt View', () => {
       await setLook(page);
       expectDrawerMove(await pressAndWatch(page, camera), { name: 'Camera opening', from: 'bottom', opening: true, edge: bar });
       expectDrawerMove(await pressAndWatch(page, camera), { name: 'Camera closing', from: 'bottom', opening: false, edge: bar });
-      expectDrawerMove(await pressAndWatch(page, ascii), { name: 'ASCII opening', from: 'bottom', opening: true, edge: bar });
-      expectDrawerMove(await pressAndWatch(page, ascii), { name: 'ASCII closing', from: 'bottom', opening: false, edge: bar });
+      expectDrawerMove(await pressAndWatch(page, ascii), { name: 'Lens opening', from: 'bottom', opening: true, edge: bar });
+      expectDrawerMove(await pressAndWatch(page, ascii), { name: 'Lens closing', from: 'bottom', opening: false, edge: bar });
       expectDrawerMove(await pressAndWatch(page, popOut), { name: 'Customizer opening', from: 'left', opening: true, edge: WINDOW });
       expectDrawerMove(await pressAndWatch(page, popOut), { name: 'Customizer closing', from: 'left', opening: false, edge: WINDOW });
       expectDrawerMove(await pressAndWatch(page, settings), { name: 'Preview Settings opening', from: 'top', opening: true, edge: header });

@@ -311,7 +311,7 @@ const _HFM_NO_GRAPHICS_SENTENCE =
 // the preview's status line, and each change is spoken on its own.
 const _HFM_PAN_ADJUST_NAME = 'Adjust the Alt View with the pan arrows';
 const _HFM_PAN_ADJUST_ON_SENTENCE =
-  'Pan arrows now adjust the Alt View: up and down for edges, left and right for size, Shift with up and down for glow.';
+  'Pan arrows now adjust the Alt View: up and down for edges, left and right for focus, Shift with up and down for glow.';
 const _HFM_PAN_ADJUST_OFF_SENTENCE = 'Pan arrows move the view again.';
 
 // The character sizes a person steps through from the status strip. The
@@ -571,7 +571,7 @@ function _updateHfmStatusBar() {
   } else {
     const edge = _formatPercent(_hfmContrastScale);
     const size = _formatPercent(_hfmFontScale);
-    const sizeWord = _hfmIsVector() ? 'LINES' : 'SIZE';
+    const sizeWord = _hfmIsVector() ? 'LINES' : 'FOCUS';
     const glow = _formatPercent(_prefersReducedMotion() ? 0 : _hfmPersistFade);
     displayText = `[ALT VIEW] EDGE ${edge} \u00B7 ${sizeWord} ${size} \u00B7 GLOW ${glow}`;
   }
@@ -686,15 +686,15 @@ function _hfmIsVector(scale = _hfmFontScale) {
 }
 
 /**
- * What a size is called aloud: "Characters 60%", or under 40% "Vector
- * lines, 35%".
+ * What a size is called aloud: "Focus 60%", or under 40% "Vector lines,
+ * 35%".
  * @param {number} scale
  * @returns {string}
  */
 function _hfmSizeWords(scale) {
   return _hfmIsVector(scale)
     ? `Vector lines, ${_formatPercent(scale)}`
-    : `Characters ${_formatPercent(scale)}`;
+    : `Focus ${_formatPercent(scale)}`;
 }
 
 /**
@@ -1066,7 +1066,7 @@ function _initHfmFontScaleControls() {
   if (_hfmFontScaleControls) return _hfmFontScaleControls;
   _hfmFontScaleControls = _buildHfmSliderControls({
     idBase: '_hfmFontScale',
-    titleText: 'Characters',
+    titleText: 'Focus',
     range: _HFM_FONT_SCALE_RANGE,
     getValue: () => _hfmFontScale,
     onInput: (value) => _applyHfmFontScale(value),
@@ -1108,7 +1108,7 @@ function _initHfmSurfaceControls() {
     range: _HFM_SURFACE_RANGE,
     getValue: () => _hfmSurfaceOpacity,
     onInput: (value) => _applyHfmSurfaceOpacity(value),
-    note: 'Below 40% Characters: how solid the faces under the lines are.',
+    note: 'Below 40% Focus: how solid the faces under the lines are.',
   });
   return _hfmSurfaceControls;
 }

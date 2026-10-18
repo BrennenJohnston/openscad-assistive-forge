@@ -857,7 +857,7 @@ function readPhoneDrawer() {
   };
 }
 
-/** The open ASCII drawer and the bar it opens from, read in the page. */
+/** The open Lens drawer and the bar it opens from, read in the page. */
 function readAsciiDrawer() {
   const box = (el) => el.getBoundingClientRect();
   const shown = (el) => !!el && el.checkVisibility() && box(el).width > 0;
@@ -930,11 +930,11 @@ for (const height of [915, 810]) {
         expect.soft(m.lone, 'S8: buttons alone on a row').toEqual([]);
         if (!look.altView) {
           expect
-            .soft(m.asciiToggle, 'no ASCII drawer outside the Alt View')
+            .soft(m.asciiToggle, 'no Lens drawer outside the Alt View')
             .toBe(false);
           return;
         }
-        // The Alt View's own controls: off the preview, in the ASCII drawer
+        // The Alt View's own controls: off the preview, in the Lens drawer
         // at the left of the bar, which opens into the camera drawer's space
         // and closes the camera drawer first.
         expect
@@ -950,8 +950,8 @@ for (const height of [915, 810]) {
         );
         await page.waitForTimeout(300);
         const a = await page.evaluate(readAsciiDrawer);
-        expect.soft(a.leftOfCamera, 'ASCII at the left of Camera').toBe(true);
-        expect.soft(a.small, 'ASCII drawer buttons under 44 px').toEqual([]);
+        expect.soft(a.leftOfCamera, 'Lens at the left of Camera').toBe(true);
+        expect.soft(a.small, 'Lens drawer buttons under 44 px').toEqual([]);
       });
 
       test('S6: each drawer as tall as its controls, in and out of Full Screen', async ({
@@ -962,7 +962,7 @@ for (const height of [915, 810]) {
         await openPhoneCameraDrawer(page, look);
         const drawers = [['camera', '#cameraDrawerToggle', 'cameraDrawerBody']];
         if (look.altView) {
-          drawers.push(['ASCII', '#asciiDrawerToggle', 'asciiDrawerBody']);
+          drawers.push(['Lens', '#asciiDrawerToggle', 'asciiDrawerBody']);
         }
         const openDrawer = async (selector) => {
           const toggle = page.locator(selector);
@@ -1045,7 +1045,7 @@ for (const height of [915, 810]) {
       });
 
       if (look.altView) {
-        test('S5: the ASCII drawer holds the four sliders only', async ({
+        test('S5: the Lens drawer holds the four sliders only', async ({
           page,
         }) => {
           expectRule('S5-ascii');
@@ -1077,7 +1077,7 @@ for (const height of [915, 810]) {
           expect
             .soft(
               m.sliders.length,
-              `Edges, Characters, Glow and Surfaces (${m.sliders})`
+              `Edges, Focus, Glow and Surfaces (${m.sliders})`
             )
             .toBe(4);
           expect.soft(m.others, 'nothing but the sliders').toEqual([]);

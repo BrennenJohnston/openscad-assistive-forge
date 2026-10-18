@@ -18,11 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   controller, shows its buttons for Xbox, PlayStation, Nintendo or generic
   layouts, offers two presets, and lets each action take the button you
   press.
-- Under 40% Characters, the Alt View draws the model as lines, bold at 35%
+- Under 40% Focus, the Alt View draws the model as lines, bold at 35%
   and the thinnest at 0%: its creases, its outline, and its rounded parts
   as a dimmer wireframe, with a Surfaces slider for how solid the faces
-  under them are; Characters goes up to 170%, where the characters stop
-  growing, and a phone starts at 45%.
+  under them are; Focus goes up to 170%, where the characters stop
+  growing, and a phone starts at 45%. The Characters slider is Focus now, and
+  the ASCII drawer and group are Lens, since they shape lines as well as
+  characters.
 - The Alt View has a sounds button beside its key, the same setting as Play
   sounds. In the look the 3D view ticks as it is turned, tilted or zoomed,
   by hand or by its camera buttons, a drawer unlatches, rolls and meets its
@@ -67,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every look (in the Alt View a hovered icon was black on a dark ground), and
   a tap on a touch screen no longer leaves a button looking hovered.
 - In Classic, the Alt View's sliders have a place: the 3D view toolbar's
-  ASCII settings button opens them in Viewport-Control, or at the foot of the
+  Lens settings button opens them in Viewport-Control, or at the foot of the
   Customizer in the Simplified view.
 
 ## [5.6.0] - 2026-10-15

@@ -743,7 +743,7 @@ test.describe('The bottom bar toggles say their name once', () => {
     await nameOnly(page, 'cameraDrawerToggle', 'camera controls');
   });
 
-  test('ASCII, in the Alt View: a name and no description, before and after a press', async ({
+  test('Lens, in the Alt View: a name and no description, before and after a press', async ({
     page,
   }) => {
     test.setTimeout(WASM_READY_TIMEOUT + 60_000);
@@ -763,6 +763,6 @@ test.describe('The bottom bar toggles say their name once', () => {
         )
       )
       .toBe('mono');
-    await nameOnly(page, 'asciiDrawerToggle', 'ASCII controls');
+    await nameOnly(page, 'asciiDrawerToggle', 'Lens controls');
   });
 });

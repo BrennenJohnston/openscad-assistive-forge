@@ -2044,7 +2044,7 @@ test.describe('Classic 3D view toolbar', () => {
     expect(names).toEqual(ORDER);
     // The Alt View's own button waits hidden for the look.
     await expect(
-      bar.getByRole('button', { name: 'ASCII settings', exact: true })
+      bar.getByRole('button', { name: 'Lens settings', exact: true })
     ).toBeHidden();
 
     // It sits along the bottom edge of the 3D view, above the strip
@@ -3235,11 +3235,11 @@ test.describe('Classic in the Alt View', () => {
 });
 
 // Classic has no camera panel, so in the Alt View its four sliders live in
-// Classic's own places: an ASCII group in Viewport-Control, or at the foot
+// Classic's own places: a Lens group in Viewport-Control, or at the foot
 // of the Customizer in the Simplified view, which has no Viewport-Control.
-// The 3D view toolbar's ASCII settings button takes you to them.
+// The 3D view toolbar's Lens settings button takes you to them.
 test.describe('The Alt View sliders in Classic', () => {
-  const SLIDERS = ['Edges', 'Characters', 'Glow', 'Surfaces'];
+  const SLIDERS = ['Edges', 'Focus', 'Glow', 'Surfaces'];
 
   async function turnOnTheLook(page) {
     await skipWithoutWebGL(
@@ -3251,7 +3251,7 @@ test.describe('The Alt View sliders in Classic', () => {
     await drawersBack(page);
   }
 
-  test('Standard: the toolbar button opens Viewport-Control on its ASCII group and the four sliders; out of the look neither shows', async ({
+  test('Standard: the toolbar button opens Viewport-Control on its Lens group and the four sliders; out of the look neither shows', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -3265,7 +3265,7 @@ test.describe('The Alt View sliders in Classic', () => {
     await expect(page.locator('body')).toHaveAttribute('data-classic-density', 'standard');
     const button = page
       .locator('#classicCameraBar')
-      .getByRole('button', { name: 'ASCII settings', exact: true });
+      .getByRole('button', { name: 'Lens settings', exact: true });
     await expect(button).toBeHidden();
 
     await turnOnTheLook(page);
@@ -3274,7 +3274,7 @@ test.describe('The Alt View sliders in Classic', () => {
     await expect(panel).toBeHidden();
     await button.click();
     await expect(panel).toBeVisible();
-    const group = panel.getByRole('group', { name: 'ASCII', exact: true });
+    const group = panel.getByRole('group', { name: 'Lens', exact: true });
     await expect(group).toBeVisible();
     await expect(group.getByRole('slider')).toHaveCount(4);
     for (const name of SLIDERS) {
@@ -3283,7 +3283,7 @@ test.describe('The Alt View sliders in Classic', () => {
     await expect(group.getByRole('slider', { name: 'Edges', exact: true })).toBeFocused();
 
     // The same sliders as everywhere else: one value, one source.
-    await group.getByRole('slider', { name: 'Characters', exact: true }).evaluate((el) => {
+    await group.getByRole('slider', { name: 'Focus', exact: true }).evaluate((el) => {
       el.value = '0.4';
       el.dispatchEvent(new Event('input', { bubbles: true }));
     });
@@ -3302,7 +3302,7 @@ test.describe('The Alt View sliders in Classic', () => {
     await expect(group).toBeHidden();
   });
 
-  test('Simplified: the toolbar button opens the Customizer on the ASCII group at its foot', async ({
+  test('Simplified: the toolbar button opens the Customizer on the Lens group at its foot', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -3320,10 +3320,10 @@ test.describe('The Alt View sliders in Classic', () => {
     await expect(customizer).toBeHidden();
     await page
       .locator('#classicCameraBar')
-      .getByRole('button', { name: 'ASCII settings', exact: true })
+      .getByRole('button', { name: 'Lens settings', exact: true })
       .click();
     await expect(customizer).toBeVisible();
-    const group = customizer.getByRole('group', { name: 'ASCII', exact: true });
+    const group = customizer.getByRole('group', { name: 'Lens', exact: true });
     await expect(group).toBeVisible();
     await expect(group.getByRole('slider')).toHaveCount(4);
     for (const name of SLIDERS) {

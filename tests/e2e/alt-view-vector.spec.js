@@ -1,5 +1,5 @@
 /**
- * The Alt View's vector look: below 40% on the Characters slider the model is
+ * The Alt View's vector look: below 40% on the Focus slider the model is
  * drawn as its edges in lines of the look's color, in place of characters.
  * The line widens with the size and 0% still draws; the faces stay dark
  * until the Surfaces slider fills them; the green look glows and keeps a
@@ -213,7 +213,7 @@ test.describe('The vector look', () => {
     const size = page.locator('#_hfmFontScale');
 
     await slide(page, '_hfmFontScale', 0.4);
-    await expect(strip).toContainText('SIZE 40%');
+    await expect(strip).toContainText('FOCUS 40%');
     await expect(size).toHaveAttribute('aria-valuetext', '40%');
     const characters = await readScreen(page, 'characters');
 
