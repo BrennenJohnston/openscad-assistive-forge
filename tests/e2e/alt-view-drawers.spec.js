@@ -319,6 +319,42 @@ test.describe('Drawers in the Alt View', () => {
     expectTodaysMotion(await pressAndWatch(page, settings), { name: 'Preview Settings under reduced motion', ms: 0 });
   });
 
+  test('desktop: the Lens drawer, open in the look, leaves with Classic and comes back with Standard', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await openBox(page);
+    await setLook(page);
+    const drawer = page.locator('#lensDrawer');
+    const toggle = page.locator('#lensDrawerToggle');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(drawer).toBeVisible();
+    await expect(drawer.locator('input').first()).toBeVisible();
+
+    // Classic has no actions bar and no Lens toggle: the drawer goes with
+    // them, and nothing of it lies over the view.
+    const classic = page.locator('#classicModeToggle');
+    await classic.click();
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+    await expect(page.locator('html')).toHaveAttribute('data-ui-variant', 'mono');
+    await expect(drawer).toBeHidden();
+    const over = await page.evaluate(() => {
+      const box = document.getElementById('lensDrawer')?.getBoundingClientRect();
+      return box ? box.width * box.height : 0;
+    });
+    expect(over, 'no area of the drawer over the view').toBe(0);
+
+    // Back in Standard the drawer is where it was left: open, its toggle
+    // saying so.
+    await classic.click();
+    await expect(page.locator('body')).not.toHaveAttribute('data-ui-mode', 'classic');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(drawer).toBeVisible();
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  });
+
   test.describe('on a phone', () => {
     // No isMobile: Firefox rejects it when the browser context is created.
     test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });

@@ -60,6 +60,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The desktop Lens drawer, open in the Alt View, leaves with the switch to
+  Classic (which holds the sliders in Viewport-Control) and comes back open
+  with the switch out of it; it no longer lies over Classic's 3D view with
+  no button to close it.
 - In Classic, the Alt View's DOS look has cursors of its own, in its
   yellow; the green look's no longer follow it in.
 - In the Alt View, auto-rotate ticks as the view turns, as a drag does.

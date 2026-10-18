@@ -1912,6 +1912,9 @@ body[data-ui-mode='classic'] #featuresGuideBtn,
 /* Custom actions bar: toolbar Preview/Render + Design menu; downloads via
    File > Export */
 body[data-ui-mode='classic'] #actionsBar,
+/* The Lens drawer rises from that bar; Classic holds the Alt View's sliders
+   in Viewport-Control instead */
+body[data-ui-mode='classic'] #lensDrawer,
 /* Preview settings drawer — stats go to the status bar; quality and
    friends live under View > Preview Quality */
 body[data-ui-mode='classic'] #previewInfoSection,
