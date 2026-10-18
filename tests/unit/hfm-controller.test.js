@@ -892,7 +892,70 @@ describe('the Alt View is heard', () => {
     controller.disableAltViewWithPreview(toggle)
   })
 
-  it('a move a pan button, a view or View All made plays no camera tick; the arrow keys on the preview and a controller stick do', async () => {
+  it("the view ticks a lead screw's step for every 5 % of its distance it is panned across or up by hand, right and up higher, left and down lower", async () => {
+    pageWithHeaderAndDpad()
+    clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const pm = previewManagerStub()
+    const { controls, place } = viewWithControls(pm)
+    const controller = await freshController(pm)
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    place(0, 20)
+    // The camera 100 away at turn 0, tilt 20: its right is +y and its up
+    // leans back from +z by the tilt. A pan moves the camera and what it
+    // looks at together.
+    const camera = pm.getActiveCamera()
+    const e = (20 * Math.PI) / 180
+    const right = new Vector3(0, 1, 0)
+    const up = new Vector3(-Math.sin(e), 0, Math.cos(e))
+    const pan = (axis, by) => {
+      const step = axis.clone().multiplyScalar(by)
+      controls.target.add(step)
+      camera.position.add(step)
+      controls.fire('change')
+    }
+
+    // A drag across, 12 units right a unit a frame: a tick at 5 and at 10
+    // (5 % of 100 each), right's way.
+    controls.fire('start')
+    for (let n = 1; n <= 12; n++) {
+      clock += 20
+      pan(right, 1)
+    }
+    controls.fire('end')
+    expect(await cameraAsked()).toEqual(['pan', 'pan'])
+    expect(await cameraWays(), 'panned right').toEqual([1, 1])
+
+    // Back left the same 12: a step and a little more before the first
+    // tick, then a tick a step, left's way.
+    controls.fire('start')
+    for (let n = 1; n <= 12; n++) {
+      clock += 20
+      pan(right, -1)
+    }
+    controls.fire('end')
+    expect((await cameraAsked()).slice(2)).toEqual(['pan', 'pan'])
+    expect((await cameraWays()).slice(2), 'panned left').toEqual([-1, -1])
+
+    // Up 10: two ticks, up's way.
+    controls.fire('start')
+    for (let n = 1; n <= 10; n++) {
+      clock += 20
+      pan(up, 1)
+    }
+    controls.fire('end')
+    expect((await cameraAsked()).slice(4)).toEqual(['pan', 'pan'])
+    expect((await cameraWays()).slice(4), 'panned up').toEqual([1, 1])
+
+    // A pan the page makes, with nothing dragged: silent.
+    clock += 2000
+    pan(right, 20)
+    expect(await cameraAsked(), 'a pan nobody made').toHaveLength(6)
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it("a pan button plays the view's pan tick for its move; a view or View All plays no camera tick; the arrow keys on the preview and a controller stick tick", async () => {
     pageWithHeaderAndDpad()
     clock = 0
     vi.spyOn(performance, 'now').mockImplementation(() => clock)
@@ -907,7 +970,8 @@ describe('the Alt View is heard', () => {
     await controller.enableAltViewWithPreview(document.createElement('button'))
     place(0, 20)
 
-    // A pan button pressed: its move is the button's, heard as its key.
+    // A pan button pressed: its move is the button's, heard as the pan
+    // tick, up's way, and no key.
     clock += 100
     press(pan, 'pointerdown')
     place(45, 20)
@@ -915,11 +979,14 @@ describe('the Alt View is heard', () => {
     pan.click()
     clock += 100
     place(90, 20)
+    expect(await cameraAsked(), 'the pan button').toEqual(['pan'])
+    expect(await cameraWays(), "up's way").toEqual([1])
+    expect(await keysAsked(), 'no key for it').toEqual([])
     // A view chosen from a menu or a shortcut: no drag, no tick.
     clock += 100
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '4', ctrlKey: true, bubbles: true }))
     place(180, -30)
-    expect(await cameraAsked(), 'buttons, views and View All').toEqual([])
+    expect(await cameraAsked(), 'views and View All').toEqual(['pan'])
 
     // The arrow keys on the focused preview turn it directly.
     container.focus()
@@ -928,7 +995,7 @@ describe('the Alt View is heard', () => {
       container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
       place(180 + n * 15, -30)
     }
-    expect(await cameraAsked(), 'the arrow keys').toEqual(['turn', 'turn', 'turn'])
+    expect((await cameraAsked()).slice(1), 'the arrow keys').toEqual(['turn', 'turn', 'turn'])
 
     // A controller's stick pushed past its dead zone turns it directly too.
     const hadGamepads = navigator.getGamepads
@@ -941,7 +1008,7 @@ describe('the Alt View is heard', () => {
       document.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
       clock += 100
       place(240, -30)
-      expect((await cameraAsked()).slice(3), 'a stick').toEqual(['turn'])
+      expect((await cameraAsked()).slice(4), 'a stick').toEqual(['turn'])
     } finally {
       navigator.getGamepads = hadGamepads
     }
@@ -952,7 +1019,7 @@ describe('the Alt View is heard', () => {
     clock += 100
     container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
     place(300, -30)
-    expect(await cameraAsked(), 'sounds off').toHaveLength(4)
+    expect(await cameraAsked(), 'sounds off').toHaveLength(5)
     controller.disableAltViewWithPreview(document.createElement('button'))
   })
 

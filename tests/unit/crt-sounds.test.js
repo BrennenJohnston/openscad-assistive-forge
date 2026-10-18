@@ -147,7 +147,7 @@ function fakeParam(value) {
 
 // The 3D view's ticks: a lens detent, a bearing and a ratchet, one file each.
 const CAMERA_DIR = join(SOUNDS_DIR, 'camera');
-const CAMERA_FILES = ['zoom.wav', 'turn.wav', 'tilt.wav'];
+const CAMERA_FILES = ['zoom.wav', 'turn.wav', 'tilt.wav', 'pan.wav'];
 
 describe('the camera tick files', () => {
   it.each(CAMERA_FILES)(
@@ -167,7 +167,7 @@ describe('the camera tick files', () => {
     }
   );
 
-  it('the three weigh under 40 KB together', () => {
+  it('the four weigh under 40 KB together', () => {
     const total = CAMERA_FILES.reduce((n, f) => n + statSync(join(CAMERA_DIR, f)).size, 0);
     expect(total).toBeGreaterThan(0);
     expect(total).toBeLessThan(40_000);
@@ -618,7 +618,7 @@ describe('playing a switch sound', () => {
     expect(() => duck('hum', 8, 150)).toThrow('No such sound group: hum');
   });
 
-  it('plays a camera tick by its kind in the camera group, which it does not lower itself; the turn 12 dB under the zoom, the tilt 7', async () => {
+  it('plays a camera tick by its kind in the camera group, which it does not lower itself; the turn 12 dB under the zoom, the tilt 7, the pan 17', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
     const { playCameraSound, preloadCameraSounds, soundGroup } = await load();
     const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
@@ -626,17 +626,22 @@ describe('playing a switch sound', () => {
     expect(urls()).toEqual(['/sounds/camera/turn.wav']);
     await playCameraSound('tilt');
     await playCameraSound('zoom');
-    expect(urls().slice(1)).toEqual(['/sounds/camera/tilt.wav', '/sounds/camera/zoom.wav']);
-    for (const [n, level] of [db(-12), db(-7), db(0)].entries()) {
+    await playCameraSound('pan');
+    expect(urls().slice(1)).toEqual([
+      '/sounds/camera/tilt.wav',
+      '/sounds/camera/zoom.wav',
+      '/sounds/camera/pan.wav',
+    ]);
+    for (const [n, level] of [db(-12), db(-7), db(0), db(-17)].entries()) {
       expect(sources[n].connectedTo.connectedTo, 'its level, then the group').toBe(
         soundGroup('camera')
       );
       expect(sources[n].connectedTo.gain.value, `tick ${n}'s level`).toBeCloseTo(level, 6);
     }
     expect(soundGroup('camera').gain.calls, 'a tick does not duck its own group').toEqual([]);
-    await expect(playCameraSound('pan')).rejects.toThrow('No such camera sound: pan');
+    await expect(playCameraSound('dolly')).rejects.toThrow('No such camera sound: dolly');
     preloadCameraSounds();
-    expect(globalThis.fetch, 'the three fetched once').toHaveBeenCalledTimes(3);
+    expect(globalThis.fetch, 'the four fetched once').toHaveBeenCalledTimes(4);
     vi.restoreAllMocks();
   });
 

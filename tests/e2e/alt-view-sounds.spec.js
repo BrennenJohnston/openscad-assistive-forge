@@ -20,12 +20,13 @@ import { drawersBack } from './helpers/alt-view.js';
 test.describe.configure({ timeout: 240_000 });
 
 const WASM_READY_TIMEOUT = 180_000;
-// The 3D view's three ticks, in seconds, as public/sounds/camera/ holds
+// The 3D view's four ticks, in seconds, as public/sounds/camera/ holds
 // them. The browser decodes at its own rate, so a played tick is known by
 // its length to a few milliseconds (a key is 160 ms).
 const TURN_SECONDS = 0.102;
 const TILT_SECONDS = 0.03;
 const ZOOM_SECONDS = 0.018;
+const PAN_SECONDS = 0.12;
 const oneTick = (heard, seconds) =>
   heard.length === 1 && Math.abs(heard[0] - seconds) < 0.005;
 // The drawer's parts, in seconds, as public/sounds/drawers/ holds them.
@@ -298,7 +299,7 @@ test.describe('The sounds button', () => {
     expect(await page.evaluate(() => window.__sounds.length), 'one key').toBe(1);
   });
 
-  test("a drag of the view ticks as it turns, without sawing; a camera button that turns, tilts or zooms ticks as the view, a pan button is a key", async ({
+  test("a drag of the view ticks as it turns, without sawing; a camera button that turns, tilts, zooms or pans ticks as the view", async ({
     page,
   }) => {
     await listenForSound(page);
@@ -336,7 +337,7 @@ test.describe('The sounds button', () => {
     );
 
     // Each camera button pressed: the view's own tick for its move and no
-    // key, by the tick's length; a pan button has no tick and is a key.
+    // key, by the tick's length; a pan button the lead screw's step.
     const lengths = () => page.evaluate(() => window.__sounds.map((s) => s.seconds));
     const heard = async (id) => {
       await page.waitForTimeout(500);
@@ -351,7 +352,8 @@ test.describe('The sounds button', () => {
     expect(oneTick(down, TILT_SECONDS), `rotate down, the tilt: ${down}`).toBe(true);
     const zoom = await heard('cameraZoomIn');
     expect(oneTick(zoom, ZOOM_SECONDS), `zoom in, the zoom: ${zoom}`).toBe(true);
-    expect(await heard('cameraPanLeft'), 'pan left: its key, down and up').toHaveLength(2);
+    const pan = await heard('cameraPanLeft');
+    expect(oneTick(pan, PAN_SECONDS), `pan left, the pan: ${pan}`).toBe(true);
   });
 
   test("in Classic the 3D view toolbar's zoom buttons tick as the view's zoom", async ({

@@ -449,12 +449,24 @@ copyc4t: https://freesound.org/s/275958/
 
 ---
 
-## View Ticks (CC-BY-3.0, CC0-1.0)
+## View Ticks (CC-BY-3.0, CC-BY-4.0, CC0-1.0)
 
-While the Alt View is on, turning, tilting or zooming the 3D view by hand
-ticks quietly, one sound for each, under `public/sounds/camera/`. Each is one
-event cut from a recording on Freesound, resampled to 32 kHz mono and
+While the Alt View is on, turning, tilting, zooming or panning the 3D view by
+hand ticks quietly, one sound for each, under `public/sounds/camera/`. Each is
+one event cut from a recording on Freesound, resampled to 32 kHz mono and
 levelled:
+
+### High speed linear module (CC-BY-4.0)
+
+The pan's tick, `pan.wav`, is cut from "High speed linear module steppermotor
+servo sound" by Artninja: https://freesound.org/s/705184/
+
+- **Author**: Artninja
+- **License**: Creative Commons Attribution 4.0 International,
+  https://creativecommons.org/licenses/by/4.0/
+- **Changes**: the first 120 ms of one move cut out (the motor's run-up and
+  the start of its run, with short fades), its top end softened, resampled
+  to 32 kHz mono, levelled.
 
 ### declicking aperture (CC-BY-3.0)
 

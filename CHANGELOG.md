@@ -28,12 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the left of the Generate button's row; the stepper and level buttons beside the
   status line are gone, and the camera panel holds no sliders.
 - The Alt View has a sounds button beside its key, the same setting as Play
-  sounds. In the look the 3D view ticks as it is turned, tilted or zoomed,
-  by hand or by its camera buttons, a drawer unlatches, rolls and meets its
-  stop with a thump, checkboxes and switches flip like a lever, scrolling
-  ticks a line at a time like a typewriter's roller, and lists, menus and
-  typing each have theirs. Preferences > Advanced turns each kind off on
-  its own.
+  sounds. In the look the 3D view ticks as it is turned, tilted, zoomed or
+  panned, by hand or by its camera buttons, a drawer unlatches, rolls and
+  meets its stop with a thump, checkboxes and switches flip like a lever,
+  scrolling ticks a line at a time like a typewriter's roller, and lists,
+  menus and typing each have theirs. Preferences > Advanced turns each kind
+  off on its own.
 
 ### Changed
 

@@ -60,17 +60,21 @@ const DIAL_VARIANTS = 7;
 // itself exactly.
 const DIAL_STRAY_CENTS = 10;
 // The 3D view's ticks, the same in every look: a lens detent for a zoom
-// step, a bearing for a turn, a ratchet for a tilt.
+// step, a bearing for a turn, a ratchet for a tilt, a lead screw's step for
+// a pan (the stage moved across or up).
 const CAMERA_FILES = {
   zoom: '/sounds/camera/zoom.wav',
   turn: '/sounds/camera/turn.wav',
   tilt: '/sounds/camera/tilt.wav',
+  pan: '/sounds/camera/pan.wav',
 };
 // Each tick's level in the camera group, set so the ear hears the lens
 // detent first, the ratchet a shade under it, and the bearing, the one
 // heard most as a drag goes round, under both (the files differ in length
-// and brightness, so the numbers alone are not that order).
-const CAMERA_LEVELS_DB = { zoom: 0, turn: -12, tilt: -7 };
+// and brightness, so the numbers alone are not that order). The lead
+// screw's step, a sustained 120 ms, sits at the ratchet's level as the ear
+// weighs it, 10 dB under the ratchet's number.
+const CAMERA_LEVELS_DB = { zoom: 0, turn: -12, tilt: -7, pan: -17 };
 // Each tick tells its way, left, down and out a little lower and right, up
 // and in a little higher (in cents), and strays a little in pitch and level,
 // so a run of them does not wear.
@@ -499,9 +503,9 @@ const _stray = () => Math.random() * 2 - 1;
  * Play one of the 3D view's ticks in the camera group, which keys and dial
  * clicks lower for a moment, through a level of its own. A tick tells its
  * way by its pitch and strays a little in pitch and level.
- * @param {'zoom'|'turn'|'tilt'} kind
+ * @param {'zoom'|'turn'|'tilt'|'pan'} kind
  * @param {{way?: -1|0|1}} [how] - way: left, down or out (-1); right, up
- *   or in (1)
+ *   or in (1); a pan left or down (-1), right or up (1)
  * @returns {Promise<number>} The tick's length in seconds once it has begun
  */
 export async function playCameraSound(kind, { way = 0 } = {}) {
