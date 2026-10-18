@@ -50,6 +50,31 @@ const SETTLE = 0.02;
 const running = new WeakMap();
 
 /**
+ * Told of each drawer that opens or closes by the name it goes by, whether
+ * it slides or changes at once because less motion was asked for (the
+ * look's sounds), but not of one laid out at once (`instant`).
+ * @type {((name: string, open: boolean, share: number) => void)|null}
+ */
+let movesHeard = null;
+
+/**
+ * @param {((name: string, open: boolean, share: number) => void)|null} listener
+ *   - share: how much of the drawer's way the move covers, 0.2 to 1
+ */
+export function onDrawerMove(listener) {
+  movesHeard = listener;
+}
+
+/**
+ * A drawer that opened or closed without a slide of its own to say so.
+ * @param {string|undefined} name - none: nothing is told
+ * @param {boolean} open
+ */
+export function drawerChanged(name, open) {
+  if (name) movesHeard?.(name, open, 1);
+}
+
+/**
  * Each moving element's part as its slide began: a drawer turned round in
  * mid-slide keeps those sizes, since a box measured mid-slide reports the
  * size the slide has given it, not its own.
@@ -264,6 +289,8 @@ export function restingRect(el) {
  *   changing under the drawer)
  * @param {number} [options.travel] - px a moving part travels, when neither
  *   its own size nor a width or height room says (a grid track's growth)
+ * @param {string} [options.name] - the drawer's name, for the look to hear
+ *   it move; a room that follows a drawer has none
  * @returns {Promise<boolean>|null} null when nothing moves; else true once
  *   the slide has ended, false when another press turned it round
  */
@@ -277,6 +304,7 @@ export function slideDrawer(
     inert = [],
     instant = false,
     travel: given,
+    name,
   }
 ) {
   const present = parts
@@ -302,17 +330,18 @@ export function slideDrawer(
         : 1;
   present.forEach((part) => stop(part.el));
 
-  const pace = instant ? null : drawerPace();
   const still = lead
     ? travel <= 0
     : !room || Object.values(room.props ?? {}).every(sameSizes);
+  const toP = open ? 1 : 0;
+  const share = Math.max(0.2, Math.abs(toP - fromP));
+  if (name && !instant && !still) movesHeard?.(name, open, share);
+  const pace = instant ? null : drawerPace();
   if (!pace || still) {
     if (!open) whenClosed?.();
     return null;
   }
 
-  const toP = open ? 1 : 0;
-  const share = Math.max(0.2, Math.abs(toP - fromP));
   const duration = (open ? pace.open : pace.close) * share;
   const animations = present.map((part) =>
     part.el.animate(keyframesFor(part, from, travel, fromP, toP, pace.ease), {

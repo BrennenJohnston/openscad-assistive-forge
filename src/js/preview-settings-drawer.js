@@ -127,7 +127,12 @@ export function initPreviewSettingsDrawer(options = {}) {
     if (options.onResize) {
       requestAnimationFrame(() => options.onResize());
     }
-    return slideDrawer(slideParts(), { from: 'top', open: true, instant });
+    return slideDrawer(slideParts(), {
+      from: 'top',
+      open: true,
+      instant,
+      name: 'preview-settings',
+    });
   };
 
   /**
@@ -143,6 +148,7 @@ export function initPreviewSettingsDrawer(options = {}) {
       from: 'top',
       open: false,
       instant,
+      name: 'preview-settings',
       inert: [content],
       whenClosed: () => {
         if (isExpanded) return;

@@ -15,19 +15,28 @@ import {
 import { announce, announceImmediate } from './announcer.js';
 import { playUnlockJingle } from './unlock-jingle.js';
 import {
+  playControlSound,
   playCrtSound,
   playDialSound,
   playCameraSound,
+  playDrawerSound,
   playKeySound,
+  playTypingSound,
   preloadCameraSounds,
+  preloadControlSounds,
   preloadCrtSounds,
   preloadDialSounds,
+  preloadDrawerSounds,
   preloadKeySounds,
   setMuted,
   stopCrtSound,
 } from './crt-sounds.js';
 import { closePhoneDrawer } from './phone-drawers.js';
-import { openLookDrawers, setLookDrawer } from './drawer-motion.js';
+import {
+  onDrawerMove,
+  openLookDrawers,
+  setLookDrawer,
+} from './drawer-motion.js';
 
 // ---------------------------------------------------------------------------
 // HFM / Alt View state (module-level singleton)
@@ -90,9 +99,63 @@ let _hfmMomentTimer = null;
 // band edges in CSS px squared, from a letter key to the space bar.
 const _HFM_KEY_BANDS_PX2 = [1000, 1600, 2500, 4000, 7000, 12000];
 const _HFM_KEY_TARGET =
-  'button, [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="tab"], [role="switch"]';
+  'button, summary, a[href], [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="tab"]';
+// A switch, a checkbox or a radio button snaps on and off instead.
+const _HFM_SNAP_TARGET =
+  'input[type="checkbox"], input[type="radio"], [role="switch"], [role="checkbox"], [role="radio"]';
+// A press that came with no press of its own first, a screen reader's in
+// browse mode or a controller's, plays its key's press and release this far
+// apart.
+const _HFM_KEY_TAP_MS = 60;
 let _hfmKeyListeners = null;
 let _hfmKeyDown = null;
+/** The last control a press sounded for, so its click does not sound again. */
+let _hfmKeyHeard = null;
+// Typing into a field is a quiet key per keystroke, at most this many a
+// second; a keystroke that would sound sooner is passed over.
+const _HFM_TYPING_PER_SECOND = 15;
+const _HFM_TYPED_INPUTS = new Set([
+  'text',
+  'search',
+  'url',
+  'email',
+  'tel',
+  'password',
+  'number',
+]);
+let _hfmTypingLastAt = -Infinity;
+/** When each field was last typed into, so a typed number is not a step. */
+const _hfmTypedAt = new WeakMap();
+// A grip moved by hand ticks for every 2 % of the window it travels, at most
+// as often as a dial clicks, at the dial's middle tone.
+const _HFM_GRIP_TARGET = '[role="separator"][tabindex], .gutter';
+const _HFM_GRIP_STEP = 0.02;
+const _HFM_GRIP_TONE = 4;
+let _hfmGrip = null;
+let _hfmGripLastAt = -Infinity;
+// What a latch opens and closes: a dialog or a menu by its aria-hidden, a
+// pop-out list by its hidden.
+const _HFM_LATCH_BY_ARIA_HIDDEN = '[role="dialog"], .toolbar-menu-modal';
+const _HFM_LATCH_BY_HIDDEN = '.camera-shortcuts-panel, [role="menu"]';
+let _hfmLatches = null;
+// The look's drawers by the names they move by, and the drawer each sounds
+// as in its set: the phosphor looks' Customizer, camera, ASCII and Preview
+// Settings, the DOS look's Customizer, editor and console (Classic's fields:
+// the left one the editor's, the right ones the Customizer's).
+const _HFM_DRAWER_SOUNDS = {
+  customizer: 'customizer',
+  'phone-customizer': 'customizer',
+  camera: 'camera',
+  'phone-camera': 'camera',
+  'phone-ascii': 'ascii',
+  'preview-settings': 'preview-settings',
+  'classic-customizer': 'customizer',
+  'classic-right-top': 'customizer',
+  'classic-right-bottom': 'customizer',
+  'classic-editor': 'editor',
+  'classic-left': 'editor',
+  'classic-console': 'console',
+};
 // A slider moved while the look is on clicks as a dial does, its tone by
 // how many steps the slider has: the edges of the seven tones, a slider of
 // eight steps or fewer the lowest, one of more than a hundred the highest.
@@ -1016,13 +1079,153 @@ function _hfmKeyBand(el) {
 }
 
 // The button a press lands on; the look's own key keeps its switch sounds,
-// and the sounds button plays its key only when it turns sounds on.
+// the sounds button plays its key only when it turns sounds on, and a
+// switch snaps instead.
 function _hfmKeyTarget(event) {
-  const el = event.target?.closest?.(_HFM_KEY_TARGET);
-  if (!el || el.id === '_hfmToggle' || el.id === '_hfmSounds' || el.disabled) {
+  const el =
+    event.target?.closest?.(_HFM_KEY_TARGET) ?? _hfmChooserLabel(event.target);
+  if (
+    !el ||
+    el.id === '_hfmToggle' ||
+    el.id === '_hfmSounds' ||
+    el.disabled ||
+    el.matches(_HFM_SNAP_TARGET)
+  ) {
     return null;
   }
   return el;
+}
+
+// A file chooser drawn as a button is a label around its file input; a
+// press on either is the label's key.
+function _hfmChooserLabel(target) {
+  const label =
+    target instanceof HTMLInputElement
+      ? target.labels?.[0]
+      : target?.closest?.('label');
+  const control = label?.control;
+  return control?.type === 'file' && !control.disabled ? label : null;
+}
+
+// A controller's button held down: the press a controller makes is a click.
+function _hfmPadButtonHeld() {
+  for (const pad of navigator.getGamepads?.() ?? []) {
+    if (pad?.buttons?.some((button) => button?.pressed)) return true;
+  }
+  return false;
+}
+
+// A field a keystroke types into.
+function _hfmTypedInto(el) {
+  if (el instanceof HTMLTextAreaElement) return !el.readOnly && !el.disabled;
+  if (el instanceof HTMLInputElement) {
+    return _HFM_TYPED_INPUTS.has(el.type) && !el.readOnly && !el.disabled;
+  }
+  return Boolean(el?.isContentEditable);
+}
+
+// A key that types or edits, not a shortcut, a modifier or a move.
+function _hfmTypes(event) {
+  if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  return (
+    event.key?.length === 1 ||
+    event.key === 'Backspace' ||
+    event.key === 'Delete' ||
+    event.key === 'Enter'
+  );
+}
+
+// A list or a color well: one that opens to be chosen from.
+function _hfmSelector(el) {
+  if (el instanceof HTMLSelectElement) return !el.multiple && el.size <= 1;
+  return el instanceof HTMLInputElement && el.type === 'color';
+}
+
+function _playControlSound(kind) {
+  if (!_soundsOn()) return;
+  playControlSound(kind).catch((error) => {
+    console.warn(`[Alt View] The ${kind} sound did not play:`, error);
+  });
+}
+
+function _playTypingSound() {
+  if (!_soundsOn()) return;
+  playTypingSound(_hfmKeySet()).catch((error) => {
+    console.warn('[Alt View] A typing sound did not play:', error);
+  });
+}
+
+// A drawer the look heard move: its own sound in the look's set.
+function _playDrawerSound(name, open, share) {
+  const drawer = _HFM_DRAWER_SOUNDS[name];
+  if (!drawer || !_soundsOn()) return;
+  playDrawerSound(_hfmKeySet(), drawer, open ? 'open' : 'close', share).catch(
+    (error) => {
+      console.warn(
+        `[Alt View] The ${name} drawer's sound did not play:`,
+        error
+      );
+    }
+  );
+}
+
+// Whether a latch's pop-up shows, by the attribute that hides it.
+function _hfmLatchShown(attr, value) {
+  return attr === 'aria-hidden' ? value === 'false' : value === null;
+}
+
+// A dialog or a menu that opened or closed since the last look: a latch
+// each. The first change an element had in the batch says how it was.
+function _hfmLatchesMoved(records) {
+  const first = new Map();
+  for (const record of records) {
+    const seen = first.get(record.target) ?? new Map();
+    if (!seen.has(record.attributeName)) {
+      seen.set(record.attributeName, record.oldValue);
+    }
+    first.set(record.target, seen);
+  }
+  for (const [el, seen] of first) {
+    for (const [attr, was] of seen) {
+      const latch =
+        attr === 'aria-hidden'
+          ? el.matches(_HFM_LATCH_BY_ARIA_HIDDEN)
+          : el.matches(_HFM_LATCH_BY_HIDDEN);
+      if (!latch) continue;
+      const shown = _hfmLatchShown(attr, el.getAttribute(attr));
+      if (shown === _hfmLatchShown(attr, was)) continue;
+      _playControlSound(shown ? 'latch-open' : 'latch-close');
+    }
+  }
+}
+
+// Where a grip is now.
+function _hfmGripAt(el) {
+  const box = el.getBoundingClientRect();
+  return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+}
+
+// A grip's tick when it has come 2 % of the window or more from the last
+// one, no sooner than a dial's click.
+function _hfmGripMoved(grip, { anyMove = false } = {}) {
+  const at = _hfmGripAt(grip.el);
+  const share = Math.max(
+    Math.abs(at.x - grip.from.x) / Math.max(1, window.innerWidth),
+    Math.abs(at.y - grip.from.y) / Math.max(1, window.innerHeight)
+  );
+  const moved = anyMove ? share > 0 : share >= _HFM_GRIP_STEP - 1e-9;
+  if (!moved) return;
+  grip.from = at;
+  const now = performance.now();
+  if (now - _hfmGripLastAt < 1000 / _HFM_DIAL_CLICKS_PER_SECOND) return;
+  _hfmGripLastAt = now;
+  _playDialSound(_HFM_GRIP_TONE);
+}
+
+function _stopGripWatch() {
+  if (!_hfmGrip) return;
+  cancelAnimationFrame(_hfmGrip.frame);
+  _hfmGrip = null;
 }
 
 function _playKeySound(el, phase) {
@@ -1032,10 +1235,13 @@ function _playKeySound(el, phase) {
   });
 }
 
-// The slider a press or a move lands on.
+// The slider, or the number box stepped by its arrows, a press or a move
+// lands on.
 function _hfmDialTarget(event) {
   const el = event.target;
-  return el instanceof HTMLInputElement && el.type === 'range' && !el.disabled
+  return el instanceof HTMLInputElement &&
+    (el.type === 'range' || el.type === 'number') &&
+    !el.disabled
     ? el
     : null;
 }
@@ -1073,6 +1279,8 @@ function _preloadLookSounds() {
   preloadKeySounds(set);
   preloadDialSounds(set);
   preloadCameraSounds();
+  preloadDrawerSounds(set);
+  preloadControlSounds();
 }
 
 // Where the camera is, seen from what it looks at: its turn and tilt in
@@ -1224,7 +1432,8 @@ function _removeCameraTicks() {
   _hfmCamera = null;
 }
 
-// The keys and the dials: every button and every slider of the look.
+// Every control of the look: the keys and the dials, the switches, the
+// lists, the typing, the grips, the menus and dialogs, and the drawers.
 function _installKeySounds() {
   if (_hfmKeyListeners) return;
   _preloadLookSounds();
@@ -1232,6 +1441,7 @@ function _installKeySounds() {
     const el = _hfmKeyTarget(event);
     if (!el) return;
     _hfmKeyDown = el;
+    _hfmKeyHeard = el;
     _playKeySound(el, 'down');
   };
   const up = () => {
@@ -1244,13 +1454,119 @@ function _installKeySounds() {
   const keydown = (event) => {
     if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
     const el = _hfmKeyTarget(event);
-    if (!el || el !== event.target) return;
+    if (!el || (el !== event.target && el.control !== event.target)) return;
     _hfmKeyDown = el;
+    _hfmKeyHeard = el;
     _playKeySound(el, 'down');
   };
   const keyup = (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     up();
+  };
+  // A click no press of ours came before: a screen reader's Enter in browse
+  // mode, which the page gets as a click alone, or a controller's A button.
+  // Anything else the page clicks for itself stays quiet. A label's click
+  // is passed on to its file input, and the two are one press.
+  const click = (event) => {
+    const el = _hfmKeyTarget(event);
+    if (!el) return;
+    const control = el instanceof HTMLLabelElement ? el.control : null;
+    const passing = control !== null && event.target !== control;
+    if (el === _hfmKeyHeard) {
+      if (!passing) _hfmKeyHeard = null;
+      return;
+    }
+    // A file input another control opens: that control has sounded.
+    if (control && !passing && control !== document.activeElement) return;
+    if (!event.isTrusted && !_hfmPadButtonHeld()) return;
+    if (passing) _hfmKeyHeard = el;
+    _playKeySound(el, 'down');
+    setTimeout(() => _playKeySound(el, 'up'), _HFM_KEY_TAP_MS);
+  };
+  // A checkbox or a radio button snaps once it has changed; a switch or a
+  // radio drawn as a button snaps as it is pressed, by the state it leaves.
+  const snapChange = (event) => {
+    const el = event.target;
+    if (
+      !(el instanceof HTMLInputElement) ||
+      (el.type !== 'checkbox' && el.type !== 'radio')
+    ) {
+      return;
+    }
+    _playControlSound(el.checked ? 'snap-on' : 'snap-off');
+  };
+  const snapClick = (event) => {
+    const el = event.target?.closest?.(
+      '[role="switch"], [role="checkbox"], [role="radio"]'
+    );
+    if (
+      !el ||
+      el instanceof HTMLInputElement ||
+      el.disabled ||
+      el.getAttribute('aria-disabled') === 'true'
+    ) {
+      return;
+    }
+    const on = el.getAttribute('aria-checked') === 'true';
+    // A radio button already chosen does nothing when pressed again.
+    if (on && el.getAttribute('role') === 'radio') return;
+    _playControlSound(on ? 'snap-off' : 'snap-on');
+  };
+  // A list clicks as it opens, by a press or by the keys that open it, and
+  // again as a choice is made.
+  const selectDown = (event) => {
+    if (_hfmSelector(event.target) && !event.target.disabled) {
+      _playControlSound('select-open');
+    }
+  };
+  const selectKey = (event) => {
+    const el = event.target;
+    if (!_hfmSelector(el) || el.disabled) return;
+    const opens =
+      event.key === 'F4' ||
+      (event.altKey &&
+        (event.key === 'ArrowDown' || event.key === 'ArrowUp')) ||
+      event.key === ' ' ||
+      (el instanceof HTMLInputElement && event.key === 'Enter');
+    if (opens && !event.repeat) _playControlSound('select-open');
+  };
+  const selectChange = (event) => {
+    const el = event.target;
+    if (el instanceof HTMLSelectElement || _hfmSelector(el)) {
+      _playControlSound('select-choose');
+    }
+  };
+  // A keystroke in a field: the quiet key.
+  const typing = (event) => {
+    const el = event.target;
+    if (!_hfmTypedInto(el) || !_hfmTypes(event)) return;
+    const now = performance.now();
+    _hfmTypedAt.set(el, now);
+    if (now - _hfmTypingLastAt < 1000 / _HFM_TYPING_PER_SECOND) return;
+    _hfmTypingLastAt = now;
+    _playTypingSound();
+  };
+  // A grip taken hold of: watched each frame until it is let go. Moved by
+  // its keys: a tick for any move a key made.
+  const gripDown = (event) => {
+    const el = event.target?.closest?.(_HFM_GRIP_TARGET);
+    if (!el) return;
+    _stopGripWatch();
+    const grip = { el, from: _hfmGripAt(el), frame: 0 };
+    const watch = () => {
+      _hfmGripMoved(grip);
+      grip.frame = requestAnimationFrame(watch);
+    };
+    grip.frame = requestAnimationFrame(watch);
+    _hfmGrip = grip;
+  };
+  const gripUp = () => _stopGripWatch();
+  const gripKey = (event) => {
+    const el = event.target;
+    if (!(el instanceof Element) || !el.matches(_HFM_GRIP_TARGET)) return;
+    if (!/^(Arrow|Home$|End$|Page)/.test(event.key)) return;
+    const grip = { el, from: _hfmGripAt(el) };
+    requestAnimationFrame(() => _hfmGripMoved(grip, { anyMove: true }));
   };
   // A slider taken hold of, by pointer or key: where it stands, so the
   // first move's steps are counted from there.
@@ -1266,6 +1582,11 @@ function _installKeySounds() {
     if (!el) return;
     const dial = _hfmDial(el);
     const value = Number(el.value);
+    // A number typed into the box was heard as typing.
+    if (performance.now() - (_hfmTypedAt.get(el) ?? -Infinity) < 150) {
+      dial.value = value;
+      return;
+    }
     const step = Number(el.step) || 1;
     const crossed = Number.isFinite(dial.value)
       ? Math.round(Math.abs(value - dial.value) / step)
@@ -1283,13 +1604,32 @@ function _installKeySounds() {
     ['pointercancel', up],
     ['keydown', keydown],
     ['keyup', keyup],
+    ['click', click],
     ['pointerdown', dialDown],
     ['keydown', dialDown],
     ['input', dialInput],
+    ['change', snapChange],
+    ['click', snapClick],
+    ['pointerdown', selectDown],
+    ['keydown', selectKey],
+    ['change', selectChange],
+    ['keydown', typing],
+    ['pointerdown', gripDown],
+    ['pointerup', gripUp],
+    ['pointercancel', gripUp],
+    ['keydown', gripKey],
   ];
   for (const [type, fn] of _hfmKeyListeners) {
     document.addEventListener(type, fn, true);
   }
+  _hfmLatches = new MutationObserver(_hfmLatchesMoved);
+  _hfmLatches.observe(document.body, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['aria-hidden', 'hidden'],
+    attributeOldValue: true,
+  });
+  onDrawerMove(_playDrawerSound);
 }
 
 function _removeKeySounds() {
@@ -1299,7 +1639,14 @@ function _removeKeySounds() {
   }
   _hfmKeyListeners = null;
   _hfmKeyDown = null;
+  _hfmKeyHeard = null;
   _hfmDialLastClickAt = -Infinity;
+  _hfmTypingLastAt = -Infinity;
+  _stopGripWatch();
+  _hfmGripLastAt = -Infinity;
+  _hfmLatches?.disconnect();
+  _hfmLatches = null;
+  onDrawerMove(null);
 }
 
 /** @returns {Promise<void>|null} Settles once the sound has started or failed; null when none plays */

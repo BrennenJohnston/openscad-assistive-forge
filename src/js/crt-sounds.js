@@ -3,13 +3,15 @@
  * going off, each a short recording played whole; the keys, a keyboard's
  * press and release for every button of the look, chosen by the button's
  * size; the dial clicks a slider makes step by step, one click per look at
- * seven speeds; and the 3D view's ticks as it is turned, tilted or zoomed
- * by hand (the recordings and their makers are named in
- * THIRD_PARTY_NOTICES.md). A file is fetched ahead or the first time it is
- * wanted, decoded once and kept. The switch sounds play one at a time, the
- * newest one asked for winning; the keys and the clicks play as pressed,
- * over each other if need be. Every sound passes through its group's level
- * and one master, which the sounds setting silences.
+ * seven speeds; the 3D view's ticks as it is turned, tilted or zoomed by
+ * hand; the drawers sliding open and shut; a switch's snap, a selector's
+ * click, a latch, and a quiet key for typing (the recordings and their
+ * makers are named in THIRD_PARTY_NOTICES.md). A file is fetched ahead or
+ * the first time it is wanted, decoded once and kept. The switch sounds
+ * play one at a time, the newest one asked for winning, and so does each
+ * drawer; the keys and the clicks play as pressed, over each other if need
+ * be. Every sound passes through its group's level and one master, which
+ * the sounds setting silences.
  * @license GPL-3.0-or-later
  */
 
@@ -59,19 +61,45 @@ const CAMERA_FILES = {
   turn: '/sounds/camera/turn.wav',
   tilt: '/sounds/camera/tilt.wav',
 };
+// The drawers, by the look: p (the phosphor looks) a rack drawer on slide
+// rails, d (the DOS look) its own; each drawer an opening and a closing as
+// long as its slide, told apart by pitch and length, the biggest lowest.
+const DRAWER_SETS = {
+  p: ['customizer', 'camera', 'ascii', 'preview-settings'],
+  d: ['customizer', 'editor', 'console'],
+};
+// The other controls' sounds, the same in every look, each in its group: a
+// switch's snap on and off, a selector's click as a list opens and as a
+// choice is made, a latch as a menu or a dialog opens and closes.
+const CONTROL_FILES = {
+  'snap-on': ['/sounds/switches/snap-on.wav', 'snaps'],
+  'snap-off': ['/sounds/switches/snap-off.wav', 'snaps'],
+  'select-open': ['/sounds/switches/select-open.wav', 'selectors'],
+  'select-choose': ['/sounds/switches/select-choose.wav', 'selectors'],
+  'latch-open': ['/sounds/switches/latch-open.wav', 'latches'],
+  'latch-close': ['/sounds/switches/latch-close.wav', 'latches'],
+};
+// A drawer's sound cut short, by a press that turns the drawer round, fades
+// out over this instead of stopping with a click.
+const CUT_FADE_S = 0.015;
 // A browser that has not let the page make sound yet leaves the audio
 // context waiting; past this the sound is given up.
 const START_TIMEOUT_MS = 1000;
 
 // The groups a sound plays in, each at its own level under the master: the
-// camera's sounds 9 dB under the keys, typing a quiet key 12 dB under.
+// camera's sounds 9 dB under the keys, a drawer's slide 6 dB under the key
+// that moved it, typing a quiet key 12 dB under, a latch under the key that
+// opened its menu.
 const GROUP_LEVELS_DB = {
   switch: 0,
   keys: 0,
   dials: 0,
   camera: -9,
-  drawers: 0,
+  drawers: -6,
   typing: -12,
+  snaps: 0,
+  selectors: 0,
+  latches: -3,
 };
 // Muting fades the master out over this, so a sound stops without a click.
 const MUTE_RAMP_S = 0.02;
@@ -90,6 +118,8 @@ let _playing = null;
 let _asked = 0;
 let _armed = false;
 const _turn = new Map();
+/** The sound each drawer is making now, by set and drawer. */
+const _drawerPlaying = new Map();
 
 function _contextClass() {
   return window.AudioContext || window.webkitAudioContext;
@@ -202,8 +232,15 @@ function _holdFrom(param, at) {
 }
 
 // Waits for the context to run, a second at most, then starts the buffer in
-// its group.
-async function _start(context, running, buffer, group) {
+// its group, `offset` seconds in. With `own`, the sound has a level of its
+// own (`source.level`) between it and the group, so it can be faded out.
+async function _start(
+  context,
+  running,
+  buffer,
+  group,
+  { offset = 0, own = false } = {}
+) {
   let timer = null;
   await Promise.race([
     running,
@@ -216,14 +253,29 @@ async function _start(context, running, buffer, group) {
   ]).finally(() => clearTimeout(timer));
   const source = context.createBufferSource();
   source.buffer = buffer;
-  source.connect(_mixerFor(context).groups[group]);
-  source.start();
+  const into = _mixerFor(context).groups[group];
+  if (own) {
+    source.level = context.createGain();
+    source.level.connect(into);
+    source.connect(source.level);
+  } else {
+    source.connect(into);
+  }
+  source.start(0, offset);
   return source;
+}
+
+// Fades a sound with a level of its own out, then stops it.
+function _fadeOut(source, context) {
+  const now = context.currentTime;
+  _holdFrom(source.level.gain, now);
+  source.level.gain.linearRampToValueAtTime(0, now + CUT_FADE_S);
+  source.stop(now + CUT_FADE_S);
 }
 
 /**
  * The gain a group's sounds pass through, or null before the first sound.
- * @param {'switch'|'keys'|'dials'|'camera'|'drawers'|'typing'} name
+ * @param {'switch'|'keys'|'dials'|'camera'|'drawers'|'typing'|'snaps'|'selectors'|'latches'} name
  * @returns {GainNode|null}
  */
 export function soundGroup(name) {
@@ -327,6 +379,38 @@ export function preloadCameraSounds() {
   _fetchAhead(Object.values(CAMERA_FILES), 'camera');
 }
 
+function _drawerUrl(set, drawer, phase) {
+  return `/sounds/drawers/${set}-${drawer}-${phase}.wav`;
+}
+
+function _checkDrawer(set, drawer) {
+  if (!DRAWER_SETS[set]) throw new Error(`No such drawer set: ${set}`);
+  if (!DRAWER_SETS[set].includes(drawer)) {
+    throw new Error(`No ${drawer} drawer in set ${set}`);
+  }
+}
+
+/**
+ * Fetch a look's drawer sounds now, once.
+ * @param {'p'|'d'} set
+ */
+export function preloadDrawerSounds(set) {
+  if (!DRAWER_SETS[set]) throw new Error(`No such drawer set: ${set}`);
+  const urls = DRAWER_SETS[set].flatMap((drawer) => [
+    _drawerUrl(set, drawer, 'open'),
+    _drawerUrl(set, drawer, 'close'),
+  ]);
+  _fetchAhead(urls, 'drawer');
+}
+
+/** Fetch the switches', selectors' and latches' sounds now, once. */
+export function preloadControlSounds() {
+  _fetchAhead(
+    Object.values(CONTROL_FILES).map(([url]) => url),
+    'control'
+  );
+}
+
 /**
  * Play one of the 3D view's ticks in the camera group, which keys and dial
  * clicks lower for a moment.
@@ -419,6 +503,87 @@ export async function playDialSound(set, variant) {
   const running = context.resume();
   const buffer = await _bufferFor(_dialUrl(set, tone), context);
   await _start(context, running, buffer, 'dials');
+  duck('camera');
+  return buffer.duration;
+}
+
+/**
+ * Play a drawer opening or closing. A drawer still sounding from before (a
+ * press that turned it round) fades out first. A slide that covers only
+ * part of the way starts its sound that far in, so the stop at its end
+ * comes as the drawer arrives.
+ * @param {'p'|'d'} set - The look's drawer set
+ * @param {string} drawer - The drawer, by its name in the set
+ * @param {'open'|'close'} phase
+ * @param {number} [share=1] - How much of the way the slide covers, 0 to 1
+ * @returns {Promise<number>} The seconds it plays for once it has begun;
+ *   0 when a later sound for the drawer was asked for before this one began
+ */
+export async function playDrawerSound(set, drawer, phase, share = 1) {
+  _checkDrawer(set, drawer);
+  if (phase !== 'open' && phase !== 'close') {
+    throw new Error(`No such drawer phase: ${phase}`);
+  }
+  const slot = `${set}-${drawer}`;
+  const asked = {};
+  const before = _drawerPlaying.get(slot);
+  _drawerPlaying.set(slot, asked);
+  if (before?.source) _fadeOut(before.source, before.context);
+  const context = _audioContext();
+  const running = context.resume();
+  const buffer = await _bufferFor(_drawerUrl(set, drawer, phase), context);
+  if (_drawerPlaying.get(slot) !== asked) return 0;
+  const part = Math.max(0, Math.min(1, share));
+  const offset = buffer.duration * (1 - part);
+  const source = await _start(context, running, buffer, 'drawers', {
+    offset,
+    own: true,
+  });
+  if (_drawerPlaying.get(slot) !== asked) {
+    source.stop();
+    return 0;
+  }
+  asked.source = source;
+  asked.context = context;
+  source.addEventListener('ended', () => {
+    if (_drawerPlaying.get(slot) === asked) _drawerPlaying.delete(slot);
+  });
+  return buffer.duration - offset;
+}
+
+/**
+ * Play a switch's snap, a selector's click or a latch.
+ * @param {keyof typeof CONTROL_FILES} kind
+ * @returns {Promise<number>} The sound's length in seconds once it has begun
+ */
+export async function playControlSound(kind) {
+  if (!CONTROL_FILES[kind]) throw new Error(`No such control sound: ${kind}`);
+  const [url, group] = CONTROL_FILES[kind];
+  const context = _audioContext();
+  const running = context.resume();
+  const buffer = await _bufferFor(url, context);
+  await _start(context, running, buffer, group);
+  duck('camera');
+  return buffer.duration;
+}
+
+/**
+ * Play a keystroke typed into a field: the look's smallest key, its press
+ * only, the takes in turn, in the typing group.
+ * @param {'p'|'d'} set - The look's key set
+ * @returns {Promise<number>} The sound's length in seconds once it has begun
+ */
+export async function playTypingSound(set) {
+  const keys = KEY_SETS[set];
+  if (!keys) throw new Error(`No such key set: ${set}`);
+  const takes = keys.bands[1];
+  const slot = `${set}typing`;
+  const turn = _turn.get(slot) ?? 0;
+  _turn.set(slot, (turn + 1) % takes.length);
+  const context = _audioContext();
+  const running = context.resume();
+  const buffer = await _bufferFor(_keyUrl(set, takes[turn], 'down'), context);
+  await _start(context, running, buffer, 'typing');
   duck('camera');
   return buffer.duration;
 }

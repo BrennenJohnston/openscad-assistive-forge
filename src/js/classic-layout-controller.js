@@ -34,6 +34,7 @@ import { getUIModeController } from './ui-mode-controller.js';
 import { announceImmediate } from './announcer.js';
 import {
   cancelSlide,
+  drawerChanged,
   drawerPace,
   registerLookDrawer,
   slideDrawer,
@@ -738,7 +739,10 @@ export class ClassicLayoutController {
     if (this._panes[key] === visible) return null;
     const hadFocus = this._paneElement(pane)?.contains(document.activeElement);
     this._panes[key] = visible;
-    const slide = this._applyPaneAttributesMoving({ instant });
+    const slide = this._applyPaneAttributesMoving({
+      instant,
+      drawer: `classic-${pane}`,
+    });
     if (remember) this._savePaneState();
     if (!visible && hadFocus) this._focusRestoreControl(pane);
     if (pane === 'editor' && this.active) {
@@ -1075,7 +1079,10 @@ export class ClassicLayoutController {
       else resizers?.restoreBottomSize();
     }
 
-    const slide = this._applyPaneAttributesMoving({ instant });
+    const slide = this._applyPaneAttributesMoving({
+      instant,
+      drawer: def.name === 'bottom' ? 'classic-console' : `classic-${def.name}`,
+    });
     this._refreshTitlebarControls();
     if (remember) this._savePaneState();
     // The 3D view's track just changed size.
@@ -1097,24 +1104,34 @@ export class ClassicLayoutController {
    * from their old sizes to their new ones with the field's slide, the
    * field's panes keep their open size and ride its moving edge, and a
    * closing field keeps its old layout until it has slid shut.
-   * @param {import('./drawer-motion.js').DrawerHow} [how]
+   * @param {import('./drawer-motion.js').DrawerHow & {drawer?: string}} [how]
+   *   - drawer: the name the look hears the field's move by
    * @returns {Promise<boolean>|null}
    * @private
    */
-  _applyPaneAttributesMoving({ instant = false } = {}) {
+  _applyPaneAttributesMoving({ instant = false, drawer } = {}) {
     const main = document.querySelector('.main-interface');
     cancelSlide(main);
-    if (
-      instant ||
-      !main ||
-      !this.active ||
-      !this._isDesktopWidth() ||
-      !drawerPace()
-    ) {
+    if (instant || !main || !this.active || !this._isDesktopWidth()) {
       this._applyPaneAttributes();
       return null;
     }
     const body = document.body;
+    const occupied = () =>
+      DOCK_FIELDS.filter(
+        (f) => body.dataset[`classicField${f.datasetSuffix}`] === 'occupied'
+      ).map((f) => f.name);
+    if (!drawerPace()) {
+      // Nothing slides, but a field that opens or closes is still heard.
+      const was = occupied();
+      this._applyPaneAttributes();
+      const now = occupied();
+      const opening = now.some((name) => !was.includes(name));
+      if (opening || was.some((name) => !now.includes(name))) {
+        drawerChanged(drawer, opening);
+      }
+      return null;
+    }
     const read = () => {
       const style = getComputedStyle(main);
       const px = (list) => list.split(/\s+/).map(parseFloat);
@@ -1124,9 +1141,7 @@ export class ClassicLayoutController {
         attrs: Object.entries(body.dataset).filter(([name]) =>
           name.startsWith('classic')
         ),
-        open: DOCK_FIELDS.filter(
-          (f) => body.dataset[`classicField${f.datasetSuffix}`] === 'occupied'
-        ).map((f) => f.name),
+        open: occupied(),
       };
     };
     const before = read();
@@ -1186,6 +1201,7 @@ export class ClassicLayoutController {
         from,
         open: opening,
         travel,
+        name: drawer,
         inert: opening ? [] : [field],
         whenClosed: () => this._applyPaneAttributes(),
       }

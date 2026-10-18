@@ -202,6 +202,7 @@ export function initDrawerController() {
       from: 'left',
       open: true,
       instant,
+      name: 'phone-customizer',
     });
 
     if (initialFocus) {
@@ -269,6 +270,7 @@ export function initDrawerController() {
       from: 'left',
       open: false,
       instant,
+      name: 'phone-customizer',
       inert: [drawer],
       whenClosed: () => {
         if (isOpen) return;

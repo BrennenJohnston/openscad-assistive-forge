@@ -464,6 +464,60 @@ Commons 0.
 
 ---
 
+## Drawer Sounds (CC0-1.0)
+
+While the Alt View is on, each drawer slides open and shut with a sound of
+its own, under `public/sounds/drawers/`. Each is one slide cut from a
+recording on Freesound, played at a speed of its own for its pitch (0.85 to
+1.15), fitted to the drawer's slide (500 ms open, 450 ms shut, the stop at
+400 ms), resampled to 32 kHz mono and levelled:
+
+- The green and amber looks' drawers (`p-*.wav`): one opening and one
+  closing from "Drawer opening/closing - Ball Bearing rails" by leocb,
+  https://freesound.org/s/710648/
+- The blue DOS look's drawers (`d-*.wav`): the opening and the closing of
+  "CD-tray, open & close.wav" by Ryding, https://freesound.org/s/109308/
+
+Each is released under Creative Commons 0.
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+- **Note**: CC0 asks for no credit; it is given with thanks.
+
+---
+
+## Switch, Selector and Latch Sounds (CC-BY-3.0, CC0-1.0)
+
+While the Alt View is on, a switch, a checkbox or a radio button snaps on
+and off, a list clicks as it opens and as a choice is made, and a menu or a
+dialog latches open and shut, under `public/sounds/switches/`. Each is one
+event cut from a recording on Freesound, resampled to 32 kHz mono and
+levelled:
+
+### SMALL SIZE TOGGLE SWITCH (CC-BY-3.0)
+
+The snaps, `snap-on.wav` and `snap-off.wav`, are the two clicks of "SMALL
+SIZE TOGGLE SWITCH.wav" by StevenBrown: https://freesound.org/s/128437/
+
+- **Author**: StevenBrown
+- **License**: Creative Commons Attribution 3.0 Unported,
+  https://creativecommons.org/licenses/by/3.0/
+- **Changes**: each click cut out (32 and 42 ms, with short fades),
+  resampled to 32 kHz mono, levelled.
+
+### Radio switch and latches (CC0-1.0)
+
+The selector's clicks, `select-open.wav` and `select-choose.wav`, are two
+clicks of "Old radio switch.wav" by eneibol
+(https://freesound.org/s/369964/), and the latches, `latch-open.wav` and
+`latch-close.wav`, are cut from "Latch_03.wav" and "Latch_01.wav" by Q.K.
+(https://freesound.org/s/56245/, https://freesound.org/s/56243/), each
+released under Creative Commons 0.
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+- **Note**: CC0 asks for no credit; it is given with thanks.
+
+---
+
 ## Iosevka Term (OFL-1.1)
 
 The mono UI variant self-hosts the Iosevka Term Regular WOFF2 font.

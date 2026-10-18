@@ -15,6 +15,8 @@ const DURATIONS = {
   '/sounds/crt-on.wav': 2.21,
   '/sounds/crt-look.wav': 0.8,
   '/sounds/crt-off.wav': 2.17,
+  '/sounds/drawers/p-camera-open.wav': 0.5,
+  '/sounds/drawers/p-camera-close.wav': 0.45,
 };
 
 function wavHeader(bytes) {
@@ -160,6 +162,79 @@ describe('the camera tick files', () => {
 
   it('the three weigh under 40 KB together', () => {
     const total = CAMERA_FILES.reduce((n, f) => n + statSync(join(CAMERA_DIR, f)).size, 0);
+    expect(total).toBeGreaterThan(0);
+    expect(total).toBeLessThan(40_000);
+  });
+});
+
+// A WAV's samples' loudest, 0 to 1.
+function peakOf(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let peak = 0;
+  for (let at = 44; at + 1 < bytes.length; at += 2) peak = Math.max(peak, Math.abs(view.getInt16(at, true)));
+  return peak / 32768;
+}
+
+// The drawers: each look's drawers an opening and a closing, as long as the
+// drawer's slide in the look (500 ms open, 450 ms shut).
+const DRAWERS_DIR = join(SOUNDS_DIR, 'drawers');
+const DRAWER_FILES = [
+  ...['customizer', 'camera', 'ascii', 'preview-settings'].map((d) => `p-${d}`),
+  ...['customizer', 'editor', 'console'].map((d) => `d-${d}`),
+].flatMap((d) => [`${d}-open.wav`, `${d}-close.wav`]);
+
+describe('the drawer sound files', () => {
+  it.each(DRAWER_FILES)(
+    '%s is a 32 kHz mono 16-bit WAV no longer than its slide, its peak at or under -1 dBFS',
+    (file) => {
+      const bytes = readFileSync(join(DRAWERS_DIR, file));
+      const header = wavHeader(bytes);
+      expect(header.riff).toBe('RIFF');
+      expect(header.channels).toBe(1);
+      expect(header.rate).toBe(32000);
+      expect(header.bits).toBe(16);
+      const seconds = header.dataBytes / 2 / 32000;
+      expect(seconds).toBeLessThanOrEqual(file.endsWith('-open.wav') ? 0.5 : 0.45);
+      expect(seconds).toBeGreaterThan(0.3);
+      expect(peakOf(bytes)).toBeLessThanOrEqual(10 ** (-1 / 20));
+    }
+  );
+
+  it('the fourteen weigh under 450 KB together', () => {
+    const total = DRAWER_FILES.reduce((n, f) => n + statSync(join(DRAWERS_DIR, f)).size, 0);
+    expect(total).toBeGreaterThan(0);
+    expect(total).toBeLessThan(450_000);
+  });
+});
+
+// A switch's snaps, a selector's clicks and a latch's.
+const SWITCHES_DIR = join(SOUNDS_DIR, 'switches');
+const SWITCH_FILES = [
+  'snap-on.wav',
+  'snap-off.wav',
+  'select-open.wav',
+  'select-choose.wav',
+  'latch-open.wav',
+  'latch-close.wav',
+];
+
+describe('the switch, selector and latch files', () => {
+  it.each(SWITCH_FILES)(
+    '%s is a 32 kHz mono 16-bit WAV under 0.25 s with its peak at or under -1 dBFS',
+    (file) => {
+      const bytes = readFileSync(join(SWITCHES_DIR, file));
+      const header = wavHeader(bytes);
+      expect(header.riff).toBe('RIFF');
+      expect(header.channels).toBe(1);
+      expect(header.rate).toBe(32000);
+      expect(header.bits).toBe(16);
+      expect(header.dataBytes / 2 / 32000).toBeLessThan(0.25);
+      expect(peakOf(bytes)).toBeLessThanOrEqual(10 ** (-1 / 20));
+    }
+  );
+
+  it('the six weigh under 40 KB together', () => {
+    const total = SWITCH_FILES.reduce((n, f) => n + statSync(join(SWITCHES_DIR, f)).size, 0);
     expect(total).toBeGreaterThan(0);
     expect(total).toBeLessThan(40_000);
   });
@@ -446,7 +521,17 @@ describe('playing a switch sound', () => {
       soundGroup('keys'),
       soundGroup('dials'),
     ]);
-    for (const name of ['switch', 'keys', 'dials', 'camera', 'drawers', 'typing']) {
+    for (const name of [
+      'switch',
+      'keys',
+      'dials',
+      'camera',
+      'drawers',
+      'typing',
+      'snaps',
+      'selectors',
+      'latches',
+    ]) {
       expect(soundGroup(name).connectedTo, `${name} into the master`).toBe(masters[0]);
     }
     expect(() => soundGroup('hum')).toThrow('No such sound group: hum');
@@ -494,6 +579,106 @@ describe('playing a switch sound', () => {
     await expect(playCameraSound('pan')).rejects.toThrow('No such camera sound: pan');
     preloadCameraSounds();
     expect(globalThis.fetch, 'the three fetched once').toHaveBeenCalledTimes(3);
+  });
+
+  it("plays a drawer by its look's set, its name and the way it moves, in the drawers group through a level of its own", async () => {
+    const { playDrawerSound, preloadDrawerSounds, soundGroup } = await load();
+    const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
+    await expect(playDrawerSound('p', 'customizer', 'open')).resolves.toBeCloseTo(0.16, 6);
+    expect(urls()).toEqual(['/sounds/drawers/p-customizer-open.wav']);
+    expect(sources[0].connectedTo.connectedTo, 'its level, then the group').toBe(
+      soundGroup('drawers')
+    );
+    expect(sources[0].start).toHaveBeenCalledWith(0, 0);
+    await playDrawerSound('d', 'console', 'close');
+    expect(urls().at(-1)).toBe('/sounds/drawers/d-console-close.wav');
+    await expect(playDrawerSound('d', 'ascii', 'open')).rejects.toThrow('No ascii drawer in set d');
+    await expect(playDrawerSound('x', 'customizer', 'open')).rejects.toThrow(
+      'No such drawer set: x'
+    );
+    await expect(playDrawerSound('p', 'camera', 'slam')).rejects.toThrow(
+      'No such drawer phase: slam'
+    );
+    globalThis.fetch.mockClear();
+    preloadDrawerSounds('p');
+    expect(urls(), "the phosphor looks' eight, the two played already kept").toEqual([
+      '/sounds/drawers/p-customizer-close.wav',
+      '/sounds/drawers/p-camera-open.wav',
+      '/sounds/drawers/p-camera-close.wav',
+      '/sounds/drawers/p-ascii-open.wav',
+      '/sounds/drawers/p-ascii-close.wav',
+      '/sounds/drawers/p-preview-settings-open.wav',
+      '/sounds/drawers/p-preview-settings-close.wav',
+    ]);
+    globalThis.fetch.mockClear();
+    preloadDrawerSounds('d');
+    expect(urls(), "the DOS look's six").toHaveLength(5);
+    expect(() => preloadDrawerSounds('x')).toThrow('No such drawer set: x');
+  });
+
+  it('a drawer turned round fades its sound out over 15 ms, and a slide over part of the way starts its sound that far in', async () => {
+    const { playDrawerSound } = await load();
+    await playDrawerSound('p', 'camera', 'open');
+    const opening = sources[0];
+    const seconds = await playDrawerSound('p', 'camera', 'close', 0.4);
+    expect(rounded(opening.level.gain.calls)).toEqual(
+      rounded([
+        ['cancel', 10],
+        ['set', 1, 10],
+        ['ramp', 0, 10.015],
+      ])
+    );
+    expect(opening.stop).toHaveBeenCalledWith(10.015);
+    // Four tenths of the way: the closing's last four tenths, its stop last.
+    const [, offset] = sources[1].start.mock.calls[0];
+    expect(offset).toBeCloseTo(0.27, 6);
+    expect(seconds).toBeCloseTo(0.18, 6);
+    await playDrawerSound('p', 'ascii', 'open');
+    expect(sources[1].stopped, 'another drawer does not cut it short').toBe(false);
+  });
+
+  it('plays a switch, a selector and a latch in their own groups, lowering the camera; typing the smallest key, its takes in turn, quieter', async () => {
+    const { playControlSound, playTypingSound, preloadControlSounds, soundGroup } = await load();
+    const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
+    await playControlSound('snap-on');
+    await playControlSound('select-open');
+    await playControlSound('latch-close');
+    expect(urls()).toEqual([
+      '/sounds/switches/snap-on.wav',
+      '/sounds/switches/select-open.wav',
+      '/sounds/switches/latch-close.wav',
+    ]);
+    expect(sources.map((s) => s.connectedTo)).toEqual([
+      soundGroup('snaps'),
+      soundGroup('selectors'),
+      soundGroup('latches'),
+    ]);
+    expect(soundGroup('camera').gain.calls.length, 'each lowers the camera').toBeGreaterThan(0);
+    expect(soundGroup('latches').gain.value, 'a latch 3 dB under its key').toBeCloseTo(db(-3), 6);
+    await expect(playControlSound('slam')).rejects.toThrow('No such control sound: slam');
+
+    globalThis.fetch.mockClear();
+    for (let n = 0; n < 4; n++) await playTypingSound('p');
+    await playTypingSound('d');
+    expect(urls()).toEqual([
+      '/sounds/keys/p1a-down.wav',
+      '/sounds/keys/p1b-down.wav',
+      '/sounds/keys/p1c-down.wav',
+      '/sounds/keys/d1.wav',
+    ]);
+    expect(sources.slice(3).map((s) => s.connectedTo)).toEqual(
+      Array(5).fill(soundGroup('typing'))
+    );
+    expect(soundGroup('typing').gain.value, '12 dB under the keys').toBeCloseTo(db(-12), 6);
+    await expect(playTypingSound('x')).rejects.toThrow('No such key set: x');
+
+    globalThis.fetch.mockClear();
+    preloadControlSounds();
+    expect(urls(), 'the six, the three played already kept').toEqual([
+      '/sounds/switches/snap-off.wav',
+      '/sounds/switches/select-choose.wav',
+      '/sounds/switches/latch-open.wav',
+    ]);
   });
 
   it('mutes through the master: silent within 20 ms, before or after the first sound', async () => {

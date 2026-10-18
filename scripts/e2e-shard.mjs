@@ -160,7 +160,7 @@ export const MEASURED_SECONDS = {
   // Five cases, each loading the box and turning the look on (one drags the
   // view for a second and a half): 45 s locally; booked at 100 for the
   // look's software drawing on CI.
-  'alt-view-sounds.spec.js': 100.0,
+  'alt-view-sounds.spec.js': 140.0,
   // Two cases, each loading the box, turning the look on and watching about
   // twenty drawer presses for 1.2 s each: 48 s locally; booked at 110 for
   // the look's software drawing on CI.

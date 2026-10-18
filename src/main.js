@@ -9998,6 +9998,7 @@ if (rounded) {
           open: false,
           keep: stripWidth(),
           instant,
+          name: 'customizer',
           inert: [paramPanelBody],
           whenClosed: () => {
             if (!isCollapsed) return;
@@ -10020,6 +10021,7 @@ if (rounded) {
           open: true,
           keep: stripWidth(),
           instant,
+          name: 'customizer',
         });
       }
 

@@ -34,6 +34,11 @@ vi.mock('../../src/js/crt-sounds.js', () => ({
   duck: vi.fn(),
   playCameraSound: vi.fn(async () => 0.06),
   preloadCameraSounds: vi.fn(),
+  playDrawerSound: vi.fn(async () => 0.45),
+  preloadDrawerSounds: vi.fn(),
+  playControlSound: vi.fn(async () => 0.08),
+  preloadControlSounds: vi.fn(),
+  playTypingSound: vi.fn(async () => 0.1),
 }))
 
 // The screen waits for its sound to start, which the mock settles on a tick.
@@ -771,6 +776,7 @@ describe('the Alt View is heard', () => {
     const ticks = await cameraAsked()
     expect(ticks.length).toBeGreaterThan(0)
     expect(ticks.length).toBeLessThanOrEqual(14)
+    controller.disableAltViewWithPreview(document.createElement('button'))
   })
 
   it('a move a button, a view or View All made plays no camera tick; the arrow keys on the preview and a controller stick do', async () => {
@@ -856,6 +862,491 @@ describe('the Alt View is heard', () => {
       false
     )
     expect(await soundsAsked()).toEqual(['on'])
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  // A drawer's panel, sized as a drawer that has somewhere to go.
+  function drawerPanel(width = 300, height = 400) {
+    const el = document.createElement('div')
+    Object.defineProperty(el, 'offsetWidth', { value: width })
+    Object.defineProperty(el, 'offsetHeight', { value: height })
+    document.body.appendChild(el)
+    return el
+  }
+  const drawersAsked = async () => {
+    const { playDrawerSound } = await import('../../src/js/crt-sounds.js')
+    return playDrawerSound.mock.calls.map((c) => c.slice(0, 3).join(' '))
+  }
+  const controlsAsked = async () => {
+    const { playControlSound } = await import('../../src/js/crt-sounds.js')
+    return playControlSound.mock.calls.map(([kind]) => kind)
+  }
+  const typingAsked = async () => {
+    const { playTypingSound } = await import('../../src/js/crt-sounds.js')
+    return playTypingSound.mock.calls.map(([set]) => set)
+  }
+
+  it('a drawer opening plays its own opening once and closing its own closing, in the look\'s set, without motion too; not one laid out at once', async () => {
+    pageWithHeaderAndDpad()
+    const panel = drawerPanel()
+    const controller = await freshController(previewManagerStub())
+    const { slideDrawer } = await import('../../src/js/drawer-motion.js')
+    const { preloadDrawerSounds } = await import('../../src/js/crt-sounds.js')
+    const toggle = document.createElement('button')
+    // No pace here, as with reduced motion: the drawers change at once.
+    const move = (name, open, how = {}) =>
+      slideDrawer([{ el: panel }], { from: 'left', open, name, ...how })
+
+    move('customizer', true)
+    expect(await drawersAsked(), 'nothing while the look is off').toEqual([])
+
+    await controller.enableAltViewWithPreview(toggle)
+    expect(preloadDrawerSounds, 'the phosphor drawers fetched at switch-on').toHaveBeenCalledWith('p')
+    move('customizer', true)
+    move('customizer', false)
+    move('preview-settings', true)
+    move('phone-ascii', true)
+    move('phone-camera', false)
+    expect(await drawersAsked()).toEqual([
+      'p customizer open',
+      'p customizer close',
+      'p preview-settings open',
+      'p ascii open',
+      'p camera close',
+    ])
+    move('camera', true, { instant: true })
+    slideDrawer([{ el: panel }], { from: 'left', open: true })
+    expect(await drawersAsked(), 'laid out at once, or a room with no name').toHaveLength(5)
+
+    // Classic is the DOS look, with drawers of its own.
+    document.body.dataset.uiMode = 'classic'
+    move('classic-console', true)
+    move('classic-editor', false)
+    move('classic-right-top', true)
+    expect((await drawersAsked()).slice(5)).toEqual([
+      'd console open',
+      'd editor close',
+      'd customizer open',
+    ])
+    delete document.body.dataset.uiMode
+
+    controller.disableAltViewWithPreview(toggle)
+    move('customizer', true)
+    expect(await drawersAsked(), 'nothing once off').toHaveLength(8)
+
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    await controller.enableAltViewWithPreview(toggle)
+    move('customizer', false)
+    expect(await drawersAsked(), 'nothing with sounds off').toHaveLength(8)
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('a checkbox, a radio button and a switch snap on and off, never a key', async () => {
+    pageWithHeaderAndDpad()
+    const box = document.createElement('input')
+    box.type = 'checkbox'
+    const radioA = document.createElement('input')
+    radioA.type = 'radio'
+    radioA.name = 'pick'
+    const radioB = radioA.cloneNode()
+    const paramSwitch = document.createElement('input')
+    paramSwitch.type = 'checkbox'
+    paramSwitch.setAttribute('role', 'switch')
+    document.body.append(box, radioA, radioB, paramSwitch)
+    const modeSwitch = sizedButton('modeSwitch', 120, 36)
+    modeSwitch.setAttribute('role', 'switch')
+    modeSwitch.setAttribute('aria-checked', 'false')
+    const controller = await freshController(previewManagerStub())
+    const { preloadControlSounds } = await import('../../src/js/crt-sounds.js')
+    const toggle = document.createElement('button')
+
+    box.click()
+    expect(await controlsAsked(), 'nothing while the look is off').toEqual([])
+
+    await controller.enableAltViewWithPreview(toggle)
+    expect(preloadControlSounds).toHaveBeenCalled()
+    box.click()
+    box.click()
+    radioA.click()
+    radioB.click()
+    radioB.click()
+    press(paramSwitch, 'pointerdown')
+    press(paramSwitch, 'pointerup')
+    paramSwitch.click()
+    expect(await controlsAsked()).toEqual([
+      // the box was checked once while the look was off
+      'snap-off',
+      'snap-on',
+      'snap-on',
+      'snap-on',
+      'snap-on',
+    ])
+    press(modeSwitch, 'pointerdown')
+    press(modeSwitch, 'pointerup')
+    modeSwitch.click()
+    modeSwitch.setAttribute('aria-checked', 'true')
+    modeSwitch.click()
+    expect((await controlsAsked()).slice(5), 'by the state it leaves').toEqual([
+      'snap-on',
+      'snap-off',
+    ])
+    expect(await keysAsked(), 'a switch is never a key').toEqual([])
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('a list clicks as it opens and again as a choice is made; a color well the same', async () => {
+    pageWithHeaderAndDpad()
+    const list = document.createElement('select')
+    list.innerHTML = '<option>a</option><option>b</option>'
+    const many = document.createElement('select')
+    many.multiple = true
+    many.innerHTML = '<option>a</option><option>b</option>'
+    const well = document.createElement('input')
+    well.type = 'color'
+    document.body.append(list, many, well)
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    const choose = (el) => el.dispatchEvent(new Event('change', { bubbles: true }))
+
+    await controller.enableAltViewWithPreview(toggle)
+    press(list, 'pointerdown')
+    list.value = 'b'
+    choose(list)
+    list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true }))
+    list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    choose(list)
+    expect(await controlsAsked(), 'an arrow alone chooses without opening').toEqual([
+      'select-open',
+      'select-choose',
+      'select-open',
+      'select-choose',
+    ])
+    press(many, 'pointerdown')
+    choose(many)
+    press(well, 'pointerdown')
+    choose(well)
+    expect((await controlsAsked()).slice(4), 'a list always open does not open').toEqual([
+      'select-choose',
+      'select-open',
+      'select-choose',
+    ])
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('typing into a field is a quiet key per keystroke, fifteen a second at most; not a shortcut or a move', async () => {
+    pageWithHeaderAndDpad()
+    clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const field = document.createElement('input')
+    field.type = 'text'
+    const notes = document.createElement('textarea')
+    const fixed = document.createElement('input')
+    fixed.readOnly = true
+    const button = sizedButton('plainBtn', 36, 36)
+    document.body.append(field, notes, fixed)
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    const type = (el, key, init = {}, afterMs = 100) => {
+      clock += afterMs
+      el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...init }))
+    }
+
+    type(field, 'a')
+    expect(await typingAsked(), 'nothing while the look is off').toEqual([])
+
+    await controller.enableAltViewWithPreview(toggle)
+    type(field, 'a')
+    type(field, 'Backspace')
+    type(notes, 'Enter')
+    type(field, 'Shift')
+    type(field, 's', { ctrlKey: true })
+    type(field, 'Tab')
+    type(field, 'ArrowLeft')
+    type(fixed, 'a')
+    type(button, 'a')
+    expect(await typingAsked(), 'three keystrokes that type').toEqual(['p', 'p', 'p'])
+
+    // Thirty keystrokes in a second: at most fifteen keys.
+    const before = (await typingAsked()).length
+    for (let n = 0; n < 30; n++) type(field, 'x', {}, 1000 / 30)
+    const heard = (await typingAsked()).length - before
+    expect(heard).toBeLessThanOrEqual(15)
+    expect(heard).toBeGreaterThanOrEqual(10)
+
+    document.body.dataset.uiMode = 'classic'
+    type(field, 'a', {}, 500)
+    expect((await typingAsked()).at(-1), "the DOS look's smallest key").toBe('d')
+    delete document.body.dataset.uiMode
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it("a number box's arrows click as a dial does; a number typed into it is typing", async () => {
+    pageWithHeaderAndDpad()
+    clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const box = document.createElement('input')
+    box.type = 'number'
+    box.min = '0'
+    box.max = '10'
+    box.step = '1'
+    box.value = '0'
+    document.body.append(box)
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+
+    await controller.enableAltViewWithPreview(toggle)
+    box.focus()
+    clock += 100
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }))
+    slide(box, 1)
+    expect(await clicksAsked(), 'ten steps: the second tone').toEqual(['p 2'])
+    clock += 100
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: '5', bubbles: true }))
+    slide(box, 15, 5)
+    expect(await clicksAsked(), 'typed, not stepped').toHaveLength(1)
+    expect(await typingAsked()).toEqual(['p'])
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('a menu or a dialog opening and closing is a latch; a pop-out list the same', async () => {
+    pageWithHeaderAndDpad()
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('aria-hidden', 'true')
+    const menu = document.createElement('div')
+    menu.className = 'toolbar-menu-modal'
+    menu.setAttribute('aria-hidden', 'true')
+    const popout = document.createElement('div')
+    popout.className = 'camera-shortcuts-panel'
+    popout.hidden = true
+    const other = document.createElement('div')
+    other.setAttribute('aria-hidden', 'true')
+    document.body.append(dialog, menu, popout, other)
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    const settled = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+    dialog.setAttribute('aria-hidden', 'false')
+    await settled()
+    expect(await controlsAsked(), 'nothing while the look is off').toEqual([])
+    dialog.setAttribute('aria-hidden', 'true')
+
+    await controller.enableAltViewWithPreview(toggle)
+    dialog.setAttribute('aria-hidden', 'false')
+    await settled()
+    dialog.setAttribute('aria-hidden', 'true')
+    await settled()
+    menu.setAttribute('aria-hidden', 'false')
+    await settled()
+    menu.setAttribute('aria-hidden', 'true')
+    popout.hidden = false
+    other.setAttribute('aria-hidden', 'false')
+    await settled()
+    popout.hidden = true
+    await settled()
+    expect(await controlsAsked()).toEqual([
+      'latch-open',
+      'latch-close',
+      'latch-open',
+      'latch-close',
+      'latch-open',
+      'latch-close',
+    ])
+
+    // A dialog made, then shown, then taken away.
+    const made = document.createElement('div')
+    made.setAttribute('role', 'dialog')
+    document.body.append(made)
+    made.setAttribute('aria-hidden', 'false')
+    await settled()
+    made.setAttribute('aria-hidden', 'true')
+    made.remove()
+    await settled()
+    expect((await controlsAsked()).slice(6)).toEqual(['latch-open', 'latch-close'])
+
+    controller.disableAltViewWithPreview(toggle)
+    dialog.setAttribute('aria-hidden', 'false')
+    await settled()
+    expect(await controlsAsked(), 'nothing once off').toHaveLength(8)
+  })
+
+  it("a disclosure and a link are keys; a press with no key of its own first plays one when a controller's button is held", async () => {
+    pageWithHeaderAndDpad()
+    const details = document.createElement('details')
+    details.innerHTML = '<summary>Group</summary><p>x</p>'
+    const summary = details.querySelector('summary')
+    summary.getBoundingClientRect = () => ({ width: 200, height: 30, left: 0, top: 0, right: 200, bottom: 30, x: 0, y: 0 })
+    const link = document.createElement('a')
+    link.href = '#here'
+    link.getBoundingClientRect = () => ({ width: 60, height: 20, left: 0, top: 0, right: 60, bottom: 20, x: 0, y: 0 })
+    document.body.append(details, link)
+    const button = sizedButton('padBtn', 36, 36)
+    const hadPads = navigator.getGamepads
+    let held = false
+    navigator.getGamepads = () => [{ axes: [0, 0, 0, 0], buttons: [{ pressed: held, value: held ? 1 : 0 }] }]
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+
+    await controller.enableAltViewWithPreview(toggle)
+    press(summary, 'pointerdown')
+    press(summary, 'pointerup')
+    press(link, 'pointerdown')
+    press(link, 'pointerup')
+    expect(await keysAsked()).toEqual(['p 5 down', 'p 5 up', 'p 2 down', 'p 2 up'])
+
+    // The page's own clicks stay quiet.
+    button.click()
+    expect(await keysAsked()).toHaveLength(4)
+    // A controller's A button: its click is the press.
+    held = true
+    button.click()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect((await keysAsked()).slice(4)).toEqual(['p 2 down', 'p 2 up'])
+    // A press heard first: its click is not heard again.
+    press(button, 'pointerdown')
+    press(button, 'pointerup')
+    button.click()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect((await keysAsked()).slice(6)).toEqual(['p 2 down', 'p 2 up'])
+
+    navigator.getGamepads = hadPads
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('a label that opens a file chooser is a key, one press whether a pointer, Enter or a controller presses it', async () => {
+    pageWithHeaderAndDpad()
+    const zone = document.createElement('label')
+    zone.tabIndex = 0
+    zone.innerHTML = '<span>Drop a project here</span><input type="file">'
+    zone.getBoundingClientRect = () => ({ width: 400, height: 160, left: 0, top: 0, right: 400, bottom: 160, x: 0, y: 0 })
+    const text = zone.querySelector('span')
+    const chooser = zone.querySelector('input')
+    let opened = 0
+    chooser.addEventListener('click', () => opened++)
+    zone.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') chooser.click()
+    })
+    const browse = document.createElement('label')
+    browse.innerHTML = 'Browse<input type="file">'
+    browse.getBoundingClientRect = () => ({ width: 90, height: 36, left: 0, top: 0, right: 90, bottom: 36, x: 0, y: 0 })
+    const browseInput = browse.querySelector('input')
+    const gridLabel = document.createElement('label')
+    gridLabel.innerHTML = '<input type="checkbox"> Grid'
+    const picker = document.createElement('input')
+    picker.type = 'file'
+    document.body.append(zone, browse, gridLabel, picker)
+    const opener = sizedButton('openBtn', 36, 36)
+    opener.addEventListener('click', () => chooser.click())
+    const hadPads = navigator.getGamepads
+    let held = false
+    navigator.getGamepads = () => [{ axes: [0, 0, 0, 0], buttons: [{ pressed: held, value: held ? 1 : 0 }] }]
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    const enter = (el, type) => el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', bubbles: true }))
+    const tapped = () => new Promise((resolve) => setTimeout(resolve, 100))
+
+    await controller.enableAltViewWithPreview(toggle)
+    press(text, 'pointerdown')
+    press(text, 'pointerup')
+    text.click()
+    expect(opened, 'the label passes its click on').toBe(1)
+    expect(await keysAsked(), 'a pointer on the label').toEqual(['p 7 down', 'p 7 up'])
+    zone.focus()
+    enter(zone, 'keydown')
+    enter(zone, 'keyup')
+    expect(opened).toBe(2)
+    expect((await keysAsked()).slice(2), 'Enter on the label').toEqual(['p 7 down', 'p 7 up'])
+    // The input the browser gives the focus to when its label is pressed.
+    browseInput.focus()
+    press(browse, 'pointerdown')
+    press(browse, 'pointerup')
+    browse.click()
+    enter(browseInput, 'keydown')
+    enter(browseInput, 'keyup')
+    expect((await keysAsked()).slice(4), "a label's input sounds as the label").toEqual([
+      'p 4 down',
+      'p 4 up',
+      'p 4 down',
+      'p 4 up',
+    ])
+
+    held = true
+    zone.click()
+    await tapped()
+    browseInput.click()
+    await tapped()
+    opener.click()
+    await tapped()
+    picker.click()
+    gridLabel.click()
+    await tapped()
+    expect((await keysAsked()).slice(8), 'a controller: each press once').toEqual([
+      'p 7 down',
+      'p 7 up',
+      'p 4 down',
+      'p 4 up',
+      'p 2 down',
+      'p 2 up',
+    ])
+    expect(opened, 'the chooser opened by another control').toBe(4)
+
+    navigator.getGamepads = hadPads
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('a grip ticks for every 2 % of the window it is moved by hand, and for a move its keys make', async () => {
+    pageWithHeaderAndDpad()
+    clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const frames = []
+    const hadFrame = window.requestAnimationFrame
+    const hadCancel = window.cancelAnimationFrame
+    window.requestAnimationFrame = (fn) => frames.push(fn)
+    window.cancelAnimationFrame = (id) => {
+      frames[id - 1] = null
+    }
+    const runFrame = () => {
+      const due = frames.splice(0)
+      for (const fn of due) fn?.(clock)
+    }
+    let x = 500
+    const grip = document.createElement('div')
+    grip.setAttribute('role', 'separator')
+    grip.tabIndex = 0
+    grip.getBoundingClientRect = () => ({ width: 8, height: 400, left: x, top: 0, right: x + 8, bottom: 400, x, y: 0 })
+    document.body.append(grip)
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    const width = window.innerWidth
+    const dragTo = (px) => {
+      clock += 100
+      x = px
+      runFrame()
+    }
+
+    await controller.enableAltViewWithPreview(toggle)
+    const before = (await clicksAsked()).length
+    press(grip, 'pointerdown')
+    dragTo(500 + width * 0.01)
+    expect((await clicksAsked()).length - before, '1 %: nothing yet').toBe(0)
+    dragTo(500 + width * 0.021)
+    dragTo(500 + width * 0.03)
+    dragTo(500 + width * 0.042)
+    expect((await clicksAsked()).slice(before), 'a tick per 2 %, the middle tone').toEqual(['p 4', 'p 4'])
+    press(grip, 'pointerup')
+    dragTo(500 + width * 0.2)
+    expect((await clicksAsked()).length - before, 'let go').toBe(2)
+
+    grip.focus()
+    clock += 100
+    grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
+    x -= 10
+    runFrame()
+    expect((await clicksAsked()).length - before, 'a key that moved it').toBe(3)
+
+    window.requestAnimationFrame = hadFrame
+    window.cancelAnimationFrame = hadCancel
+    controller.disableAltViewWithPreview(toggle)
   })
 })
 

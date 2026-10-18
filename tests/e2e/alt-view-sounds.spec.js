@@ -4,7 +4,8 @@
  * when the button appears beside it. A press turns the sounds off and on; it is the
  * same setting as Preferences > Play sounds, and the two always agree. The
  * press that turns sounds on plays a key, so a person hears that it worked;
- * the press that turns them off plays nothing.
+ * the press that turns them off plays nothing. In the look a drag of the
+ * view ticks, a drawer slides with a sound of its own, and a menu latches.
  *
  * @license GPL-3.0-or-later
  */
@@ -12,6 +13,7 @@
 import { test, expect } from '@playwright/test';
 import { skipWithoutWebGL } from './helpers/webgl.js';
 import { canSound, listenForSound, probeSound } from './helpers/sound.js';
+import { drawersBack } from './helpers/alt-view.js';
 
 test.describe.configure({ timeout: 240_000 });
 
@@ -237,6 +239,51 @@ test.describe('The sounds button', () => {
     await page.locator('#cameraRotateLeft').click();
     await page.waitForTimeout(800);
     expect((await started()).length - beforeButton, 'the key, down and up').toBe(2);
+  });
+
+  test("a drawer's button plays its key, then the drawer's own slide as long as the slide; a menu latches open and shut", async ({
+    page,
+  }) => {
+    await listenForSound(page);
+    await openBox(page);
+    await probeSound(page);
+    await setLook(page, true);
+    test.skip(
+      !(await canSound(page)),
+      'this machine has no sound device, so no sound can start'
+    );
+    await drawersBack(page);
+    const heard = async (press) => {
+      await page.waitForTimeout(600);
+      await page.evaluate(() => {
+        window.__sounds = [];
+      });
+      const at = await page.evaluate(() => performance.now());
+      await press();
+      await page.waitForTimeout(900);
+      return page.evaluate(
+        (from) => window.__sounds.map((s) => ({ after: s.at - from, seconds: s.seconds })),
+        at
+      );
+    };
+    const slides = (sounds) => sounds.filter((s) => s.seconds > 0.3);
+
+    const button = page.locator('#collapseParamPanelBtn');
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
+    const closing = await heard(() => button.click());
+    expect(slides(closing), 'one slide shut').toHaveLength(1);
+    expect(slides(closing)[0].seconds, 'as long as the slide shut, s').toBeCloseTo(0.45, 2);
+    expect(slides(closing)[0].after, 'with the press, ms').toBeLessThan(300);
+    expect(closing.length - 1, 'and the key, down and up').toBe(2);
+    const opening = await heard(() => button.click());
+    expect(slides(opening), 'one slide open').toHaveLength(1);
+    expect(slides(opening)[0].seconds, 'as long as the slide open, s').toBeCloseTo(0.5, 2);
+
+    const menu = await heard(() => page.locator('#editMenuBtn').click());
+    expect(menu.length, 'the key, down and up, and the latch').toBe(3);
+    const shut = await heard(() => page.keyboard.press('Escape'));
+    expect(shut, 'the latch shut').toHaveLength(1);
+    expect(shut[0].seconds).toBeLessThan(0.25);
   });
 
   test.describe('on a phone', () => {

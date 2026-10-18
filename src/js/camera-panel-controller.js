@@ -98,6 +98,7 @@ export function initCameraPanelController(options = {}) {
       open: true,
       keep: stripWidth(),
       instant,
+      name: 'camera',
     });
   }
 
@@ -117,6 +118,7 @@ export function initCameraPanelController(options = {}) {
       open: false,
       keep: stripWidth(),
       instant,
+      name: 'camera',
       inert: [panel.querySelector('.camera-panel-body')],
       whenClosed: () => {
         if (isCollapsed) panel.classList.add('collapsed');
@@ -662,7 +664,12 @@ function initPhoneDrawer({
     apply();
     if (storageKey && remember) safeSetItem(storageKey, 'false');
     onChange?.(true, { instant });
-    return slideDrawer([{ el: body }], { from: edge(), open: true, instant });
+    return slideDrawer([{ el: body }], {
+      from: edge(),
+      open: true,
+      instant,
+      name: `phone-${name}`,
+    });
   }
 
   /** @param {import('./drawer-motion.js').DrawerHow} [how] */
@@ -677,6 +684,7 @@ function initPhoneDrawer({
       from: edge(),
       open: false,
       instant,
+      name: `phone-${name}`,
       inert: [body],
       whenClosed: () => {
         if (collapsed) drawer.classList.add('collapsed');
