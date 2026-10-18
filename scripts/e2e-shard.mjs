@@ -108,7 +108,9 @@ export const MEASURED_SECONDS = {
   // margin, and 29 unbooked seconds is a sixth of it.
   'ascii-city-walk-furniture.spec.js': 164,
   'classic-panels.spec.js': 442.5,
-  'classic-mode.spec.js': 400.8,
+  // Two cases turn the Alt View on inside Classic (about 15 s locally
+  // together); booked at 40 more for the look's software drawing on CI.
+  'classic-mode.spec.js': 440.8,
   'menu-parity.spec.js': 253.9,
   'accessibility.spec.js': 195.8,
   // Every pose is now read once the camera holds still: one local pass went

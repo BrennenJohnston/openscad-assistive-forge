@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import { changeOneParameter, reloadAnsweringDraft } from './helpers/draft-question.js';
 import { skipWithoutWebGL } from './helpers/webgl.js';
+import { drawersBack } from './helpers/alt-view.js';
 
 // Classic mode (desktop-OpenSCAD-style layout).
 //
@@ -2036,11 +2037,15 @@ test.describe('Classic 3D view toolbar', () => {
     await expect(bar).toHaveAttribute('aria-label', '3D view toolbar');
 
     const names = await bar.evaluate((el) =>
-      Array.from(el.querySelectorAll('button')).map((b) =>
-        (b.textContent || '').trim()
-      )
+      Array.from(el.querySelectorAll('button'))
+        .filter((b) => b.checkVisibility())
+        .map((b) => (b.textContent || '').trim())
     );
     expect(names).toEqual(ORDER);
+    // The Alt View's own button waits hidden for the look.
+    await expect(
+      bar.getByRole('button', { name: 'ASCII settings', exact: true })
+    ).toBeHidden();
 
     // It sits along the bottom edge of the 3D view, above the strip
     const [barBox, viewBox, stripBox] = await Promise.all([
@@ -3226,5 +3231,106 @@ test.describe('Classic in the Alt View', () => {
     await page.locator('#_hfmToggle').click();
     await expect(page.locator('html')).toHaveAttribute('data-ui-variant', 'mono');
     await expectYellowCharacters(page);
+  });
+});
+
+// Classic has no camera panel, so in the Alt View its four sliders live in
+// Classic's own places: an ASCII group in Viewport-Control, or at the foot
+// of the Customizer in the Simplified view, which has no Viewport-Control.
+// The 3D view toolbar's ASCII settings button takes you to them.
+test.describe('The Alt View sliders in Classic', () => {
+  const SLIDERS = ['Edges', 'Characters', 'Glow', 'Surfaces'];
+
+  async function turnOnTheLook(page) {
+    await skipWithoutWebGL(
+      page,
+      'no WebGL: the Alt View draws its characters from the 3D picture'
+    );
+    await page.locator('#_hfmToggle').click();
+    await expect(page.locator('html')).toHaveAttribute('data-ui-variant', 'mono');
+    await drawersBack(page);
+  }
+
+  test('Standard: the toolbar button opens Viewport-Control on its ASCII group and the four sliders; out of the look neither shows', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page);
+    await switchToStandardMode(page);
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute('data-classic-density', 'standard');
+    const button = page
+      .locator('#classicCameraBar')
+      .getByRole('button', { name: 'ASCII settings', exact: true });
+    await expect(button).toBeHidden();
+
+    await turnOnTheLook(page);
+    await expect(button).toBeVisible();
+    const panel = page.locator('#viewportControlPanel');
+    await expect(panel).toBeHidden();
+    await button.click();
+    await expect(panel).toBeVisible();
+    const group = panel.getByRole('group', { name: 'ASCII', exact: true });
+    await expect(group).toBeVisible();
+    await expect(group.getByRole('slider')).toHaveCount(4);
+    for (const name of SLIDERS) {
+      await expect(group.getByRole('slider', { name, exact: true })).toBeVisible();
+    }
+    await expect(group.getByRole('slider', { name: 'Edges', exact: true })).toBeFocused();
+
+    // The same sliders as everywhere else: one value, one source.
+    await group.getByRole('slider', { name: 'Characters', exact: true }).evaluate((el) => {
+      el.value = '0.4';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.4');
+
+    // A second press keeps the panel open and goes back to the first slider.
+    await page.locator('#previewContainer').click();
+    await button.click();
+    await expect(panel).toBeVisible();
+    await expect(group.getByRole('slider', { name: 'Edges', exact: true })).toBeFocused();
+
+    await page.locator('#_hfmToggle').click();
+    await expect(page.locator('html')).not.toHaveAttribute('data-ui-variant', 'mono');
+    await expect(button).toBeHidden();
+    await expect(panel).toBeVisible();
+    await expect(group).toBeHidden();
+  });
+
+  test('Simplified: the toolbar button opens the Customizer on the ASCII group at its foot', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page);
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute('data-classic-density', 'simplified');
+    await turnOnTheLook(page);
+
+    const customizer = page.locator('#paramPanel');
+    await page.locator('#classicCustomizerCloseBtn').click();
+    await expect(customizer).toBeHidden();
+    await page
+      .locator('#classicCameraBar')
+      .getByRole('button', { name: 'ASCII settings', exact: true })
+      .click();
+    await expect(customizer).toBeVisible();
+    const group = customizer.getByRole('group', { name: 'ASCII', exact: true });
+    await expect(group).toBeVisible();
+    await expect(group.getByRole('slider')).toHaveCount(4);
+    for (const name of SLIDERS) {
+      await expect(group.getByRole('slider', { name, exact: true })).toBeVisible();
+    }
+    await expect(group.getByRole('slider', { name: 'Edges', exact: true })).toBeFocused();
+    // Viewport-Control's own group is not on the screen in Simplified.
+    await expect(page.locator('#viewportControlPanel')).toBeHidden();
   });
 });

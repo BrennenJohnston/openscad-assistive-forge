@@ -11385,6 +11385,11 @@ if (rounded) {
         refreshStop();
         document.addEventListener('ui-mode-changed', refreshStop);
         document.addEventListener('classic-density-change', refreshStop);
+        // The Alt View's ASCII settings button shows in the look only.
+        new MutationObserver(refreshStop).observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ['data-ui-variant'],
+        });
         let resizeTimer;
         window.addEventListener('resize', () => {
           clearTimeout(resizeTimer);

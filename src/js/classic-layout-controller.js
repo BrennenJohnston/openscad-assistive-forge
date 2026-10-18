@@ -367,6 +367,9 @@ export class ClassicLayoutController {
    */
   init() {
     this._registerLookDrawers();
+    document
+      .getElementById('classicAsciiSettingsBtn')
+      ?.addEventListener('click', () => this.showAsciiSettings());
     const ui = getUIModeController();
     ui.subscribe((newMode) => {
       if (newMode === 'classic') {
@@ -812,6 +815,37 @@ export class ClassicLayoutController {
   /** Show/hide the Viewport-Control pane (Window > Viewport-Control). */
   toggleViewportControl() {
     return this._toggleOptionalPane('viewportControl');
+  }
+
+  /**
+   * The 3D view toolbar's ASCII settings button, in the Alt View: put the
+   * look's sliders on the screen and the focus on the first. Standard keeps
+   * them in Viewport-Control; Simplified, which has no Viewport-Control, at
+   * the foot of the Customizer.
+   * @returns {HTMLInputElement|null} the slider given the focus
+   */
+  showAsciiSettings() {
+    const simplified =
+      getUIModeController().getClassicDensity() === 'simplified';
+    const pane = simplified ? 'customizer' : 'viewportControl';
+    if (!this._panes[`${pane}Visible`]) {
+      if (simplified) this.toggleCustomizer();
+      else this.toggleViewportControl();
+    }
+    // A pane in a stowed field is out of sight with its field.
+    const stowDef = STOW_FIELDS.find(
+      (f) => f.name === this.getPanelField(pane)
+    );
+    if (stowDef && this._panes[stowDef.paneKey]) {
+      this._setFieldStowed(stowDef, false, { focus: false });
+    }
+    const slider = document
+      .getElementById(simplified ? 'classicAsciiSimplified' : 'vpAsciiGroup')
+      ?.querySelector('input[type="range"]');
+    if (!slider) return null;
+    slider.focus();
+    slider.scrollIntoView({ block: 'nearest' });
+    return slider;
   }
 
   /**

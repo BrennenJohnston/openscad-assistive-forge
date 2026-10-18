@@ -1027,6 +1027,55 @@
               ><span class="sr-only">Bottom</span>
             </button>
           </div>
+          <!-- The Alt View's sliders, in the look only: one button, so no
+               group of its own to name. Kept ahead of the groups the bar
+               scrolls to on a narrow window. -->
+          <div class="classic-tb-group classic-tb-ascii">
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicAsciiSettingsBtn"
+              title="ASCII settings"
+            >
+              <svg
+                class="classic-tb-svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  d="M3 6h18M3 12h18M3 18h18"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  fill="none"
+                ></path>
+                <rect
+                  x="6"
+                  y="3"
+                  width="4"
+                  height="6"
+                  fill="currentColor"
+                ></rect>
+                <rect
+                  x="14"
+                  y="9"
+                  width="4"
+                  height="6"
+                  fill="currentColor"
+                ></rect>
+                <rect
+                  x="9"
+                  y="15"
+                  width="4"
+                  height="6"
+                  fill="currentColor"
+                ></rect>
+              </svg>
+              <span class="sr-only">ASCII settings</span>
+            </button>
+          </div>
           <div class="classic-tb-group" role="group" aria-label="Projection">
             <button
               type="button"
@@ -2660,6 +2709,14 @@
                 id="viewportControlPanel"
                 class="classic-panel-body classic-viewport-control"
               >
+                <!-- The Alt View's four sliders, in the look only; the page
+                     fills it when it starts. -->
+                <fieldset
+                  class="classic-vp-group classic-ascii-group"
+                  id="vpAsciiGroup"
+                >
+                  <legend>ASCII</legend>
+                </fieldset>
                 <fieldset class="classic-vp-group">
                   <legend>Aspect Ratio</legend>
                   <!-- Upstream sets the render size here; our canvas is sized
@@ -4356,6 +4413,15 @@
               >
                 <!-- Parameters will be dynamically generated here -->
               </div>
+              <!-- The Alt View's four sliders in Classic's Simplified view,
+                   which has no Viewport-Control; the page fills it when it
+                   starts. -->
+              <fieldset
+                class="classic-vp-group classic-ascii-group"
+                id="classicAsciiSimplified"
+              >
+                <legend>ASCII</legend>
+              </fieldset>
               <!-- The whole stencil set in one download. Shown only
                    when the loaded tile makes plates; main.js reveals it. -->
               <div id="stencilSetExport" class="stencil-set-export" hidden>
@@ -5563,7 +5629,7 @@
                   </svg>
                   <span class="camera-drawer-label">ASCII</span>
                 </button>
-                <!-- Filled when the page starts with the Alt View's three
+                <!-- Filled when the page starts with the Alt View's four
                      sliders. -->
                 <div
                   class="camera-drawer-body ascii-drawer-body"

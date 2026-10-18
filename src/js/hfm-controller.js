@@ -631,8 +631,9 @@ function _applyHfmPersistFade(value) {
 // ---------------------------------------------------------------------------
 
 /**
- * Build a pair of Alt View slider sections (desktop camera panel + mobile
- * drawer) and return a { setEnabled, sync } controls object.
+ * Build one Alt View slider in each of its homes (the desktop camera panel,
+ * the phone's ASCII drawer, Classic's two) and return a { setEnabled, sync }
+ * controls object over all of them.
  *
  * setEnabled(true) shows the sections while Alt View is on; setEnabled(false)
  * hides them entirely so they never appear in the standard UI.
@@ -666,16 +667,18 @@ function _buildHfmSliderControls({
     titleClass,
     inputId,
     noteVisible,
+    titleTag = 'h3',
   }) => {
     if (!container || document.getElementById(inputId)) return;
 
     const section = document.createElement('div');
     section.className = sectionClass;
 
-    const title = document.createElement('h3');
+    const title = document.createElement(titleTag);
     title.className = titleClass;
     title.id = `${inputId}-label`;
     title.textContent = titleText;
+    if (titleTag === 'label') title.htmlFor = inputId;
 
     const sliderContainer = document.createElement('div');
     sliderContainer.className = 'slider-container';
@@ -742,6 +745,24 @@ function _buildHfmSliderControls({
     inputId: `${idBase}Mobile`,
     noteVisible: false,
   });
+
+  // Classic has no camera panel: its ASCII group in Viewport-Control, and
+  // in the Simplified view, which has no Viewport-Control, at the foot of
+  // the Customizer. Labels, as in the panel's other fields.
+  for (const [containerId, suffix] of [
+    ['vpAsciiGroup', 'Classic'],
+    ['classicAsciiSimplified', 'Simplified'],
+  ]) {
+    buildSection({
+      container: document.getElementById(containerId),
+      insertBefore: null,
+      sectionClass: `classic-ascii-field hfm-slider-section ${idBase}-classic-section`,
+      titleClass: 'classic-ascii-label',
+      inputId: `${idBase}${suffix}`,
+      noteVisible: true,
+      titleTag: 'label',
+    });
+  }
 
   const controls = {
     setEnabled(isEnabled) {
