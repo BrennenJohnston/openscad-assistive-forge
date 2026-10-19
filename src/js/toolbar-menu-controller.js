@@ -244,6 +244,9 @@ export class ToolbarMenuController {
 
     document.addEventListener('focusin', (e) => {
       if (!this._isInsideMenus(e.target)) this._lastExternalFocus = e.target;
+      // A bar button focused any way at all is the one the bar's keys act on.
+      const barIndex = this._getVisibleBarItems().indexOf(e.target);
+      if (barIndex >= 0) this._activeBarIndex = barIndex;
     });
   }
 
@@ -549,6 +552,10 @@ export class ToolbarMenuController {
     const items = this._getVisibleBarItems();
     if (items.length === 0) return;
 
+    // The focused button decides; the last one used only when focus is not
+    // on a bar button.
+    const focused = items.indexOf(document.activeElement);
+    if (focused >= 0) this._activeBarIndex = focused;
     const idx = this._activeBarIndex;
 
     switch (e.key) {
