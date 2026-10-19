@@ -45,6 +45,22 @@ spoken sentence: what a control says, it still says.
 | The Alt View key | the header | A screen coming on, changing look, or going off, a little over a key |
 | The Sounds button | the header | A key when it turns sounds on; nothing when it turns them off |
 
+## The key's moments
+
+The key itself has two short moments of its own. Like the switch sounds,
+they follow Play sounds alone, and they play whether the look is on or off.
+The two recordings were cut to one event each and made retro, 8 bits at
+11,025 Hz; their makers are named in `THIRD_PARTY_NOTICES.md`. The two
+melodies are synthesized in the unlock tune's voice, so nothing more is
+downloaded.
+
+| Input | Where | Sound |
+|---|---|---|
+| The key cracking | around the key | A single hard crack, its loudest part at the unlock tune's level |
+| The same moment, 150 ms on | around the key | A three-second tense melody: a creeping lead over a climbing bass, ending unresolved, a few dB under the unlock tune |
+| The key breaking through the glass | the key | A glass shatter as the glass breaks, at the unlock tune's level |
+| The same moment, 200 ms on | the key | A two-second fanfare in a major key, close to the unlock tune's level |
+
 ## Drawers, menus and dialogs
 
 | Input | Where | Sound |
