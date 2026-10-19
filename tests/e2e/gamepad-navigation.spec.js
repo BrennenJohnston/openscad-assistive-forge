@@ -11,10 +11,13 @@ import { skipWithoutWebGL } from './helpers/webgl.js';
 const WASM_READY_TIMEOUT = 180_000;
 
 /** The standard mapping's indexes for the buttons these cases press. */
-const BUTTON = { a: 0, b: 1, rb: 5, rt: 7, select: 8 };
+const BUTTON = { a: 0, b: 1, rb: 5, rt: 7, select: 8, home: 16 };
 
-async function openWithPad(page, { preset = null, mode = 'standard' } = {}) {
-  await page.addInitScript(({ chosen, mode }) => {
+async function openWithPad(
+  page,
+  { preset = null, mode = 'standard', custom = null } = {}
+) {
+  await page.addInitScript(({ chosen, mode, custom }) => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     localStorage.setItem('openscad-forge-theme', 'dark');
@@ -22,10 +25,10 @@ async function openWithPad(page, { preset = null, mode = 'standard' } = {}) {
       'openscad-forge-ui-mode',
       JSON.stringify({ mode, lastCustomMode: mode })
     );
-    if (chosen) {
+    if (chosen || custom) {
       localStorage.setItem(
         'openscad-forge-gamepad-mapping',
-        JSON.stringify({ preset: chosen })
+        JSON.stringify({ preset: chosen ?? 'camera', custom })
       );
     }
     window.__padButtons = Array.from({ length: 17 }, () => ({
@@ -48,7 +51,7 @@ async function openWithPad(page, { preset = null, mode = 'standard' } = {}) {
       configurable: true,
       value: () => [pad, null, null, null],
     });
-  }, { chosen: preset, mode });
+  }, { chosen: preset, mode, custom });
   await page.goto('/?example=simple-box', { timeout: 60_000 });
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
@@ -138,6 +141,22 @@ test.describe('A game controller drives the interface', () => {
     expect(ring.source).toBe('gamepad');
     expect(ring.outline).not.toBe('none');
     expect(ring.width).toBeGreaterThanOrEqual(2);
+  });
+
+  test('the Keys button on the controller opens Keys on its Controller tab', async ({
+    page,
+  }) => {
+    await openWithPad(page, {
+      custom: { activate: 'a', back: 'b', keys: 'home' },
+    });
+    await page.locator('#fileMenuBtn').focus();
+    await press(page, BUTTON.home);
+    await expect(page.locator('#shortcutsModal')).not.toHaveClass(/hidden/);
+    await expect(page.locator('#keys-tab-controller')).toBeFocused();
+    await expect(page.locator('#keysPanelController')).toBeVisible();
+    await press(page, BUTTON.b);
+    await expect(page.locator('#shortcutsModal')).toHaveClass(/hidden/);
+    expect(await activeId(page)).toBe('fileMenuBtn');
   });
 
   test('A opens the File menu and B closes it', async ({ page }) => {

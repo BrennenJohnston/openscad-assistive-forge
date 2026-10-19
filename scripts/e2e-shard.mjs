@@ -140,11 +140,11 @@ export const MEASURED_SECONDS = {
   'folder-import.spec.js': 48.9,
   'folder-projects.spec.js': 10.7,
   'folder-write-back.spec.js': 21.0,
-  // 33.1 by the two runs above, plus five cases since (the parts the right
+  // 33.1 by the two runs above, plus six cases since (the parts the right
   // trigger visits, in Standard, Simplified and on a phone; the D-pad down
-  // the Customizer; a group header's ring: 30 s locally), booked at about
-  // four times that.
-  'gamepad-navigation.spec.js': 153.1,
+  // the Customizer; a group header's ring; the controller's Keys button:
+  // 33 s locally), booked at about four times that.
+  'gamepad-navigation.spec.js': 165.1,
   'guide-example-focus.spec.js': 15.1,
   'header-names.spec.js': 38.9,
   'ink-modes.spec.js': 140.6,
@@ -213,6 +213,9 @@ export const MEASURED_SECONDS = {
   // engine-fault-ladder, four cases that start or render the box two or three
   // times and download one official engine, 29 s locally.
   'engine-fault-ladder.spec.js': 120.0,
+  // keys-dialog, seven cases that each load the Main Page once and open Keys,
+  // 21 s locally.
+  'keys-dialog.spec.js': 84.0,
   // 137.2 by the two runs above, plus one case since (the Engine group, which
   // downloads an engine and switches twice: 9.3 s locally), booked at 40.
   'preferences-dialog.spec.js': 177.2,

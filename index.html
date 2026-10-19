@@ -146,8 +146,8 @@
               type="button"
               id="shortcutsToggle"
               class="btn btn-sm btn-secondary shortcuts-toggle"
-              aria-label="Keys: keyboard shortcuts"
-              title="Keyboard shortcuts"
+              aria-label="Keys: keyboard and controller"
+              title="Keyboard and controller settings"
             >
               <svg
                 class="shortcuts-icon"
@@ -8905,11 +8905,175 @@
             tabindex="0"
             hidden
           >
+            <p>
+              The controller settings live in the Keys dialog, beside the
+              keyboard shortcuts.
+            </p>
+            <button
+              type="button"
+              id="preferencesOpenController"
+              class="btn btn-primary"
+            >
+              Open the controller settings
+            </button>
+          </div>
+          <div
+            role="tabpanel"
+            id="prefs-panel-keyboard"
+            aria-labelledby="prefs-tab-keyboard"
+            class="preferences-panel"
+            tabindex="0"
+            hidden
+          >
+            <p>
+              Every keyboard shortcut in this app can be viewed and changed. The
+              editor opens in its own window so it has room for the full list.
+            </p>
+            <button
+              type="button"
+              id="preferencesOpenShortcuts"
+              class="btn btn-primary"
+            >
+              Open Keyboard Shortcuts…
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button
+            type="button"
+            id="preferencesModalDone"
+            class="btn btn-primary"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Keys: the keyboard shortcuts and the controller -->
+    <div
+      class="modal hidden"
+      id="shortcutsModal"
+      role="dialog"
+      aria-labelledby="shortcutsModalTitle"
+      aria-modal="true"
+    >
+      <div class="modal-overlay" id="shortcutsModalOverlay"></div>
+      <div class="modal-content modal-large shortcuts-modal-content">
+        <div class="modal-header">
+          <h2 id="shortcutsModalTitle">Keys</h2>
+          <button
+            type="button"
+            class="modal-close"
+            id="shortcutsModalClose"
+            aria-label="Close Keys"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div
+          class="preferences-tabs keys-tabs"
+          role="tablist"
+          aria-label="Keys sections"
+          id="keysTablist"
+        >
+          <button
+            role="tab"
+            type="button"
+            class="preferences-tab"
+            id="keys-tab-keyboard"
+            aria-selected="true"
+            aria-controls="keysPanelKeyboard"
+            tabindex="0"
+          >
+            Keyboard
+          </button>
+          <button
+            role="tab"
+            type="button"
+            class="preferences-tab"
+            id="keys-tab-controller"
+            aria-selected="false"
+            aria-controls="keysPanelController"
+            tabindex="-1"
+          >
+            Controller
+          </button>
+        </div>
+
+        <!-- The dialog's one scroll container, between the tabs and the
+             footer. It is also the containing block of the list's hidden
+             labels, which otherwise stretch the dialog into a second
+             scroll. -->
+        <div class="modal-body shortcuts-modal-body">
+          <div
+            role="tabpanel"
+            id="keysPanelKeyboard"
+            aria-labelledby="keys-tab-keyboard"
+            class="keys-panel"
+            tabindex="0"
+          >
+            <div id="shortcutsModalBody">
+              <!-- Content populated by JavaScript -->
+            </div>
+            <div class="keys-panel-actions">
+              <button
+                type="button"
+                id="shortcutsResetAll"
+                class="btn btn-secondary"
+              >
+                Reset All to Defaults
+              </button>
+            </div>
+          </div>
+          <div
+            role="tabpanel"
+            id="keysPanelController"
+            aria-labelledby="keys-tab-controller"
+            class="keys-panel"
+            tabindex="0"
+            hidden
+          >
             <!-- Read-only, deliberately not a live region: plugging a pad in
                  already announces through the status line (main.js wires
                  gamepad connect/disconnect to updateStatus), so a live region
                  here would double-announce the same event. -->
             <p id="prefsGamepadStatus" class="preferences-field-note"></p>
+            <div class="controller-readout">
+              <h3>Test your controller</h3>
+              <p class="preferences-field-note">
+                During the test, a press on your controller shows here and does
+                nothing else. The test stops after 10 seconds without a press,
+                or with Escape.
+              </p>
+              <!-- Not live regions: the second line changes on every frame a
+                   stick moves. controller-panel.js speaks a test's press once
+                   through the announcer. -->
+              <p id="controllerReadoutPad" class="controller-readout-line"></p>
+              <p
+                id="controllerReadoutPress"
+                class="controller-readout-line"
+              ></p>
+              <button
+                type="button"
+                id="controllerReadoutTest"
+                class="btn btn-sm btn-outline controller-readout-test"
+              >
+                Start the test
+              </button>
+            </div>
             <div class="preferences-select-row">
               <label for="prefsGamepadFamily">Controller layout</label>
               <select id="prefsGamepadFamily">
@@ -8921,7 +9085,7 @@
             </div>
             <!-- A picture of the buttons for sighted readers; the list of
                  actions below names every button in full, so the picture is
-                 hidden from assistive technology. preferences-dialog.js
+                 hidden from assistive technology. controller-panel.js
                  writes each part's word for the chosen layout. -->
             <svg
               id="prefsGamepadDiagram"
@@ -9035,7 +9199,7 @@
                   <th scope="col">Button</th>
                 </tr>
               </thead>
-              <!-- One row per action, written by preferences-dialog.js. -->
+              <!-- One row per action, written by controller-panel.js. -->
               <tbody></tbody>
             </table>
             <div class="preferences-check-row">
@@ -9048,82 +9212,9 @@
               </button>
             </div>
           </div>
-          <div
-            role="tabpanel"
-            id="prefs-panel-keyboard"
-            aria-labelledby="prefs-tab-keyboard"
-            class="preferences-panel"
-            tabindex="0"
-            hidden
-          >
-            <p>
-              Every keyboard shortcut in this app can be viewed and changed. The
-              editor opens in its own window so it has room for the full list.
-            </p>
-            <button
-              type="button"
-              id="preferencesOpenShortcuts"
-              class="btn btn-primary"
-            >
-              Open Keyboard Shortcuts…
-            </button>
-          </div>
         </div>
 
-        <div class="modal-footer">
-          <button
-            type="button"
-            id="preferencesModalDone"
-            class="btn btn-primary"
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Keyboard Shortcuts Modal -->
-    <div
-      class="modal hidden"
-      id="shortcutsModal"
-      role="dialog"
-      aria-labelledby="shortcutsModalTitle"
-      aria-modal="true"
-    >
-      <div class="modal-overlay" id="shortcutsModalOverlay"></div>
-      <div class="modal-content modal-large shortcuts-modal-content">
-        <div class="modal-header">
-          <h2 id="shortcutsModalTitle">Keyboard Shortcuts</h2>
-          <button
-            type="button"
-            class="modal-close"
-            id="shortcutsModalClose"
-            aria-label="Close keyboard shortcuts"
-          >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-        <div class="modal-body shortcuts-modal-body" id="shortcutsModalBody">
-          <!-- Content populated by JavaScript -->
-        </div>
         <div class="modal-footer shortcuts-modal-footer">
-          <button
-            type="button"
-            id="shortcutsResetAll"
-            class="btn btn-secondary"
-          >
-            Reset All to Defaults
-          </button>
           <button type="button" id="shortcutsModalDone" class="btn btn-primary">
             Done
           </button>
