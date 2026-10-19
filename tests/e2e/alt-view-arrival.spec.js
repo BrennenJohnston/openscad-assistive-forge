@@ -683,7 +683,16 @@ test.describe('The break-through', () => {
     await openMainPage(page, { [UNLOCK]: count({ entries: 3, permanent: true }) });
     const [key, theme] = await boxes(page);
     expect(key, 'the theme button beside it').toEqual(theme);
-    expect(key).toEqual([36, 36]);
+    // The touch-target size: 36 px where the browser reports a fine pointer,
+    // 44 where it reports none, as some test machines' browsers do.
+    const target = await page.evaluate(() =>
+      Math.round(
+        parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue('--size-touch-target')
+        )
+      )
+    );
+    expect(key, 'the touch-target size').toEqual([target, target]);
     // In the look, the sounds button beside the key is its size too.
     await page.locator('#_hfmToggle').click();
     await expect(page.locator('html')).toHaveAttribute('data-ui-variant', 'mono');
