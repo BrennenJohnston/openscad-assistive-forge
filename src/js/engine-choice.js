@@ -180,7 +180,8 @@ async function readBody(response, onChunk) {
  * @param {(percent: number) => void} [options.onProgress] - 0 to 100
  * @param {Function} [options.fetchImpl]
  * @param {() => Promise<unknown>} [options.requestPersistence] - asked once,
- *   when the first engine is kept
+ *   when the first engine is kept, and not waited for; it reports its own
+ *   failure
  * @returns {Promise<{bytes: number}>}
  */
 export async function download(
@@ -250,7 +251,9 @@ export async function download(
       })
     );
   }
-  if (firstKept) await requestPersistence();
+  // Firefox settles the request only once the person answers its own
+  // permission prompt, which may be never; the engine is kept either way.
+  if (firstKept) requestPersistence();
   onProgress(100);
   return { bytes: total };
 }

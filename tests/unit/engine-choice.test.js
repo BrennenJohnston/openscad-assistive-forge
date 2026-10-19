@@ -165,6 +165,23 @@ describe('downloading an official engine', () => {
     expect(await isDownloaded(manifest, ID)).toBe(true);
   });
 
+  it('finishes while the browser still waits for an answer about persistent storage', async () => {
+    // Firefox settles navigator.storage.persist() only once the person
+    // answers its permission prompt, which may be never.
+    const { fetchImpl } = serve();
+    const progress = [];
+    const requestPersistence = vi.fn(() => new Promise(() => {}));
+    const finished = download(manifest, ID, {
+      fetchImpl,
+      onProgress: (p) => progress.push(p),
+      requestPersistence,
+    }).then(() => 'finished');
+    const waited = new Promise((resolve) => setTimeout(() => resolve('still waiting'), 1000));
+    expect(await Promise.race([finished, waited])).toBe('finished');
+    expect(requestPersistence).toHaveBeenCalledTimes(1);
+    expect(progress[progress.length - 1]).toBe(100);
+  });
+
   it('keeps nothing when one byte differs from the manifest', async () => {
     const damaged = wasm.slice();
     damaged[10] ^= 1;
