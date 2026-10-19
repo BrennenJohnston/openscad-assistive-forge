@@ -40,6 +40,11 @@ body[data-ui-mode='classic'] {
   --alt-view-key-ground: #0000cc;
 }
 
+/* The light of the glass the key breaks through, the same in every look. */
+:root {
+  --alt-view-glint: #ffffff;
+}
+
 /* With high contrast on, its own palette is as specific as this block's
    plain selector and would replace the look's colors in the dark theme;
    the second selector keeps them, as the amber block keeps the light

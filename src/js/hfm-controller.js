@@ -15,12 +15,23 @@ import {
   STORAGE_KEY_SOUND_KINDS_OFF,
 } from './storage-keys.js';
 import { announce, announceImmediate } from './announcer.js';
-import { playUnlockJingle } from './unlock-jingle.js';
+import {
+  isPermanent,
+  noteDevUnlock,
+  recordCodeEntry,
+  takePendingBreak,
+} from './alt-unlock-stages.js';
+import {
+  playFanfare,
+  playThrillerTune,
+  playUnlockJingle,
+} from './unlock-jingle.js';
 import {
   playControlSound,
   playCrtSound,
   playDialSound,
   playCameraSound,
+  playMomentSound,
   startPanMotion,
   playDrawerSound,
   playKeySound,
@@ -33,6 +44,7 @@ import {
   preloadDialSounds,
   preloadDrawerSounds,
   preloadKeySounds,
+  preloadMomentSounds,
   setMuted,
   stopCrtSound,
 } from './crt-sounds.js';
@@ -387,6 +399,25 @@ const _HFM_KEY_REST_MS = 300;
 const _HFM_ARRIVAL_FALLBACK_MS = 12000;
 let _hfmArrival = null;
 const _hfmArrivalTimers = { rest: null, fallback: null };
+// Heard after the second finding: something happened at the key, and that it
+// was not the last of it is left to be found.
+const _HFM_CRACK_SENTENCE = 'Something cracked around the key.';
+// The thriller comes in this long after the crack, under its tail.
+const _HFM_THRILLER_AFTER_S = 0.15;
+// A crack whose lines never report their end is cleared after this.
+const _HFM_CRACK_FALLBACK_MS = 5000;
+let _hfmCrack = null;
+const _SVG_NS = 'http://www.w3.org/2000/svg';
+// Heard after the third finding's break-through: the key is not going away.
+const _HFM_BREAK_SENTENCE = 'The key is here to stay.';
+// The glass breaks this far into the break-through: the stylesheet's
+// --alt-view-break-grow. The shatter plays then, the fanfare a moment after.
+const _HFM_BREAK_IMPACT_S = 1.6;
+const _HFM_FANFARE_AFTER_S = 0.2;
+// A break-through whose shards never report their end is cleared after this.
+const _HFM_BREAK_FALLBACK_MS = 4000;
+const _HFM_BREAK_SHARDS = 12;
+let _hfmBreak = null;
 
 // Late-bound dependencies set via initHfmController
 let _getPreviewManager = () => null;
@@ -2464,6 +2495,7 @@ function _disableAltViewWithPreview(toggleBtn) {
   _setHfmSlidersEnabled(false);
 
   _updateHfmStatusBar();
+  _playPendingBreak();
 }
 
 // ---------------------------------------------------------------------------
@@ -2512,6 +2544,261 @@ function _playKeyArrival(toggle) {
   toggle.setAttribute('data-arrival', 'dropping');
 }
 
+/**
+ * A sentence after the sound playing for the same moment and a short pause,
+ * or at its usual time where nothing plays or the sound cannot start: the
+ * press that completed the code speaks first, inside the announcer's hold.
+ * @param {string} sentence
+ * @param {Promise<number>|null} playing - resolves with the seconds until the
+ *   sound ends
+ * @param {string} what - the sound, for a warning
+ */
+function _sayAfter(sentence, playing, what) {
+  const sayIt = (delay) =>
+    window.setTimeout(() => {
+      announce(sentence, { immediate: true });
+    }, delay);
+  if (!playing) {
+    sayIt(_HFM_UNLOCK_ANNOUNCE_DELAY_MS);
+    return;
+  }
+  playing.then(
+    (seconds) => sayIt(seconds * 1000 + _HFM_AFTER_TUNE_MS),
+    (error) => {
+      console.warn(`[Alt View] The ${what} did not play:`, error);
+      sayIt(_HFM_UNLOCK_ANNOUNCE_DELAY_MS);
+    }
+  );
+}
+
+function _endKeyCrack() {
+  if (!_hfmCrack) return;
+  const { toggle, overlay, onEnd, timer } = _hfmCrack;
+  _hfmCrack = null;
+  clearTimeout(timer);
+  toggle.removeEventListener('animationend', onEnd);
+  toggle.removeAttribute('data-moment');
+  overlay.remove();
+}
+
+// Seven jagged lines from the key's border outward, 10 to 18 px, in the
+// overlay's own coordinates.
+function _drawCrackLines(overlay, toggle) {
+  const box = overlay.getBoundingClientRect();
+  const key = toggle.getBoundingClientRect();
+  const cx = key.left - box.left + key.width / 2;
+  const cy = key.top - box.top + key.height / 2;
+  const lines = 7;
+  for (let i = 0; i < lines; i++) {
+    const angle = (i / lines) * Math.PI * 2 + 0.35 * Math.sin(i * 2.3);
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    // Where the ray leaves the key's box.
+    const t = Math.min(
+      Math.abs(key.width / 2 / (dx || 1e-6)),
+      Math.abs(key.height / 2 / (dy || 1e-6))
+    );
+    const sx = cx + dx * t;
+    const sy = cy + dy * t;
+    const length = 10 + ((i * 5) % 9);
+    const points = [[sx, sy]];
+    for (let step = 1; step <= 3; step++) {
+      const d = (length * step) / 3;
+      const jag = (step % 2 ? 1 : -1) * (1.5 + (i % 3));
+      points.push([sx + dx * d - dy * jag, sy + dy * d + dx * jag]);
+    }
+    const line = document.createElementNS(_SVG_NS, 'polyline');
+    line.setAttribute(
+      'points',
+      points.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+    );
+    line.setAttribute('pathLength', '1');
+    overlay.appendChild(line);
+  }
+}
+
+/**
+ * The second finding: the glass around the key cracks. The lines are drawn
+ * out, held and receding as the stylesheet times them; with Play sounds on,
+ * the crack and then the thriller; then the sentence. With reduced motion,
+ * the sounds and the sentence alone.
+ * @param {HTMLElement|null} toggle - the key
+ * @param {{appeared?: boolean}} [options] - appeared: the crack brought the
+ *   key, on a visit where it was not showing, so the sentence says so first
+ */
+function _playKeyCrack(toggle, { appeared = false } = {}) {
+  if (!toggle) return;
+  _endKeyCrack();
+  let playing = null;
+  if (_soundsOn()) {
+    playMomentSound('crack').catch((error) => {
+      console.warn('[Alt View] The crack did not play:', error);
+    });
+    playing = playThrillerTune({ after: _HFM_THRILLER_AFTER_S });
+  }
+  _sayAfter(
+    appeared
+      ? `${_HFM_UNLOCK_SENTENCE} ${_HFM_CRACK_SENTENCE}`
+      : _HFM_CRACK_SENTENCE,
+    playing,
+    'thriller'
+  );
+  if (_prefersReducedMotion()) return;
+
+  const overlay = document.createElementNS(_SVG_NS, 'svg');
+  overlay.setAttribute('class', 'alt-view-crack');
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.setAttribute('focusable', 'false');
+  toggle.setAttribute('data-moment', 'crack');
+  toggle.appendChild(overlay);
+  _drawCrackLines(overlay, toggle);
+  const onEnd = (event) => {
+    if (event.animationName === 'alt-view-crack-recede') _endKeyCrack();
+  };
+  toggle.addEventListener('animationend', onEnd);
+  _hfmCrack = {
+    toggle,
+    overlay,
+    onEnd,
+    timer: setTimeout(_endKeyCrack, _HFM_CRACK_FALLBACK_MS),
+  };
+}
+
+function _endKeyBreak() {
+  if (!_hfmBreak) return;
+  const { toggle, overlay, onEnd, timer } = _hfmBreak;
+  _hfmBreak = null;
+  clearTimeout(timer);
+  toggle.removeEventListener('animationend', onEnd);
+  // The key takes its own look at once, where the copy wearing it stood.
+  toggle.style.transition = 'none';
+  toggle.removeAttribute('data-moment');
+  void toggle.offsetWidth;
+  toggle.style.transition = '';
+  overlay.remove();
+}
+
+// Shards of the glass: triangles cut from the key's box, from its center
+// out, each flying its own way, 40 to 80 px, and turning as it goes.
+function _addBreakShards(overlay) {
+  for (let i = 0; i < _HFM_BREAK_SHARDS; i++) {
+    const shard = document.createElement('span');
+    shard.className = 'alt-view-break-shard';
+    const way = (i / _HFM_BREAK_SHARDS) * Math.PI * 2 + 0.3 * Math.sin(i * 1.7);
+    const far = 40 + ((i * 13) % 41);
+    shard.style.setProperty('--dx', `${(Math.cos(way) * far).toFixed(1)}px`);
+    shard.style.setProperty('--dy', `${(Math.sin(way) * far).toFixed(1)}px`);
+    shard.style.setProperty('--spin', `${(i % 2 ? 1 : -1) * (90 + i * 23)}deg`);
+    const corner = (k) => {
+      const at = way + (k - 0.5) * ((Math.PI * 2) / _HFM_BREAK_SHARDS);
+      return `${(50 + Math.cos(at) * 70).toFixed(1)}% ${(50 + Math.sin(at) * 70).toFixed(1)}%`;
+    };
+    shard.style.clipPath = `polygon(50% 50%, ${corner(0)}, ${corner(1)})`;
+    overlay.appendChild(shard);
+  }
+}
+
+/**
+ * The third finding: a copy of the key grows toward the viewer from behind
+ * the screen and breaks the glass, a flash and its shards, then settles into
+ * the key's place, which keeps the look from then on. With Play sounds on,
+ * the shatter as the glass breaks and the fanfare after it; then the
+ * sentence. With reduced motion the key simply takes its look, and the
+ * sounds and the sentence follow at once.
+ * @param {HTMLElement|null} toggle - the key
+ */
+function _playKeyBreakThrough(toggle) {
+  if (!toggle) return;
+  _endKeyCrack();
+  _endKeyBreak();
+  _setKeyPermanent(toggle);
+  const still = _prefersReducedMotion();
+  const impact = still ? 0 : _HFM_BREAK_IMPACT_S;
+  let playing = null;
+  if (_soundsOn()) {
+    // The fanfare is asked for now, inside the press, to start after the
+    // shatter; the shatter plays as the glass breaks, even if the picture
+    // is cut short.
+    playing = playFanfare({ after: impact + _HFM_FANFARE_AFTER_S });
+    setTimeout(() => {
+      playMomentSound('shatter').catch((error) => {
+        console.warn('[Alt View] The shatter did not play:', error);
+      });
+    }, impact * 1000);
+  }
+  _sayAfter(_HFM_BREAK_SENTENCE, playing, 'fanfare');
+  if (still) return;
+
+  const overlay = document.createElement('span');
+  overlay.className = 'alt-view-break';
+  overlay.setAttribute('aria-hidden', 'true');
+  const copy = document.createElement('span');
+  copy.className = 'alt-view-break-copy';
+  copy.innerHTML = toggle.querySelector('svg')?.outerHTML ?? '';
+  const flash = document.createElement('span');
+  flash.className = 'alt-view-break-flash';
+  overlay.append(copy, flash);
+  _addBreakShards(overlay);
+  toggle.setAttribute('data-moment', 'break');
+  toggle.appendChild(overlay);
+  const onEnd = (event) => {
+    if (event.animationName === 'alt-view-break-shard') _endKeyBreak();
+  };
+  toggle.addEventListener('animationend', onEnd);
+  _hfmBreak = {
+    toggle,
+    overlay,
+    onEnd,
+    timer: setTimeout(_endKeyBreak, _HFM_BREAK_FALLBACK_MS),
+  };
+}
+
+/** From the third finding on the key stays, there at every start. */
+function _setKeyPermanent(toggle) {
+  toggle?.setAttribute('data-alt-key', 'permanent');
+}
+
+/** A break-through found while the look was on plays once it is off. */
+function _playPendingBreak() {
+  if (!takePendingBreak()) return;
+  _playKeyBreakThrough(document.getElementById('_hfmToggle'));
+}
+
+/**
+ * What a finding of the code plays on the key.
+ * @param {string} stage - recordCodeEntry()'s answer
+ * @param {HTMLElement|null} toggle - the key
+ * @param {{appeared?: boolean}} [options] - appeared: the finding brought
+ *   the key, on a visit where it was not showing
+ * @returns {boolean} whether the moment says its own sentence
+ */
+function _playFinding(stage, toggle, { appeared = false } = {}) {
+  if (stage === 'arrival') {
+    _playKeyArrival(toggle);
+  } else if (stage === 'crack') {
+    _playKeyCrack(toggle, { appeared });
+    return true;
+  } else if (stage === 'break') {
+    _playKeyBreakThrough(toggle);
+    return true;
+  } else if (stage === 'break-pending') {
+    _setKeyPermanent(toggle);
+  }
+  return false;
+}
+
+// Whoever put it there: the Alt View, before a project opens or with one, or
+// the City Walk.
+function _lookOn() {
+  return document.documentElement.getAttribute('data-ui-variant') === 'mono';
+}
+
+function _showGatedElements() {
+  document.querySelectorAll('[data-hfm-gated]').forEach((el) => {
+    el.hidden = false;
+  });
+}
+
 function _injectAltToggle() {
   const themeToggle = document.getElementById('themeToggle');
   if (!themeToggle) return;
@@ -2520,6 +2807,7 @@ function _injectAltToggle() {
   const toggleBtn = document.createElement('button');
   toggleBtn.id = '_hfmToggle';
   toggleBtn.className = 'btn btn-sm btn-secondary alt-view-toggle';
+  if (isPermanent()) _setKeyPermanent(toggleBtn);
   toggleBtn.setAttribute('aria-pressed', 'false');
   toggleBtn.setAttribute('aria-label', _HFM_TOGGLE_NAME);
   toggleBtn.setAttribute('title', _HFM_TOGGLE_NAME);
@@ -2535,8 +2823,11 @@ function _injectAltToggle() {
 
   themeToggle.parentElement.insertBefore(toggleBtn, themeToggle.nextSibling);
   // The key is there: its sounds are fetched now, so the first press is not
-  // waiting on a download.
-  if (_soundsOn()) preloadCrtSounds();
+  // waiting on a download, and its moments while it can still have them.
+  if (_soundsOn()) {
+    preloadCrtSounds();
+    if (!isPermanent()) preloadMomentSounds();
+  }
 
   // Just before the key; the stylesheet shows it while the look is on. The
   // row is right-aligned, so the key stays under the pointer that pressed it
@@ -2625,6 +2916,7 @@ function _injectAltToggle() {
         _setAssetsForVariant(false);
         toggleBtn.setAttribute('aria-pressed', 'false');
         _hfmPendingEnable = false;
+        _playPendingBreak();
       }
       announceImmediate(
         isCurrentlyEnabled ? _HFM_OFF_SENTENCE : _HFM_ON_SENTENCE
@@ -2653,37 +2945,52 @@ function _injectAltToggle() {
 }
 
 /**
+ * Every finding of the code counts, wherever it is made; a developer's door
+ * counts as the first.
+ *
  * @param {Object} [options]
- * @param {boolean} [options.moment] - Found by the camera sequence: the key
- *   arrives with its drop instead of simply appearing.
+ * @param {boolean} [options.moment] - Found by the camera sequence: the
+ *   finding plays its moment instead of the key simply appearing.
  */
 function _handleUnlock({ moment = false } = {}) {
-  if (_hfmUnlocked) return;
+  if (_hfmUnlocked) {
+    if (moment) {
+      _playFinding(
+        recordCodeEntry({ altViewOn: _lookOn() }),
+        document.getElementById('_hfmToggle')
+      );
+    }
+    return;
+  }
   _hfmUnlocked = true;
 
   _injectAltToggle();
-  if (moment) _playKeyArrival(document.getElementById('_hfmToggle'));
-
-  document.querySelectorAll('[data-hfm-gated]').forEach((el) => {
-    el.hidden = false;
-  });
-
-  const sayIt = (delay) =>
-    window.setTimeout(() => {
-      announce(_HFM_UNLOCK_SENTENCE, { immediate: true });
-    }, delay);
-  if (moment && _soundsOn()) {
-    // The tune first, then the sentence, so neither covers the other. A tune
-    // that cannot play leaves the sentence at its usual time.
-    playUnlockJingle().then(
-      (seconds) => sayIt(seconds * 1000 + _HFM_AFTER_TUNE_MS),
-      (error) => {
-        console.warn('[Alt View] The unlock tune did not play:', error);
-        sayIt(_HFM_UNLOCK_ANNOUNCE_DELAY_MS);
-      }
-    );
+  const toggle = document.getElementById('_hfmToggle');
+  let stage = null;
+  if (moment) {
+    stage = recordCodeEntry({ altViewOn: _lookOn() });
   } else {
-    sayIt(_HFM_UNLOCK_ANNOUNCE_DELAY_MS);
+    noteDevUnlock();
+  }
+  // The first finding drops the key in. A later one made where the key was
+  // not showing, on a new visit, brings it by its own moment instead.
+  const drops = moment && (stage === 'arrival' || stage === 'none');
+  let spoken = false;
+  if (drops) {
+    _playKeyArrival(toggle);
+  } else if (stage) {
+    spoken = _playFinding(stage, toggle, { appeared: true });
+  }
+
+  _showGatedElements();
+
+  // The tune first, then the sentence, so neither covers the other.
+  if (!spoken) {
+    _sayAfter(
+      _HFM_UNLOCK_SENTENCE,
+      drops && _soundsOn() ? playUnlockJingle() : null,
+      'unlock tune'
+    );
   }
 
   const container = document.getElementById('previewContainer');
@@ -2718,6 +3025,13 @@ export function initHfmController({
   _getDisplayOptionsController = getDisplayOptionsController;
   // A page that starts with sounds off starts muted.
   setMuted(!_soundsOn());
+
+  // A key that stays is simply there: no drop, nothing said.
+  if (isPermanent()) {
+    _hfmUnlocked = true;
+    _injectAltToggle();
+    _showGatedElements();
+  }
 
   return {
     handleUnlock: _handleUnlock,

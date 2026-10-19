@@ -559,6 +559,14 @@ export const STORAGE_KEY_HFM_SURFACES = 'openscad-forge-hfm-surfaces';
 export const STORAGE_KEY_HFM_GRID = getAppPrefKey('hfm-grid');
 
 /**
+ * localStorage key for how many times the Alt View's code has been found in
+ * this browser: JSON { entries, permanent, pendingBreak }, written by
+ * alt-unlock-stages.js and never expired. The key stays from the third
+ * finding on.
+ */
+export const STORAGE_KEY_ALT_UNLOCK = getAppPrefKey('alt-unlock');
+
+/**
  * localStorage key for the City Walk game's walking-speed multiplier.
  * Decimal string in [0.5, 3]; a comfort/accessibility preference,
  * so it persists across sessions.

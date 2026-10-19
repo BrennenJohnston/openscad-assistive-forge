@@ -726,7 +726,8 @@ body[data-app-surface='welcome'] #uiModeToggle {
 
 /* Alternate View Toggle Button (hidden until unlocked) */
 .alt-view-toggle {
-  /* Match theme-toggle styling: 44×44px, same visual treatment */
+  /* The theme buttons' size and treatment: 36 px at a fine pointer, 44 on
+     touch and in high contrast; the sounds button beside the key the same. */
   background: var(--color-bg-primary);
   border: 1px solid var(--color-text-primary);
   border-radius: var(--border-radius-md);
@@ -737,14 +738,31 @@ body[data-app-surface='welcome'] #uiModeToggle {
   display: none; /* Hidden by default until unlock */
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: var(--size-touch-target);
+  height: var(--size-touch-target);
   flex-shrink: 0;
 }
 
 /* Show when injected by unlock sequence */
 .alt-view-toggle:not(.hidden) {
   display: flex;
+}
+
+/* Found three times, the key stays, wearing the look it turns on: the
+   look's accent on its key's ground, green with the dark theme, amber with
+   the light, Classic's DOS yellow on its blue. Inside the look the variant
+   draws it, its pressed fill included. */
+:root:not([data-ui-variant='mono']) .alt-view-toggle[data-alt-key='permanent'] {
+  background: var(--alt-view-key-ground);
+  border-color: var(--alt-view-key-accent);
+  color: var(--alt-view-key-accent);
+}
+
+@media (hover: hover) {
+  :root:not([data-ui-variant='mono'])
+    .alt-view-toggle[data-alt-key='permanent']:hover {
+    background: var(--alt-view-key-ground);
+  }
 }
 
 @media (hover: hover) {
@@ -841,7 +859,7 @@ body[data-app-surface='welcome'] #uiModeToggle {
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    width: 44px;
+    width: var(--size-touch-target);
     height: 100%;
     transform: translateX(-50%);
     background: var(--alt-view-key-ground);
@@ -974,6 +992,214 @@ body[data-app-surface='welcome'] #uiModeToggle {
   }
   to {
     top: 100%;
+  }
+}
+
+/* A second finding cracks the glass around the key: jagged lines leave its
+   border, drawn out, held, and receding, in the look the key would turn on.
+   In Classic they are the DOS blue, which reads on its light toolbar, and
+   the DOS yellow once the DOS look's navy is behind them. The controller
+   draws them into the key and names the moment on it while it lasts. With
+   reduced motion nothing is drawn. */
+.alt-view-crack {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .alt-view-toggle[data-moment='crack'] {
+    --alt-view-crack-draw: 0.8s;
+    --alt-view-crack-hold: 1.5s;
+    --alt-view-crack-recede: 2s;
+    --alt-view-crack-color: var(--alt-view-key-accent);
+    position: relative;
+    z-index: var(--z-index-base);
+    overflow: visible;
+  }
+
+  body[data-ui-mode='classic'] .alt-view-toggle[data-moment='crack'] {
+    --alt-view-crack-color: var(--alt-view-key-ground);
+  }
+
+  :root[data-ui-variant='mono']
+    body[data-ui-mode='classic']
+    .alt-view-toggle[data-moment='crack'] {
+    --alt-view-crack-color: var(--alt-view-key-accent);
+  }
+
+  .alt-view-crack {
+    display: block;
+    position: absolute;
+    top: calc(-1 * var(--space-lg));
+    left: calc(-1 * var(--space-lg));
+    width: calc(100% + 2 * var(--space-lg));
+    height: calc(100% + 2 * var(--space-lg));
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .alt-view-crack polyline {
+    fill: none;
+    stroke: var(--alt-view-crack-color);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    filter: drop-shadow(0 0 2px var(--alt-view-crack-color));
+    animation:
+      alt-view-crack-draw var(--alt-view-crack-draw) ease-out forwards,
+      alt-view-crack-recede var(--alt-view-crack-recede) ease-in
+        calc(var(--alt-view-crack-draw) + var(--alt-view-crack-hold)) forwards;
+  }
+}
+
+@keyframes alt-view-crack-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes alt-view-crack-recede {
+  from {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  to {
+    stroke-dashoffset: 1;
+    opacity: 0.2;
+  }
+}
+
+/* A third finding: a copy of the key comes from behind the screen, small,
+   dim and blurred, grows toward the viewer and breaks the glass in front of
+   it, a flash and shards flying out, then settles into its place to stay.
+   The controller names the moment on the key while it lasts. With reduced
+   motion the key simply takes its look. */
+.alt-view-break {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* The key's own box goes out of sight at once under the copy: over the
+     permanent look the key already wears, and over high contrast's border. */
+  .alt-view-toggle[data-moment='break'],
+  :root:not([data-ui-variant='mono'])
+    .alt-view-toggle[data-moment='break'][data-alt-key],
+  :root[data-high-contrast='true'] .alt-view-toggle[data-moment='break'] {
+    --alt-view-break-grow: 1.6s;
+    --alt-view-break-flash: 80ms;
+    --alt-view-break-shards: 0.8s;
+    --alt-view-break-settle: 0.4s;
+    position: relative;
+    z-index: var(--z-index-base);
+    overflow: visible;
+    background: transparent;
+    border-color: transparent;
+    transition: none;
+  }
+
+  .alt-view-toggle[data-moment='break'] > svg {
+    visibility: hidden;
+  }
+
+  .alt-view-break {
+    display: block;
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .alt-view-break-copy {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    border: 1px solid var(--alt-view-key-accent);
+    border-radius: var(--border-radius-md);
+    background: var(--alt-view-key-ground);
+    color: var(--alt-view-key-accent);
+    transform: scale(0.2);
+    opacity: 0.4;
+    filter: blur(4px);
+    animation:
+      alt-view-break-grow var(--alt-view-break-grow) ease-in forwards,
+      alt-view-break-settle var(--alt-view-break-settle) ease-out
+        var(--alt-view-break-grow) forwards;
+  }
+
+  .alt-view-break-copy svg {
+    stroke: var(--alt-view-key-accent);
+  }
+
+  .alt-view-break-flash {
+    position: absolute;
+    inset: calc(-1 * var(--space-xs));
+    border-radius: var(--border-radius-sm);
+    background: var(--alt-view-glint);
+    opacity: 0;
+    animation: alt-view-break-flash var(--alt-view-break-flash) linear
+      var(--alt-view-break-grow) forwards;
+  }
+
+  .alt-view-break-shard {
+    position: absolute;
+    inset: 0;
+    background: color-mix(
+      in srgb,
+      var(--alt-view-glint) 55%,
+      var(--alt-view-key-accent)
+    );
+    opacity: 0;
+    animation: alt-view-break-shard var(--alt-view-break-shards) ease-out
+      var(--alt-view-break-grow) forwards;
+  }
+}
+
+@keyframes alt-view-break-grow {
+  to {
+    transform: scale(1.15);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes alt-view-break-settle {
+  0% {
+    transform: scale(1.15);
+    opacity: 1;
+    filter: none;
+  }
+  50% {
+    transform: scale(0.95);
+    opacity: 1;
+    filter: none;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    filter: none;
+  }
+}
+
+@keyframes alt-view-break-flash {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes alt-view-break-shard {
+  from {
+    transform: none;
+    opacity: 0.9;
+  }
+  to {
+    transform: translate(var(--dx), var(--dy)) rotate(var(--spin));
+    opacity: 0;
   }
 }
 

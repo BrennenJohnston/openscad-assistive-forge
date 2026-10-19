@@ -22,6 +22,23 @@ import { PreviewManager } from '../../src/js/preview.js'
 import { announce } from '../../src/js/announcer.js'
 import { STORAGE_KEY_SOUNDS, STORAGE_KEY_SOUND_KINDS_OFF } from '../../src/js/storage-keys.js'
 
+// Reduced motion asked for, until the case's afterEach puts the setup's
+// matchMedia back with putMotionBack().
+let setupMatchMedia = null
+function reduceMotion() {
+  setupMatchMedia = window.matchMedia
+  window.matchMedia = (query) => ({
+    matches: query.includes('prefers-reduced-motion: reduce'),
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  })
+}
+function putMotionBack() {
+  if (setupMatchMedia) window.matchMedia = setupMatchMedia
+  setupMatchMedia = null
+}
+
 // The pan's motion, as the mixer hands it back: a handle whose stop() the
 // controller calls once the view has come to rest.
 const { panMotions } = vi.hoisted(() => ({ panMotions: [] }))
@@ -50,6 +67,15 @@ vi.mock('../../src/js/crt-sounds.js', () => ({
   playScrollSound: vi.fn(async () => 0.055),
   preloadScrollSounds: vi.fn(),
   playTypingSound: vi.fn(async () => 0.1),
+  playMomentSound: vi.fn(async () => 0.6),
+  preloadMomentSounds: vi.fn(),
+}))
+
+// The tunes, each resolving with the seconds until it ends.
+vi.mock('../../src/js/unlock-jingle.js', () => ({
+  playUnlockJingle: vi.fn(async () => 3.8),
+  playThrillerTune: vi.fn(async ({ after = 0 } = {}) => after + 3),
+  playFanfare: vi.fn(async ({ after = 0 } = {}) => after + 2),
 }))
 
 // The screen waits for its sound to start, which the mock settles on a tick.
@@ -2019,6 +2045,501 @@ describe('the unlock is heard', () => {
     expect(written.indexOf('A key appeared next to the theme button.')).toBeGreaterThan(
       written.indexOf('Pan right')
     )
+  })
+})
+
+describe('every finding of the code counts', () => {
+  const UNLOCK_KEY = 'openscad-forge-alt-unlock'
+  let seen
+  let observer = null
+
+  const seed = (state) =>
+    localStorage.setItem(
+      UNLOCK_KEY,
+      JSON.stringify({ entries: 0, permanent: false, pendingBreak: false, ...state })
+    )
+  const stored = () => JSON.parse(localStorage.getItem(UNLOCK_KEY))
+  const key = () => document.getElementById('_hfmToggle')
+  // Every moment the key is marked with and every state of its drop, in order.
+  const watchKey = () => {
+    seen = { moments: [], arrival: [] }
+    observer = new MutationObserver((records) => {
+      for (const record of records) {
+        if (record.target.id !== '_hfmToggle') continue
+        const value = record.target.getAttribute(record.attributeName)
+        if (value === null) continue
+        const list = record.attributeName === 'data-moment' ? seen.moments : seen.arrival
+        if (list.at(-1) !== value) list.push(value)
+      }
+    })
+    observer.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-moment', 'data-arrival'],
+    })
+  }
+  const page = () => {
+    const written = pageWithHeaderAndDpad()
+    const gated = document.createElement('div')
+    gated.id = 'gatedTab'
+    gated.setAttribute('data-hfm-gated', '')
+    gated.hidden = true
+    document.body.appendChild(gated)
+    watchKey()
+    return written
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: [
+        'setTimeout',
+        'clearTimeout',
+        'requestAnimationFrame',
+        'cancelAnimationFrame',
+      ],
+    })
+    localStorage.clear()
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    document.documentElement.removeAttribute('data-ui-variant')
+  })
+
+  afterEach(() => {
+    observer?.disconnect()
+    observer = null
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    document.body.innerHTML = ''
+    document.documentElement.removeAttribute('data-ui-variant')
+    localStorage.clear()
+  })
+
+  it('a second finding, with the key showing, cracks the glass around it', async () => {
+    page()
+    const controller = await freshController()
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(seen.arrival[0]).toBe('dropping')
+    expect(seen.moments).toEqual([])
+
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(seen.moments).toEqual(['crack'])
+    expect(stored().entries).toBe(2)
+    // Here no animation runs, so the crack is cleared by its fallback.
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(key().hasAttribute('data-moment')).toBe(false)
+    expect(key().hasAttribute('data-alt-key')).toBe(false)
+  })
+
+  it('a third finding outside the look breaks through, and the key stays', async () => {
+    page()
+    const controller = await freshController()
+    for (let i = 0; i < 3; i++) {
+      controller.handleUnlock({ moment: true })
+      await vi.advanceTimersByTimeAsync(200)
+    }
+    expect(seen.moments).toEqual(['crack', 'break'])
+    expect(key().getAttribute('data-alt-key')).toBe('permanent')
+    expect(stored()).toEqual({ entries: 3, permanent: true, pendingBreak: false })
+  })
+
+  it('a third finding inside the look makes the key permanent at once; the break-through plays as the look goes off', async () => {
+    page()
+    const controller = await freshController(previewManagerStub())
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(200)
+    key().click()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(document.documentElement.getAttribute('data-ui-variant')).toBe('mono')
+
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(200)
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(200)
+    expect(seen.moments).toEqual(['crack'])
+    expect(key().getAttribute('data-alt-key')).toBe('permanent')
+    expect(stored()).toEqual({ entries: 3, permanent: true, pendingBreak: true })
+
+    key().click()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(document.documentElement.hasAttribute('data-ui-variant')).toBe(false)
+    expect(seen.moments).toEqual(['crack', 'break'])
+    expect(stored().pendingBreak).toBe(false)
+
+    key().click()
+    await vi.advanceTimersByTimeAsync(100)
+    key().click()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(seen.moments, 'it plays once').toEqual(['crack', 'break'])
+  })
+
+  it('the same on the Main Page, where the look is on with no preview yet', async () => {
+    page()
+    seed({ entries: 3, permanent: true, pendingBreak: true })
+    await freshController()
+    key().click()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(document.documentElement.getAttribute('data-ui-variant')).toBe('mono')
+    expect(seen.moments).toEqual([])
+    key().click()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(document.documentElement.hasAttribute('data-ui-variant')).toBe(false)
+    expect(seen.moments).toEqual(['break'])
+  })
+
+  it('a key made permanent before is there at start: no drop, nothing said, the guide tab shown', async () => {
+    const written = page()
+    seed({ entries: 3, permanent: true })
+    const controller = await freshController()
+    expect(key()).not.toBeNull()
+    expect(key().getAttribute('data-alt-key')).toBe('permanent')
+    expect(document.getElementById('gatedTab').hidden).toBe(false)
+    expect(controller.isUnlocked()).toBe(true)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(seen.arrival).toEqual([])
+    expect(written).toEqual([])
+
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(200)
+    expect(seen.moments, 'a finding after that brings nothing').toEqual([])
+    expect(seen.arrival).toEqual([])
+  })
+
+  it('on a later visit, with no key showing, the second finding brings the key with its crack and no drop', async () => {
+    const written = page()
+    seed({ entries: 1 })
+    const controller = await freshController()
+    expect(key()).toBeNull()
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(key()).not.toBeNull()
+    expect(seen.arrival).toEqual([])
+    expect(seen.moments).toEqual(['crack'])
+    expect(document.getElementById('gatedTab').hidden).toBe(false)
+    expect(written).toEqual([
+      'A key appeared next to the theme button. Something cracked around the key.',
+    ])
+  })
+
+  it('on a later visit the third finding brings the key through the glass, to stay', async () => {
+    page()
+    seed({ entries: 2 })
+    const controller = await freshController()
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(seen.arrival).toEqual([])
+    expect(seen.moments).toEqual(['break'])
+    expect(key().getAttribute('data-alt-key')).toBe('permanent')
+    expect(stored().permanent).toBe(true)
+  })
+
+  it('a developer door counts as the first finding, so the code after it cracks', async () => {
+    page()
+    const controller = await freshController()
+    controller.handleUnlock()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(seen.arrival).toEqual([])
+    expect(stored().entries).toBe(1)
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(seen.moments).toEqual(['crack'])
+  })
+})
+
+describe('the crack', () => {
+  const UNLOCK_KEY = 'openscad-forge-alt-unlock'
+  const CRACK = 'Something cracked around the key.'
+  const APPEARED = 'A key appeared next to the theme button.'
+  const key = () => document.getElementById('_hfmToggle')
+  const found = (entries) =>
+    localStorage.setItem(
+      UNLOCK_KEY,
+      JSON.stringify({ entries, permanent: false, pendingBreak: false })
+    )
+  // The recede animation's end, as a browser reports it from a line.
+  const recedeEnds = () => {
+    const event = new Event('animationend', { bubbles: true })
+    Object.defineProperty(event, 'animationName', { value: 'alt-view-crack-recede' })
+    key().querySelector('.alt-view-crack polyline').dispatchEvent(event)
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: [
+        'setTimeout',
+        'clearTimeout',
+        'requestAnimationFrame',
+        'cancelAnimationFrame',
+      ],
+    })
+    localStorage.clear()
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+  })
+
+  afterEach(() => {
+    putMotionBack()
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+    document.body.innerHTML = ''
+    localStorage.clear()
+  })
+
+  it('draws seven lines into the key, hidden from assistive tech, while the key names the moment, and clears both when the lines have receded', async () => {
+    pageWithHeaderAndDpad()
+    localStorage.setItem('openscad-customizer-hfm-unlock', 'true')
+    found(1)
+    const controller = await freshController()
+    controller.handleUnlock()
+    controller.handleUnlock({ moment: true })
+
+    const overlay = key().querySelector('svg.alt-view-crack')
+    expect(overlay).not.toBeNull()
+    expect(overlay.getAttribute('aria-hidden')).toBe('true')
+    expect(overlay.querySelectorAll('polyline')).toHaveLength(7)
+    expect(key().getAttribute('data-moment')).toBe('crack')
+    expect(key().querySelector('svg'), 'the key icon stays first').not.toBe(overlay)
+
+    recedeEnds()
+    expect(key().querySelector('.alt-view-crack')).toBeNull()
+    expect(key().hasAttribute('data-moment')).toBe(false)
+  })
+
+  it('says the crack once, 600 ms after the press with sounds off', async () => {
+    const written = pageWithHeaderAndDpad()
+    found(1)
+    const controller = await freshController()
+    controller.handleUnlock()
+    await vi.advanceTimersByTimeAsync(1000)
+    written.length = 0
+
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(500)
+    expect(written).toEqual([])
+    await vi.advanceTimersByTimeAsync(200)
+    expect(written).toEqual([CRACK])
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(written).toEqual([CRACK])
+  })
+
+  it('with sounds on, plays the crack, then the thriller 150 ms after it, and says the crack after the thriller', async () => {
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'true')
+    const written = pageWithHeaderAndDpad()
+    found(1)
+    const controller = await freshController()
+    const { playMomentSound } = await import('../../src/js/crt-sounds.js')
+    const { playThrillerTune, playUnlockJingle } = await import('../../src/js/unlock-jingle.js')
+    controller.handleUnlock()
+    await vi.advanceTimersByTimeAsync(1000)
+    written.length = 0
+
+    controller.handleUnlock({ moment: true })
+    expect(playMomentSound).toHaveBeenCalledWith('crack')
+    expect(playThrillerTune).toHaveBeenCalledWith({ after: 0.15 })
+    expect(playUnlockJingle, 'no unlock tune for a crack').not.toHaveBeenCalled()
+    // The thriller ends 3.15 s from the press; the sentence 300 ms after.
+    await vi.advanceTimersByTimeAsync(3400)
+    expect(written).toEqual([])
+    await vi.advanceTimersByTimeAsync(100)
+    expect(written).toEqual([CRACK])
+  })
+
+  it('on a later visit, the crack brings the key with no drop and no unlock tune, and one sentence says both', async () => {
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'true')
+    const written = pageWithHeaderAndDpad()
+    found(1)
+    const controller = await freshController()
+    const { playUnlockJingle } = await import('../../src/js/unlock-jingle.js')
+    expect(key()).toBeNull()
+
+    controller.handleUnlock({ moment: true })
+    expect(key().hasAttribute('data-arrival')).toBe(false)
+    expect(key().getAttribute('data-moment')).toBe('crack')
+    expect(playUnlockJingle).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(written).toEqual([`${APPEARED} ${CRACK}`])
+  })
+
+  it('with reduced motion draws nothing and names no moment, and still sounds and speaks', async () => {
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'true')
+    reduceMotion()
+    const written = pageWithHeaderAndDpad()
+    found(1)
+    const controller = await freshController()
+    const { playMomentSound } = await import('../../src/js/crt-sounds.js')
+    controller.handleUnlock()
+    controller.handleUnlock({ moment: true })
+    expect(key().querySelector('.alt-view-crack')).toBeNull()
+    expect(key().hasAttribute('data-moment')).toBe(false)
+    expect(playMomentSound).toHaveBeenCalledWith('crack')
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(written).toContain(CRACK)
+  })
+})
+
+describe('the break-through', () => {
+  const UNLOCK_KEY = 'openscad-forge-alt-unlock'
+  const STAY = 'The key is here to stay.'
+  const key = () => document.getElementById('_hfmToggle')
+  const found = (entries) =>
+    localStorage.setItem(
+      UNLOCK_KEY,
+      JSON.stringify({ entries, permanent: false, pendingBreak: false })
+    )
+  // The shards' animation ending, as a browser reports it from a shard.
+  const shardsEnd = () => {
+    const event = new Event('animationend', { bubbles: true })
+    Object.defineProperty(event, 'animationName', { value: 'alt-view-break-shard' })
+    key().querySelector('.alt-view-break-shard').dispatchEvent(event)
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: [
+        'setTimeout',
+        'clearTimeout',
+        'requestAnimationFrame',
+        'cancelAnimationFrame',
+      ],
+    })
+    localStorage.clear()
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    document.documentElement.removeAttribute('data-ui-variant')
+  })
+
+  afterEach(() => {
+    putMotionBack()
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+    document.body.innerHTML = ''
+    document.documentElement.removeAttribute('data-ui-variant')
+    localStorage.clear()
+  })
+
+  it('grows a copy of the key, with a flash and twelve shards hidden from assistive tech, and leaves the key permanent when the shards have flown', async () => {
+    pageWithHeaderAndDpad()
+    found(2)
+    const controller = await freshController()
+    controller.handleUnlock()
+    controller.handleUnlock({ moment: true })
+
+    const overlay = key().querySelector('.alt-view-break')
+    expect(overlay).not.toBeNull()
+    expect(overlay.getAttribute('aria-hidden')).toBe('true')
+    expect(overlay.querySelector('.alt-view-break-copy svg')).not.toBeNull()
+    expect(overlay.querySelectorAll('.alt-view-break-flash')).toHaveLength(1)
+    const shards = overlay.querySelectorAll('.alt-view-break-shard')
+    expect(shards).toHaveLength(12)
+    expect(shards[0].style.clipPath).toMatch(/^polygon\(50% 50%,/)
+    expect(key().getAttribute('data-moment')).toBe('break')
+    expect(key().getAttribute('data-alt-key')).toBe('permanent')
+
+    shardsEnd()
+    expect(key().querySelector('.alt-view-break')).toBeNull()
+    expect(key().hasAttribute('data-moment')).toBe(false)
+    expect(key().getAttribute('data-alt-key')).toBe('permanent')
+  })
+
+  it('says the key is here to stay once, 600 ms after the press with sounds off', async () => {
+    const written = pageWithHeaderAndDpad()
+    found(2)
+    const controller = await freshController()
+    controller.handleUnlock()
+    await vi.advanceTimersByTimeAsync(1000)
+    written.length = 0
+
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(500)
+    expect(written).toEqual([])
+    await vi.advanceTimersByTimeAsync(200)
+    expect(written).toEqual([STAY])
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(written).toEqual([STAY])
+  })
+
+  it('with sounds on, asks for the fanfare at the press to start 1.8 s on, plays the shatter as the glass breaks at 1.6 s, and speaks after the fanfare', async () => {
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'true')
+    const written = pageWithHeaderAndDpad()
+    found(2)
+    const controller = await freshController()
+    const { playMomentSound } = await import('../../src/js/crt-sounds.js')
+    const { playFanfare, playUnlockJingle } = await import('../../src/js/unlock-jingle.js')
+    controller.handleUnlock()
+    await vi.advanceTimersByTimeAsync(1000)
+    written.length = 0
+
+    controller.handleUnlock({ moment: true })
+    expect(playFanfare).toHaveBeenCalledWith({ after: 1.8 })
+    expect(playUnlockJingle).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(playMomentSound).not.toHaveBeenCalledWith('shatter')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(playMomentSound).toHaveBeenCalledWith('shatter')
+    // The fanfare ends 3.8 s from the press; the sentence 300 ms after.
+    await vi.advanceTimersByTimeAsync(2400)
+    expect(written).toEqual([])
+    await vi.advanceTimersByTimeAsync(200)
+    expect(written).toEqual([STAY])
+  })
+
+  it('on a later visit, the break-through brings the key with no drop and no unlock tune, and says only that it is here to stay', async () => {
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'true')
+    const written = pageWithHeaderAndDpad()
+    found(2)
+    const controller = await freshController()
+    const { playUnlockJingle } = await import('../../src/js/unlock-jingle.js')
+    expect(key()).toBeNull()
+
+    controller.handleUnlock({ moment: true })
+    expect(key().hasAttribute('data-arrival')).toBe(false)
+    expect(key().getAttribute('data-moment')).toBe('break')
+    expect(key().getAttribute('data-alt-key')).toBe('permanent')
+    expect(playUnlockJingle).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(written).toEqual([STAY])
+  })
+
+  it('with reduced motion the key takes its look at once, with no picture, and the shatter, the fanfare and the sentence still come', async () => {
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'true')
+    reduceMotion()
+    const written = pageWithHeaderAndDpad()
+    found(2)
+    const controller = await freshController()
+    const { playMomentSound } = await import('../../src/js/crt-sounds.js')
+    const { playFanfare } = await import('../../src/js/unlock-jingle.js')
+    controller.handleUnlock()
+    controller.handleUnlock({ moment: true })
+    expect(key().querySelector('.alt-view-break')).toBeNull()
+    expect(key().hasAttribute('data-moment')).toBe(false)
+    expect(key().getAttribute('data-alt-key')).toBe('permanent')
+    expect(playFanfare).toHaveBeenCalledWith({ after: 0.2 })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(playMomentSound).toHaveBeenCalledWith('shatter')
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(written).toContain(STAY)
+  })
+
+  it('found while the look is on, it waits; the look turned off says so first, then the break-through plays and speaks', async () => {
+    const written = pageWithHeaderAndDpad()
+    found(2)
+    const controller = await freshController(previewManagerStub())
+    controller.handleUnlock()
+    key().click()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(document.documentElement.getAttribute('data-ui-variant')).toBe('mono')
+
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(key().querySelector('.alt-view-break')).toBeNull()
+    expect(key().getAttribute('data-alt-key')).toBe('permanent')
+    written.length = 0
+
+    key().click()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(key().querySelector('.alt-view-break')).not.toBeNull()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(written).toEqual(['Alt View off.', STAY])
   })
 })
 

@@ -215,8 +215,11 @@ test.describe('The sounds button', () => {
     expect(place.rowOffset, 'in the key row').toBeLessThanOrEqual(2);
     expect(place.gap, 'just before the key').toBeGreaterThanOrEqual(0);
     expect(place.gap).toBeLessThanOrEqual(16);
-    expect(place.width, 'a 44 px target').toBeGreaterThanOrEqual(44);
-    expect(place.height).toBeGreaterThanOrEqual(44);
+    // The key's size, which is the theme buttons': 36 px at a fine pointer,
+    // 44 on touch and in high contrast.
+    const key = await page.locator('#_hfmToggle').boundingBox();
+    expect(Math.round(place.width), "the key's size").toBe(Math.round(key.width));
+    expect(Math.round(place.height)).toBe(Math.round(key.height));
 
     await page.locator('#themeToggle').focus();
     await page.keyboard.press('Tab');
