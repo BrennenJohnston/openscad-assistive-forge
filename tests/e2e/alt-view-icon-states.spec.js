@@ -72,6 +72,12 @@ async function seed(page, { theme, classic, highContrast }) {
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
       localStorage.setItem('openscad-forge-theme', theme);
       localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+      // The key found three times: it wears the look it turns on, and is
+      // measured so in every look and state.
+      localStorage.setItem(
+        'openscad-forge-alt-unlock',
+        JSON.stringify({ entries: 3, permanent: true, pendingBreak: false })
+      );
       localStorage.setItem('openscad-forge-sounds', 'false');
       if (highContrast) {
         localStorage.setItem('openscad-forge-high-contrast', 'true');

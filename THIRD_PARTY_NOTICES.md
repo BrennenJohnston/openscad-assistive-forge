@@ -603,16 +603,20 @@ magedu: https://freesound.org/s/277300/
 
 ---
 
-## Crack Sound (CC0-1.0)
+## Crack and Shatter Sounds (CC0-1.0)
 
-A short sound the Alt View's key makes, `public/sounds/moments/crack.wav`,
-from "loud crack" by cairhien: https://freesound.org/s/865450/
+Two short sounds the Alt View's key makes, under `public/sounds/moments/`,
+each released under Creative Commons 0 by its author:
+
+- `crack.wav`, from "loud crack" by cairhien: https://freesound.org/s/865450/
+- `shatter.wav`, from "Hard Glass Break 3" by ElevatorFan2020:
+  https://freesound.org/s/861044/
 
 **License**: CC0 1.0 Universal (public domain dedication)  
 **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/  
-**Note**: One crack cut out, made mono and levelled, resampled to 11,025 Hz
-and quantized to 8 bits for a retro sound, then resampled to 32 kHz mono.
-CC0 asks for no credit; it is given with thanks.
+**Note**: One event cut out of each, made mono and levelled, resampled to
+11,025 Hz and quantized to 8 bits for a retro sound, then resampled to 32 kHz
+mono. CC0 asks for no credit; these are given with thanks.
 
 ---
 

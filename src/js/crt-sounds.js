@@ -169,6 +169,7 @@ const SCROLL_STRAY_DB = 1;
 // level of its own: the loudest 200 ms of each on the unlock tune's.
 const MOMENT_FILES = {
   crack: ['/sounds/moments/crack.wav', -7.2],
+  shatter: ['/sounds/moments/shatter.wav', -9.5],
 };
 // A browser that has not let the page make sound yet leaves the audio
 // context waiting; past this the sound is given up.

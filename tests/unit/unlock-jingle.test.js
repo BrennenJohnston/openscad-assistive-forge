@@ -7,6 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+  fanfareSchedule,
   jingleSchedule,
   noteFrequency,
   thrillerSchedule,
@@ -83,6 +84,32 @@ describe('the thriller', () => {
     expect(bass).toEqual(['A2', 'A2', 'A2', 'A2', 'A#2', 'A#2', 'B2', 'C3']);
     const end = phrase.notes.filter((n) => n.t === last(phrase).t).map((n) => n.note);
     expect(end.sort()).toEqual(['C3', 'D5', 'G#5']);
+  });
+});
+
+// The key that stays: a short fanfare in the same voice, after the glass breaks.
+describe('the fanfare', () => {
+  const { phrases, seconds } = fanfareSchedule();
+  const [phrase] = phrases;
+
+  it("is one phrase of 2.0 s at the tune's speed", () => {
+    expect(phrases).toHaveLength(1);
+    expect(seconds).toBeCloseTo(2.0, 6);
+  });
+
+  it('has thirteen notes, every time stretched by four thirds and every pitch kept', () => {
+    expect(phrase.notes).toHaveLength(13);
+    const top = phrase.notes.find((n) => n.note === 'C6');
+    expect(top.t).toBeCloseTo(0.94 / 0.75, 9);
+    expect(top.dur).toBeCloseTo(0.56 / 0.75, 9);
+    expect(top.freq).toBeCloseTo(noteFrequency('C6'), 9);
+  });
+
+  it('calls three times, leaps, climbs to C6 and resolves on the C chord', () => {
+    const lead = phrase.notes.filter((n) => n.type === 'pulse' && n.duty === 0.25);
+    expect(lead.map((n) => n.note)).toEqual(['C5', 'C5', 'C5', 'G5', 'E5', 'G5', 'C6']);
+    const end = phrase.notes.filter((n) => n.t === last(phrase).t).map((n) => n.note);
+    expect(end.sort()).toEqual(['C4', 'C6', 'G5']);
   });
 });
 

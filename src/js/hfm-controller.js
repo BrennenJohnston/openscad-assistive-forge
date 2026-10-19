@@ -21,7 +21,11 @@ import {
   recordCodeEntry,
   takePendingBreak,
 } from './alt-unlock-stages.js';
-import { playThrillerTune, playUnlockJingle } from './unlock-jingle.js';
+import {
+  playFanfare,
+  playThrillerTune,
+  playUnlockJingle,
+} from './unlock-jingle.js';
 import {
   playControlSound,
   playCrtSound,
@@ -395,10 +399,6 @@ const _HFM_KEY_REST_MS = 300;
 const _HFM_ARRIVAL_FALLBACK_MS = 12000;
 let _hfmArrival = null;
 const _hfmArrivalTimers = { rest: null, fallback: null };
-// A later finding's moment (the crack, the break-through) is named on the key
-// while it plays.
-const _HFM_MOMENT_MARK_MS = 100;
-let _hfmMomentMarkTimer = null;
 // Heard after the second finding: something happened at the key, and that it
 // was not the last of it is left to be found.
 const _HFM_CRACK_SENTENCE = 'Something cracked around the key.';
@@ -408,6 +408,16 @@ const _HFM_THRILLER_AFTER_S = 0.15;
 const _HFM_CRACK_FALLBACK_MS = 5000;
 let _hfmCrack = null;
 const _SVG_NS = 'http://www.w3.org/2000/svg';
+// Heard after the third finding's break-through: the key is not going away.
+const _HFM_BREAK_SENTENCE = 'The key is here to stay.';
+// The glass breaks this far into the break-through: the stylesheet's
+// --alt-view-break-grow. The shatter plays then, the fanfare a moment after.
+const _HFM_BREAK_IMPACT_S = 1.6;
+const _HFM_FANFARE_AFTER_S = 0.2;
+// A break-through whose shards never report their end is cleared after this.
+const _HFM_BREAK_FALLBACK_MS = 4000;
+const _HFM_BREAK_SHARDS = 12;
+let _hfmBreak = null;
 
 // Late-bound dependencies set via initHfmController
 let _getPreviewManager = () => null;
@@ -2534,15 +2544,6 @@ function _playKeyArrival(toggle) {
   toggle.setAttribute('data-arrival', 'dropping');
 }
 
-function _markKeyMoment(toggle, moment) {
-  if (!toggle) return;
-  clearTimeout(_hfmMomentMarkTimer);
-  toggle.setAttribute('data-moment', moment);
-  _hfmMomentMarkTimer = setTimeout(() => {
-    toggle.removeAttribute('data-moment');
-  }, _HFM_MOMENT_MARK_MS);
-}
-
 /**
  * A sentence after the sound playing for the same moment and a short pause,
  * or at its usual time where nothing plays or the sound cannot start: the
@@ -2663,9 +2664,93 @@ function _playKeyCrack(toggle, { appeared = false } = {}) {
   };
 }
 
-/** The third finding: the key breaks through the glass into its place. */
+function _endKeyBreak() {
+  if (!_hfmBreak) return;
+  const { toggle, overlay, onEnd, timer } = _hfmBreak;
+  _hfmBreak = null;
+  clearTimeout(timer);
+  toggle.removeEventListener('animationend', onEnd);
+  // The key takes its own look at once, where the copy wearing it stood.
+  toggle.style.transition = 'none';
+  toggle.removeAttribute('data-moment');
+  void toggle.offsetWidth;
+  toggle.style.transition = '';
+  overlay.remove();
+}
+
+// Shards of the glass: triangles cut from the key's box, from its center
+// out, each flying its own way, 40 to 80 px, and turning as it goes.
+function _addBreakShards(overlay) {
+  for (let i = 0; i < _HFM_BREAK_SHARDS; i++) {
+    const shard = document.createElement('span');
+    shard.className = 'alt-view-break-shard';
+    const way = (i / _HFM_BREAK_SHARDS) * Math.PI * 2 + 0.3 * Math.sin(i * 1.7);
+    const far = 40 + ((i * 13) % 41);
+    shard.style.setProperty('--dx', `${(Math.cos(way) * far).toFixed(1)}px`);
+    shard.style.setProperty('--dy', `${(Math.sin(way) * far).toFixed(1)}px`);
+    shard.style.setProperty('--spin', `${(i % 2 ? 1 : -1) * (90 + i * 23)}deg`);
+    const corner = (k) => {
+      const at = way + (k - 0.5) * ((Math.PI * 2) / _HFM_BREAK_SHARDS);
+      return `${(50 + Math.cos(at) * 70).toFixed(1)}% ${(50 + Math.sin(at) * 70).toFixed(1)}%`;
+    };
+    shard.style.clipPath = `polygon(50% 50%, ${corner(0)}, ${corner(1)})`;
+    overlay.appendChild(shard);
+  }
+}
+
+/**
+ * The third finding: a copy of the key grows toward the viewer from behind
+ * the screen and breaks the glass, a flash and its shards, then settles into
+ * the key's place, which keeps the look from then on. With Play sounds on,
+ * the shatter as the glass breaks and the fanfare after it; then the
+ * sentence. With reduced motion the key simply takes its look, and the
+ * sounds and the sentence follow at once.
+ * @param {HTMLElement|null} toggle - the key
+ */
 function _playKeyBreakThrough(toggle) {
-  _markKeyMoment(toggle, 'break');
+  if (!toggle) return;
+  _endKeyCrack();
+  _endKeyBreak();
+  _setKeyPermanent(toggle);
+  const still = _prefersReducedMotion();
+  const impact = still ? 0 : _HFM_BREAK_IMPACT_S;
+  let playing = null;
+  if (_soundsOn()) {
+    // The fanfare is asked for now, inside the press, to start after the
+    // shatter; the shatter plays as the glass breaks, even if the picture
+    // is cut short.
+    playing = playFanfare({ after: impact + _HFM_FANFARE_AFTER_S });
+    setTimeout(() => {
+      playMomentSound('shatter').catch((error) => {
+        console.warn('[Alt View] The shatter did not play:', error);
+      });
+    }, impact * 1000);
+  }
+  _sayAfter(_HFM_BREAK_SENTENCE, playing, 'fanfare');
+  if (still) return;
+
+  const overlay = document.createElement('span');
+  overlay.className = 'alt-view-break';
+  overlay.setAttribute('aria-hidden', 'true');
+  const copy = document.createElement('span');
+  copy.className = 'alt-view-break-copy';
+  copy.innerHTML = toggle.querySelector('svg')?.outerHTML ?? '';
+  const flash = document.createElement('span');
+  flash.className = 'alt-view-break-flash';
+  overlay.append(copy, flash);
+  _addBreakShards(overlay);
+  toggle.setAttribute('data-moment', 'break');
+  toggle.appendChild(overlay);
+  const onEnd = (event) => {
+    if (event.animationName === 'alt-view-break-shard') _endKeyBreak();
+  };
+  toggle.addEventListener('animationend', onEnd);
+  _hfmBreak = {
+    toggle,
+    overlay,
+    onEnd,
+    timer: setTimeout(_endKeyBreak, _HFM_BREAK_FALLBACK_MS),
+  };
 }
 
 /** From the third finding on the key stays, there at every start. */
@@ -2694,8 +2779,8 @@ function _playFinding(stage, toggle, { appeared = false } = {}) {
     _playKeyCrack(toggle, { appeared });
     return true;
   } else if (stage === 'break') {
-    _setKeyPermanent(toggle);
     _playKeyBreakThrough(toggle);
+    return true;
   } else if (stage === 'break-pending') {
     _setKeyPermanent(toggle);
   }

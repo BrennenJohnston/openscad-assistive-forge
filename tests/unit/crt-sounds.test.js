@@ -28,6 +28,7 @@ const DURATIONS = {
   '/sounds/switches/lever-on-1.wav': 0.13,
   '/sounds/switches/lever-on-2.wav': 0.131,
   '/sounds/moments/crack.wav': 0.6,
+  '/sounds/moments/shatter.wav': 0.8,
 };
 
 function wavHeader(bytes) {
@@ -296,7 +297,7 @@ describe('the switch, selector and latch files', () => {
 const MOMENTS_DIR = join(SOUNDS_DIR, 'moments');
 
 describe("the key's moment files", () => {
-  it.each(['crack.wav'])(
+  it.each(['crack.wav', 'shatter.wav'])(
     '%s is a 32 kHz mono 16-bit WAV under 1 s with its peak at or under -1 dBFS',
     (file) => {
       const bytes = readFileSync(join(MOMENTS_DIR, file));
@@ -622,19 +623,22 @@ describe('playing a switch sound', () => {
     expect(() => soundGroup('hum')).toThrow('No such sound group: hum');
   });
 
-  it("plays the key's crack whole in the moments group, 7.2 dB down on a level of its own, fetched ahead once", async () => {
+  it("plays the key's crack and shatter whole in the moments group, 7.2 and 9.5 dB down on levels of their own, fetched ahead once", async () => {
     const { playMomentSound, preloadMomentSounds, soundGroup } = await load();
     const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
     preloadMomentSounds();
-    expect(urls()).toEqual(['/sounds/moments/crack.wav']);
+    expect(urls()).toEqual(['/sounds/moments/crack.wav', '/sounds/moments/shatter.wav']);
     await expect(playMomentSound('crack')).resolves.toBeCloseTo(0.6, 6);
-    expect(urls(), 'fetched once').toHaveLength(1);
+    expect(urls(), 'fetched once').toHaveLength(2);
     const [source] = sources;
     expect(source.started).toBe(true);
     expect(source.connectedTo).toBe(source.level);
     expect(source.level.gain.value).toBeCloseTo(db(-7.2), 6);
     expect(source.level.connectedTo).toBe(soundGroup('moments'));
     expect(soundGroup('moments').gain.value, 'the group itself at 0 dB').toBe(1);
+    await expect(playMomentSound('shatter')).resolves.toBeCloseTo(0.8, 6);
+    expect(sources[1].level.gain.value, 'the shatter 9.5 dB down').toBeCloseTo(db(-9.5), 6);
+    expect(sources[1].level.connectedTo).toBe(soundGroup('moments'));
     await expect(playMomentSound('thud')).rejects.toThrow('No such moment: thud');
   });
 

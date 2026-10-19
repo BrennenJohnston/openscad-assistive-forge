@@ -123,6 +123,29 @@ const THRILLER = [
   },
 ];
 
+// C major: three calls, a leap, an arpeggio up to C6, resolving on the C
+// chord.
+const FANFARE = [
+  {
+    length: 1.5,
+    notes: [
+      pulse('C5', 0, 0.1, 0.25, { gain: 0.16, release: 0.02 }),
+      pulse('C5', 0.12, 0.1, 0.25, { gain: 0.16, release: 0.02 }),
+      pulse('C5', 0.24, 0.1, 0.25, { gain: 0.16, release: 0.02 }),
+      pulse('G5', 0.36, 0.3, 0.25, { gain: 0.16, release: 0.08 }),
+      pulse('E5', 0.36, 0.3, 0.5, { gain: 0.09, release: 0.08 }),
+      pulse('E5', 0.7, 0.1, 0.25, { gain: 0.16, release: 0.02 }),
+      pulse('G5', 0.82, 0.1, 0.25, { gain: 0.16, release: 0.02 }),
+      pulse('C6', 0.94, 0.56, 0.25, { gain: 0.16, release: 0.3 }),
+      pulse('G5', 0.94, 0.56, 0.5, { gain: 0.09, release: 0.3 }),
+      triangle('C3', 0, 0.34, { gain: 0.28, release: 0.04 }),
+      triangle('G2', 0.36, 0.3, { gain: 0.28, release: 0.04 }),
+      triangle('C3', 0.7, 0.22, { gain: 0.28, release: 0.04 }),
+      triangle('C4', 0.94, 0.56, { gain: 0.3, release: 0.3 }),
+    ],
+  },
+];
+
 /**
  * A table of phrases as played: every time stretched, every frequency kept.
  * @returns {{ phrases: Array<{ start: number, length: number, notes: Array<Object> }>, seconds: number }}
@@ -159,6 +182,11 @@ export function jingleSchedule() {
 /** The thriller as played. */
 export function thrillerSchedule() {
   return schedule(THRILLER);
+}
+
+/** The fanfare as played. */
+export function fanfareSchedule() {
+  return schedule(FANFARE);
 }
 
 function pulseWave(context, duty) {
@@ -234,6 +262,14 @@ export function renderThriller() {
   return renderTune(thrillerSchedule());
 }
 
+/**
+ * The fanfare's samples, mono at 44.1 kHz.
+ * @returns {Promise<Float32Array>}
+ */
+export function renderFanfare() {
+  return renderTune(fanfareSchedule());
+}
+
 // The audio context is made before the first wait, inside the press that
 // asked for the tune, because a browser lets a page make sound only after a
 // person has used it. `after` seconds from the press, it starts.
@@ -288,4 +324,14 @@ export function playUnlockJingle() {
  */
 export function playThrillerTune({ after = 0 } = {}) {
   return playTune(renderThriller, after);
+}
+
+/**
+ * Play the fanfare once, `after` seconds from the press that asked for it.
+ * Call it from that press.
+ * @param {{after?: number}} [options]
+ * @returns {Promise<number>} Seconds from now until it ends, once scheduled
+ */
+export function playFanfare({ after = 0 } = {}) {
+  return playTune(renderFanfare, after);
 }

@@ -498,6 +498,224 @@ test.describe('The crack', () => {
   });
 });
 
+// The third finding: a copy of the key grows from behind the screen, breaks
+// the glass, and settles into the key's place, which keeps the look it turns
+// on from then on; the shatter and a fanfare; then a sentence.
+const STAY = 'The key is here to stay.';
+const SHATTER_SECONDS = 0.8;
+const FANFARE_SECONDS = 2.0;
+
+// Seeded on the first load only, so a reload shows what the page kept.
+async function openMainPageOnce(page, stored) {
+  await page.addInitScript((stored) => {
+    if (sessionStorage.getItem('seeded')) return;
+    sessionStorage.setItem('seeded', 'true');
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    localStorage.setItem('openscad-forge-theme', 'dark');
+    for (const [name, value] of Object.entries(stored)) {
+      localStorage.setItem(name, value);
+    }
+  }, stored);
+  await page.goto('/');
+  await page.waitForSelector('body[data-wasm-ready="true"]', { timeout: 180_000 });
+}
+
+// When the key was marked with the break-through and when the mark and its
+// pieces went, on the page's clock, and how many shards flew.
+async function watchBreak(page) {
+  await page.evaluate(() => {
+    const seen = (window.__break = { marked: null, cleared: null, shards: 0, copy: false, ground: null });
+    new MutationObserver(() => {
+      const key = document.getElementById('_hfmToggle');
+      if (!key) return;
+      const overlay = key.querySelector('.alt-view-break');
+      if (overlay) {
+        seen.copy = !!overlay.querySelector('.alt-view-break-copy svg');
+        seen.shards = overlay.querySelectorAll('.alt-view-break-shard').length;
+      }
+      const marked = key.getAttribute('data-moment') === 'break';
+      if (marked && seen.marked === null) {
+        seen.marked = performance.now();
+        // The key's own box, which the copy grows in front of.
+        seen.ground = getComputedStyle(key).backgroundColor;
+      }
+      if (!marked && !overlay && seen.marked !== null && seen.cleared === null) {
+        seen.cleared = performance.now();
+      }
+    }).observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['data-moment'],
+    });
+  });
+}
+
+const breakSeen = (page) => page.evaluate(() => window.__break);
+const keyColors = (page) =>
+  page.locator('#_hfmToggle').evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { ground: s.backgroundColor, glyph: s.color, edge: s.borderTopColor };
+  });
+
+test.describe('The break-through', () => {
+  test('a third finding breaks through the glass, and the key stays in its look, through a reload', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await recordAnnouncements(page);
+    await listenForSound(page);
+    await openMainPageOnce(page, {
+      'openscad-customizer-hfm-unlock': 'true',
+      [UNLOCK]: count({ entries: 2 }),
+    });
+    await expect(page.locator('#_hfmToggle')).toBeVisible();
+    await page.waitForTimeout(1_000);
+    await probeSound(page);
+    await watchBreak(page);
+    const before = await page.evaluate(() => window.__sounds.length);
+    await typeSequence(page);
+    const pressed = await page.evaluate(() => performance.now());
+    const sounding = await canSoundAfterTyping(page);
+
+    await expect.poll(async () => (await breakSeen(page)).cleared, { timeout: 8_000 }).not.toBeNull();
+    const seen = await breakSeen(page);
+    expect(seen.copy, 'a copy of the key').toBe(true);
+    expect(seen.ground, "the key's own box out of sight behind the copy").toBe('rgba(0, 0, 0, 0)');
+    expect(seen.shards).toBe(12);
+    const lasted = seen.cleared - seen.marked;
+    expect(lasted, 'grown 1.6 s, then 0.8 s of shards').toBeGreaterThan(2_000);
+    expect(lasted, 'ended by its shards, before the 4 s fallback').toBeLessThan(3_600);
+    await expect(page.locator('.alt-view-break')).toHaveCount(0);
+    await expect(page.locator('#_hfmToggle')).toHaveAttribute('data-alt-key', 'permanent');
+    expect(
+      JSON.parse(await page.evaluate((name) => localStorage.getItem(name), UNLOCK))
+    ).toEqual({ entries: 3, permanent: true, pendingBreak: false });
+    expect(await keyColors(page), 'the green look on its ground').toEqual({
+      ground: 'rgb(18, 18, 18)',
+      glyph: 'rgb(0, 255, 0)',
+      edge: 'rgb(0, 255, 0)',
+    });
+
+    await expect.poll(async () => (await said(page, STAY)).length, { timeout: 10_000 }).toBe(1);
+    const [sentence] = await said(page, STAY);
+    if (sounding) {
+      const heard = (await page.evaluate(() => window.__sounds)).slice(before);
+      expect(heard.map((s) => Math.round(s.seconds * 10) / 10).sort((a, c) => a - c)).toEqual([
+        SHATTER_SECONDS,
+        FANFARE_SECONDS,
+      ]);
+      expect(sentence.t - pressed, 'after the fanfare').toBeGreaterThanOrEqual(3_800);
+    }
+
+    // Without the developer's door, a reload still shows the key, in its look.
+    await page.evaluate(() => localStorage.removeItem('openscad-customizer-hfm-unlock'));
+    await page.reload();
+    await page.waitForSelector('body[data-wasm-ready="true"]', { timeout: 180_000 });
+    const key = page.locator('#_hfmToggle');
+    await expect(key).toBeVisible();
+    await expect(key).toHaveAttribute('data-alt-key', 'permanent');
+    await expect(key).not.toHaveAttribute('data-arrival', /.+/);
+  });
+
+  test('found while the look is on, the key stays at once and the break-through waits until the look is off', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => localStorage.setItem('openscad-forge-sounds', 'false'));
+    await recordAnnouncements(page);
+    await openMainPage(page, {
+      'openscad-customizer-hfm-unlock': 'true',
+      [UNLOCK]: count({ entries: 2 }),
+    });
+    const key = page.locator('#_hfmToggle');
+    await key.click();
+    await expect(page.locator('html')).toHaveAttribute('data-ui-variant', 'mono');
+    await watchBreak(page);
+    await typeSequence(page);
+    await page.waitForTimeout(1_500);
+    await expect(key).toHaveAttribute('data-alt-key', 'permanent');
+    expect((await breakSeen(page)).marked, 'nothing breaks in the look').toBeNull();
+    expect(
+      JSON.parse(await page.evaluate((name) => localStorage.getItem(name), UNLOCK))
+    ).toEqual({ entries: 3, permanent: true, pendingBreak: true });
+
+    const mark = await page.evaluate(() => performance.now());
+    await key.click();
+    await expect(page.locator('html')).not.toHaveAttribute('data-ui-variant', 'mono');
+    await expect.poll(async () => (await breakSeen(page)).cleared, { timeout: 8_000 }).not.toBeNull();
+    await expect.poll(async () => (await said(page, STAY)).length, { timeout: 5_000 }).toBe(1);
+    const order = (await announcementsSince(page, 0))
+      .filter((a) => a.t >= mark && ['Alt View off.', STAY].includes(a.text))
+      .map((a) => a.text);
+    expect(order).toEqual(['Alt View off.', STAY]);
+  });
+
+  test("in Classic the permanent key is the DOS look's yellow key on its blue", async ({ page }) => {
+    test.setTimeout(240_000);
+    await openMainPage(page, {
+      [UNLOCK]: count({ entries: 3, permanent: true }),
+      'openscad-forge-ui-mode': JSON.stringify({ mode: 'classic', lastCustomMode: 'standard' }),
+    });
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+    await expect(page.locator('#_hfmToggle')).toBeVisible();
+    expect(await keyColors(page)).toEqual({
+      ground: 'rgb(0, 0, 204)',
+      glyph: 'rgb(255, 255, 85)',
+      edge: 'rgb(255, 255, 85)',
+    });
+  });
+
+  test("the permanent key is the theme buttons' size: at a fine pointer, in high contrast, and on a touch screen", async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(240_000);
+    const boxes = async (p) =>
+      p.evaluate(() =>
+        ['_hfmToggle', 'themeToggle'].map((id) => {
+          const r = document.getElementById(id).getBoundingClientRect();
+          return [Math.round(r.width), Math.round(r.height)];
+        })
+      );
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await openMainPage(page, { [UNLOCK]: count({ entries: 3, permanent: true }) });
+    const [key, theme] = await boxes(page);
+    expect(key, 'the theme button beside it').toEqual(theme);
+    expect(key).toEqual([36, 36]);
+    // In the look, the sounds button beside the key is its size too.
+    await page.locator('#_hfmToggle').click();
+    await expect(page.locator('html')).toHaveAttribute('data-ui-variant', 'mono');
+    const sounds = await page.locator('#_hfmSounds').boundingBox();
+    expect([Math.round(sounds.width), Math.round(sounds.height)], 'the sounds button').toEqual(key);
+
+    const contrast = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const contrastPage = await contrast.newPage();
+    await openMainPage(contrastPage, {
+      [UNLOCK]: count({ entries: 3, permanent: true }),
+      'openscad-forge-high-contrast': 'true',
+    });
+    const [hcKey, hcTheme] = await boxes(contrastPage);
+    expect(hcKey, 'in high contrast').toEqual(hcTheme);
+    await contrast.close();
+
+    const phone = await browser.newContext({
+      viewport: { width: 412, height: 915 },
+      hasTouch: true,
+    });
+    const phonePage = await phone.newPage();
+    await openMainPage(phonePage, { [UNLOCK]: count({ entries: 3, permanent: true }) });
+    const coarse = await phonePage.evaluate(() => matchMedia('(pointer: coarse)').matches);
+    if (coarse) {
+      const [phoneKey, phoneTheme] = await boxes(phonePage);
+      expect(phoneKey, 'on a touch screen').toEqual(phoneTheme);
+      expect(phoneKey).toEqual([44, 44]);
+    }
+    await phone.close();
+  });
+});
+
 // A short tune plays as the key drops, unless sounds are turned off in
 // Preferences; the screen reader's sentence waits until it has finished.
 test.describe('The tune', () => {
