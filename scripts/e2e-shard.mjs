@@ -211,8 +211,11 @@ export const MEASURED_SECONDS = {
   'typed-preset.spec.js': 10.3,
   // 1474.1 by the two runs above, plus four cases since (the open phone
   // Customizer closed by its own arrow, in four looks: 28 s locally), booked
-  // at about four times that.
-  'ui-schema.spec.js': 1623.1,
+  // at about four times that. Then eight more (Preview Settings opened over
+  // the preview without moving it, two desktop sizes in four looks), booked
+  // at 45.4 s from CI's own pace in Test Suite 39315966307: two presses of a
+  // toggle each, at the 2.2 to 3.3 s a press its S1 case took there.
+  'ui-schema.spec.js': 1668.5,
   'wasm-smoke.spec.js': 35.6,
   'welcome-spotlight.spec.js': 37.4,
   'welcome-surface.spec.js': 18.6,

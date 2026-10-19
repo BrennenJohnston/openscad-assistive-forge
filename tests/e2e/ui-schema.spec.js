@@ -563,6 +563,38 @@ for (const size of SIZES) {
           );
         }
       });
+
+      // The drawer matrix: on a desktop Preview Settings drops down over the
+      // preview as an overlay, so opening it leaves the preview where it was.
+      test('Preview Settings drops over the preview without moving it', async () => {
+        const toggle = '#previewDrawerToggle';
+        if ((await settle(toggle)).expanded) await press(toggle);
+        const read = () =>
+          page.evaluate(() => {
+            const box = (id) =>
+              document.getElementById(id).getBoundingClientRect();
+            return {
+              canvasTop: box('previewCanvasSection').top,
+              drawerBottom: box('previewInfoSection').bottom,
+            };
+          });
+        const closed = await read();
+        await press(toggle);
+        await expect
+          .poll(
+            async () => Math.abs((await read()).canvasTop - closed.canvasTop),
+            {
+              message: `the preview's top moves when Preview Settings opens (closed at ${closed.canvasTop} px)`,
+              timeout: limits.expect,
+            }
+          )
+          .toBeLessThanOrEqual(1);
+        const open = await read();
+        expect
+          .soft(open.drawerBottom, 'the open drawer lies over the preview')
+          .toBeGreaterThan(open.canvasTop + 1);
+        await press(toggle);
+      });
     });
   }
 }
