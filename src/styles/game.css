@@ -26,6 +26,13 @@
   display: none;
 }
 
+/* Keys opens over the game from its Controller button. The layer comes
+   later in the page at the same level, so without this it would cover the
+   dialog. */
+body:has(> .city-walk-layer:not([hidden])) #shortcutsModal {
+  z-index: calc(var(--z-index-modal) + 1);
+}
+
 .city-walk-header {
   display: flex;
   align-items: center;

@@ -1,7 +1,8 @@
 /**
  * The Keys dialog's Controller tab: the status line, the layout and preset
  * pickers, one row per action with its button and a Change button that waits
- * for one press, and a readout of what the browser reads from the pad.
+ * for one press, and a readout of what the browser reads from the pad. Once
+ * the game is found, a second table holds its own buttons.
  *
  * The readout's lines follow the pad on every frame while the tab is shown.
  * A press still does what it is assigned to do, so a test takes each press
@@ -11,6 +12,8 @@
  */
 
 import {
+  CITY_WALK_ACTIONS,
+  CITY_WALK_PRESETS,
   GAMEPAD_ACTIONS,
   GAMEPAD_BUTTON_NAMES,
   GAMEPAD_PRESETS,
@@ -22,6 +25,7 @@ import {
  * @typedef {Object} ControllerPanelHandlers
  * @property {() => {supported: boolean, padName: string|null}} [getGamepadStatus]
  * @property {GamepadHandlers} [gamepad]
+ * @property {ReturnType<typeof import('./gamepad-controller.js').createWalkMapping>} [walkMapping]
  */
 
 /**
@@ -54,12 +58,31 @@ const STICKS = [
 /** @returns {HTMLElement|null} */
 const el = (id) => document.getElementById(id);
 
+/**
+ * The tab's two tables: the app's, and the game's own, each with its
+ * actions, its presets, its mapping and the prefix of its ids.
+ */
+const TABLES = [
+  {
+    prefix: 'prefsGamepad',
+    actions: GAMEPAD_ACTIONS,
+    presets: GAMEPAD_PRESETS,
+    mapping: () => handlers.gamepad?.mapping,
+  },
+  {
+    prefix: 'keysWalk',
+    actions: CITY_WALK_ACTIONS,
+    presets: CITY_WALK_PRESETS,
+    mapping: () => handlers.walkMapping,
+  },
+];
+
 /** @type {ControllerPanelHandlers} */
 let handlers = {};
 let wired = false;
 
-/** The action whose Change button is waiting for a press, if any. */
-let capturingAction = null;
+/** The table and action whose Change button waits for a press, if any. */
+let capturing = null;
 
 const readout = {
   frame: null,
@@ -148,15 +171,13 @@ export function readoutPressLine(parts) {
 }
 
 /**
- * Write the tab from the saved mapping: the pickers, the picture's words
- * for the layout, and one row per action with its button and a Change
- * button named for the action.
+ * Write the tab from the saved mappings: the pickers, the picture's words
+ * for the layout, and each table.
  */
 function renderGamepadPanel() {
-  const gamepad = handlers.gamepad;
-  const body = el('prefsGamepadAssignments')?.querySelector('tbody');
-  if (!gamepad || !body) return;
-  const now = gamepad.mapping.get();
+  const mapping = handlers.gamepad?.mapping;
+  if (!mapping) return;
+  const now = mapping.get();
 
   const family = el('prefsGamepadFamily');
   if (family) family.value = now.family;
@@ -169,25 +190,40 @@ function renderGamepadPanel() {
     part.textContent = gamepadDiagramLabel(part.dataset.part, now.family);
   }
 
-  if (body.rows.length !== GAMEPAD_ACTIONS.length) {
+  for (const table of TABLES) renderTable(table, now.family);
+}
+
+/**
+ * One row per action with its button and a Change button named for the
+ * action. Every table is named by the layout the picker shows.
+ * @param {typeof TABLES[number]} table
+ * @param {string} family
+ */
+function renderTable(table, family) {
+  const mapping = table.mapping();
+  const body = el(`${table.prefix}Assignments`)?.querySelector('tbody');
+  if (!mapping || !body) return;
+  const { prefix, actions } = table;
+
+  if (body.rows.length !== actions.length) {
     body.textContent = '';
-    for (const action of GAMEPAD_ACTIONS) {
+    for (const action of actions) {
       const row = document.createElement('tr');
       row.dataset.action = action.id;
       const name = document.createElement('th');
       name.scope = 'row';
-      name.id = `prefsGamepadAction-${action.id}`;
+      name.id = `${prefix}Action-${action.id}`;
       name.textContent = action.name;
       const cell = document.createElement('td');
       const wrap = document.createElement('div');
       wrap.className = 'gamepad-assignment';
       const input = document.createElement('span');
       input.className = 'gamepad-input';
-      input.id = `prefsGamepadInput-${action.id}`;
+      input.id = `${prefix}Input-${action.id}`;
       const change = document.createElement('button');
       change.type = 'button';
       change.className = 'btn btn-sm btn-outline gamepad-change';
-      change.id = `prefsGamepadChange-${action.id}`;
+      change.id = `${prefix}Change-${action.id}`;
       change.textContent = 'Change';
       // "Change Activate": the visible word and the row's action, so each
       // button says which action it changes.
@@ -195,7 +231,7 @@ function renderGamepadPanel() {
       // On the button itself: a listener on the table makes screen readers
       // call the whole table clickable.
       change.addEventListener('click', () =>
-        changeGamepadAssignment(action.id)
+        changeGamepadAssignment(table, action.id)
       );
       wrap.append(input, change);
       cell.append(wrap);
@@ -204,30 +240,33 @@ function renderGamepadPanel() {
     }
   }
 
-  for (const action of GAMEPAD_ACTIONS) {
-    if (action.id === capturingAction) continue;
-    const input = el(`prefsGamepadInput-${action.id}`);
+  const { assignments } = mapping.get();
+  for (const action of actions) {
+    if (capturing?.table === table && capturing.actionId === action.id) {
+      continue;
+    }
+    const input = el(`${prefix}Input-${action.id}`);
     if (input) {
-      input.textContent = gamepadInputLabel(
-        now.assignments[action.id],
-        now.family
-      );
+      input.textContent = gamepadInputLabel(assignments[action.id], family);
     }
   }
 }
 
 /**
  * Change one action's button: wait for one press on the controller (Escape
- * stops waiting), then assign it and say what changed.
+ * stops waiting), then assign it and say what changed. A press the table
+ * cannot take (the game's D-pad walks) changes nothing.
+ * @param {typeof TABLES[number]} table
  * @param {string} actionId
  */
-async function changeGamepadAssignment(actionId) {
+async function changeGamepadAssignment(table, actionId) {
   const gamepad = handlers.gamepad;
-  if (!gamepad || capturingAction) return;
+  const mapping = table.mapping();
+  if (!gamepad || !mapping || capturing) return;
   // Its wait ends a running test; the prompt below is what to hear.
   if (readout.testing) readout.quiet = true;
-  capturingAction = actionId;
-  const input = el(`prefsGamepadInput-${actionId}`);
+  capturing = { table, actionId };
+  const input = el(`${table.prefix}Input-${actionId}`);
   if (input) input.textContent = GAMEPAD_CAPTURE_PROMPT;
   gamepad.announce?.(GAMEPAD_CAPTURE_PROMPT);
 
@@ -237,21 +276,22 @@ async function changeGamepadAssignment(actionId) {
     pressed = await gamepad.capture(GAMEPAD_CAPTURE_MS);
   } finally {
     stopEscape();
-    capturingAction = null;
+    capturing = null;
   }
 
-  if (!pressed) {
-    renderGamepadPanel();
+  const result = pressed ? mapping.assign(actionId, pressed) : null;
+  renderGamepadPanel();
+  if (!result?.assigned) {
     gamepad.announce?.('Nothing changed.');
     return;
   }
-  const { swappedWith } = gamepad.mapping.assign(actionId, pressed);
-  renderGamepadPanel();
-  const now = gamepad.mapping.get();
+  const { swappedWith } = result;
+  const { assignments } = mapping.get();
+  const family = gamepad.mapping.get().family;
   const said = (id) =>
-    `${GAMEPAD_ACTIONS.find((a) => a.id === id).name}: ${gamepadInputLabel(
-      now.assignments[id],
-      now.family
+    `${table.actions.find((a) => a.id === id).name}: ${gamepadInputLabel(
+      assignments[id],
+      family
     )}.`;
   gamepad.announce?.(
     swappedWith ? `${said(actionId)} ${said(swappedWith)}` : said(actionId)
@@ -411,14 +451,16 @@ function wireControllerTab() {
     renderGamepadPanel();
   });
 
-  el('prefsGamepadReset')?.addEventListener('click', () => {
-    const gamepad = handlers.gamepad;
-    if (!gamepad) return;
-    gamepad.mapping.reset();
-    renderGamepadPanel();
-    const preset = GAMEPAD_PRESETS[gamepad.mapping.get().preset];
-    gamepad.announce?.(`${preset.name} restored.`);
-  });
+  for (const table of TABLES) {
+    el(`${table.prefix}Reset`)?.addEventListener('click', () => {
+      const mapping = table.mapping();
+      if (!mapping) return;
+      mapping.reset();
+      renderGamepadPanel();
+      const preset = table.presets[mapping.get().preset];
+      handlers.gamepad?.announce?.(`${preset.name} restored.`);
+    });
+  }
 
   el('controllerReadoutTest')?.addEventListener('click', () => {
     if (readout.testing) handlers.gamepad?.cancelCapture();
@@ -471,5 +513,5 @@ export function _resetControllerPanelForTests() {
   });
   handlers = {};
   wired = false;
-  capturingAction = null;
+  capturing = null;
 }

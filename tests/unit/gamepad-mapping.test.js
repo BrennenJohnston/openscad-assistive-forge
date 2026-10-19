@@ -8,17 +8,22 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
+  CITY_WALK_ACTIONS,
   GAMEPAD_ACTIONS,
   GAMEPAD_FAMILIES,
   GAMEPAD_PRESETS,
   GAMEPAD_PRESET_ORDER,
   GamepadController,
   createGamepadMapping,
+  createWalkMapping,
   gamepadFamilyFromId,
   gamepadInputLabel,
   presetAssignments,
 } from '../../src/js/gamepad-controller.js';
-import { STORAGE_KEY_GAMEPAD_MAPPING } from '../../src/js/storage-keys.js';
+import {
+  STORAGE_KEY_GAMEPAD_MAPPING,
+  STORAGE_KEY_GAMEPAD_WALK_MAPPING,
+} from '../../src/js/storage-keys.js';
 
 describe('the presets', () => {
   it('Camera, the default: the D-pad turns and tilts the view, the bumpers walk the standard views, the triggers zoom, X resets the view, Y fits the model, View steps to the next preset', () => {
@@ -139,7 +144,7 @@ describe('the presets', () => {
       'Zoom in',
       'Zoom out',
       'Full Screen',
-      'Keyboard shortcuts',
+      'Keys',
       'Reset View',
       'View All',
       'Turn left',
@@ -309,6 +314,76 @@ describe('the saved mapping', () => {
     const now = make().get();
     expect(now.preset).toBe('camera');
     expect(now.assignments.activate).toBe('a');
+  });
+});
+
+describe('the City Walk table', () => {
+  const XBOX = 'Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e)';
+  const PRO = 'Pro Controller (STANDARD GAMEPAD Vendor: 057e Product: 2009)';
+  const WALK = {
+    map: 'a',
+    back: 'b',
+    help: 'start',
+    previousLandmark: 'lb',
+    nextLandmark: 'rb',
+    walkTo: 'rt',
+    autoWalk: 'lt',
+  };
+  let padId;
+  const make = () => createWalkMapping({ getPadId: () => padId });
+
+  beforeEach(() => {
+    localStorage.clear();
+    padId = XBOX;
+  });
+
+  it("names the game's seven actions and starts on its own buttons; a Nintendo pad swaps A and B", () => {
+    expect(CITY_WALK_ACTIONS.map((a) => a.name)).toEqual([
+      'Map',
+      'Back',
+      'Help',
+      'Previous landmark',
+      'Next landmark',
+      'Walk to the landmark',
+      'Auto-walk',
+    ]);
+    expect(make().get().assignments).toEqual(WALK);
+    padId = PRO;
+    const nintendo = make().get().assignments;
+    expect(nintendo.map).toBe('b');
+    expect(nintendo.back).toBe('a');
+  });
+
+  it("a change swaps and is kept under the game's own key, leaving the app's table alone", () => {
+    const walk = make();
+    expect(walk.assign('help', 'a').swappedWith).toBe('map');
+    expect(walk.get().assignments.help).toBe('a');
+    expect(walk.get().assignments.map).toBe('start');
+    expect(make().get().assignments.help).toBe('a');
+    expect(
+      JSON.parse(localStorage.getItem(STORAGE_KEY_GAMEPAD_WALK_MAPPING)).custom
+        .help
+    ).toBe('a');
+    expect(localStorage.getItem(STORAGE_KEY_GAMEPAD_MAPPING)).toBeNull();
+    expect(
+      createGamepadMapping({ getPadId: () => padId }).get().assignments
+    ).toEqual(presetAssignments('camera', 'xbox'));
+    walk.reset();
+    expect(make().get().assignments).toEqual(WALK);
+  });
+
+  it('the sticks and the D-pad stay with walking and looking: they are not taken', () => {
+    const walk = make();
+    expect(walk.assign('map', 'up')).toEqual({
+      assigned: false,
+      swappedWith: null,
+    });
+    expect(walk.assign('map', 'ls-left').assigned).toBe(false);
+    expect(walk.get().assignments.map).toBe('a');
+    expect(
+      createGamepadMapping({ getPadId: () => padId }).assign('activate', 'up')
+        .assigned
+    ).toBe(true);
   });
 });
 

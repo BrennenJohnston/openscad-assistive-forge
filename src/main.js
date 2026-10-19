@@ -175,6 +175,7 @@ import { initSequenceDetector } from './js/_seq.js';
 import {
   createGamepadController,
   createGamepadMapping,
+  createWalkMapping,
   isGamepadSupported,
   GAMEPAD_ACTIONS,
 } from './js/gamepad-controller.js';
@@ -813,9 +814,10 @@ const keysTabs = () =>
  * Shortcuts, the header button, Ctrl+Shift+K, and the controller's Keys
  * button): a fix applied to some of the copies looks done and is not.
  *
- * @param {{tab?: 'keyboard'|'controller'}} [options]
+ * @param {{tab?: 'keyboard'|'controller', onClose?: () => void}} [options]
+ *   `onClose` runs when this opening of the dialog closes
  */
-function openShortcutsDialog({ tab = 'keyboard' } = {}) {
+function openShortcutsDialog({ tab = 'keyboard', onClose } = {}) {
   const modal = document.getElementById('shortcutsModal');
   const modalBody = document.getElementById('shortcutsModalBody');
   if (!modal || !modalBody) return;
@@ -835,7 +837,10 @@ function openShortcutsDialog({ tab = 'keyboard' } = {}) {
   const target =
     document.getElementById(`keys-tab-${tab}`) ?? keysTabs()[0] ?? null;
   if (target) selectTabIn(keysTabs(), target, { focus: false });
-  openModal(modal, target ? { focusTarget: target } : {});
+  openModal(modal, {
+    ...(target ? { focusTarget: target } : {}),
+    ...(onClose ? { onClose } : {}),
+  });
   syncControllerPanel();
 }
 
@@ -1905,8 +1910,14 @@ async function initApp() {
   const gamepadMapping = createGamepadMapping({
     getPadId: () => gamepadController?.getGamepadInfo()?.id ?? '',
   });
+  // The game's own buttons, named by the layout the app's table follows.
+  const walkMapping = createWalkMapping({
+    getPadId: () => gamepadController?.getGamepadInfo()?.id ?? '',
+    getFamily: () => gamepadMapping.get().family,
+  });
   // Keys ▸ Controller: the status line, the assignments and the test.
   initControllerPanel({
+    walkMapping,
     getGamepadStatus: () => ({
       supported: !!gamepadController,
       // The same display-name trim the connection status line uses, so the
@@ -12040,6 +12051,9 @@ if (rounded) {
           await mod.launchCityWalk({
             hfmCtrl,
             triggerEl: cityWalkLaunchBtn,
+            walkMapping,
+            openControllerSettings: ({ onClose }) =>
+              openShortcutsDialog({ tab: 'controller', onClose }),
           });
         } catch (error) {
           console.error('[CityWalk] Failed to launch:', error);

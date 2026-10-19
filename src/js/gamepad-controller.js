@@ -10,6 +10,7 @@
 
 import {
   STORAGE_KEY_GAMEPAD_MAPPING,
+  STORAGE_KEY_GAMEPAD_WALK_MAPPING,
   safeGetItem,
   safeSetItem,
 } from './storage-keys.js';
@@ -135,7 +136,7 @@ export const GAMEPAD_ACTIONS = [
   { id: 'zoomIn', name: 'Zoom in', held: true },
   { id: 'zoomOut', name: 'Zoom out', held: true },
   { id: 'fullScreen', name: 'Full Screen' },
-  { id: 'keys', name: 'Keyboard shortcuts' },
+  { id: 'keys', name: 'Keys' },
   { id: 'resetView', name: 'Reset View' },
   { id: 'viewAll', name: 'View All' },
   { id: 'turnLeft', name: 'Turn left', repeats: true },
@@ -169,8 +170,8 @@ const presetTable = (given) =>
  * - "Menus": the bumpers step from control to control as Tab does, the
  *   triggers jump between the window's parts, X and Y zoom.
  * In each, A presses, B goes back, Menu is Full Screen and View steps to
- * the next preset; the sticks always orbit and pan. The keyboard shortcuts
- * keep F1 and the Help menu, and a button when a person gives them one.
+ * the next preset; the sticks always orbit and pan. Keys keeps the Help
+ * menu, and a button when a person gives it one.
  */
 export const GAMEPAD_PRESETS = {
   camera: {
@@ -237,6 +238,41 @@ export const GAMEPAD_PRESET_ORDER = Object.freeze(Object.keys(GAMEPAD_PRESETS));
 
 /** The preset a person starts with. */
 export const DEFAULT_GAMEPAD_PRESET = 'camera';
+
+/**
+ * The City Walk's own actions, in its table's order. The sticks and the
+ * D-pad are not among them: they always walk and look there.
+ */
+export const CITY_WALK_ACTIONS = [
+  { id: 'map', name: 'Map' },
+  { id: 'back', name: 'Back' },
+  { id: 'help', name: 'Help' },
+  { id: 'previousLandmark', name: 'Previous landmark' },
+  { id: 'nextLandmark', name: 'Next landmark' },
+  { id: 'walkTo', name: 'Walk to the landmark' },
+  { id: 'autoWalk', name: 'Auto-walk' },
+];
+
+/** The City Walk's one preset: its buttons before anyone changes them. */
+export const CITY_WALK_PRESETS = {
+  walk: {
+    name: 'City Walk buttons',
+    assignments: {
+      map: 'a',
+      back: 'b',
+      help: 'start',
+      previousLandmark: 'lb',
+      nextLandmark: 'rb',
+      walkTo: 'rt',
+      autoWalk: 'lt',
+    },
+  },
+};
+
+/** The inputs the City Walk's actions can take: every button but the D-pad. */
+const CITY_WALK_INPUTS = GAMEPAD_BUTTON_NAMES.filter(
+  (name) => !['up', 'down', 'left', 'right'].includes(name)
+);
 
 /** The controller families whose button names the Controller tab uses. */
 export const GAMEPAD_FAMILIES = [
@@ -431,11 +467,17 @@ export function gamepadDiagramLabel(part, family) {
  * A activates and the one printed B goes back, as Nintendo's own menus do.
  * @param {string} presetId
  * @param {string} family
+ * @param {Object} [presets] - the table of presets, the app's by default
+ * @param {string} [defaultPreset]
  * @returns {Object<string, string|null>} action id to input
  */
-export function presetAssignments(presetId, family) {
-  const preset =
-    GAMEPAD_PRESETS[presetId] ?? GAMEPAD_PRESETS[DEFAULT_GAMEPAD_PRESET];
+export function presetAssignments(
+  presetId,
+  family,
+  presets = GAMEPAD_PRESETS,
+  defaultPreset = DEFAULT_GAMEPAD_PRESET
+) {
+  const preset = presets[presetId] ?? presets[defaultPreset];
   const table = { ...preset.assignments };
   if (family === 'nintendo') {
     for (const [action, input] of Object.entries(table)) {
@@ -446,23 +488,24 @@ export function presetAssignments(presetId, family) {
   return table;
 }
 
-const ACTION_IDS = GAMEPAD_ACTIONS.map((a) => a.id);
 const FAMILY_IDS = GAMEPAD_FAMILIES.map((f) => f.id);
 
 /**
- * A person's own table, when every action in it names a known input (or
- * none) and no input is used twice; anything else is not kept.
+ * A person's own table, when every action in it names an input it may take
+ * (or none) and no input is used twice; anything else is not kept.
  * @param {unknown} table
+ * @param {string[]} actionIds
+ * @param {string[]} inputs
  * @returns {Object<string, string|null>|null}
  */
-function validAssignments(table) {
+function validAssignments(table, actionIds, inputs) {
   if (!table || typeof table !== 'object') return null;
   const seen = new Set();
   const out = {};
-  for (const id of ACTION_IDS) {
+  for (const id of actionIds) {
     const input = table[id] ?? null;
     if (input !== null) {
-      if (!GAMEPAD_INPUT_NAMES.includes(input) || seen.has(input)) return null;
+      if (!inputs.includes(input) || seen.has(input)) return null;
       seen.add(input);
     }
     out[id] = input;
@@ -473,15 +516,34 @@ function validAssignments(table) {
 /**
  * The saved controller mapping: the preset, the family when a person chose
  * one (else it follows the pad), and a person's own assignments when they
- * changed any.
- * @param {{getPadId?: () => string}} [options]
+ * changed any. The app's by default; the City Walk's table is the same
+ * thing with its own actions, preset, inputs and key.
+ * @param {Object} [options]
+ * @param {() => string} [options.getPadId]
+ * @param {() => string|null} [options.getFamily] - the family to follow
+ *   when this table has none chosen, before the pad's own
+ * @param {{id: string}[]} [options.actions]
+ * @param {Object} [options.presets]
+ * @param {string} [options.defaultPreset]
+ * @param {string[]} [options.inputs] - the inputs an action may take
+ * @param {string} [options.storageKey]
  */
-export function createGamepadMapping({ getPadId = () => '' } = {}) {
+export function createGamepadMapping({
+  getPadId = () => '',
+  getFamily = () => null,
+  actions = GAMEPAD_ACTIONS,
+  presets = GAMEPAD_PRESETS,
+  defaultPreset = DEFAULT_GAMEPAD_PRESET,
+  inputs = GAMEPAD_INPUT_NAMES,
+  storageKey = STORAGE_KEY_GAMEPAD_MAPPING,
+} = {}) {
+  const actionIds = actions.map((a) => a.id);
+  const presetOrder = Object.keys(presets);
   const listeners = new Set();
   let saved = read();
 
   function read() {
-    const raw = safeGetItem(STORAGE_KEY_GAMEPAD_MAPPING);
+    const raw = safeGetItem(storageKey);
     let data = null;
     if (raw) {
       try {
@@ -496,26 +558,27 @@ export function createGamepadMapping({ getPadId = () => '' } = {}) {
       }
     }
     return {
-      preset: GAMEPAD_PRESETS[data?.preset]
-        ? data.preset
-        : DEFAULT_GAMEPAD_PRESET,
+      preset: presets[data?.preset] ? data.preset : defaultPreset,
       family: FAMILY_IDS.includes(data?.family) ? data.family : null,
-      custom: validAssignments(data?.custom),
+      custom: validAssignments(data?.custom, actionIds, inputs),
     };
   }
 
   function write() {
-    safeSetItem(STORAGE_KEY_GAMEPAD_MAPPING, JSON.stringify(saved));
+    safeSetItem(storageKey, JSON.stringify(saved));
     for (const listener of listeners) listener();
   }
 
   function get() {
-    const family = saved.family ?? gamepadFamilyFromId(getPadId());
+    const family =
+      saved.family ?? getFamily() ?? gamepadFamilyFromId(getPadId());
     return {
       preset: saved.preset,
       family,
       familyChosen: saved.family !== null,
-      assignments: saved.custom ?? presetAssignments(saved.preset, family),
+      assignments:
+        saved.custom ??
+        presetAssignments(saved.preset, family, presets, defaultPreset),
     };
   }
 
@@ -527,11 +590,13 @@ export function createGamepadMapping({ getPadId = () => '' } = {}) {
      * action's old one, so every action stays reachable.
      * @param {string} actionId
      * @param {string} input
-     * @returns {{swappedWith: string|null}}
+     * @returns {{assigned: boolean, swappedWith: string|null}} `assigned`
+     *   false when the action or the input is not this table's to take
      */
     assign(actionId, input) {
-      if (!ACTION_IDS.includes(actionId)) return { swappedWith: null };
-      if (!GAMEPAD_INPUT_NAMES.includes(input)) return { swappedWith: null };
+      if (!actionIds.includes(actionId) || !inputs.includes(input)) {
+        return { assigned: false, swappedWith: null };
+      }
       const current = get().assignments;
       const next = { ...current };
       let swappedWith = null;
@@ -544,12 +609,12 @@ export function createGamepadMapping({ getPadId = () => '' } = {}) {
       next[actionId] = input;
       saved = { ...saved, custom: next };
       write();
-      return { swappedWith };
+      return { assigned: true, swappedWith };
     },
 
     /** Start from a preset's own table. */
     setPreset(presetId) {
-      if (!GAMEPAD_PRESETS[presetId]) return;
+      if (!presets[presetId]) return;
       saved = { ...saved, preset: presetId, custom: null };
       write();
     },
@@ -559,8 +624,8 @@ export function createGamepadMapping({ getPadId = () => '' } = {}) {
      * @returns {string} the preset now on
      */
     nextPreset() {
-      const at = GAMEPAD_PRESET_ORDER.indexOf(saved.preset);
-      const next = GAMEPAD_PRESET_ORDER[(at + 1) % GAMEPAD_PRESET_ORDER.length];
+      const at = presetOrder.indexOf(saved.preset);
+      const next = presetOrder[(at + 1) % presetOrder.length];
       saved = { ...saved, preset: next, custom: null };
       write();
       return next;
@@ -585,6 +650,23 @@ export function createGamepadMapping({ getPadId = () => '' } = {}) {
       return () => listeners.delete(listener);
     },
   };
+}
+
+/**
+ * The City Walk's table, kept apart from the app's: its seven actions, its
+ * one preset, every button but the D-pad.
+ * @param {{getPadId?: () => string, getFamily?: () => string|null}} [options]
+ */
+export function createWalkMapping({ getPadId, getFamily } = {}) {
+  return createGamepadMapping({
+    getPadId,
+    getFamily,
+    actions: CITY_WALK_ACTIONS,
+    presets: CITY_WALK_PRESETS,
+    defaultPreset: 'walk',
+    inputs: CITY_WALK_INPUTS,
+    storageKey: STORAGE_KEY_GAMEPAD_WALK_MAPPING,
+  });
 }
 
 /**

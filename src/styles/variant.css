@@ -1144,6 +1144,15 @@ body[data-ui-mode='classic'] {
   border-color: var(--color-accent);
 }
 
+/* Preferences' and Keys' tabs: the look's rule for every button outranks
+   the selected tab's underline, so the selected tab is filled instead, as a
+   pressed toggle is. */
+:root[data-ui-variant='mono'] .preferences-tab[aria-selected='true'] {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
 /* ========================================
  * Emoji replacement for UI variant
  * Replace emoji icons with text-based equivalents

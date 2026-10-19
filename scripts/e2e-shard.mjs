@@ -213,9 +213,9 @@ export const MEASURED_SECONDS = {
   // engine-fault-ladder, four cases that start or render the box two or three
   // times and download one official engine, 29 s locally.
   'engine-fault-ladder.spec.js': 120.0,
-  // keys-dialog, seven cases that each load the Main Page once and open Keys,
-  // 21 s locally.
-  'keys-dialog.spec.js': 84.0,
+  // keys-dialog, eight cases that each load the app once and open Keys,
+  // 24 s locally.
+  'keys-dialog.spec.js': 95.0,
   // 137.2 by the two runs above, plus one case since (the Engine group, which
   // downloads an engine and switches twice: 9.3 s locally), booked at 40.
   'preferences-dialog.spec.js': 177.2,

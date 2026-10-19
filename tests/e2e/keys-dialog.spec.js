@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { skipWithoutWebGL } from './helpers/webgl.js';
 
 // Keys holds the keyboard shortcuts and the controller in two tabs and
 // scrolls in one place. The Controller tab's table and Change work as they
@@ -190,6 +191,8 @@ test.describe('Keys', () => {
       29
     );
     await expect(page.locator('#controllerReadoutPad')).toBeHidden();
+    // A fresh profile has not found the game: its section stays hidden.
+    await expect(page.locator('#keysWalkSection')).toBeHidden();
   });
 
   test('a button changed in the Controller tab is kept after a reload', async ({
@@ -275,6 +278,51 @@ test.describe('Keys', () => {
     await page.waitForTimeout(120);
     await hold(page, 1, false);
     await expect(page.locator('#shortcutsModal')).toHaveClass(/hidden/);
+  });
+
+  test('in the alternative look the selected tab still looks selected', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+      localStorage.setItem('openscad-forge-theme', 'dark');
+    });
+    await page.goto('/?example=simple-box');
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await skipWithoutWebGL(
+      page,
+      'no WebGL context: the alternative look does not start'
+    );
+    await page.locator('#_hfmToggle').click();
+    await page.waitForFunction(
+      () => document.documentElement.getAttribute('data-ui-variant') === 'mono'
+    );
+    await openKeys(page);
+    await page.mouse.move(5, 5);
+    const look = (tab) =>
+      tab.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return [
+          s.borderBottomWidth,
+          s.borderBottomColor,
+          s.backgroundColor,
+          s.color,
+        ].join(' ');
+      });
+    expect(await look(keyboardTab(page))).not.toBe(
+      await look(controllerTab(page))
+    );
+    await controllerTab(page).click();
+    await page.mouse.move(5, 5);
+    expect(await look(controllerTab(page))).not.toBe(
+      await look(keyboardTab(page))
+    );
   });
 
   test('both tabs pass the WCAG 2.2 A and AA rules', async ({ page }) => {

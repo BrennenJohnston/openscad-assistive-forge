@@ -306,8 +306,12 @@ export const STORAGE_KEY_PHONE_CUSTOMIZER_OPACITY = getAppPrefKey(
   'phone-customizer-opacity'
 );
 // The game controller's preset, its family and a person's own assignments
-// (Preferences > Controller); one device, so one copy for every interface.
+// (Keys > Controller); one device, so one copy for every interface.
 export const STORAGE_KEY_GAMEPAD_MAPPING = getAppPrefKey('gamepad-mapping');
+// The game's own table of controller buttons, kept apart from the app's.
+export const STORAGE_KEY_GAMEPAD_WALK_MAPPING = getAppPrefKey(
+  'gamepad-walk-mapping'
+);
 
 // --- Preview settings (preview.js) ---
 export const STORAGE_KEY_MEASUREMENTS = getAppPrefKey('measurements');

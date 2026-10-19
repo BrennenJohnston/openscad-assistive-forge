@@ -36,6 +36,7 @@ const EXPECTED_KEYS = {
   STORAGE_KEY_PHONE_CUSTOMIZER_OPACITY:
     'openscad-forge-phone-customizer-opacity',
   STORAGE_KEY_GAMEPAD_MAPPING: 'openscad-forge-gamepad-mapping',
+  STORAGE_KEY_GAMEPAD_WALK_MAPPING: 'openscad-forge-gamepad-walk-mapping',
 
   // Preview settings (preview.js)
   STORAGE_KEY_MEASUREMENTS: 'openscad-forge-measurements',

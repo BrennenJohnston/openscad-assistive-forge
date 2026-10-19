@@ -112,10 +112,7 @@ import {
   stepProbePhase,
 } from './size-calibration.js';
 import { createDocumentFocusTrap } from '../focus-trap.js';
-import {
-  GamepadController,
-  gamepadFamilyFromId,
-} from '../gamepad-controller.js';
+import { GamepadController, createWalkMapping } from '../gamepad-controller.js';
 import { announce } from '../announcer.js';
 import { themeManager } from '../theme-manager.js';
 import {
@@ -396,8 +393,17 @@ let activeSession = null;
  *   variant + asset switching)
  * @param {HTMLElement} [deps.triggerEl] - control to restore focus to on
  *   exit; falls back to the currently focused element
+ * @param {ReturnType<typeof createWalkMapping>} [deps.walkMapping] - the
+ *   game's table of controller buttons, shared with Keys ▸ Controller
+ * @param {(options: {onClose: () => void}) => void} [deps.openControllerSettings]
+ *   opens Keys on its Controller tab; `onClose` runs when it closes
  */
-export async function launchCityWalk({ hfmCtrl, triggerEl }) {
+export async function launchCityWalk({
+  hfmCtrl,
+  triggerEl,
+  walkMapping,
+  openControllerSettings,
+}) {
   if (activeSession) return;
 
   const layer = document.getElementById('cityWalkLayer');
@@ -406,12 +412,24 @@ export async function launchCityWalk({ hfmCtrl, triggerEl }) {
     return;
   }
 
-  const session = createSession({ layer, hfmCtrl, triggerEl });
+  const session = createSession({
+    layer,
+    hfmCtrl,
+    triggerEl,
+    walkMapping,
+    openControllerSettings,
+  });
   activeSession = session;
   session.open();
 }
 
-function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
+function createSession({
+  layer,
+  hfmCtrl,
+  triggerEl: providedTrigger,
+  walkMapping: providedWalkMapping,
+  openControllerSettings,
+}) {
   const root = document.documentElement;
   // Capture the trigger before any DOM work so exit can restore focus.
   const triggerEl =
@@ -450,8 +468,15 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     themeUnsub: null,
     // The game's own reading of a game controller, while the layer is open.
     pad: null,
+    // Keys is open over the game: the pad belongs to it until it closes.
+    keysOpen: false,
     refs: {},
   };
+  const walkMapping =
+    providedWalkMapping ??
+    createWalkMapping({
+      getPadId: () => state.pad?.getGamepadInfo()?.id ?? '',
+    });
 
   function open() {
     if (!state.wasMono) {
@@ -643,6 +668,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     fireworksBtn.addEventListener('click', playFireworks);
     headerActions.appendChild(fireworksBtn);
 
+    // Accessibility-critical strings: the visible word and the name.
+    const controllerBtn = makeControllerButton('cityWalkControllerBtn');
+    headerActions.appendChild(controllerBtn);
+
     const helpBtn = document.createElement('button');
     helpBtn.type = 'button';
     helpBtn.className = 'btn btn-secondary city-walk-btn';
@@ -809,8 +838,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       // names Xbox prints; a Nintendo pad's printed A and B do the same.
       'On a controller: the left stick walks and the right stick looks, and the D-pad walks and turns',
       'On a controller: A opens the map, B closes the map or this help, ' +
-        'Start (Menu) opens this help, LB and RB step through the landmarks, ' +
-        'RT walks to the selected landmark, LT starts auto-walk',
+        'Start opens this help, the bumpers step through the landmarks, ' +
+        'the right trigger walks to the chosen one and the left trigger ' +
+        'starts auto-walk. The Controller button changes these.',
       // Accessibility-critical strings. The help teaches the default first,
       // and the default is drag: hover-follow stays one press away on the
       // Mouse look button.
@@ -878,6 +908,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'The city is built from real OpenStreetMap building and street data. ' +
       'Buildings are solid. Streets and open ground are walkable.';
     help.appendChild(helpNote);
+
+    const helpControllerBtn = makeControllerButton('cityWalkHelpControllerBtn');
+    help.appendChild(helpControllerBtn);
 
     const helpAttribution = document.createElement('p');
     helpAttribution.className = 'city-walk-attribution';
@@ -991,6 +1024,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     layer.appendChild(announcer);
 
     state.refs = {
+      controllerBtn,
+      helpControllerBtn,
       found,
       foundClose,
       contrastBtn,
@@ -1781,6 +1816,40 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     } else {
       state.refs.helpBtn.focus();
     }
+  }
+
+  /** A Controller button: Keys on its Controller tab, over the game. */
+  function makeControllerButton(id) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-secondary city-walk-btn';
+    button.id = id;
+    button.textContent = 'Controller';
+    button.setAttribute('aria-label', 'Controller settings');
+    button.hidden = !openControllerSettings;
+    button.addEventListener('click', () => openKeysFrom(button));
+    return button;
+  }
+
+  /**
+   * Keys over the game: the game's trap stands down and its layer goes
+   * inert, so the dialog alone takes focus and is read; the pad belongs to
+   * Keys (a Change waits for a press). On close the trap comes back and
+   * focus returns to the button.
+   */
+  function openKeysFrom(button) {
+    if (!openControllerSettings || state.keysOpen) return;
+    state.keysOpen = true;
+    clearHeldKeys();
+    state.trap?.deactivate();
+    openControllerSettings({
+      onClose: () => {
+        layer.inert = false;
+        state.keysOpen = false;
+        if (activeSession) state.trap?.activate({ initialFocus: button });
+      },
+    });
+    layer.inert = true;
   }
 
   // -------------------------------------------------------------------
@@ -2945,33 +3014,30 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   /**
-   * The City Walk's controller buttons: A the map, B closes (the map, the
+   * The City Walk's controller buttons, by the game's own table (Keys ▸
+   * Controller changes it): by default A the map, B closes (the map, the
    * help, a question, a tour, auto-walk; never the game), Start the help,
    * LB and RB the landmarks, RT the walk to the chosen landmark, LT
-   * auto-walk. On a Nintendo pad the printed A and B swap places, as in
-   * the app.
+   * auto-walk; on a Nintendo pad the printed A and B swap places, as in
+   * the app. Nothing while Keys is open over the game.
    * @param {{name: string, repeat: boolean}} event
    */
   function handlePadInput({ name, repeat }) {
-    if (repeat) return;
-    const nintendo =
-      gamepadFamilyFromId(state.pad?.getGamepadInfo()?.id) === 'nintendo';
-    const button =
-      nintendo && (name === 'a' || name === 'b')
-        ? name === 'a'
-          ? 'b'
-          : 'a'
-        : name;
+    if (repeat || state.keysOpen) return;
+    const { assignments } = walkMapping.get();
+    const action = Object.keys(assignments).find(
+      (id) => assignments[id] === name
+    );
     const dialogOpen = state.travel || state.refs.found?.hidden === false;
-    if (button === 'start') {
+    if (action === 'help') {
       toggleHelp(!state.helpOpen);
       return;
     }
-    if (button === 'b') {
+    if (action === 'back') {
       padBack();
       return;
     }
-    if (button === 'a') {
+    if (action === 'map') {
       // On the city picker or in a question, A presses the focused button.
       const focused = document.activeElement;
       if (
@@ -2986,11 +3052,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
     if (!state.game) return;
-    if (button === 'lb' || button === 'rb') {
-      cycleLandmark(button === 'lb' ? -1 : 1);
-    } else if (button === 'rt') {
+    if (action === 'previousLandmark' || action === 'nextLandmark') {
+      cycleLandmark(action === 'previousLandmark' ? -1 : 1);
+    } else if (action === 'walkTo') {
       startTour();
-    } else if (button === 'lt') {
+    } else if (action === 'autoWalk') {
       if (state.game.tour) stopTour(TOUR_STOPPED_MESSAGE);
       else toggleAutoWalk();
     }
@@ -3021,7 +3087,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    */
   function padAxes() {
     const pad = state.pad;
-    if (!pad?.state.connected) return null;
+    if (!pad?.state.connected || state.keysOpen) return null;
     const s = pad.state;
     const dz = pad.deadzone;
     const held = (i) => (s.isButtonPressed(i) ? 1 : 0);

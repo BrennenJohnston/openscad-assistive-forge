@@ -19,7 +19,10 @@ import {
   syncControllerPanel,
   _resetControllerPanelForTests,
 } from '../../src/js/controller-panel.js';
-import { createGamepadMapping } from '../../src/js/gamepad-controller.js';
+import {
+  createGamepadMapping,
+  createWalkMapping,
+} from '../../src/js/gamepad-controller.js';
 
 const INDEX = readFileSync(path.resolve(__dirname, '../../index.html'), 'utf8');
 const XBOX = 'Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e)';
@@ -93,6 +96,7 @@ describe('the readout lines', () => {
 
 describe('the Controller tab', () => {
   let mapping;
+  let walkMapping;
   let capture;
   let pending;
   let announce;
@@ -149,6 +153,7 @@ describe('the Controller tab', () => {
       value: () => pads,
     });
     mapping = createGamepadMapping({ getPadId: () => XBOX });
+    walkMapping = createWalkMapping({ getPadId: () => XBOX });
     pending = null;
     // As the controller's own wait does: a new wait ends the one before.
     capture = vi.fn(() => {
@@ -165,6 +170,7 @@ describe('the Controller tab', () => {
         padName: 'Xbox Wireless Controller',
       }),
       gamepad: { mapping, capture, cancelCapture, announce },
+      walkMapping,
     });
     open();
   });
@@ -384,6 +390,62 @@ describe('the Controller tab', () => {
     await flush();
     expect(cancelCapture).toHaveBeenCalledTimes(2);
     expect(test.textContent).toBe('Start the test');
+  });
+
+  it('the City Walk section stays hidden until the game is found', () => {
+    const section = document.getElementById('keysWalkSection');
+    expect(section).not.toBeNull();
+    expect(section.hidden).toBe(true);
+    expect(section.hasAttribute('data-hfm-gated')).toBe(true);
+  });
+
+  it("found, the section lists the game's seven actions from its own table, and Change keeps a press there", async () => {
+    document.getElementById('keysWalkSection').hidden = false;
+    syncControllerPanel();
+    const walkRows = [
+      ...document.querySelectorAll('#keysWalkAssignments tbody tr'),
+    ];
+    expect(walkRows.map((r) => r.querySelector('th').textContent)).toEqual([
+      'Map',
+      'Back',
+      'Help',
+      'Previous landmark',
+      'Next landmark',
+      'Walk to the landmark',
+      'Auto-walk',
+    ]);
+    const walkButton = (id) =>
+      document.getElementById(`keysWalkInput-${id}`).textContent;
+    expect(walkButton('map')).toBe('A');
+    expect(walkButton('autoWalk')).toBe('LT');
+    const change = document.getElementById('keysWalkChange-map');
+    const name = change
+      .getAttribute('aria-labelledby')
+      .split(' ')
+      .map((id) => document.getElementById(id).textContent.trim())
+      .join(' ');
+    expect(name).toBe('Change Map');
+
+    change.click();
+    expect(walkButton('map')).toBe(
+      'Press a button on your controller. Esc cancels.'
+    );
+    pending('x');
+    await flush();
+    expect(walkButton('map')).toBe('X');
+    expect(announce).toHaveBeenLastCalledWith('Map: X.');
+    expect(walkMapping.get().assignments.map).toBe('x');
+    expect(mapping.get().assignments.activate).toBe('a');
+
+    change.click();
+    pending('up');
+    await flush();
+    expect(walkButton('map')).toBe('X');
+    expect(announce).toHaveBeenLastCalledWith('Nothing changed.');
+
+    document.getElementById('keysWalkReset').click();
+    expect(walkButton('map')).toBe('A');
+    expect(buttonOf('back')).toBe('B');
   });
 
   it('closing the dialog stops the readout and ends a test without a word', async () => {
