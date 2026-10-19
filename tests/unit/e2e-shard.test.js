@@ -63,7 +63,16 @@ describe('e2e shard planner', () => {
   // Two CI workers per shard, plus a couple of minutes of checkout, npm ci
   // and browser install before any test runs.
   const SETUP_MIN = 3
-  const projectMin = (shard) => load(shard) / 60 / 2 + SETUP_MIN
+  // The lanes are projected the way CI plans them, with weightsFor(true): a
+  // City Walk file skips there in seconds and is booked at what skipping
+  // costs, not at the minutes it takes a local board. Projected with the
+  // local weights, each Edge and Firefox shard carried about fourteen minutes
+  // nobody spends (35.0 projected, 15 to 22 minutes run, 2026-10-18). When
+  // the suites come back to CI, weightsFor(true) books them in full again.
+  const ciWeights = weightsFor(true)
+  const ciLoad = (shard) =>
+    shard.reduce((sum, f) => sum + (ciWeights[f] ?? DEFAULT_WEIGHT_S), 0)
+  const projectMin = (shard) => ciLoad(shard) / 60 / 2 + SETUP_MIN
 
   it('never lets a Chromium shard approach the 35-minute ceiling', () => {
     // The weights must be re-measured from a green run as suites grow: a guard
@@ -76,7 +85,7 @@ describe('e2e shard planner', () => {
     // suites push a shard past the 2100 s clock, and the two-core runner does
     // not parallelize software 3D. Twenty-five minutes leaves ten of margin on
     // a thirty-five minute ceiling, which is what a starved runner eats.
-    for (const shard of planShards(files, MEASURED_SECONDS, 7)) {
+    for (const shard of planShards(files, ciWeights, 7)) {
       const wallMin = projectMin(shard)
       expect(
         wallMin,
@@ -104,7 +113,7 @@ describe('e2e shard planner', () => {
       ['firefox', 4],
     ]) {
       const lane = filesForProject(files, project)
-      for (const shard of planShards(lane, MEASURED_SECONDS, laneShards)) {
+      for (const shard of planShards(lane, ciWeights, laneShards)) {
         const wallMin = projectMin(shard)
         expect(
           wallMin,
