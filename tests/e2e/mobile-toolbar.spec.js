@@ -31,6 +31,8 @@ const WASM_READY_TIMEOUT = 180_000;
 const HEIGHTS = [915, 810];
 
 // What Chromium measures, and the ceiling: what four stacked rows cost.
+// Measured again with the Customizer button in the settings row and Main Page
+// twice a button wide: the same 93 and 135.
 const TOP_CHROME = { simplified: 93, standard: 135 };
 const BASE_TOP_CHROME = { simplified: 147, standard: 187 };
 const QUARTET = [
@@ -218,28 +220,37 @@ for (const height of HEIGHTS) {
     });
   });
 
-  // The header's first row holds the Customizer button, Main Page, the
-  // Simplified/Standard switch, GitHub and Keys, left to right, and the
-  // switch never sits on a row of its own: with the Customizer button up
-  // here, the Customizer row below keeps the Preview Settings toggle and the
-  // four controls. Main Page and the Customizer button show their arrows
-  // alone at this width and keep their names.
-  test.describe(`The first header row (412x${height})`, () => {
+  // The header's first row holds Main Page, the Simplified/Standard switch,
+  // GitHub and Keys, left to right, and the switch never sits on a row of its
+  // own. Main Page is twice a button wide, with its words where they fit (its
+  // arrow alone in high contrast). The Customizer button leads the Preview
+  // Settings row, at the left of its arrow, with its word where it fits (its
+  // arrow alone in the Alt View, whose row holds two more buttons). Nothing in
+  // either row sits on a neighbour: a row can be as wide as the screen and
+  // still have two controls drawn over each other.
+  test.describe(`The first header row and the settings row (412x${height})`, () => {
     test.use({ viewport: { width: 412, height } });
 
-    for (const altView of [false, true]) {
-      test(`toolbar-first-row: the Customizer button, Main Page, the switch, GitHub and Keys share one row${altView ? ' in the Alt View' : ''}`, async ({
+    for (const look of [
+      { label: '' },
+      { label: ' in high contrast', highContrast: true },
+      { label: ' in the Alt View', altView: true },
+    ]) {
+      test(`toolbar-first-row: Main Page, the switch, GitHub and Keys share one row, and the Customizer button leads the settings row${look.label}`, async ({
         page,
       }) => {
         test.setTimeout(240_000);
-        if (altView) {
-          await page.addInitScript(() =>
-            localStorage.setItem('openscad-customizer-hfm-unlock', 'true')
-          );
-        }
+        await page.addInitScript((l) => {
+          if (l.altView) {
+            localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+          }
+          if (l.highContrast) {
+            localStorage.setItem('openscad-forge-high-contrast', 'true');
+          }
+        }, look);
         await loadSampleProject(page);
         await switchToStandard(page);
-        if (altView) {
+        if (look.altView) {
           await skipWithoutWebGL(
             page,
             'no WebGL: the Alt View draws its characters from the 3D picture'
@@ -254,7 +265,6 @@ for (const height of HEIGHTS) {
 
         const row = await page.evaluate(() => {
           const wanted = {
-            customizer: '#mobileDrawerToggle',
             mainPage: '#clearFileBtn',
             mode: '#uiModeToggle',
             github: '.app-header .github-link',
@@ -291,11 +301,73 @@ for (const height of HEIGHTS) {
         expect(
           [...row].sort((a, b) => a.left - b.left).map((c) => c.key),
           'left to right'
-        ).toEqual(['customizer', 'mainPage', 'mode', 'github', 'keys']);
-        expect(row.find((c) => c.key === 'customizer').name).toBe(
-          'Customizer panel'
-        );
-        expect(row.find((c) => c.key === 'mainPage').name).toBe('Main Page');
+        ).toEqual(['mainPage', 'mode', 'github', 'keys']);
+        const mainPage = row.find((c) => c.key === 'mainPage');
+        expect(mainPage.name).toBe('Main Page');
+        expect(mainPage.width, 'Main Page is twice a button wide').toBeGreaterThanOrEqual(92);
+
+        const words = await page.evaluate(() => ({
+          mainPage: document
+            .querySelector('#clearFileBtn .clear-file-label')
+            .checkVisibility(),
+          customizer: document
+            .querySelector('#mobileDrawerToggle .btn-label')
+            .checkVisibility(),
+        }));
+        expect(words.mainPage, "Main Page's words").toBe(!look.highContrast);
+        expect(words.customizer, "the Customizer button's word").toBe(!look.altView);
+
+        // The Customizer button leads the settings row, the arrow next.
+        const settings = await page.evaluate(() => {
+          const button = document.getElementById('mobileDrawerToggle');
+          const r = button.getBoundingClientRect();
+          return {
+            parent: button.parentElement.className,
+            next: button.nextElementSibling?.id ?? null,
+            first: button.parentElement.firstElementChild === button,
+            name: button.getAttribute('aria-label'),
+            width: Math.round(r.width),
+            height: Math.round(r.height),
+          };
+        });
+        expect(settings.parent).toContain('preview-drawer-header-left');
+        expect(settings.first, 'the first control of the row').toBe(true);
+        expect(settings.next).toBe('previewDrawerToggle');
+        expect(settings.name).toBe('Customizer panel');
+        expect(settings.width).toBeGreaterThanOrEqual(44);
+        expect(settings.height).toBeGreaterThanOrEqual(44);
+
+        // Nothing in the header or the settings row sits on a neighbour or
+        // runs off the screen.
+        const crowding = await page.evaluate(() => {
+          const boxes = [];
+          for (const el of document.querySelectorAll(
+            '.app-header button, .app-header a, .preview-drawer-header button'
+          )) {
+            if (!el.checkVisibility()) continue;
+            const r = el.getBoundingClientRect();
+            if (!r.width || !r.height) continue;
+            boxes.push({ id: el.id || String(el.className).split(' ')[0], r });
+          }
+          const overlaps = [];
+          for (let a = 0; a < boxes.length; a++) {
+            for (let b = a + 1; b < boxes.length; b++) {
+              const p = boxes[a].r;
+              const q = boxes[b].r;
+              const ox = Math.min(p.right, q.right) - Math.max(p.left, q.left);
+              const oy = Math.min(p.bottom, q.bottom) - Math.max(p.top, q.top);
+              if (ox > 0.5 && oy > 0.5) {
+                overlaps.push(`${boxes[a].id} x ${boxes[b].id} = ${Math.round(ox)}px`);
+              }
+            }
+          }
+          const offscreen = boxes
+            .filter((b) => b.r.right > innerWidth + 0.5 || b.r.left < -0.5)
+            .map((b) => b.id);
+          return { overlaps, offscreen };
+        });
+        expect(crowding.overlaps, 'no control sits on a neighbour').toEqual([]);
+        expect(crowding.offscreen, 'no control runs off the screen').toEqual([]);
 
         // Tab order follows the row.
         const order = await page.evaluate(() => {
@@ -308,22 +380,10 @@ for (const height of HEIGHTS) {
         });
         expect(
           order.filter((id) =>
-            [
-              'mobileDrawerToggle',
-              'clearFileBtn',
-              'uiModeToggle',
-              'github-link',
-              'shortcutsToggle',
-            ].includes(id)
+            ['clearFileBtn', 'uiModeToggle', 'github-link', 'shortcutsToggle'].includes(id)
           ),
           'the header in tab order'
-        ).toEqual([
-          'mobileDrawerToggle',
-          'clearFileBtn',
-          'uiModeToggle',
-          'github-link',
-          'shortcutsToggle',
-        ]);
+        ).toEqual(['clearFileBtn', 'uiModeToggle', 'github-link', 'shortcutsToggle']);
 
         // The header is one row high.
         const header = await page.evaluate(() =>
@@ -495,6 +555,63 @@ for (const height of HEIGHTS) {
     });
   });
 }
+
+// Held sideways the menu bar shares the settings row, which has no room left,
+// so the Customizer button keeps its place at the head of the header's first
+// row, where there is room; Main Page is twice a button wide here too.
+test.describe('Held sideways (740x360)', () => {
+  test.use({ viewport: { width: 740, height: 360 }, hasTouch: true });
+
+  test('toolbar-sideways: the Customizer button heads the header, and the settings row with the menu bar fits', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await loadSampleProject(page);
+    await switchToStandard(page);
+    const facts = await page.evaluate(() => {
+      const button = document.getElementById('mobileDrawerToggle');
+      const back = document.getElementById('clearFileBtn');
+      const header = document.querySelector('.header-content');
+      const row = document.querySelector('.preview-drawer-header');
+      return {
+        inHeader: button.parentElement === header,
+        beforeMainPage: button.nextElementSibling === back,
+        mainPageWidth: Math.round(back.getBoundingClientRect().width),
+        rowFits: row.scrollWidth <= row.clientWidth + 1,
+        menuInRow: !!row.querySelector('#toolbarMenuBar'),
+      };
+    });
+    expect(facts.menuInRow, 'the menu bar shares the settings row').toBe(true);
+    expect(facts.inHeader, 'the Customizer button is in the header').toBe(true);
+    expect(facts.beforeMainPage, 'at its head, before Main Page').toBe(true);
+    expect(facts.mainPageWidth, 'Main Page is twice a button wide').toBeGreaterThanOrEqual(92);
+    expect(facts.rowFits, 'the settings row fits its width').toBe(true);
+
+    // Open, the button takes the accent fill, which is the header's own
+    // color here: its edge is what still shows it is pressed.
+    await page.locator('#mobileDrawerToggle').click();
+    await expect(page.locator('#mobileDrawerToggle')).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    // Past the colors' transition: mid-way the edge is neither color.
+    await page.waitForTimeout(600);
+    const pressed = await page.evaluate(() => {
+      const cs = getComputedStyle(document.getElementById('mobileDrawerToggle'));
+      return {
+        fill: cs.backgroundColor,
+        edge: cs.borderTopColor,
+        width: parseFloat(cs.borderTopWidth),
+        header: getComputedStyle(document.querySelector('.app-header')).backgroundColor,
+      };
+    });
+    expect(pressed.width, 'the open button has an edge').toBeGreaterThanOrEqual(1);
+    expect(
+      pressed.edge,
+      `its edge stands out from the header (${JSON.stringify(pressed)})`
+    ).not.toBe(pressed.header);
+  });
+});
 
 test.describe('High contrast grows the row rather than hiding it', () => {
   test.use({ viewport: { width: 412, height: 810 } });

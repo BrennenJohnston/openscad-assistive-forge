@@ -75,28 +75,35 @@ function moveWithFocus(actions, parent, before) {
 }
 
 /**
- * The header's first row on a phone: the Customizer button leads it, then
- * Main Page, then the Simplified/Standard switch ahead of GitHub and Keys,
- * so the order on screen is the tab order. Its old place in the Customizer
- * row is what leaves that row room. layout.css makes the five fit 412px.
+ * The header's first row on a phone: Main Page, then the Simplified/Standard
+ * switch ahead of GitHub and Keys, so the order on screen is the tab order.
+ * Held upright, the Customizer button stays where the markup puts it, at the
+ * head of the Preview Settings row beside the arrow that opens that row:
+ * two buttons that open panels over the preview, side by side, as on a
+ * desktop. Held sideways, the menu bar takes that row's room, so the
+ * Customizer button heads the header instead, which has room to spare.
+ * layout.css fits the rows.
  * @param {boolean} relocate
  */
 function placeFirstRow(relocate) {
   const header = document.querySelector('.header-content');
   const controls = document.querySelector('.header-controls');
+  const sideways = window.matchMedia(SIDEWAYS_PHONE_QUERY).matches;
   const moves = [
     [
       document.getElementById('mobileDrawerToggle'),
       header,
       document.getElementById('clearFileBtn'),
+      relocate && sideways,
     ],
     [
       document.getElementById('uiModeToggle'),
       controls,
       controls?.querySelector(':scope > .github-link'),
+      relocate,
     ],
   ];
-  for (const [el, parent, before] of moves) {
+  for (const [el, parent, before, move] of moves) {
     if (!el || !parent || !before) continue;
     if (!firstRowHomes.has(el)) {
       firstRowHomes.set(el, {
@@ -105,7 +112,7 @@ function placeFirstRow(relocate) {
       });
     }
     const back = firstRowHomes.get(el);
-    if (relocate) {
+    if (move) {
       if (el.nextSibling !== before) moveWithFocus(el, parent, before);
     } else if (
       el.parentElement !== back.parent ||

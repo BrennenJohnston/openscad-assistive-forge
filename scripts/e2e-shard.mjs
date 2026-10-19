@@ -164,7 +164,10 @@ export const MEASURED_SECONDS = {
   'menu-reach.spec.js': 41.1,
   'mesh-companion.spec.js': 13.1,
   'mobile-drawer.spec.js': 13.2,
-  'mobile-toolbar.spec.js': 101.3,
+  // 101.3 by the two runs above, plus three cases since (the first row in
+  // high contrast at two heights, and held sideways: 7 s locally), booked at
+  // about four times that.
+  'mobile-toolbar.spec.js': 129.3,
   'mobile-viewport.spec.js': 75.5,
   'overlay-placement.spec.js': 168.9,
   'page-fits-window.spec.js': 62.0,

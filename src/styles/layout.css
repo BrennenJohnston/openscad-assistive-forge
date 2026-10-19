@@ -4121,21 +4121,42 @@ body[data-mobile-toolbar='relocated']
   }
 }
 
-/* A phone with a project open: the header's first row also carries the
-   Customizer button (mobile-toolbar.js moves it there), so Main Page and the
-   Customizer button show their arrows alone, keeping their names, and the
-   switch's two options take the small padding. Measured at 412px: Main Page
-   101px and the Customizer button 98px with their words, the switch 194px
-   (206px in the Alt View's font); the 396px row holds the five only this
-   way. The Customizer button takes the header's button look, and its open
-   state keeps the shared pressed color. */
+/* A phone with a project open. Main Page is twice a button wide, as the
+   desktop's is wider than a button, with its words where they fit: 101px in
+   dark and light, 92px in the Alt View's font. In high contrast its words
+   make it 116px and wrap the header to three rows, so it shows its arrow
+   alone there and keeps its name. Held upright, the Customizer button heads
+   the Preview Settings row with its word, except in the Alt View, whose row
+   holds two more buttons and would put the row's arrow over HC. Held
+   sideways it heads the header (mobile-toolbar.js) as its arrow alone, in
+   the header's button look; open, it keeps the shared pressed color. The
+   switch's two options take the small padding. */
 @media (max-width: 767px) {
-  body[data-mobile-toolbar='relocated'] #clearFileBtn .clear-file-label,
+  body[data-mobile-toolbar='relocated'] .header-content > #clearFileBtn {
+    min-width: calc(2 * var(--size-touch-target) + var(--space-xs));
+    justify-content: center;
+  }
+
+  :root[data-high-contrast='true']
+    body[data-mobile-toolbar='relocated']
+    #clearFileBtn
+    .clear-file-label,
+  :root[data-ui-variant='mono']
+    body[data-mobile-toolbar='relocated']
+    .preview-drawer-header
+    #mobileDrawerToggle
+    .btn-label,
   body[data-mobile-toolbar='relocated']
     .app-header
     #mobileDrawerToggle
     .btn-label {
     display: none;
+  }
+
+  body[data-mobile-toolbar='relocated']
+    .preview-drawer-header
+    #mobileDrawerToggle {
+    flex-shrink: 0;
   }
 
   body[data-mobile-toolbar='relocated'] .app-header .ui-mode-option {
@@ -4154,6 +4175,15 @@ body[data-mobile-toolbar='relocated']
   body[data-mobile-toolbar='relocated'] .app-header #mobileDrawerToggle {
     justify-content: center;
     flex-shrink: 0;
+  }
+
+  /* Open, it takes the accent fill (S3), which is the header's own color, so
+     an edge in its pressed text color keeps its shape in view. */
+  body[data-mobile-toolbar='relocated']
+    .app-header
+    #mobileDrawerToggle[aria-expanded='true'] {
+    border: 1px solid currentColor;
+    border-radius: var(--border-radius-md);
   }
 }
 
