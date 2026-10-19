@@ -40,6 +40,14 @@
     border-color 150ms ease;
 }
 
+/* The 32px bar is for a mouse; a finger gets the full touch target, as
+   Classic's menu bar does. */
+@media (pointer: coarse) {
+  .toolbar-menu-btn {
+    min-height: var(--size-touch-target);
+  }
+}
+
 .toolbar-menu-btn:hover {
   background: var(--color-hover-bg);
   border-color: var(--color-text-primary);

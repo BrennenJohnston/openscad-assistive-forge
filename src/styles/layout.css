@@ -4656,6 +4656,12 @@ body[data-mobile-toolbar='relocated']
     align-items: stretch;
   }
 
+  /* The toggles keep the touch size, as they do upright; the small-button
+     rule would hold them at 36px. */
+  :root .actions-bar .camera-drawer-toggle-btn {
+    min-height: var(--size-touch-target);
+  }
+
   /* No blur on the drawer: a blurred box would hold its fixed body inside
      itself instead of at the screen's edge. */
   :root .actions-bar .camera-drawer {

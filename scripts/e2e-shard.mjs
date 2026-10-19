@@ -198,7 +198,7 @@ export const MEASURED_SECONDS = {
   'svg-preparer.spec.js': 12.0,
   'terminology.spec.js': 29.8,
   'theme-switching.spec.js': 189.6,
-  'touch-targets.spec.js': 47.4,
+  'touch-targets.spec.js': 103.4,
   'tour-interaction.spec.js': 271.6,
   'tour-nudge.spec.js': 59.8,
   'trace-start-cancel.spec.js': 153.9,
