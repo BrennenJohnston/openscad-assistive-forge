@@ -20,6 +20,17 @@ test.use({ viewport: { width: 1280, height: 800 }, hasTouch: true });
 
 const MIN = 44;
 
+// The touch rules key on the pointer the browser reports; Playwright's
+// Firefox reports none for a touch context, so those cases need one.
+async function skipUnless(page, query, what) {
+  test.skip(
+    !(await page.evaluate((q) => matchMedia(q).matches, query)),
+    `this browser does not report ${what}`
+  );
+}
+const SIDEWAYS =
+  '(orientation: landscape) and (pointer: coarse) and (max-height: 500px)';
+
 async function openBox(page) {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
@@ -211,6 +222,7 @@ test.describe('the menu bar on an upright phone', () => {
         }
       }, look);
       await openBox(page);
+      await skipUnless(page, '(pointer: coarse)', 'a touch screen');
       await expectAtLeast(
         page,
         '#toolbarMenuBar .toolbar-menu-btn',
@@ -224,6 +236,7 @@ test.describe('the bottom bar on a phone held sideways', () => {
   test.use({ viewport: { width: 740, height: 360 }, hasTouch: true });
   test('the Camera toggle', async ({ page }) => {
     await openBox(page);
+    await skipUnless(page, SIDEWAYS, 'a touch screen held sideways');
     await expectAtLeast(page, '#cameraDrawerToggle', 'the Camera toggle');
   });
 
@@ -232,6 +245,7 @@ test.describe('the bottom bar on a phone held sideways', () => {
       localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
     });
     await openBox(page);
+    await skipUnless(page, SIDEWAYS, 'a touch screen held sideways');
     await skipWithoutWebGL(
       page,
       'no WebGL: the Alt View draws its characters from the 3D picture'

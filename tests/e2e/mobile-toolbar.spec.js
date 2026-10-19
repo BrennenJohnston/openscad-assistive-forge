@@ -35,6 +35,15 @@ const HEIGHTS = [915, 810];
 // twice a button wide: the same 93 and 135.
 const TOP_CHROME = { simplified: 93, standard: 135 };
 const BASE_TOP_CHROME = { simplified: 147, standard: 187 };
+// A phone held sideways, as phone-drawers.js and layout.css ask for it. A
+// browser that reports no touch pointer (Playwright's Firefox) never matches.
+const SIDEWAYS_QUERY =
+  '(orientation: landscape) and (pointer: coarse) and (max-height: 500px)';
+const skipUnlessSideways = async (page) =>
+  test.skip(
+    !(await page.evaluate((q) => matchMedia(q).matches, SIDEWAYS_QUERY)),
+    'this browser does not report a touch screen held sideways'
+  );
 const QUARTET = [
   '#contrastToggle',
   '#themeToggle',
@@ -273,14 +282,22 @@ for (const height of HEIGHTS) {
           return Object.entries(wanted).map(([key, selector]) => {
             const el = document.querySelector(selector);
             const r = el.getBoundingClientRect();
+            const content = el.closest('.header-content');
             return {
               key,
               inHeader: !!el.closest('.app-header'),
               top: Math.round(r.top),
               left: Math.round(r.left),
+              right: Math.round(r.right),
               width: Math.round(r.width),
               height: Math.round(r.height),
               name: el.getAttribute('aria-label'),
+              rowRight: content
+                ? Math.round(
+                    content.getBoundingClientRect().right -
+                      parseFloat(getComputedStyle(content).paddingRight)
+                  )
+                : innerWidth,
             };
           });
         });
@@ -293,15 +310,28 @@ for (const height of HEIGHTS) {
           expect(c.width, `${c.key} width`).toBeGreaterThanOrEqual(44);
           expect(c.height, `${c.key} height`).toBeGreaterThanOrEqual(44);
         }
-        const tops = row.map((c) => c.top);
-        expect(
-          Math.max(...tops) - Math.min(...tops),
-          `one row (${where})`
-        ).toBeLessThanOrEqual(2);
-        expect(
-          [...row].sort((a, b) => a.left - b.left).map((c) => c.key),
-          'left to right'
-        ).toEqual(['mainPage', 'mode', 'github', 'keys']);
+        // One row where the four fit. A platform with wider glyphs wraps the
+        // row rather than clipping it (layout.css): then a control starts the
+        // next line only where the first line had no room left for it. Main
+        // Page stands beside the lines, centered on them.
+        const minTop = Math.min(...row.map((c) => c.top));
+        const first = row.filter((c) => c.top - minTop <= 2);
+        const later = row.filter(
+          (c) => c.top - minTop > 2 && c.key !== 'mainPage'
+        );
+        if (later.length === 0) {
+          expect(
+            [...row].sort((a, b) => a.left - b.left).map((c) => c.key),
+            'left to right'
+          ).toEqual(['mainPage', 'mode', 'github', 'keys']);
+        }
+        for (const c of later) {
+          expect(
+            Math.max(...first.map((f) => f.right)) + c.width,
+            `${c.key} wraps only where the row has no room for it (${where})`
+          ).toBeGreaterThan(c.rowRight);
+        }
+        const lines = 1 + new Set(later.map((c) => c.top)).size;
         const mainPage = row.find((c) => c.key === 'mainPage');
         expect(mainPage.name).toBe('Main Page');
         expect(
@@ -404,13 +434,15 @@ for (const height of HEIGHTS) {
           'shortcutsToggle',
         ]);
 
-        // The header is one row high.
+        // The header is as tall as its lines: one where the four fit.
         const header = await page.evaluate(() =>
           Math.round(
             document.querySelector('.app-header').getBoundingClientRect().height
           )
         );
-        expect(header, 'the header height').toBeLessThan(60);
+        expect(header, `the header height, ${lines} line(s)`).toBeLessThan(
+          60 * lines
+        );
       });
     }
   });
@@ -604,6 +636,7 @@ test.describe('Held sideways (740x360)', () => {
         }
       }, look);
       await loadSampleProject(page);
+      await skipUnlessSideways(page);
       await switchToStandard(page);
       if (look.altView) {
         await skipWithoutWebGL(
@@ -693,6 +726,7 @@ test.describe('Held sideways (740x360)', () => {
   }) => {
     test.setTimeout(240_000);
     await loadSampleProject(page);
+    await skipUnlessSideways(page);
     await switchToStandard(page);
     const facts = await page.evaluate(() => {
       const button = document.getElementById('mobileDrawerToggle');
