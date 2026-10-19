@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "engines": [
+    {
+      "id": "forge",
+      "name": "Forge build of OpenSCAD 2026.04.03",
+      "builtIn": true,
+      "path": "/wasm/openscad-official"
+    },
+    {
+      "id": "official-2026-10-18",
+      "name": "OpenSCAD snapshot 2026.10.18",
+      "date": "2026.10.18",
+      "snapshot": "2026.10.18",
+      "path": "/wasm/engines/official-2026-10-18",
+      "zip": {
+        "url": "https://files.openscad.org/snapshots/OpenSCAD-2026.10.18-WebAssembly-web.zip",
+        "sha256": "307e2821d480c392d0606cea52b1486d93290e97cd34370fd0da97e792f51589",
+        "size": 3353874
+      },
+      "files": {
+        "openscad.js": {
+          "sha256": "7d2c692ba2b4bb125115f0b69ea0897f877f55bdabd8552c7ca84cfef62242d5",
+          "size": 99853
+        },
+        "openscad.wasm": {
+          "sha256": "45ce2aedc3356ea1018931beaa7a4fd77f46f771c8f1a9a6da4989a001945e8a",
+          "size": 11000299
+        }
+      }
+    },
+    {
+      "id": "official-2026-04-03",
+      "name": "OpenSCAD snapshot 2026.04.03",
+      "date": "2026.04.03",
+      "snapshot": "2026.04.03",
+      "path": "/wasm/engines/official-2026-04-03",
+      "zip": {
+        "url": "https://files.openscad.org/snapshots/OpenSCAD-2026.04.03-WebAssembly-web.zip",
+        "sha256": "f57fd4197b9c1e2aabea1039b65057dbff713ed78835e0e92ab2d0e9f766ee10",
+        "size": 3284651
+      },
+      "files": {
+        "openscad.js": {
+          "sha256": "266d025d4ee056356bc4f152c6e3f72fefc40fc6355a828ab0be6af31b8859a4",
+          "size": 100183
+        },
+        "openscad.wasm": {
+          "sha256": "96ed844bb397f91b3c139aced445fa0558881595bff46e965177c4e37b01e59d",
+          "size": 10712276
+        }
+      }
+    },
+    {
+      "id": "official-2026-01-03",
+      "name": "OpenSCAD snapshot 2026.01.03",
+      "date": "2026.01.03",
+      "snapshot": "2026.01.03",
+      "path": "/wasm/engines/official-2026-01-03",
+      "zip": {
+        "url": "https://files.openscad.org/snapshots/OpenSCAD-2026.01.03-WebAssembly-web.zip",
+        "sha256": "08979e75b9bdcea6e26f0475c1de5bdc9442fd7efa324df62993b396863819a5",
+        "size": 3222966
+      },
+      "files": {
+        "openscad.js": {
+          "sha256": "92d8730b548b721fff4203825eb932ea29bc78d5c0eeffdc93aa36a560d80868",
+          "size": 99718
+        },
+        "openscad.wasm": {
+          "sha256": "3a181942182b49715a8e10988ff70fca8ede732c94174c2061b3da0f3f5caef7",
+          "size": 10531804
+        }
+      }
+    },
+    {
+      "id": "official-2025-03-25",
+      "name": "OpenSCAD snapshot 2025.03.25",
+      "date": "2025.03.25",
+      "snapshot": "2025.03.25.wasm24456",
+      "path": "/wasm/engines/official-2025-03-25",
+      "zip": {
+        "url": "https://files.openscad.org/snapshots/OpenSCAD-2025.03.25.wasm24456-WebAssembly-web.zip",
+        "sha256": "0968af31b9c9b3bba68d9031de1695ccae51c32231a1aab4ef27b18c86379f3b",
+        "size": 2947329
+      },
+      "files": {
+        "openscad.js": {
+          "sha256": "904a47f29e63afb597bedef747da3b457d8ea17cc793c462c6c8b444e918a62e",
+          "size": 124567
+        },
+        "openscad.wasm": {
+          "sha256": "f72ce246c02c0e501990837102be383326b153fd761774ebfacce5c80c5ecf26",
+          "size": 9603115
+        }
+      }
+    }
+  ]
+}

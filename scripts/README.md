@@ -5,7 +5,8 @@ listed below.
 
 | Script | What it does | Run it via |
 |---|---|---|
-| `download-wasm.js` | Downloads the Liberation fonts (details below) | `npm run setup-wasm` |
+| `download-wasm.js` | Downloads the Liberation fonts and the official OpenSCAD engines the app offers (details below) | `npm run setup-wasm` |
+| `lib/engines.mjs` | The official engines' manifest check, zip reader and download step that `download-wasm.js` runs | imported, not run directly |
 | `setup-libraries.js` | Downloads the four OpenSCAD library bundles | `npm run setup-libraries` |
 | `setup-liblouis.js` | Copies a liblouis release's braille tables (the Unified English Braille tables the app offers and everything they include) into `public/liblouis/` | `build-liblouis-wasm.sh`, during the build |
 | `run-e2e-safe.js` | Runs Playwright without hanging the Windows terminal | `npm run test:e2e` |
@@ -49,6 +50,8 @@ npm run setup-wasm
 ```
 
 This fetches Liberation fonts (~2MB) into `public/fonts/` with SHA-256 checksum verification. The WASM files (`openscad.js` + `openscad.wasm`) are already tracked in the repository.
+
+It also fetches the four official OpenSCAD snapshots the app offers as alternative engines, named with their checksums in `public/wasm/engines.json`: each zip (about 3 MB) is downloaded once into `build/engines-cache/`, checked, and its two files are written to `public/wasm/engines/<id>/` with an `INTEGRITY.json`, all of it ignored by git. With `--strict` (the build's own run) a missing or mismatched engine fails the build; without it the script warns and the app runs with the Forge engine.
 
 ## setup-libraries.js
 
