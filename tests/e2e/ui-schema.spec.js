@@ -1361,6 +1361,18 @@ function readCustomizerSheet() {
       !!focused &&
       focused.top >= scrollTop - 1 &&
       focused.bottom <= s.bottom + 1,
+    // A control the sticky header half covers looks cut off: whatever sits
+    // above the parameters is either under the header or wholly in view.
+    halfHidden:
+      header && getComputedStyle(header).position === 'sticky'
+        ? [...sheet.querySelectorAll('button, input, select')]
+            .filter((el) => !header.contains(el) && shown(el))
+            .filter((el) => {
+              const r = box(el);
+              return r.top < scrollTop - 0.5 && r.bottom > scrollTop + 0.5;
+            })
+            .map((el) => el.id || el.textContent.trim().slice(0, 24))
+        : [],
     height: s.height,
     // The least a sheet keeps: its header, one row of controls, its borders.
     floor:
@@ -1591,6 +1603,9 @@ for (const height of [915, 810]) {
         expect.soft(c.modal, 'the Customizer is not modal').toBeNull();
         expect.soft(c.role, 'the Customizer is a region').toBe('region');
         expect.soft(c.atParameters, 'it opens at the parameters').toBe(true);
+        expect
+          .soft(c.halfHidden, 'no control left half under its header')
+          .toEqual([]);
         expect
           .soft(c.focusInParameters, 'focus starts at the parameters')
           .toBe(true);

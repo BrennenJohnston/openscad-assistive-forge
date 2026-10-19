@@ -137,10 +137,19 @@ export function initDrawerController() {
     // A control focused anywhere in the sheet stays clear of its header.
     drawer.style.scrollPaddingTop = `${stuck}px`;
     if (search && drawer.contains(search)) {
-      drawer.scrollTop +=
+      // A short sheet could not scroll its parameters up to the header and
+      // left the row above them half under it; room at its end lets it.
+      drawer.style.paddingBottom = '';
+      const lift =
         search.getBoundingClientRect().top -
         drawer.getBoundingClientRect().top -
         stuck;
+      const room = drawer.scrollHeight - drawer.clientHeight - drawer.scrollTop;
+      if (lift > room) {
+        const padding = parseFloat(getComputedStyle(drawer).paddingBottom) || 0;
+        drawer.style.paddingBottom = `${padding + lift - room}px`;
+      }
+      drawer.scrollTop += lift;
     }
     const first = [search, container]
       .filter(Boolean)
