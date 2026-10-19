@@ -189,7 +189,7 @@ export const MEASURED_SECONDS = {
   'responsive-audit.spec.js': 99.3,
   'saved-projects-dialogs.spec.js': 36.2,
   'saved-projects-focus.spec.js': 22.5,
-  'saved-projects.spec.js': 98.1,
+  'saved-projects.spec.js': 118.5,
   'self-disabling-controls-focus.spec.js': 74.7,
   'settings-follow-the-person.spec.js': 15.4,
   'share-settings.spec.js': 58.5,

@@ -119,6 +119,7 @@ import {
 } from './js/modal-manager.js';
 import {
   disableKeepingFocus,
+  firstParameterControl,
   getFocusableElements,
   setBusy,
   isBusy,
@@ -3083,6 +3084,16 @@ async function initApp() {
         updateStatus('Draft restored');
       } else {
         stateManager.clearLocalStorage();
+        // Somewhere to act, not the main region a screen reader reads whole:
+        // the open project's first parameter, its Generate button where the
+        // Customizer is closed, or on the Main Page the file upload.
+        [
+          firstParameterControl(document.getElementById('parametersContainer')),
+          document.getElementById('primaryActionBtn'),
+          document.getElementById('fileInput'),
+        ]
+          .find((el) => el?.checkVisibility?.())
+          ?.focus();
       }
     } finally {
       settleDraftQuestion();

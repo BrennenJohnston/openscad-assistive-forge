@@ -1891,9 +1891,12 @@ export function initSavedProjectsUI({
         closeHandler();
       });
 
-      openModal(modal, { returnFocus: focusAfter?.() || undefined });
-
-      nameInput.focus();
+      // Straight to the name: a first stop on the close button, then the
+      // name, had a screen reader say the dialog's name twice.
+      openModal(modal, {
+        returnFocus: focusAfter?.() || undefined,
+        focusTarget: nameInput,
+      });
       nameInput.select();
     });
   }
