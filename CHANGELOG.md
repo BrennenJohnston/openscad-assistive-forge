@@ -17,12 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   zoom), Customizer (the bumpers step through the parameters, the triggers
   through the groups, X puts a parameter back, Y generates) and Menus (the
   bumpers step from control to control as Tab does, the triggers jump
-  between toolbars, the D-pad sends the arrow keys). In each, A presses and
-  B goes back.
-- Preferences > Controller, in place of the Axes and Buttons tabs, names the
-  controller, shows its buttons for Xbox, PlayStation, Nintendo or generic
-  layouts, offers the three presets, and lets each action take the button
-  you press.
+  between the parts of the window, landing past a part's own toggle, and
+  the D-pad sends the arrow keys, or steps between controls where arrow keys
+  do nothing). In each, A presses and B goes back.
+- Keys > Controller names the controller, shows its buttons for Xbox,
+  PlayStation, Nintendo or generic layouts, offers the three presets, lets
+  each action take the button you press, and tests the controller: what the
+  browser reads from it, each press shown and said once. Preferences >
+  Controller, in place of the Axes and Buttons tabs, opens it.
 - Under 40% Focus, the Alt View draws the model as lines, bold at 35%
   and the thinnest at 0%: its creases, its outline, and its rounded parts
   as a dimmer wireframe, with a Surfaces slider for how solid the faces
@@ -48,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Keyboard Shortcuts dialog is Keys, with a Keyboard tab and a Controller
+  tab, and only its list scrolls; before, it had two scroll bars.
 - The engine is built with WebAssembly's own exceptions: Chrome follows a
   model that repeats a module inside itself more than twice as deep before
   "Model Too Deep", and every model renders 10 to 45 percent faster.
@@ -71,6 +75,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A focused Customizer group header shows its focus ring again.
+- In the Alt View a selected tab in Preferences and Keys is filled; every tab
+  looked the same before.
 - The desktop Lens drawer, open in the Alt View, leaves with the switch to
   Classic (which holds the sliders in Viewport-Control) and comes back open
   with the switch out of it; it no longer lies over Classic's 3D view with

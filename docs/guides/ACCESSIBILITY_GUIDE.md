@@ -332,15 +332,17 @@ For numeric parameters:
 
 A game controller can move through the interface and turn the 3D view, with
 no keyboard or mouse. Connect it and press any button; the status line says
-when it is found. Preferences > Controller names the controller, shows a
-picture of its buttons, and lists what each button does.
+when it is found. **Keys > Controller** names the controller, shows a picture
+of its buttons, and lists what each button does. Keys opens from the Keys
+button in the header, from Help > Keyboard Shortcuts, or with Ctrl+Shift+K;
+Preferences > Controller has a button that opens it too.
 
 ### Three presets
 
 Each preset gives the buttons to one part of the work, and the View button
 steps to the next one, Camera, Customizer, Menus and round again, saying
 which is on. The table uses the names an Xbox controller prints.
-Preferences > Controller shows your own controller's names.
+Keys > Controller shows your own controller's names.
 
 | Action | Camera | Customizer | Menus |
 |---|---|---|---|
@@ -348,7 +350,7 @@ Preferences > Controller shows your own controller's names.
 | Back, as Escape does | B | B | B |
 | D-pad | turn and tilt the view a step | the arrow keys, to the focused control (a slider steps) | the arrow keys, to the focused control |
 | LB and RB | the previous and next standard view (Front, Right, Back, Left, Top, Bottom) | the previous and next parameter | the previous and next control, as Shift+Tab and Tab do |
-| LT and RT | zoom out and in, by how far each is pressed | the previous and next parameter group | the previous and next toolbar |
+| LT and RT | zoom out and in, by how far each is pressed | the previous and next parameter group | the previous and next part of the window |
 | X | Reset View | the focused parameter back to its default | zoom out |
 | Y | View All | Generate | zoom in |
 | Menu | Full Screen | Full Screen | Full Screen |
@@ -356,21 +358,52 @@ Preferences > Controller shows your own controller's names.
 
 In every preset the right stick turns the view the way you push it and the
 left stick pans it, at the same speed whatever the computer's frame rate.
-Camera is the preset you start with. The keyboard shortcuts open with F1 or
-from the Help menu; give them a button in Preferences > Controller if you
-want one. A held direction or bumper repeats after half a second, as a held
-key does, and focus shows the same ring the keyboard gives.
+Camera is the preset you start with. No preset gives Keys a button; give it
+one in Keys > Controller if you want one, and it opens on the Controller
+tab. A held direction or bumper repeats after half a second, as a held key
+does, and focus shows the same ring the keyboard gives.
+
+### Moving between the parts of the window
+
+The triggers in Menus jump from one part of the window to the next: the
+header, the menu bar, the theme row, the Customizer, the Preview Settings
+row, the 3D view, the camera controls, the Generate row and the messages
+drawer. In Classic they are the header, the menu bar, the toolbar, the
+editor, the Customizer, the 3D view, the view toolbar, the Console and the
+status bar. When a part is open, a jump lands on its first control after its
+own open and close button, so the Customizer starts at its first action.
+
+The D-pad sends the arrow keys to a control that uses them: a slider, a
+list, radio buttons, a menu, tabs, a text field, the code editor or the 3D
+view. On a control that does nothing with arrow keys (a button, a group
+header, a link or a checkbox), Up and Down step to the previous or next
+control in the same part instead. A control the controller moves to is
+scrolled into view, clear of the Customizer's title.
 
 ### Changing a button
 
-In Preferences > Controller, **Change** beside an action waits five seconds
-for the next button you press; Escape stops the wait. If another action had
-that button, it takes the one you replaced, so every action keeps a button.
+In Keys > Controller, **Change** beside an action waits five seconds for the
+next button you press; Escape stops the wait. If another action had that
+button, it takes the one you replaced, so every action keeps a button.
 **Reset to preset** puts the preset's buttons back, and your choices are kept
 for your next visit. **Controller layout** names the buttons as Xbox,
 PlayStation, Nintendo or generic controllers print them; it follows the
 controller you connect until you choose one. On a Nintendo controller the
-button printed A presses and the one printed B goes back.
+button printed A presses and the one printed B goes back. Anything you
+unlock later that has controller buttons of its own adds its table here.
+
+### Testing your controller
+
+Under the status line, **Test your controller** shows the controller as the
+browser reports it: its name, whether its buttons follow the standard
+layout, and how many buttons and axes it has. Below that it names what you
+hold right now, each button with its number in brackets, a trigger with how
+far it is pressed, and a stick with both of its axes. **Start the test**
+takes every press for itself, so a press only shows there and a screen
+reader says it once, and nothing else in the app moves; B can be tested
+without closing the dialog. The test stops after 10 seconds without a press,
+with Escape, or with **Stop the test**. If a button does the wrong thing, the
+names and numbers the test shows are the best thing to report.
 
 ---
 

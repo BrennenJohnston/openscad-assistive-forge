@@ -5,6 +5,9 @@ ASCII converter the rest of the app uses. It started as a hidden extra. This
 document records two things it is deliberately built to grow into, so that
 whoever picks it up next can see the line before they cut across it.
 
+A game controller walks and looks in the city too. Its other buttons are the
+game's own table, which its Controller button opens in Keys > Controller.
+
 Nothing here is scheduled. It is a record of intent and of the seams already in
 the code, not a promise about dates.
 
