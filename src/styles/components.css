@@ -51,6 +51,14 @@ summary:focus-visible,
   outline-offset: var(--focus-ring-offset, 2px) !important;
 }
 
+/* A disclosure's header fills its box, and the box clips what overflows it
+   (its rounded corners): drawn outside the header, the ring would be cut
+   away, so it is drawn just inside, at its full width. */
+.forge-disclosure > summary:focus,
+.forge-disclosure > summary:focus-visible {
+  outline-offset: calc(-1 * var(--focus-ring-width, 3px)) !important;
+}
+
 /* ============================================================================
    Shared Control Contract (.forge-control)
    ============================================================================

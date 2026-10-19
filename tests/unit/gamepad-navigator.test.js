@@ -16,8 +16,8 @@ const FIXTURE = `
     <button id="github">GitHub</button>
   </header>
   <div id="toolbarMenuBar" role="menubar">
-    <button id="fileMenu">File</button>
-    <button id="editMenu">Edit</button>
+    <button id="fileMenu" role="menuitem">File</button>
+    <button id="editMenu" role="menuitem">Edit</button>
   </div>
   <section id="paramPanel">
     <input id="width" type="range" min="0" max="10" step="2" value="4" />
@@ -454,5 +454,89 @@ describe("the controller jumps between the window's parts", () => {
     document.getElementById('canvas').focus();
     nav.nextRegion();
     expect(focused()).toBe('newFile');
+  });
+});
+
+describe('the D-pad where arrow keys mean nothing', () => {
+  beforeEach(() => {
+    document.body.innerHTML = WINDOW;
+  });
+
+  it('on a button, Down steps to the next control and Up to the previous, within its part', () => {
+    const nav = createGamepadNavigator();
+    document.getElementById('codeBtn').focus();
+    nav.arrow('up');
+    expect(focused()).toBe('collapseParamPanelBtn');
+    expect(document.activeElement.getAttribute('data-focus-source')).toBe(
+      'gamepad'
+    );
+    nav.arrow('up');
+    expect(focused(), 'no step out of the part').toBe('collapseParamPanelBtn');
+    nav.arrow('down');
+    nav.arrow('down');
+    expect(focused()).toBe('width');
+    const width = document.getElementById('width');
+    nav.arrow('down');
+    expect(focused(), 'a slider keeps its arrows').toBe('width');
+    expect(width.value).toBe('3');
+    document.getElementById('codeBtn').focus();
+    document.getElementById('width').remove();
+    nav.arrow('down');
+    expect(focused(), 'no step out of the part at its end').toBe('codeBtn');
+  });
+
+  it('Left and Right still send their keys to a button', () => {
+    const nav = createGamepadNavigator();
+    const code = document.getElementById('codeBtn');
+    const keys = [];
+    code.addEventListener('keydown', (e) => keys.push(e.key));
+    code.focus();
+    nav.arrow('left');
+    nav.arrow('right');
+    expect(keys).toEqual(['ArrowLeft', 'ArrowRight']);
+    expect(focused()).toBe('codeBtn');
+  });
+
+  it.each([
+    ['a menu item', '<button role="menuitem">Open</button>'],
+    ['a tab', '<button role="tab">Editor</button>'],
+    ['a radio button', '<input type="radio" name="r" />'],
+    ['a text field', '<input type="text" />'],
+    ['the code editor', '<div class="cm-editor"><div contenteditable="true">x</div></div>'],
+    ['a menu button', '<button aria-haspopup="menu">More</button>'],
+  ])('%s keeps its arrow keys', (_name, html) => {
+    document
+      .getElementById('paramPanel')
+      .insertAdjacentHTML('afterbegin', `<div id="probe">${html}</div>`);
+    const target =
+      document.querySelector('#probe [contenteditable]') ||
+      document.querySelector('#probe').firstElementChild;
+    if (!target.matches('button, input')) target.tabIndex = 0;
+    const keys = [];
+    target.addEventListener('keydown', (e) => keys.push(e.key));
+    target.focus();
+    const nav = createGamepadNavigator();
+    nav.arrow('down');
+    nav.arrow('up');
+    expect(keys).toEqual(['ArrowDown', 'ArrowUp']);
+    expect(document.activeElement).toBe(target);
+  });
+
+  it('a control the step lands under a sticky header is scrolled clear of it', () => {
+    const panel = document.getElementById('paramPanel');
+    panel.style.overflowY = 'auto';
+    Object.defineProperty(panel, 'scrollHeight', { value: 1000 });
+    Object.defineProperty(panel, 'clientHeight', { value: 300 });
+    panel.scrollTop = 100;
+    const header = document.createElement('div');
+    header.style.position = 'sticky';
+    panel.prepend(header);
+    header.getBoundingClientRect = () => ({ top: 0, bottom: 50, left: 0, right: 300, width: 300, height: 50 });
+    document.getElementById('codeBtn').getBoundingClientRect = () => ({ top: 30, bottom: 60, left: 0, right: 100, width: 100, height: 30 });
+    const nav = createGamepadNavigator();
+    document.getElementById('collapseParamPanelBtn').focus();
+    nav.arrow('down');
+    expect(focused()).toBe('codeBtn');
+    expect(panel.scrollTop, 'scrolled back by the 20 px the header covered').toBe(80);
   });
 });

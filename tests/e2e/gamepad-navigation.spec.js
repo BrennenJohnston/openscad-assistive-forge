@@ -240,3 +240,104 @@ test.describe('The right trigger reaches every part of the window', () => {
     });
   });
 });
+
+const DPAD_DOWN = 13;
+
+/** The focused control's box against the screen and the panel's title. */
+const placeOfFocused = (page) =>
+  page.evaluate(() => {
+    const el = document.activeElement;
+    const r = el.getBoundingClientRect();
+    const title = el.closest('#paramPanel')?.querySelector('.panel-header');
+    return {
+      tag: el.tagName.toLowerCase(),
+      closedHeader: el.tagName === 'SUMMARY' && !el.parentElement.open,
+      onScreen: r.top >= 0 && r.bottom <= innerHeight && r.width > 0,
+      clearOfTitle: title ? r.top >= title.getBoundingClientRect().bottom - 0.5 : true,
+      name: (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 40),
+    };
+  });
+
+/**
+ * The share of the pixels just inside the top edge of a box, read from a
+ * picture at twice the size, that are the focus ring's color.
+ */
+async function ringShareOnTopEdge(page, box) {
+  const png = await page.screenshot({
+    clip: { x: box.x, y: box.y, width: box.width, height: 6 },
+  });
+  return page.evaluate(async (b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(bitmap, 0, 0);
+    const probe = document.createElement('div');
+    probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--color-focus');
+    document.body.append(probe);
+    const [fr, fg, fb] = getComputedStyle(probe).color.match(/\d+/g).map(Number);
+    probe.remove();
+    // The rows a 3 px ring drawn inside the edge covers at twice the size.
+    const { data, width } = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+    let ring = 0;
+    let all = 0;
+    for (const y of [2, 3, 4]) {
+      for (let x = 8; x < width - 8; x++) {
+        const i = (y * width + x) * 4;
+        all += 1;
+        if (Math.abs(data[i] - fr) + Math.abs(data[i + 1] - fg) + Math.abs(data[i + 2] - fb) < 60) ring += 1;
+      }
+    }
+    return ring / all;
+  }, png.toString('base64'));
+}
+
+test.describe('Up and Down on controls that take no arrows', () => {
+  test.use({ deviceScaleFactor: 2 });
+
+  test('the D-pad walks the Customizer to a closed group, A opens it, and Down reaches its first control, in view', async ({
+    page,
+  }) => {
+    await openWithPad(page, { preset: 'menus' });
+    await page.locator('#expertModeToggle').focus();
+    let header = null;
+    for (let n = 0; n < 10 && !header; n++) {
+      await press(page, DPAD_DOWN);
+      const place = await placeOfFocused(page);
+      if (place.closedHeader) header = place;
+    }
+    expect(header, 'a closed group header reached by Down').not.toBeNull();
+    expect(header.onScreen).toBe(true);
+    expect(header.clearOfTitle).toBe(true);
+    await press(page, BUTTON.a);
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement.parentElement.open))
+      .toBe(true);
+    await press(page, DPAD_DOWN);
+    const first = await placeOfFocused(page);
+    expect(first.tag, `the group's first control: ${first.name}`).not.toBe('summary');
+    expect(first.onScreen).toBe(true);
+    expect(first.clearOfTitle).toBe(true);
+  });
+
+  test('a closed group header shows its focus ring, from Tab and from the pad', async ({
+    page,
+  }) => {
+    await openWithPad(page, { preset: 'menus' });
+    const dimensions = page.locator('#paramPanel details.param-group:not([open]) > summary').first();
+    const hide = page.locator('#paramPanel .param-group').first().locator('xpath=preceding::button[1]');
+    await dimensions.scrollIntoViewIfNeeded();
+    // From Tab: the button before the header, then Tab.
+    await hide.focus();
+    await page.keyboard.press('Tab');
+    await expect(dimensions).toBeFocused();
+    const box = await dimensions.boundingBox();
+    expect(await ringShareOnTopEdge(page, box), 'from Tab').toBeGreaterThan(0.5);
+    // From the pad: the same button, then the bumper.
+    await hide.focus();
+    await press(page, BUTTON.rb);
+    await expect(dimensions).toBeFocused();
+    expect(await dimensions.getAttribute('data-focus-source')).toBe('gamepad');
+    expect(await ringShareOnTopEdge(page, await dimensions.boundingBox()), 'from the pad').toBeGreaterThan(0.5);
+  });
+});

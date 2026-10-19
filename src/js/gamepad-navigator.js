@@ -109,8 +109,51 @@ export function focusOrder() {
   return [...positive, ...elements.filter((el) => !(el.tabIndex > 0))];
 }
 
+/** The nearest ancestor that scrolls the element up and down. */
+function scrollContainerOf(el) {
+  for (
+    let p = el.parentElement;
+    p && p !== document.body;
+    p = p.parentElement
+  ) {
+    const overflowY = getComputedStyle(p).overflowY;
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      p.scrollHeight > p.clientHeight
+    ) {
+      return p;
+    }
+  }
+  return null;
+}
+
 /**
- * Focus an element the way a keyboard would, its ring showing.
+ * Bring a control into view: the nearest scroll, then clear of a sticky
+ * header in its scroll container (the Customizer's title stays on top of
+ * what scrolls under it).
+ * @param {HTMLElement} el
+ */
+function reveal(el) {
+  el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  const container = scrollContainerOf(el);
+  if (!container) return;
+  const box = el.getBoundingClientRect();
+  for (const header of container.querySelectorAll(
+    ':scope > *, :scope > * > *'
+  )) {
+    if (header.contains(el) || getComputedStyle(header).position !== 'sticky') {
+      continue;
+    }
+    const covers = header.getBoundingClientRect();
+    if (covers.bottom > box.top && covers.top < box.bottom) {
+      container.scrollTop -= covers.bottom - box.top;
+      return;
+    }
+  }
+}
+
+/**
+ * Focus an element the way a keyboard would, its ring showing, and in view.
  * @param {HTMLElement} el
  */
 function focusFromPad(el) {
@@ -130,6 +173,70 @@ function focusFromPad(el) {
   } catch (_unsupported) {
     el.focus();
   }
+  reveal(el);
+}
+
+/** Roles whose own keyboard pattern uses the arrow keys. */
+const ARROW_ROLES = [
+  'menuitem',
+  'menuitemcheckbox',
+  'menuitemradio',
+  'tab',
+  'radio',
+  'option',
+  'listbox',
+  'combobox',
+  'slider',
+  'spinbutton',
+  'treeitem',
+  'grid',
+  'gridcell',
+]
+  .map((role) => `[role="${role}"]`)
+  .join(', ');
+
+/** Inputs that move a caret, a value or a choice with the arrow keys. */
+const ARROW_INPUTS = new Set([
+  'range',
+  'number',
+  'text',
+  'search',
+  'url',
+  'email',
+  'tel',
+  'password',
+  'radio',
+  'date',
+  'time',
+  'datetime-local',
+  'month',
+  'week',
+]);
+
+/**
+ * Whether a control uses the arrow keys itself, so the D-pad sends them:
+ * sliders and number boxes, lists and radio buttons, menu items and menu
+ * buttons, tabs, text fields, the code editor, grids, the dividers and the
+ * 3D view. Anything else (a button, a group header, a link, a checkbox)
+ * does nothing with them.
+ * @param {Element|null} el
+ * @returns {boolean}
+ */
+export function takesArrows(el) {
+  if (!el || el === document.body) return false;
+  if (el instanceof HTMLInputElement) return ARROW_INPUTS.has(el.type);
+  if (el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) {
+    return true;
+  }
+  if (el.isContentEditable) return true;
+  if (
+    el.matches(
+      '[role="separator"][tabindex], [aria-haspopup]:not([aria-haspopup="false"]), #previewContainer, #previewContainer canvas, [data-forge-camera]'
+    )
+  ) {
+    return true;
+  }
+  return !!el.closest(`${ARROW_ROLES}, [data-takes-arrows], .cm-editor`);
 }
 
 /**
@@ -243,6 +350,23 @@ export function createGamepadNavigator({
     focusFromPad(landingOf(parts[next]));
   };
 
+  // The D-pad on a control that does nothing with arrows: the previous or
+  // next control of the part that holds it (of the dialog, when one is
+  // open), stopping at the part's ends.
+  const stepInPart = (by) => {
+    const order = focusOrder();
+    const active = document.activeElement;
+    const within = openDialog()
+      ? order
+      : (liveParts(getRegions(), order).find((part) =>
+          part.controls.includes(active)
+        )?.controls ?? order);
+    const at = within.indexOf(active);
+    const next =
+      at < 0 ? within[by > 0 ? 0 : within.length - 1] : within[at + by];
+    if (next) focusFromPad(next);
+  };
+
   const keyTo = (target, key) =>
     target.dispatchEvent(
       new KeyboardEvent('keydown', {
@@ -314,7 +438,9 @@ export function createGamepadNavigator({
 
     /**
      * An arrow key to the focused control. A slider, a number box and a
-     * list box are stepped directly, as their own arrow keys would.
+     * list box are stepped directly, as their own arrow keys would. On a
+     * control that does nothing with arrows, Up and Down step to the
+     * previous or next control of its part instead.
      * @param {'up'|'down'|'left'|'right'} direction
      */
     arrow(direction) {
@@ -346,6 +472,10 @@ export function createGamepadNavigator({
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
         }
+        return;
+      }
+      if ((direction === 'up' || direction === 'down') && !takesArrows(el)) {
+        stepInPart(direction === 'down' ? 1 : -1);
         return;
       }
       const key = {
