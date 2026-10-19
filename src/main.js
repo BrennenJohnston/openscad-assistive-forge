@@ -254,6 +254,16 @@ import {
   openPreferencesDialog,
 } from './js/preferences-dialog.js';
 import {
+  clearDownloads as clearEngineDownloads,
+  download as downloadEngine,
+  getChosenEngineId,
+  isDownloaded as isEngineDownloaded,
+  loadEnginesManifest,
+  remove as removeEngine,
+  setChosenEngineId,
+  switchTo as switchEngineTo,
+} from './js/engine-choice.js';
+import {
   announceImmediate,
   announceCameraAction,
   announceError as _announceError,
@@ -1432,6 +1442,9 @@ async function initApp() {
         }
 
         updateStatus('Clearing cache...');
+        // The downloaded engines go with everything else, and the Forge
+        // engine is chosen again.
+        await clearEngineDownloads();
         navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' });
 
         // Track completion via message event
@@ -4184,6 +4197,48 @@ async function initApp() {
   });
   editActionsController.init();
 
+  // Preferences ▸ Advanced ▸ Engine: the engine choice, with the render
+  // controller and the preview it reruns. Before the engine has started
+  // there is nothing to restart: the choice is kept for the first start.
+  const rerunPreview = async () => {
+    const state = stateManager.getState();
+    if (!autoPreviewController || !state.uploadedFile) return;
+    autoPreviewController.clearPreviewCache();
+    await autoPreviewController.forcePreview(state.parameters);
+  };
+  const engineHandlers = {
+    manifest: () => loadEnginesManifest(),
+    chosenId: () => getChosenEngineId(),
+    isDownloaded: async (id) =>
+      isEngineDownloaded(await loadEnginesManifest(), id),
+    download: async (id, onProgress) =>
+      downloadEngine(await loadEnginesManifest(), id, { onProgress }),
+    remove: async (id) => removeEngine(await loadEnginesManifest(), id),
+    switchTo: async (id) => {
+      if (!renderController) {
+        setChosenEngineId(id);
+        return;
+      }
+      await switchEngineTo(await loadEnginesManifest(), id, {
+        renderController,
+        rerun: rerunPreview,
+      });
+    },
+    status: (text, { announce = false } = {}) =>
+      updateStatus(text, 'info', { announce }),
+    announce: (text) => announceImmediate(text),
+    confirm: (message, title, confirmLabel, cancelLabel) =>
+      showConfirmDialog(message, title, confirmLabel, cancelLabel),
+    showError: ({ title, message, technical }) =>
+      showErrorModal({ title, message, technical }),
+  };
+  // For specs, the pattern of window.__forgeDebug: the engine the worker
+  // runs and the same handlers Preferences uses.
+  window.__forgeEngineChoice = {
+    ...engineHandlers,
+    enginePath: () => renderController?.getEnginePath() ?? null,
+  };
+
   // -- Toolbar: Edit menu --------------------------------------------------
   // Order and labels transcribed from upstream MainWindow.ui. Omitted: Show
   // Next/Previous Tab (one document, no editor tabs). Preferences is
@@ -4407,6 +4462,7 @@ async function initApp() {
         handler: () => {
           initPreferencesDialog({
             onOpenShortcuts: _openShortcutsModal,
+            engine: engineHandlers,
             getColorScheme: () => {
               if (previewManager) return previewManager.getViewportScheme();
               // Before the first preview the manager does not exist, but a

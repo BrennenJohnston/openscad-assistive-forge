@@ -169,7 +169,6 @@ export const MEASURED_SECONDS = {
   'parity-regression.spec.js': 38.7,
   'potrace-engine.spec.js': 2.4,
   'preference-matrix.spec.js': 40.7,
-  'preferences-dialog.spec.js': 137.2,
   'preview-stats.spec.js': 24.3,
   'project-link-lane.spec.js': 3.9,
   'project-share.spec.js': 31.7,
@@ -207,6 +206,9 @@ export const MEASURED_SECONDS = {
   // local cost (CI draws in software): engine-choice, two cases that load the
   // box two and three times and download one official engine, 19 s locally.
   'engine-choice.spec.js': 80.0,
+  // 137.2 by the two runs above, plus one case since (the Engine group, which
+  // downloads an engine and switches twice: 9.3 s locally), booked at 40.
+  'preferences-dialog.spec.js': 177.2,
 
   // Ran on no lane of either run: every case skips on CI for want of a
   // fixture. Kept at zero, so that a file which starts running again is

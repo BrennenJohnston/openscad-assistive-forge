@@ -289,6 +289,97 @@ test('the Advanced tab is live and hosts the engine and cache rows', async ({
   await expect(hint).toContainText('faster');
 });
 
+test('the Engine group: five engines, Download asks first, a kept engine is chosen and removed', async ({
+  page,
+}) => {
+  test.setTimeout(300_000);
+  const builds = [];
+  page.on('console', (message) => {
+    const m = /WASM build: (.*)$/.exec(message.text());
+    if (m) builds.push(m[1]);
+  });
+  await openPreferences(page);
+  await page.locator('#prefs-tab-advanced').click();
+
+  const group = page.locator('#engineGroup');
+  await expect(group.locator('legend')).toHaveText('Engine');
+  await expect(group.locator('.engine-row')).toHaveCount(5);
+  const forge = page.getByRole('radio', {
+    name: 'Forge build of OpenSCAD 2026.04.03 (default, built in)',
+  });
+  await expect(forge).toBeChecked();
+  const newest = page.getByRole('radio', {
+    name: 'OpenSCAD snapshot 2026.10.18 (official)',
+  });
+  await expect(newest).toBeDisabled();
+  for (const date of ['2026.04.03', '2026.01.03', '2025.03.25']) {
+    await expect(
+      page.getByRole('radio', { name: `OpenSCAD snapshot ${date} (official)` })
+    ).toBeDisabled();
+  }
+  await expect(page.locator('#engineCurrent')).toHaveText(
+    'Engine: Forge build of OpenSCAD 2026.04.03 (default, built in)'
+  );
+
+  // The group passes the WCAG 2.2 A and AA rules, and the rule that a
+  // control's visible words are in its name.
+  const results = await new AxeBuilder({ page })
+    .options({ rules: { 'label-content-name-mismatch': { enabled: true } } })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .include('#preferencesModal')
+    .analyze();
+  expect(
+    results.violations.map(
+      (v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`
+    )
+  ).toEqual([]);
+
+  const download = page.getByRole('button', {
+    name: 'Download the OpenSCAD snapshot 2026.10.18 engine',
+  });
+  await download.click();
+  const ask = page.getByRole('alertdialog', {
+    name: 'Download an official engine',
+  });
+  await expect(ask).toContainText('about 3.4 MB to download');
+  await ask.getByRole('button', { name: 'Not now' }).click();
+  await expect(ask).toHaveCount(0);
+  await expect(newest).toBeDisabled();
+
+  await download.click();
+  await ask.getByRole('button', { name: 'Download', exact: true }).click();
+  const remove = page.getByRole('button', {
+    name: 'Remove the OpenSCAD snapshot 2026.10.18 engine',
+  });
+  await expect(remove).toBeVisible({ timeout: 60_000 });
+  await expect(newest).toBeEnabled();
+  await expect(newest).toBeFocused();
+  await expect(page.locator('#engineState-official-2026-10-18')).toHaveText(
+    'Kept in this browser (11.1 MB)'
+  );
+
+  await newest.check();
+  await expect(page.locator('#engineCurrent')).toHaveText(
+    'Engine: OpenSCAD snapshot 2026.10.18 (official)',
+    { timeout: 120_000 }
+  );
+  await expect
+    .poll(() => page.evaluate(() => window.__forgeEngineChoice.enginePath()))
+    .toBe('/wasm/engines/official-2026-10-18');
+  await expect.poll(() => builds.join(' ')).toMatch(/2026\.10\.18/);
+
+  await remove.click();
+  await expect(page.locator('#engineCurrent')).toHaveText(
+    'Engine: Forge build of OpenSCAD 2026.04.03 (default, built in)',
+    { timeout: 120_000 }
+  );
+  await expect(forge).toBeChecked();
+  await expect(download).toBeFocused();
+  await expect
+    .poll(() => page.evaluate(() => window.__forgeEngineChoice.enginePath()))
+    .toBe('/wasm/openscad-official');
+});
+
 test('picking a scheme repaints the viewport, and it survives a reopen', async ({
   page,
 }) => {

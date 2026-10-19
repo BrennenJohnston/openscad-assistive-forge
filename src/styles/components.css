@@ -16944,6 +16944,48 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   color: var(--color-text-tertiary);
 }
 
+/* Advanced ▸ Engine: a radio, the engine's name, its state and its button on
+   one row, wrapping on a narrow screen with the button kept at the end. The
+   name stays in the primary color while its radio waits for a download: the
+   row's words are what say why. */
+.engine-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+.engine-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-xs);
+  row-gap: var(--space-2xs);
+  min-height: var(--size-touch-target);
+}
+
+.engine-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.engine-row label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.engine-state {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.engine-row .engine-action {
+  margin-left: auto;
+  min-height: var(--size-touch-target);
+  min-width: var(--size-touch-target);
+}
+
 /* Controller tab. */
 .preferences-select-row {
   display: flex;

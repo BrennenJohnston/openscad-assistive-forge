@@ -8766,6 +8766,19 @@
               the edge detail limit in View ▸ Edge Detail Limit, and Design ▸
               Flush Caches clears cached geometry.
             </p>
+            <fieldset class="preferences-fieldset" id="engineGroup">
+              <legend class="preferences-legend">Engine</legend>
+              <p class="preferences-field-note">
+                The Forge engine is built from OpenSCAD 2026.04.03 with three
+                changes that make the browser engine faster and steadier. The
+                official snapshots are OpenSCAD's own builds, downloaded only
+                when you ask and kept in this browser. Clear cache &amp; reload
+                removes them.
+              </p>
+              <!-- preferences-dialog.js writes one row per engine. -->
+              <div id="engineRows" class="engine-rows"></div>
+              <p id="engineCurrent" class="preferences-field-note"></p>
+            </fieldset>
             <!-- main.js wires these by id at startup. -->
             <div class="preferences-check-row">
               <input
