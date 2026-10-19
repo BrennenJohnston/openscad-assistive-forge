@@ -15,6 +15,12 @@ import {
   STORAGE_KEY_SOUND_KINDS_OFF,
 } from './storage-keys.js';
 import { announce, announceImmediate } from './announcer.js';
+import {
+  isPermanent,
+  noteDevUnlock,
+  recordCodeEntry,
+  takePendingBreak,
+} from './alt-unlock-stages.js';
 import { playUnlockJingle } from './unlock-jingle.js';
 import {
   playControlSound,
@@ -387,6 +393,10 @@ const _HFM_KEY_REST_MS = 300;
 const _HFM_ARRIVAL_FALLBACK_MS = 12000;
 let _hfmArrival = null;
 const _hfmArrivalTimers = { rest: null, fallback: null };
+// A later finding's moment (the crack, the break-through) is named on the key
+// while it plays.
+const _HFM_MOMENT_MARK_MS = 100;
+let _hfmMomentMarkTimer = null;
 
 // Late-bound dependencies set via initHfmController
 let _getPreviewManager = () => null;
@@ -2464,6 +2474,7 @@ function _disableAltViewWithPreview(toggleBtn) {
   _setHfmSlidersEnabled(false);
 
   _updateHfmStatusBar();
+  _playPendingBreak();
 }
 
 // ---------------------------------------------------------------------------
@@ -2512,6 +2523,66 @@ function _playKeyArrival(toggle) {
   toggle.setAttribute('data-arrival', 'dropping');
 }
 
+function _markKeyMoment(toggle, moment) {
+  if (!toggle) return;
+  clearTimeout(_hfmMomentMarkTimer);
+  toggle.setAttribute('data-moment', moment);
+  _hfmMomentMarkTimer = setTimeout(() => {
+    toggle.removeAttribute('data-moment');
+  }, _HFM_MOMENT_MARK_MS);
+}
+
+/** The second finding: the glass around the key cracks. */
+function _playKeyCrack(toggle) {
+  _markKeyMoment(toggle, 'crack');
+}
+
+/** The third finding: the key breaks through the glass into its place. */
+function _playKeyBreakThrough(toggle) {
+  _markKeyMoment(toggle, 'break');
+}
+
+/** From the third finding on the key stays, there at every start. */
+function _setKeyPermanent(toggle) {
+  toggle?.setAttribute('data-alt-key', 'permanent');
+}
+
+/** A break-through found while the look was on plays once it is off. */
+function _playPendingBreak() {
+  if (!takePendingBreak()) return;
+  _playKeyBreakThrough(document.getElementById('_hfmToggle'));
+}
+
+/**
+ * What a finding of the code plays on the key.
+ * @param {string} stage - recordCodeEntry()'s answer
+ * @param {HTMLElement|null} toggle - the key
+ */
+function _playFinding(stage, toggle) {
+  if (stage === 'arrival') {
+    _playKeyArrival(toggle);
+  } else if (stage === 'crack') {
+    _playKeyCrack(toggle);
+  } else if (stage === 'break') {
+    _setKeyPermanent(toggle);
+    _playKeyBreakThrough(toggle);
+  } else if (stage === 'break-pending') {
+    _setKeyPermanent(toggle);
+  }
+}
+
+// Whoever put it there: the Alt View, before a project opens or with one, or
+// the City Walk.
+function _lookOn() {
+  return document.documentElement.getAttribute('data-ui-variant') === 'mono';
+}
+
+function _showGatedElements() {
+  document.querySelectorAll('[data-hfm-gated]').forEach((el) => {
+    el.hidden = false;
+  });
+}
+
 function _injectAltToggle() {
   const themeToggle = document.getElementById('themeToggle');
   if (!themeToggle) return;
@@ -2520,6 +2591,7 @@ function _injectAltToggle() {
   const toggleBtn = document.createElement('button');
   toggleBtn.id = '_hfmToggle';
   toggleBtn.className = 'btn btn-sm btn-secondary alt-view-toggle';
+  if (isPermanent()) _setKeyPermanent(toggleBtn);
   toggleBtn.setAttribute('aria-pressed', 'false');
   toggleBtn.setAttribute('aria-label', _HFM_TOGGLE_NAME);
   toggleBtn.setAttribute('title', _HFM_TOGGLE_NAME);
@@ -2625,6 +2697,7 @@ function _injectAltToggle() {
         _setAssetsForVariant(false);
         toggleBtn.setAttribute('aria-pressed', 'false');
         _hfmPendingEnable = false;
+        _playPendingBreak();
       }
       announceImmediate(
         isCurrentlyEnabled ? _HFM_OFF_SENTENCE : _HFM_ON_SENTENCE
@@ -2653,26 +2726,49 @@ function _injectAltToggle() {
 }
 
 /**
+ * Every finding of the code counts, wherever it is made; a developer's door
+ * counts as the first.
+ *
  * @param {Object} [options]
- * @param {boolean} [options.moment] - Found by the camera sequence: the key
- *   arrives with its drop instead of simply appearing.
+ * @param {boolean} [options.moment] - Found by the camera sequence: the
+ *   finding plays its moment instead of the key simply appearing.
  */
 function _handleUnlock({ moment = false } = {}) {
-  if (_hfmUnlocked) return;
+  if (_hfmUnlocked) {
+    if (moment) {
+      _playFinding(
+        recordCodeEntry({ altViewOn: _lookOn() }),
+        document.getElementById('_hfmToggle')
+      );
+    }
+    return;
+  }
   _hfmUnlocked = true;
 
   _injectAltToggle();
-  if (moment) _playKeyArrival(document.getElementById('_hfmToggle'));
+  const toggle = document.getElementById('_hfmToggle');
+  let stage = null;
+  if (moment) {
+    stage = recordCodeEntry({ altViewOn: _lookOn() });
+  } else {
+    noteDevUnlock();
+  }
+  // The first finding drops the key in. A later one made where the key was
+  // not showing, on a new visit, brings it by its own moment instead.
+  const drops = moment && (stage === 'arrival' || stage === 'none');
+  if (drops) {
+    _playKeyArrival(toggle);
+  } else if (stage) {
+    _playFinding(stage, toggle);
+  }
 
-  document.querySelectorAll('[data-hfm-gated]').forEach((el) => {
-    el.hidden = false;
-  });
+  _showGatedElements();
 
   const sayIt = (delay) =>
     window.setTimeout(() => {
       announce(_HFM_UNLOCK_SENTENCE, { immediate: true });
     }, delay);
-  if (moment && _soundsOn()) {
+  if (drops && _soundsOn()) {
     // The tune first, then the sentence, so neither covers the other. A tune
     // that cannot play leaves the sentence at its usual time.
     playUnlockJingle().then(
@@ -2718,6 +2814,13 @@ export function initHfmController({
   _getDisplayOptionsController = getDisplayOptionsController;
   // A page that starts with sounds off starts muted.
   setMuted(!_soundsOn());
+
+  // A key that stays is simply there: no drop, nothing said.
+  if (isPermanent()) {
+    _hfmUnlocked = true;
+    _injectAltToggle();
+    _showGatedElements();
+  }
 
   return {
     handleUnlock: _handleUnlock,

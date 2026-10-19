@@ -2022,6 +2022,201 @@ describe('the unlock is heard', () => {
   })
 })
 
+describe('every finding of the code counts', () => {
+  const UNLOCK_KEY = 'openscad-forge-alt-unlock'
+  let seen
+  let observer = null
+
+  const seed = (state) =>
+    localStorage.setItem(
+      UNLOCK_KEY,
+      JSON.stringify({ entries: 0, permanent: false, pendingBreak: false, ...state })
+    )
+  const stored = () => JSON.parse(localStorage.getItem(UNLOCK_KEY))
+  const key = () => document.getElementById('_hfmToggle')
+  // Every moment the key is marked with and every state of its drop, in order.
+  const watchKey = () => {
+    seen = { moments: [], arrival: [] }
+    observer = new MutationObserver((records) => {
+      for (const record of records) {
+        if (record.target.id !== '_hfmToggle') continue
+        const value = record.target.getAttribute(record.attributeName)
+        if (value === null) continue
+        if (record.attributeName === 'data-moment') seen.moments.push(value)
+        else seen.arrival.push(value)
+      }
+    })
+    observer.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-moment', 'data-arrival'],
+    })
+  }
+  const page = () => {
+    const written = pageWithHeaderAndDpad()
+    const gated = document.createElement('div')
+    gated.id = 'gatedTab'
+    gated.setAttribute('data-hfm-gated', '')
+    gated.hidden = true
+    document.body.appendChild(gated)
+    watchKey()
+    return written
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: [
+        'setTimeout',
+        'clearTimeout',
+        'requestAnimationFrame',
+        'cancelAnimationFrame',
+      ],
+    })
+    localStorage.clear()
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    document.documentElement.removeAttribute('data-ui-variant')
+  })
+
+  afterEach(() => {
+    observer?.disconnect()
+    observer = null
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    document.body.innerHTML = ''
+    document.documentElement.removeAttribute('data-ui-variant')
+    localStorage.clear()
+  })
+
+  it('a second finding, with the key showing, cracks the glass around it', async () => {
+    page()
+    const controller = await freshController()
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(seen.arrival[0]).toBe('dropping')
+    expect(seen.moments).toEqual([])
+
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(seen.moments).toEqual(['crack'])
+    expect(stored().entries).toBe(2)
+    await vi.advanceTimersByTimeAsync(200)
+    expect(key().hasAttribute('data-moment')).toBe(false)
+    expect(key().hasAttribute('data-alt-key')).toBe(false)
+  })
+
+  it('a third finding outside the look breaks through, and the key stays', async () => {
+    page()
+    const controller = await freshController()
+    for (let i = 0; i < 3; i++) {
+      controller.handleUnlock({ moment: true })
+      await vi.advanceTimersByTimeAsync(200)
+    }
+    expect(seen.moments).toEqual(['crack', 'break'])
+    expect(key().getAttribute('data-alt-key')).toBe('permanent')
+    expect(stored()).toEqual({ entries: 3, permanent: true, pendingBreak: false })
+  })
+
+  it('a third finding inside the look makes the key permanent at once; the break-through plays as the look goes off', async () => {
+    page()
+    const controller = await freshController(previewManagerStub())
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(200)
+    key().click()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(document.documentElement.getAttribute('data-ui-variant')).toBe('mono')
+
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(200)
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(200)
+    expect(seen.moments).toEqual(['crack'])
+    expect(key().getAttribute('data-alt-key')).toBe('permanent')
+    expect(stored()).toEqual({ entries: 3, permanent: true, pendingBreak: true })
+
+    key().click()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(document.documentElement.hasAttribute('data-ui-variant')).toBe(false)
+    expect(seen.moments).toEqual(['crack', 'break'])
+    expect(stored().pendingBreak).toBe(false)
+
+    key().click()
+    await vi.advanceTimersByTimeAsync(100)
+    key().click()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(seen.moments, 'it plays once').toEqual(['crack', 'break'])
+  })
+
+  it('the same on the Main Page, where the look is on with no preview yet', async () => {
+    page()
+    seed({ entries: 3, permanent: true, pendingBreak: true })
+    await freshController()
+    key().click()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(document.documentElement.getAttribute('data-ui-variant')).toBe('mono')
+    expect(seen.moments).toEqual([])
+    key().click()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(document.documentElement.hasAttribute('data-ui-variant')).toBe(false)
+    expect(seen.moments).toEqual(['break'])
+  })
+
+  it('a key made permanent before is there at start: no drop, nothing said, the guide tab shown', async () => {
+    const written = page()
+    seed({ entries: 3, permanent: true })
+    const controller = await freshController()
+    expect(key()).not.toBeNull()
+    expect(key().getAttribute('data-alt-key')).toBe('permanent')
+    expect(document.getElementById('gatedTab').hidden).toBe(false)
+    expect(controller.isUnlocked()).toBe(true)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(seen.arrival).toEqual([])
+    expect(written).toEqual([])
+
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(200)
+    expect(seen.moments, 'a finding after that brings nothing').toEqual([])
+    expect(seen.arrival).toEqual([])
+  })
+
+  it('on a later visit, with no key showing, the second finding brings the key with its crack and no drop', async () => {
+    const written = page()
+    seed({ entries: 1 })
+    const controller = await freshController()
+    expect(key()).toBeNull()
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(key()).not.toBeNull()
+    expect(seen.arrival).toEqual([])
+    expect(seen.moments).toEqual(['crack'])
+    expect(document.getElementById('gatedTab').hidden).toBe(false)
+    expect(written).toContain('A key appeared next to the theme button.')
+  })
+
+  it('on a later visit the third finding brings the key through the glass, to stay', async () => {
+    page()
+    seed({ entries: 2 })
+    const controller = await freshController()
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(seen.arrival).toEqual([])
+    expect(seen.moments).toEqual(['break'])
+    expect(key().getAttribute('data-alt-key')).toBe('permanent')
+    expect(stored().permanent).toBe(true)
+  })
+
+  it('a developer door counts as the first finding, so the code after it cracks', async () => {
+    page()
+    const controller = await freshController()
+    controller.handleUnlock()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(seen.arrival).toEqual([])
+    expect(stored().entries).toBe(1)
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(seen.moments).toEqual(['crack'])
+  })
+})
+
 describe('the Alt View and pan adjust speak plainly', () => {
   beforeEach(() => {
     vi.useFakeTimers({

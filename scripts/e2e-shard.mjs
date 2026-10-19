@@ -81,7 +81,9 @@ export const MEASURED_SECONDS = {
   // the same cases of ui-schema.spec.js took 909 s in one and 1,474 s in the
   // other, as the files sharing its runner changed. Re-measure the same way.
   'accessibility.spec.js': 243.3,
-  'alt-view-arrival.spec.js': 127.3,
+  // 127.3 by the two runs above, plus three cases since (the key that stays,
+  // on the Main Page: 7 s locally), booked at about four times that.
+  'alt-view-arrival.spec.js': 155.3,
   'alt-view-consistency.spec.js': 258.6,
   'alt-view-cursors.spec.js': 35.7,
   'alt-view-drawers.spec.js': 79.7,

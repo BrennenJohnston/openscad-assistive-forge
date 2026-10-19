@@ -211,6 +211,115 @@ test.describe('The key arrives from the keyboard', () => {
   });
 });
 
+// Every finding of the code counts, kept in this browser: the second cracks
+// the glass around the key, the third makes the key stay.
+const UNLOCK = 'openscad-forge-alt-unlock';
+const count = (state) =>
+  JSON.stringify({ entries: 0, permanent: false, pendingBreak: false, ...state });
+
+async function openMainPage(page, stored) {
+  await page.addInitScript((stored) => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    localStorage.setItem('openscad-forge-theme', 'dark');
+    for (const [name, value] of Object.entries(stored)) {
+      localStorage.setItem(name, value);
+    }
+  }, stored);
+  await page.goto('/');
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    timeout: 180_000,
+  });
+}
+
+// The moments the key is marked with and the states of its drop, from now on.
+async function watchKey(page) {
+  await page.evaluate(() => {
+    const seen = (window.__key = { moments: [], arrival: [] });
+    new MutationObserver((records) => {
+      for (const record of records) {
+        if (record.target.id !== '_hfmToggle') continue;
+        const value = record.target.getAttribute(record.attributeName);
+        if (value === null) continue;
+        if (record.attributeName === 'data-moment') seen.moments.push(value);
+        else seen.arrival.push(value);
+      }
+    }).observe(document.documentElement, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-moment', 'data-arrival'],
+    });
+  });
+}
+
+const keySeen = (page) => page.evaluate(() => window.__key);
+
+test.describe('The key that stays', () => {
+  test('the key is there on load when it is permanent: no drop, nothing said, the guide tab shown', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await recordAnnouncements(page);
+    await openMainPage(page, { [UNLOCK]: count({ entries: 3, permanent: true }) });
+
+    const key = page.locator('#_hfmToggle');
+    await expect(key).toBeVisible();
+    await expect(key).toHaveAttribute('data-alt-key', 'permanent');
+    await expect(key).not.toHaveAttribute('data-arrival', /.+/);
+    expect(
+      await page.evaluate(() => {
+        const theme = document.getElementById('themeToggle');
+        return [theme.nextElementSibling?.id, theme.nextElementSibling?.nextElementSibling?.id];
+      }),
+      'the sounds button, then the key, after the theme button'
+    ).toEqual(['_hfmSounds', '_hfmToggle']);
+    expect(
+      await page.evaluate(
+        () => document.getElementById('_hfmPanAdjust')?.previousElementSibling?.id
+      )
+    ).toBe('projectionToggle');
+    expect(await page.evaluate(() => document.getElementById('tab-altview').hidden)).toBe(false);
+    await page.waitForTimeout(2_000);
+    expect(await sentences(page)).toEqual([]);
+  });
+
+  test('a second finding, with the key showing, marks the crack', async ({ page }) => {
+    test.setTimeout(240_000);
+    await openMainPage(page, {
+      'openscad-customizer-hfm-unlock': 'true',
+      [UNLOCK]: count({ entries: 1 }),
+    });
+    await expect(page.locator('#_hfmToggle')).toBeVisible();
+    await watchKey(page);
+    await typeSequence(page);
+
+    await expect.poll(async () => (await keySeen(page)).moments, { timeout: 5_000 }).toEqual([
+      'crack',
+    ]);
+    expect((await keySeen(page)).arrival).toEqual([]);
+    const stored = await page.evaluate((name) => localStorage.getItem(name), UNLOCK);
+    expect(JSON.parse(stored)).toEqual({ entries: 2, permanent: false, pendingBreak: false });
+  });
+
+  test('on a later visit, with no key showing, the second finding brings the key with its crack and no drop', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await recordAnnouncements(page);
+    await openMainPage(page, { [UNLOCK]: count({ entries: 1 }) });
+    await expect(page.locator('#_hfmToggle')).toHaveCount(0);
+    await watchKey(page);
+    await typeSequence(page);
+
+    await expect(page.locator('#_hfmToggle')).toBeVisible({ timeout: 10_000 });
+    await expect.poll(async () => (await keySeen(page)).moments, { timeout: 5_000 }).toEqual([
+      'crack',
+    ]);
+    expect((await keySeen(page)).arrival).toEqual([]);
+    await expect.poll(async () => (await sentences(page)).length, { timeout: 10_000 }).toBe(1);
+  });
+});
+
 // A short tune plays as the key drops, unless sounds are turned off in
 // Preferences; the screen reader's sentence waits until it has finished.
 test.describe('The tune', () => {
