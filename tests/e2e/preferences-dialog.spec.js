@@ -181,6 +181,44 @@ for (const where of [
   });
 }
 
+// A finger needs room to set a slider: never shorter than three touch
+// targets, the floor the Customizer's own sliders keep.
+test.describe('Preferences on a phone, its sliders', () => {
+  test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
+
+  test("each slider's value sits beside it, and the slider has room", async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await openPreferences(page);
+    await page.waitForTimeout(400);
+    const rows = await page.evaluate(() =>
+      ['gridOpacityInput', 'prefsCustomizerOpacity'].map((id) => {
+        const input = document.getElementById(id);
+        const r = input.getBoundingClientRect();
+        const v = input
+          .closest('.slider-container')
+          .querySelector('.slider-value')
+          .getBoundingClientRect();
+        const middle = v.top + v.height / 2;
+        return {
+          id,
+          beside: middle > r.top && middle < r.bottom && v.left >= r.right - 1,
+          width: Math.round(r.width),
+        };
+      })
+    );
+    expect(
+      rows.filter((r) => !r.beside).map((r) => r.id),
+      'sliders whose value is not beside them'
+    ).toEqual([]);
+    expect(
+      rows.filter((r) => r.width < 3 * 44).map((r) => `${r.id} ${r.width}px`),
+      'sliders shorter than three touch targets'
+    ).toEqual([]);
+  });
+});
+
 test('the tab bar follows the APG pattern', async ({ page }) => {
   test.setTimeout(240_000);
   await openPreferences(page);

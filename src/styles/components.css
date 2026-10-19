@@ -2554,6 +2554,17 @@ dialog:modal {
   margin-right: 0;
 }
 
+/* On a narrow phone every slider's label goes above it, as the speed's
+   always does, so the slider and its value have the row's width rather than
+   what the label leaves. */
+@media (max-width: 480px) {
+  .preview-setting:has(> .slider-container) {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 /* Ensure slider value uses tabular figures for stable width */
 .preview-setting.rotation-speed-setting .slider-value {
   min-width: 4.5rem;
@@ -4043,15 +4054,6 @@ body.high-contrast .param-tooltip {
 
 /* Mobile responsiveness - stack on small screens */
 @media (max-width: 480px) {
-  .slider-container {
-    flex-wrap: wrap;
-  }
-
-  .slider-container input[type='range'] {
-    flex-basis: 100%;
-    order: 1;
-  }
-
   .slider-spinbox {
     flex: 1;
     min-width: 60px;

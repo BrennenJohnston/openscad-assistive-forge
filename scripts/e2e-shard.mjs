@@ -167,7 +167,7 @@ export const MEASURED_SECONDS = {
   // 101.3 by the two runs above, plus three cases since (the first row in
   // high contrast at two heights, and held sideways: 7 s locally), booked at
   // about four times that.
-  'mobile-toolbar.spec.js': 129.3,
+  'mobile-toolbar.spec.js': 149.3,
   'mobile-viewport.spec.js': 75.5,
   'overlay-placement.spec.js': 168.9,
   'page-fits-window.spec.js': 62.0,
@@ -224,7 +224,7 @@ export const MEASURED_SECONDS = {
   'keys-dialog.spec.js': 95.0,
   // 137.2 by the two runs above, plus one case since (the Engine group, which
   // downloads an engine and switches twice: 9.3 s locally), booked at 40.
-  'preferences-dialog.spec.js': 217.2,
+  'preferences-dialog.spec.js': 237.2,
 
   // Ran on no lane of either run: every case skips on CI for want of a
   // fixture. Kept at zero, so that a file which starts running again is
