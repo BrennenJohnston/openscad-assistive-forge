@@ -105,7 +105,9 @@ export const MEASURED_SECONDS = {
   'braille-card.spec.js': 31.7,
   'camera-face-view-orbit.spec.js': 185.0,
   'classic-mobile-gate.spec.js': 46.2,
-  'classic-mode.spec.js': 454.5,
+  // 454.5 by the two runs above, plus one case since (the 3D view toolbar
+  // wraps at two window sizes: 2.0 s locally), booked at four times that.
+  'classic-mode.spec.js': 462.5,
   'classic-names.spec.js': 36.8,
   'classic-pane-focus.spec.js': 21.0,
   'classic-panels.spec.js': 403.4,

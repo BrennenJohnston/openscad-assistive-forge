@@ -2247,6 +2247,60 @@ test.describe('Classic toolbars stay one row', () => {
   });
 });
 
+test.describe('The 3D view toolbar wraps where one row hides buttons', () => {
+  test('classic-camera-bar-fits: every button inside the bar at 1280 x 800 and 1400 x 900', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    // A button past the bar's edge is out of sight until the bar scrolls.
+    const read = () =>
+      page.locator('#classicCameraBar').evaluate((bar) => {
+        const r = bar.getBoundingClientRect();
+        const shown = Array.from(bar.querySelectorAll('button')).filter(
+          (b) => b.offsetParent !== null
+        );
+        const outside = shown.filter((b) => {
+          const br = b.getBoundingClientRect();
+          return (
+            br.left < r.left - 0.5 ||
+            br.right > r.right + 0.5 ||
+            br.top < r.top - 0.5 ||
+            br.bottom > r.bottom + 0.5
+          );
+        });
+        return {
+          outside: outside.map(
+            (b) => b.querySelector('.sr-only')?.textContent || b.id
+          ),
+          rows: new Set(
+            shown.map((b) => Math.round(b.getBoundingClientRect().top))
+          ).size,
+        };
+      });
+
+    for (const size of [
+      { width: 1280, height: 800 },
+      { width: 1400, height: 900 },
+    ]) {
+      await page.setViewportSize(size);
+      await expect
+        .poll(async () => (await read()).outside, {
+          message: `buttons outside the 3D view toolbar at ${size.width} x ${size.height}`,
+        })
+        .toEqual([]);
+      expect(
+        (await read()).rows,
+        `3D view toolbar rows at ${size.width} x ${size.height}`
+      ).toBeLessThanOrEqual(2);
+    }
+  });
+});
+
 test.describe('Classic dock relocation', () => {
   /** Enter Classic in Standard density at a desktop width. */
   async function enterClassicDesktop(page, width = 1400) {
