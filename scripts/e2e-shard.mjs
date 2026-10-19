@@ -80,7 +80,9 @@ export const MEASURED_SECONDS = {
   // 39179291729 (2026-10-18). One run is not enough for the heaviest files:
   // the same cases of ui-schema.spec.js took 909 s in one and 1,474 s in the
   // other, as the files sharing its runner changed. Re-measure the same way.
-  'accessibility.spec.js': 243.3,
+  // 243.3 by the two runs above, plus two cases since (the upload area's one
+  // Tab stop and its file picker: 5.8 s locally), booked at four times that.
+  'accessibility.spec.js': 266.5,
   // 127.3 by the two runs above, plus eleven cases since (the key that
   // stays, the crack and the break-through, on the Main Page and the box:
   // 51 s locally), booked at about four times that.

@@ -8856,15 +8856,8 @@ async function initApp() {
     await routeUploadSelection(classifyDrop(input));
   });
 
-  // Click to upload is handled by the label wrapping the input.
-
-  // Keyboard support for upload zone
-  uploadZone.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      fileInput.click();
-    }
-  });
+  // The file input is the area's one Tab stop: its own Enter and Space open
+  // the picker, and the label wrapping it takes the click.
 
   // ========== Start new project ==========
   // A way to start a new project from scratch.
@@ -9503,7 +9496,7 @@ if (rounded) {
       const notice = document.getElementById('linkFailureNotice');
       if (notice) notice.hidden = true;
       document.getElementById('linkFailureNoticeMessage')?.replaceChildren();
-      document.getElementById('uploadZone')?.focus();
+      document.getElementById('fileInput')?.focus();
     });
 
   // =========================================
