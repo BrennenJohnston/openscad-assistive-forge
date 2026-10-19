@@ -139,12 +139,16 @@ export async function isDownloaded(manifest, id) {
   return found.every(Boolean);
 }
 
-/** Read a response's body, reporting each chunk's length. */
+/**
+ * Read a response's body, reporting each chunk's length. The bytes come back
+ * as a Uint8Array: crypto.subtle takes any typed array, where a bare
+ * ArrayBuffer has to come from the same JavaScript realm (Node 20 checks).
+ */
 async function readBody(response, onChunk) {
   if (!response.body?.getReader) {
-    const buffer = await response.arrayBuffer();
-    onChunk(buffer.byteLength);
-    return buffer;
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    onChunk(bytes.byteLength);
+    return bytes;
   }
   const reader = response.body.getReader();
   const chunks = [];
@@ -162,7 +166,7 @@ async function readBody(response, onChunk) {
     out.set(chunk, at);
     at += chunk.byteLength;
   }
-  return out.buffer;
+  return out;
 }
 
 /**
