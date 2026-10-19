@@ -124,6 +124,43 @@ describe('a stopped render says who stopped it', () => {
   })
 })
 
+describe('a worker that crashes during a render', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'Worker',
+      class {
+        postMessage(message) {
+          if (message.type === 'INIT') {
+            queueMicrotask(() =>
+              this.onmessage?.({ data: { type: 'READY', payload: { capabilities: {} } } })
+            )
+          }
+        }
+        terminate() {}
+      }
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("rejects the render with the engine crash's own words, naming no cause", async () => {
+    const controller = new RenderController()
+    await controller.init()
+    const reject = vi.fn()
+    controller.currentRequest = { id: 'render-1', reject }
+    controller.worker.onerror({ message: 'Uncaught RuntimeError' })
+
+    const error = reject.mock.calls[0][0]
+    expect(error.code).toBe('WASM_ABORT')
+    expect(error.message).not.toMatch(/projection|roof/i)
+    expect(error.message).toBe(
+      translateWorkerError('Aborted(native code called abort())').message
+    )
+  })
+})
+
 describe('the preview treats only a real cancel as one', () => {
   let renderController
   let controller
