@@ -178,7 +178,11 @@ import {
   isGamepadSupported,
   GAMEPAD_ACTIONS,
 } from './js/gamepad-controller.js';
-import { createGamepadNavigator } from './js/gamepad-navigator.js';
+import {
+  CLASSIC_REGIONS,
+  DEFAULT_REGIONS,
+  createGamepadNavigator,
+} from './js/gamepad-navigator.js';
 import { requestSwUpdate } from './js/sw-update.js';
 import {
   initKeyboardShortcuts,
@@ -16568,7 +16572,14 @@ if (rounded) {
     // stands down while the City Walk runs. In the Alt View a press that
     // acts with no control on screen plays a key (the rest press a control
     // or move the view, which have their own sounds).
+    // The triggers' parts are the Classic interface's own in Classic; the
+    // standard list covers a desktop and a phone (a part not shown is
+    // passed by).
     const gamepadNavigator = createGamepadNavigator({
+      getRegions: () =>
+        document.body.dataset.uiMode === 'classic'
+          ? CLASSIC_REGIONS
+          : DEFAULT_REGIONS,
       onUnhandledBack: () => getToolbarMenuController().closeAll(),
     });
     const PAD_TURN_STEP = 0.1;

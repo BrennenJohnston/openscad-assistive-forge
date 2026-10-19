@@ -10,14 +10,51 @@
 
 import { getFocusableElements } from './focus-trap.js';
 
-/** The parts of the window the triggers move between, in order. */
+/**
+ * A part of the window the triggers move between: where it is, and the
+ * controls that only show or hide it (its toggle), which a jump passes over
+ * when the part has anything else to reach. A plain selector is a part with
+ * no toggle.
+ * @typedef {{selector: string, toggle?: string}|string} Region
+ */
+
+/** The parts of the window, in order, as a desktop or a phone shows them. */
 export const DEFAULT_REGIONS = [
   '.app-header',
   '#toolbarMenuBar',
-  '#paramPanel',
+  '.workflow-actions',
+  {
+    selector: '#paramPanel',
+    toggle: '#collapseParamPanelBtn, #mobileDrawerToggle, #drawerCloseBtn',
+  },
+  { selector: '#previewInfoSection', toggle: '#previewDrawerToggle' },
   '#previewContainer',
-  '#cameraPanel, #cameraDrawer',
+  {
+    selector: '#cameraPanel, #cameraDrawer',
+    toggle: '#cameraPanelToggle, #cameraDrawerToggle',
+  },
+  {
+    selector: '#lensDrawer, #asciiDrawer',
+    toggle: '#lensDrawerToggle, #asciiDrawerToggle',
+  },
   '#actionsBar',
+  { selector: '#echoDrawer', toggle: '#echoDrawerToggle' },
+];
+
+/** A Classic pane's own buttons: move, stow, hide. */
+const PANE_BUTTONS = '.classic-pane-titlebar, .classic-pane-titlebar *';
+
+/** The parts of the window in the Classic interface, in order. */
+export const CLASSIC_REGIONS = [
+  '.app-header',
+  '#toolbarMenuBar',
+  '#classicToolbar',
+  { selector: '#classicEditorSlot', toggle: PANE_BUTTONS },
+  { selector: '#paramPanel', toggle: PANE_BUTTONS },
+  '#previewContainer',
+  '#classicCameraBar',
+  { selector: '#classicBottomStrip', toggle: PANE_BUTTONS },
+  '#classicStatusBar',
 ];
 
 const FOCUS_SOURCE = 'gamepad';
@@ -96,9 +133,72 @@ function focusFromPad(el) {
 }
 
 /**
+ * The parts that hold a reachable control now, in order, each with the
+ * controls it owns. A control inside two parts belongs to the inner one, so
+ * a part nested in another (on a phone the theme row stands in the Preview
+ * Settings row) is visited for itself, right after the part that holds it,
+ * and nothing twice.
+ * @param {Region[]} regions
+ * @param {HTMLElement[]} order
+ * @returns {{el: Element, toggle: string|null, controls: HTMLElement[]}[]}
+ */
+function liveParts(regions, order) {
+  const parts = regions
+    .map((region) =>
+      typeof region === 'string' ? { selector: region } : region
+    )
+    .map(({ selector, toggle = null }) => ({
+      el: [...document.querySelectorAll(selector)].find(
+        (el) => reachable(el) && order.some((c) => el.contains(c))
+      ),
+      toggle,
+      controls: [],
+    }))
+    .filter((part) => part.el);
+  for (const control of order) {
+    let owner = null;
+    for (const part of parts) {
+      if (part.el.contains(control) && (!owner || owner.el.contains(part.el))) {
+        owner = part;
+      }
+    }
+    owner?.controls.push(control);
+  }
+  const live = parts.filter((part) => part.controls.length > 0);
+  const holderOf = (part) =>
+    live
+      .filter((other) => other !== part && other.el.contains(part.el))
+      .reduce(
+        (inner, other) =>
+          inner?.el.contains(other.el) ? other : (inner ?? other),
+        null
+      );
+  const ordered = [];
+  const place = (part) => {
+    ordered.push(part);
+    live.filter((other) => holderOf(other) === part).forEach(place);
+  };
+  live.filter((part) => !holderOf(part)).forEach(place);
+  return ordered;
+}
+
+/**
+ * Where a jump into a part lands: its first control that is not its toggle,
+ * or the toggle when nothing else of the part shows (a closed drawer).
+ * @param {{toggle: string|null, controls: HTMLElement[]}} part
+ * @returns {HTMLElement}
+ */
+function landingOf(part) {
+  return (
+    part.controls.find((c) => !(part.toggle && c.matches(part.toggle))) ||
+    part.controls[0]
+  );
+}
+
+/**
  * @param {Object} [options]
- * @param {() => string[]} [options.getRegions] - selectors of the window's
- *   parts, in order
+ * @param {() => Region[]} [options.getRegions] - the window's parts, in
+ *   order
  * @param {() => boolean} [options.isPaused] - true while something else has
  *   the controller (by default, while the City Walk runs)
  * @param {() => void} [options.onUnhandledBack] - closes what is open when
@@ -123,34 +223,24 @@ export function createGamepadNavigator({
     focusFromPad(order[next]);
   };
 
-  /** The region parts that hold a reachable control now, in order. */
-  const liveRegions = () =>
-    getRegions()
-      .map((selector) =>
-        [...document.querySelectorAll(selector)].find(
-          (el) => reachable(el) && focusOrder().some((c) => el.contains(c))
-        )
-      )
-      .filter(Boolean);
-
   const jump = (by) => {
     if (isPaused()) return;
     if (openDialog()) {
       step(by);
       return;
     }
-    const parts = liveRegions();
+    const parts = liveParts(getRegions(), focusOrder());
     if (!parts.length) return;
     const active = document.activeElement;
-    const at = parts.findIndex((part) => part.contains(active));
+    let at = parts.findIndex((part) => part.controls.includes(active));
+    if (at < 0) at = parts.findIndex((part) => part.el.contains(active));
     const next =
       at < 0
         ? by > 0
           ? 0
           : parts.length - 1
         : (at + by + parts.length) % parts.length;
-    const first = focusOrder().find((c) => parts[next].contains(c));
-    focusFromPad(first);
+    focusFromPad(landingOf(parts[next]));
   };
 
   const keyTo = (target, key) =>

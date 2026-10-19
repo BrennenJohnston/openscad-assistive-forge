@@ -13,14 +13,14 @@ const WASM_READY_TIMEOUT = 180_000;
 /** The standard mapping's indexes for the buttons these cases press. */
 const BUTTON = { a: 0, b: 1, rb: 5, rt: 7, select: 8 };
 
-async function openWithPad(page, { preset = null } = {}) {
-  await page.addInitScript((chosen) => {
+async function openWithPad(page, { preset = null, mode = 'standard' } = {}) {
+  await page.addInitScript(({ chosen, mode }) => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     localStorage.setItem('openscad-forge-theme', 'dark');
     localStorage.setItem(
       'openscad-forge-ui-mode',
-      JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+      JSON.stringify({ mode, lastCustomMode: mode })
     );
     if (chosen) {
       localStorage.setItem(
@@ -48,7 +48,7 @@ async function openWithPad(page, { preset = null } = {}) {
       configurable: true,
       value: () => [pad, null, null, null],
     });
-  }, preset);
+  }, { chosen: preset, mode });
   await page.goto('/?example=simple-box', { timeout: 60_000 });
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
@@ -169,5 +169,74 @@ test.describe('A game controller drives the interface', () => {
       };
     });
     expect(landed.inCamera, `landed on ${landed.label}`).toBe(true);
+  });
+});
+
+/** Where focus is: its id, or its name when it has none, and its ring. */
+const where = (page) =>
+  page.evaluate(() => {
+    const el = document.activeElement;
+    return {
+      id: el?.id || null,
+      name: (el?.getAttribute('aria-label') || el?.textContent || '').trim(),
+      inCustomizer: !!el?.closest('#paramPanel'),
+      source: el?.getAttribute('data-focus-source') ?? null,
+    };
+  });
+
+test.describe('The right trigger reaches every part of the window', () => {
+  test('the theme row and Preview Settings in their turn, and the Customizer past its own toggle', async ({
+    page,
+  }) => {
+    await openWithPad(page, { preset: 'menus' });
+    await page.locator('#fileMenuBtn').focus();
+    await press(page, BUTTON.rt);
+    expect((await where(page)).id, 'the theme row').toBe('contrastToggle');
+    await press(page, BUTTON.rt);
+    const customizer = await where(page);
+    expect(customizer.id, 'the Customizer, past Collapse').toBe(
+      'expertModeToggle'
+    );
+    expect(customizer.source).toBe('gamepad');
+    await press(page, BUTTON.rt);
+    expect((await where(page)).id, 'Preview Settings').toBe(
+      'previewDrawerToggle'
+    );
+  });
+
+  test('in Simplified the Customizer opens on its first action too', async ({
+    page,
+  }) => {
+    await openWithPad(page, { preset: 'menus', mode: 'simplified' });
+    await page.locator('#contrastToggle').focus();
+    await press(page, BUTTON.rt);
+    const landed = await where(page);
+    expect(landed.inCustomizer).toBe(true);
+    expect(landed.id, 'not the Collapse button').not.toBe(
+      'collapseParamPanelBtn'
+    );
+    expect(landed.name).toMatch(/^About Presets/);
+  });
+
+  test.describe('on a phone', () => {
+    test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
+
+    test('with the Customizer open, it lands past the sheet\'s close button', async ({
+      page,
+    }) => {
+      await openWithPad(page, { preset: 'menus' });
+      await page.locator('#mobileDrawerToggle').click();
+      await expect(page.locator('#mobileDrawerToggle')).toHaveAttribute(
+        'aria-expanded',
+        'true'
+      );
+      await page.locator('#fileMenuBtn').focus();
+      await press(page, BUTTON.rt);
+      const landed = await where(page);
+      expect(landed.inCustomizer).toBe(true);
+      expect(landed.id, 'past Close customizer panel').toBe(
+        'expertModeToggle'
+      );
+    });
   });
 });
