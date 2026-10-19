@@ -175,10 +175,15 @@ import { initSequenceDetector } from './js/_seq.js';
 import {
   createGamepadController,
   createGamepadMapping,
+  createWalkMapping,
   isGamepadSupported,
   GAMEPAD_ACTIONS,
 } from './js/gamepad-controller.js';
-import { createGamepadNavigator } from './js/gamepad-navigator.js';
+import {
+  CLASSIC_REGIONS,
+  DEFAULT_REGIONS,
+  createGamepadNavigator,
+} from './js/gamepad-navigator.js';
 import { requestSwUpdate } from './js/sw-update.js';
 import {
   initKeyboardShortcuts,
@@ -253,6 +258,11 @@ import {
   initPreferencesDialog,
   openPreferencesDialog,
 } from './js/preferences-dialog.js';
+import { createTabList, selectTabIn } from './js/tablist.js';
+import {
+  initControllerPanel,
+  syncControllerPanel,
+} from './js/controller-panel.js';
 import {
   clearDownloads as clearEngineDownloads,
   download as downloadEngine,
@@ -792,23 +802,46 @@ function toggleClassicToolbar(bar) {
   announceImmediate(`${def.name} ${hidden ? 'hidden' : 'shown'}`);
 }
 
+const KEYS_TAB_IDS = ['keys-tab-keyboard', 'keys-tab-controller'];
+const keysTabs = () =>
+  KEYS_TAB_IDS.map((id) => document.getElementById(id)).filter(Boolean);
+
 /**
- * Open the keyboard-shortcuts editor, wiring it on first use.
+ * Open Keys, the keyboard shortcuts and the controller, on one of its tabs,
+ * wiring it on first use. Focus starts on the chosen tab.
  *
- * One copy for the four ways in (Edit ▸ Preferences, Help ▸ Keyboard
- * Shortcuts, the header button, and Ctrl+Shift+K): a fix applied to three
- * of four copies looks done and is not.
+ * One copy for every way in (Edit ▸ Preferences, Help ▸ Keyboard
+ * Shortcuts, the header button, Ctrl+Shift+K, and the controller's Keys
+ * button): a fix applied to some of the copies looks done and is not.
+ *
+ * @param {{tab?: 'keyboard'|'controller', onClose?: () => void}} [options]
+ *   `onClose` runs when this opening of the dialog closes
  */
-function _openShortcutsModal() {
+function openShortcutsDialog({ tab = 'keyboard', onClose } = {}) {
   const modal = document.getElementById('shortcutsModal');
   const modalBody = document.getElementById('shortcutsModalBody');
   if (!modal || !modalBody) return;
   // Wire once; a second call would stack duplicate listeners.
   if (!modal.dataset.initialized) {
     initShortcutsModal(modalBody, () => closeModal(modal));
+    const tablist = document.getElementById('keysTablist');
+    if (tablist) {
+      createTabList({
+        tablist,
+        tabs: keysTabs,
+        onSelect: () => syncControllerPanel(),
+      });
+    }
     modal.dataset.initialized = 'true';
   }
-  openModal(modal);
+  const target =
+    document.getElementById(`keys-tab-${tab}`) ?? keysTabs()[0] ?? null;
+  if (target) selectTabIn(keysTabs(), target, { focus: false });
+  openModal(modal, {
+    ...(target ? { focusTarget: target } : {}),
+    ...(onClose ? { onClose } : {}),
+  });
+  syncControllerPanel();
 }
 
 // Edit ▸ Insert Template. Nothing in this repository transcribes what
@@ -1876,6 +1909,31 @@ async function initApp() {
   // layout follows the plugged-in pad until one is chosen.
   const gamepadMapping = createGamepadMapping({
     getPadId: () => gamepadController?.getGamepadInfo()?.id ?? '',
+  });
+  // The game's own buttons, named by the layout the app's table follows.
+  const walkMapping = createWalkMapping({
+    getPadId: () => gamepadController?.getGamepadInfo()?.id ?? '',
+    getFamily: () => gamepadMapping.get().family,
+  });
+  // Keys ▸ Controller: the status line, the assignments and the test.
+  initControllerPanel({
+    walkMapping,
+    getGamepadStatus: () => ({
+      supported: !!gamepadController,
+      // The same display-name trim the connection status line uses, so the
+      // two surfaces name one device the same way.
+      padName:
+        gamepadController?.getGamepadInfo?.()?.id?.split(' (')[0] ?? null,
+    }),
+    gamepad: {
+      mapping: gamepadMapping,
+      capture: (ms) =>
+        gamepadController
+          ? gamepadController.captureNextInput(ms)
+          : Promise.resolve(null),
+      cancelCapture: () => gamepadController?.cancelCapture(),
+      announce: (text) => announceImmediate(text),
+    },
   });
 
   // Storage UI - Update storage display
@@ -4499,7 +4557,8 @@ async function initApp() {
         label: 'Preferences…',
         handler: () => {
           initPreferencesDialog({
-            onOpenShortcuts: _openShortcutsModal,
+            onOpenShortcuts: () => openShortcutsDialog(),
+            onOpenController: () => openShortcutsDialog({ tab: 'controller' }),
             engine: engineHandlers,
             getColorScheme: () => {
               if (previewManager) return previewManager.getViewportScheme();
@@ -4526,23 +4585,6 @@ async function initApp() {
               // Instant-apply is silent for a screen-reader user otherwise:
               // the only feedback is a repaint they cannot see.
               announceImmediate(`Color scheme ${label}`);
-            },
-            getGamepadStatus: () => ({
-              supported: !!gamepadController,
-              // The same display-name trim the connection status line uses,
-              // so the two surfaces name one device the same way.
-              padName:
-                gamepadController?.getGamepadInfo?.()?.id?.split(' (')[0] ??
-                null,
-            }),
-            gamepad: {
-              mapping: gamepadMapping,
-              capture: (ms) =>
-                gamepadController
-                  ? gamepadController.captureNextInput(ms)
-                  : Promise.resolve(null),
-              cancelCapture: () => gamepadController?.cancelCapture(),
-              announce: (text) => announceImmediate(text),
             },
             getEditorPrefs: () => loadEditorPrefs(),
             onEditorPrefChange: (name, value) => {
@@ -5495,7 +5537,7 @@ async function initApp() {
         type: 'action',
         label: 'Keyboard Shortcuts\u2026',
         shortcutAction: 'showShortcutsModal',
-        handler: _openShortcutsModal,
+        handler: () => openShortcutsDialog(),
       },
       {
         type: 'action',
@@ -5659,7 +5701,7 @@ async function initApp() {
   // Initialize keyboard shortcuts toggle button
   const shortcutsBtn = document.getElementById('shortcutsToggle');
   if (shortcutsBtn) {
-    shortcutsBtn.addEventListener('click', _openShortcutsModal);
+    shortcutsBtn.addEventListener('click', () => openShortcutsDialog());
   }
 
   // ── The drawing editor takes the preview area ─────────────────────────
@@ -12009,6 +12051,9 @@ if (rounded) {
           await mod.launchCityWalk({
             hfmCtrl,
             triggerEl: cityWalkLaunchBtn,
+            walkMapping,
+            openControllerSettings: ({ onClose }) =>
+              openShortcutsDialog({ tab: 'controller', onClose }),
           });
         } catch (error) {
           console.error('[CityWalk] Failed to launch:', error);
@@ -16411,7 +16456,7 @@ if (rounded) {
     themeManager.cycleTheme();
   });
 
-  keyboardConfig.on('showShortcutsModal', _openShortcutsModal);
+  keyboardConfig.on('showShortcutsModal', () => openShortcutsDialog());
 
   // File action shortcuts
   keyboardConfig.on('newFile', () => fileActionsController.onNew());
@@ -16568,7 +16613,14 @@ if (rounded) {
     // stands down while the City Walk runs. In the Alt View a press that
     // acts with no control on screen plays a key (the rest press a control
     // or move the view, which have their own sounds).
+    // The triggers' parts are the Classic interface's own in Classic; the
+    // standard list covers a desktop and a phone (a part not shown is
+    // passed by).
     const gamepadNavigator = createGamepadNavigator({
+      getRegions: () =>
+        document.body.dataset.uiMode === 'classic'
+          ? CLASSIC_REGIONS
+          : DEFAULT_REGIONS,
       onUnhandledBack: () => getToolbarMenuController().closeAll(),
     });
     const PAD_TURN_STEP = 0.1;
@@ -16607,7 +16659,10 @@ if (rounded) {
       left: () => gamepadNavigator.arrow('left'),
       right: () => gamepadNavigator.arrow('right'),
       fullScreen: gamepadNavigator.fullScreen,
-      keys: gamepadNavigator.keys,
+      // The controller's own button opens Keys on its own tab.
+      keys: () => {
+        if (!cityWalkUp()) openShortcutsDialog({ tab: 'controller' });
+      },
       resetView: () => {
         playPadKey();
         resetViewCommand();

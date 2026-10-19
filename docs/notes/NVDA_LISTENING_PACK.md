@@ -85,7 +85,7 @@ tabs; then into the Editor panel's disabled checkboxes.
 
 | What should happen | Heard it? | What NVDA actually said |
 |---|---|---|
-| A disabled tab (Axes, Buttons, 3D Print) speaks its name plus ONE short reason sentence — not the whole paragraph | ☐ | |
+| The disabled 3D Print tab speaks its name plus ONE short reason sentence, not the whole paragraph | ☐ | |
 | The full explanation is still on the page when you browse into the panel | ☐ | |
 | The disabled "Tab key inserts an indent" checkbox reads its two-sentence reason and stops | ☐ | |
 | Crossing the same tab twice sounds tolerable, not like a recording stuck on repeat | ☐ | |
@@ -261,8 +261,8 @@ simple box's Start Tutorial.
 
 ## 13. Dialogs from the Help menu
 
-Open About, the Features Guide, Keyboard Shortcuts and Library info, each from
-the Help menu.
+Open About, the Features Guide, Keyboard Shortcuts (the Keys dialog) and
+Library info, each from the Help menu.
 
 | What should happen | Heard it? | What NVDA actually said |
 |---|---|---|
@@ -293,12 +293,12 @@ and let it translate.
 
 ## 16. The words on the controls
 
-Tab along the header, open Presets in the Customizer, open Keys (the Keyboard
-Shortcuts dialog), then switch to Classic and Tab to its top right.
+Tab along the header, open Presets in the Customizer, open Keys, then switch
+to Classic and Tab to its top right.
 
 | What should happen | Heard it? | What NVDA actually said |
 |---|---|---|
-| Each header button is named by the word on it, first: "Keys: keyboard shortcuts", "HC: high contrast" (a toggle, pressed or not), "Theme: Auto" (or Light, or Dark), "Full Screen: the preview alone" (a toggle), "Help: features guide and examples" | ☐ | |
+| Each header button is named by the word on it, first: "Keys: keyboard and controller", "HC: high contrast" (a toggle, pressed or not), "Theme: Auto" (or Light, or Dark), "Full Screen: the preview alone" (a toggle), "Help: features guide and examples" | ☐ | |
 | The interface switch reads "Interface mode: Simplified, Standard, switch", on or off | ☐ | |
 | "Main Page, button" says nothing about unsaved changes until a value has changed; then "Main Page. Unsaved changes will be lost." | ☐ | |
 | Copy Link, in Presets, leads with its words: "Copy Link" | ☐ | |
@@ -340,6 +340,21 @@ shows is never spoken.
 | Under 40% the Focus slider's value reads "Vector lines, 35%" (at 40% and over, "40%"); the Surfaces slider reads its value and then "Below 40% Focus: how solid the faces under the lines are." | ☐ | |
 | In Classic, the 3D view toolbar's "Lens settings" button moves to the "Lens" grouping, "Edges, slider, 100%"; the grouping is heard once while Tab goes through its four sliders; in the Simplified view the same group sits at the foot of the Customizer | ☐ | |
 | The pan D-pad's center reads "Adjust the Alt View with the pan arrows"; on, it says "Pan arrows now adjust the Alt View: up and down for edges, left and right for focus, Shift with up and down for glow."; each arrow says one value ("Edges 105%", "Focus 55%", "Glow 20%"); off, "Pan arrows move the view again." | ☐ | |
+
+## 19. Keys and the controller
+
+Open Keys from the header and arrow to its Controller tab. With a controller
+connected, press Start the test and press a few buttons, B among them. Then
+open Preferences, choose its Controller tab and press Open the controller
+settings.
+
+| What should happen | Heard it? | What NVDA actually said |
+|---|---|---|
+| Opening reads "Keys, dialog", then "Keyboard, tab, selected, 1 of 2" | ☐ | |
+| Right Arrow reads "Controller, tab, selected, 2 of 2"; Left, Home and End move the same way, wrapping at the ends | ☐ | |
+| Start the test says "Test started. Press a button on your controller."; each press is said once, for example "Pressed: B [1]."; B does not close the dialog while the test runs | ☐ | |
+| The test ends after 10 seconds without a press, or with Escape or Stop the test, says "Test stopped." and leaves the dialog open | ☐ | |
+| Open the controller settings closes Preferences and lands on "Controller, tab, selected, 2 of 2" in Keys; Escape then goes back to where Preferences was opened from | ☐ | |
 
 ## The last run
 

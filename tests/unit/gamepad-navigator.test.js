@@ -16,8 +16,8 @@ const FIXTURE = `
     <button id="github">GitHub</button>
   </header>
   <div id="toolbarMenuBar" role="menubar">
-    <button id="fileMenu">File</button>
-    <button id="editMenu">Edit</button>
+    <button id="fileMenu" role="menuitem">File</button>
+    <button id="editMenu" role="menuitem">Edit</button>
   </div>
   <section id="paramPanel">
     <input id="width" type="range" min="0" max="10" step="2" value="4" />
@@ -311,5 +311,232 @@ describe('the controller drives the Customizer', () => {
     expect(reset, 'a parameter without one').toHaveBeenCalledTimes(1);
     nav.generate();
     expect(generate).toHaveBeenCalledTimes(1);
+  });
+});
+
+// The whole window as a desktop shows it: every part a person names, some
+// open and some closed.
+const WINDOW = `
+  <header class="app-header">
+    <button id="mainPage">Main Page</button>
+  </header>
+  <div id="workflowProgress">
+    <div id="toolbarMenuBar" role="menubar"><button id="fileMenu">File</button></div>
+    <div class="workflow-actions">
+      <button id="contrastToggle">HC</button><button id="themeToggle">Theme</button>
+    </div>
+  </div>
+  <section id="paramPanel">
+    <button id="collapseParamPanelBtn" aria-expanded="true">Collapse customizer panel</button>
+    <button id="codeBtn">Code</button>
+    <input id="width" type="range" min="0" max="10" value="4" />
+  </section>
+  <section id="previewInfoSection">
+    <button id="previewDrawerToggle" aria-expanded="false">Expand preview settings</button>
+    <div id="previewInfoContent" hidden><button id="quality">Quality</button></div>
+  </section>
+  <div id="previewContainer"><div id="canvas" tabindex="0">3D view</div></div>
+  <aside id="cameraPanel">
+    <button id="cameraPanelToggle" aria-expanded="false">Expand camera controls panel</button>
+    <div hidden><button id="zoomIn">Zoom in</button></div>
+  </aside>
+  <div id="lensDrawer"><div hidden><input id="focus" type="range" /></div></div>
+  <div id="actionsBar"><button id="primaryActionBtn">Generate</button></div>
+  <div id="echoDrawer">
+    <button id="echoDrawerToggle" aria-expanded="true">Messages</button>
+    <div id="echoDrawerContent"><button id="copyMessages">Copy</button></div>
+  </div>
+`;
+
+describe("the controller jumps between the window's parts", () => {
+  beforeEach(() => {
+    document.body.innerHTML = WINDOW;
+  });
+
+  it('the right trigger visits every live part in order, past an open part\'s own toggle, and round again', () => {
+    const nav = createGamepadNavigator();
+    document.getElementById('mainPage').focus();
+    const visited = [];
+    for (let i = 0; i < 9; i++) {
+      nav.nextRegion();
+      visited.push(focused());
+    }
+    expect(visited).toEqual([
+      'fileMenu',
+      'contrastToggle',
+      'codeBtn',
+      'previewDrawerToggle',
+      'canvas',
+      'cameraPanelToggle',
+      'primaryActionBtn',
+      'copyMessages',
+      'mainPage',
+    ]);
+  });
+
+  it('the left trigger visits them backward', () => {
+    const nav = createGamepadNavigator();
+    document.getElementById('mainPage').focus();
+    const visited = [];
+    for (let i = 0; i < 4; i++) {
+      nav.previousRegion();
+      visited.push(focused());
+    }
+    expect(visited).toEqual([
+      'copyMessages',
+      'primaryActionBtn',
+      'cameraPanelToggle',
+      'canvas',
+    ]);
+  });
+
+  it('a closed part lands on its toggle, and an open one on its first control', () => {
+    const nav = createGamepadNavigator();
+    document.getElementById('canvas').focus();
+    nav.previousRegion();
+    expect(focused(), 'Preview Settings, closed').toBe('previewDrawerToggle');
+    const toggle = document.getElementById('previewDrawerToggle');
+    toggle.setAttribute('aria-expanded', 'true');
+    document.getElementById('previewInfoContent').hidden = false;
+    document.getElementById('canvas').focus();
+    nav.previousRegion();
+    expect(focused(), 'Preview Settings, open').toBe('quality');
+  });
+
+  it('a part with nothing to reach is passed by, and visited once it opens', () => {
+    const nav = createGamepadNavigator();
+    document.getElementById('cameraPanelToggle').focus();
+    nav.nextRegion();
+    expect(focused(), 'the closed Lens drawer skipped').toBe('primaryActionBtn');
+    document.querySelector('#lensDrawer > div').hidden = false;
+    document.getElementById('cameraPanelToggle').focus();
+    nav.nextRegion();
+    expect(focused(), 'the open Lens drawer').toBe('focus');
+  });
+
+  it('a part inside another counts for itself, right after it, and its controls are visited once', () => {
+    // On a phone the theme row stands in the Preview Settings row.
+    const theme = document.querySelector('.workflow-actions');
+    document.getElementById('previewDrawerToggle').after(theme);
+    const nav = createGamepadNavigator();
+    document.getElementById('codeBtn').focus();
+    nav.nextRegion();
+    expect(focused(), 'Preview Settings lands on its own toggle').toBe(
+      'previewDrawerToggle'
+    );
+    nav.nextRegion();
+    expect(focused(), 'then the theme row inside it').toBe('contrastToggle');
+    nav.nextRegion();
+    expect(focused()).toBe('canvas');
+    nav.previousRegion();
+    expect(focused()).toBe('contrastToggle');
+    nav.previousRegion();
+    expect(focused()).toBe('previewDrawerToggle');
+  });
+
+  it("a pane's title bar buttons are passed over like a toggle", () => {
+    document.body.innerHTML = `
+      <div id="classicEditorSlot">
+        <div class="classic-pane-titlebar">
+          <button id="stow" aria-expanded="true">Stow the left column</button>
+          <button id="move">Move Editor</button>
+        </div>
+        <button id="newFile">New file</button>
+      </div>
+      <div id="previewContainer"><div id="canvas" tabindex="0">3D view</div></div>
+    `;
+    const nav = createGamepadNavigator({
+      getRegions: () => [
+        { selector: '#classicEditorSlot', toggle: '.classic-pane-titlebar *' },
+        '#previewContainer',
+      ],
+    });
+    document.getElementById('canvas').focus();
+    nav.nextRegion();
+    expect(focused()).toBe('newFile');
+  });
+});
+
+describe('the D-pad where arrow keys mean nothing', () => {
+  beforeEach(() => {
+    document.body.innerHTML = WINDOW;
+  });
+
+  it('on a button, Down steps to the next control and Up to the previous, within its part', () => {
+    const nav = createGamepadNavigator();
+    document.getElementById('codeBtn').focus();
+    nav.arrow('up');
+    expect(focused()).toBe('collapseParamPanelBtn');
+    expect(document.activeElement.getAttribute('data-focus-source')).toBe(
+      'gamepad'
+    );
+    nav.arrow('up');
+    expect(focused(), 'no step out of the part').toBe('collapseParamPanelBtn');
+    nav.arrow('down');
+    nav.arrow('down');
+    expect(focused()).toBe('width');
+    const width = document.getElementById('width');
+    nav.arrow('down');
+    expect(focused(), 'a slider keeps its arrows').toBe('width');
+    expect(width.value).toBe('3');
+    document.getElementById('codeBtn').focus();
+    document.getElementById('width').remove();
+    nav.arrow('down');
+    expect(focused(), 'no step out of the part at its end').toBe('codeBtn');
+  });
+
+  it('Left and Right still send their keys to a button', () => {
+    const nav = createGamepadNavigator();
+    const code = document.getElementById('codeBtn');
+    const keys = [];
+    code.addEventListener('keydown', (e) => keys.push(e.key));
+    code.focus();
+    nav.arrow('left');
+    nav.arrow('right');
+    expect(keys).toEqual(['ArrowLeft', 'ArrowRight']);
+    expect(focused()).toBe('codeBtn');
+  });
+
+  it.each([
+    ['a menu item', '<button role="menuitem">Open</button>'],
+    ['a tab', '<button role="tab">Editor</button>'],
+    ['a radio button', '<input type="radio" name="r" />'],
+    ['a text field', '<input type="text" />'],
+    ['the code editor', '<div class="cm-editor"><div contenteditable="true">x</div></div>'],
+    ['a menu button', '<button aria-haspopup="menu">More</button>'],
+  ])('%s keeps its arrow keys', (_name, html) => {
+    document
+      .getElementById('paramPanel')
+      .insertAdjacentHTML('afterbegin', `<div id="probe">${html}</div>`);
+    const target =
+      document.querySelector('#probe [contenteditable]') ||
+      document.querySelector('#probe').firstElementChild;
+    if (!target.matches('button, input')) target.tabIndex = 0;
+    const keys = [];
+    target.addEventListener('keydown', (e) => keys.push(e.key));
+    target.focus();
+    const nav = createGamepadNavigator();
+    nav.arrow('down');
+    nav.arrow('up');
+    expect(keys).toEqual(['ArrowDown', 'ArrowUp']);
+    expect(document.activeElement).toBe(target);
+  });
+
+  it('a control the step lands under a sticky header is scrolled clear of it', () => {
+    const panel = document.getElementById('paramPanel');
+    panel.style.overflowY = 'auto';
+    Object.defineProperty(panel, 'scrollHeight', { value: 1000 });
+    Object.defineProperty(panel, 'clientHeight', { value: 300 });
+    panel.scrollTop = 100;
+    const header = document.createElement('div');
+    header.style.position = 'sticky';
+    panel.prepend(header);
+    header.getBoundingClientRect = () => ({ top: 0, bottom: 50, left: 0, right: 300, width: 300, height: 50 });
+    document.getElementById('codeBtn').getBoundingClientRect = () => ({ top: 30, bottom: 60, left: 0, right: 100, width: 100, height: 30 });
+    const nav = createGamepadNavigator();
+    document.getElementById('collapseParamPanelBtn').focus();
+    nav.arrow('down');
+    expect(focused()).toBe('codeBtn');
+    expect(panel.scrollTop, 'scrolled back by the 20 px the header covered').toBe(80);
   });
 });

@@ -11,21 +11,24 @@ import { skipWithoutWebGL } from './helpers/webgl.js';
 const WASM_READY_TIMEOUT = 180_000;
 
 /** The standard mapping's indexes for the buttons these cases press. */
-const BUTTON = { a: 0, b: 1, rb: 5, rt: 7, select: 8 };
+const BUTTON = { a: 0, b: 1, rb: 5, rt: 7, select: 8, home: 16 };
 
-async function openWithPad(page, { preset = null } = {}) {
-  await page.addInitScript((chosen) => {
+async function openWithPad(
+  page,
+  { preset = null, mode = 'standard', custom = null } = {}
+) {
+  await page.addInitScript(({ chosen, mode, custom }) => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     localStorage.setItem('openscad-forge-theme', 'dark');
     localStorage.setItem(
       'openscad-forge-ui-mode',
-      JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+      JSON.stringify({ mode, lastCustomMode: mode })
     );
-    if (chosen) {
+    if (chosen || custom) {
       localStorage.setItem(
         'openscad-forge-gamepad-mapping',
-        JSON.stringify({ preset: chosen })
+        JSON.stringify({ preset: chosen ?? 'camera', custom })
       );
     }
     window.__padButtons = Array.from({ length: 17 }, () => ({
@@ -48,7 +51,7 @@ async function openWithPad(page, { preset = null } = {}) {
       configurable: true,
       value: () => [pad, null, null, null],
     });
-  }, preset);
+  }, { chosen: preset, mode, custom });
   await page.goto('/?example=simple-box', { timeout: 60_000 });
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
@@ -140,6 +143,22 @@ test.describe('A game controller drives the interface', () => {
     expect(ring.width).toBeGreaterThanOrEqual(2);
   });
 
+  test('the Keys button on the controller opens Keys on its Controller tab', async ({
+    page,
+  }) => {
+    await openWithPad(page, {
+      custom: { activate: 'a', back: 'b', keys: 'home' },
+    });
+    await page.locator('#fileMenuBtn').focus();
+    await press(page, BUTTON.home);
+    await expect(page.locator('#shortcutsModal')).not.toHaveClass(/hidden/);
+    await expect(page.locator('#keys-tab-controller')).toBeFocused();
+    await expect(page.locator('#keysPanelController')).toBeVisible();
+    await press(page, BUTTON.b);
+    await expect(page.locator('#shortcutsModal')).toHaveClass(/hidden/);
+    expect(await activeId(page)).toBe('fileMenuBtn');
+  });
+
   test('A opens the File menu and B closes it', async ({ page }) => {
     await openWithPad(page);
     const file = page.locator('#fileMenuBtn');
@@ -169,5 +188,175 @@ test.describe('A game controller drives the interface', () => {
       };
     });
     expect(landed.inCamera, `landed on ${landed.label}`).toBe(true);
+  });
+});
+
+/** Where focus is: its id, or its name when it has none, and its ring. */
+const where = (page) =>
+  page.evaluate(() => {
+    const el = document.activeElement;
+    return {
+      id: el?.id || null,
+      name: (el?.getAttribute('aria-label') || el?.textContent || '').trim(),
+      inCustomizer: !!el?.closest('#paramPanel'),
+      source: el?.getAttribute('data-focus-source') ?? null,
+    };
+  });
+
+test.describe('The right trigger reaches every part of the window', () => {
+  test('the theme row and Preview Settings in their turn, and the Customizer past its own toggle', async ({
+    page,
+  }) => {
+    await openWithPad(page, { preset: 'menus' });
+    await page.locator('#fileMenuBtn').focus();
+    await press(page, BUTTON.rt);
+    expect((await where(page)).id, 'the theme row').toBe('contrastToggle');
+    await press(page, BUTTON.rt);
+    const customizer = await where(page);
+    expect(customizer.id, 'the Customizer, past Collapse').toBe(
+      'expertModeToggle'
+    );
+    expect(customizer.source).toBe('gamepad');
+    await press(page, BUTTON.rt);
+    expect((await where(page)).id, 'Preview Settings').toBe(
+      'previewDrawerToggle'
+    );
+  });
+
+  test('in Simplified the Customizer opens on its first action too', async ({
+    page,
+  }) => {
+    await openWithPad(page, { preset: 'menus', mode: 'simplified' });
+    await page.locator('#contrastToggle').focus();
+    await press(page, BUTTON.rt);
+    const landed = await where(page);
+    expect(landed.inCustomizer).toBe(true);
+    expect(landed.id, 'not the Collapse button').not.toBe(
+      'collapseParamPanelBtn'
+    );
+    expect(landed.name).toMatch(/^About Presets/);
+  });
+
+  test.describe('on a phone', () => {
+    test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
+
+    test('with the Customizer open, it lands past the sheet\'s close button', async ({
+      page,
+    }) => {
+      await openWithPad(page, { preset: 'menus' });
+      await page.locator('#mobileDrawerToggle').click();
+      await expect(page.locator('#mobileDrawerToggle')).toHaveAttribute(
+        'aria-expanded',
+        'true'
+      );
+      await page.locator('#fileMenuBtn').focus();
+      await press(page, BUTTON.rt);
+      const landed = await where(page);
+      expect(landed.inCustomizer).toBe(true);
+      expect(landed.id, 'past Close customizer panel').toBe(
+        'expertModeToggle'
+      );
+    });
+  });
+});
+
+const DPAD_DOWN = 13;
+
+/** The focused control's box against the screen and the panel's title. */
+const placeOfFocused = (page) =>
+  page.evaluate(() => {
+    const el = document.activeElement;
+    const r = el.getBoundingClientRect();
+    const title = el.closest('#paramPanel')?.querySelector('.panel-header');
+    return {
+      tag: el.tagName.toLowerCase(),
+      closedHeader: el.tagName === 'SUMMARY' && !el.parentElement.open,
+      onScreen: r.top >= 0 && r.bottom <= innerHeight && r.width > 0,
+      clearOfTitle: title ? r.top >= title.getBoundingClientRect().bottom - 0.5 : true,
+      name: (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 40),
+    };
+  });
+
+/**
+ * The share of the pixels just inside the top edge of a box, read from a
+ * picture at twice the size, that are the focus ring's color.
+ */
+async function ringShareOnTopEdge(page, box) {
+  const png = await page.screenshot({
+    clip: { x: box.x, y: box.y, width: box.width, height: 6 },
+  });
+  return page.evaluate(async (b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(bitmap, 0, 0);
+    const probe = document.createElement('div');
+    probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--color-focus');
+    document.body.append(probe);
+    const [fr, fg, fb] = getComputedStyle(probe).color.match(/\d+/g).map(Number);
+    probe.remove();
+    // The rows a 3 px ring drawn inside the edge covers at twice the size.
+    const { data, width } = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+    let ring = 0;
+    let all = 0;
+    for (const y of [2, 3, 4]) {
+      for (let x = 8; x < width - 8; x++) {
+        const i = (y * width + x) * 4;
+        all += 1;
+        if (Math.abs(data[i] - fr) + Math.abs(data[i + 1] - fg) + Math.abs(data[i + 2] - fb) < 60) ring += 1;
+      }
+    }
+    return ring / all;
+  }, png.toString('base64'));
+}
+
+test.describe('Up and Down on controls that take no arrows', () => {
+  test.use({ deviceScaleFactor: 2 });
+
+  test('the D-pad walks the Customizer to a closed group, A opens it, and Down reaches its first control, in view', async ({
+    page,
+  }) => {
+    await openWithPad(page, { preset: 'menus' });
+    await page.locator('#expertModeToggle').focus();
+    let header = null;
+    for (let n = 0; n < 10 && !header; n++) {
+      await press(page, DPAD_DOWN);
+      const place = await placeOfFocused(page);
+      if (place.closedHeader) header = place;
+    }
+    expect(header, 'a closed group header reached by Down').not.toBeNull();
+    expect(header.onScreen).toBe(true);
+    expect(header.clearOfTitle).toBe(true);
+    await press(page, BUTTON.a);
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement.parentElement.open))
+      .toBe(true);
+    await press(page, DPAD_DOWN);
+    const first = await placeOfFocused(page);
+    expect(first.tag, `the group's first control: ${first.name}`).not.toBe('summary');
+    expect(first.onScreen).toBe(true);
+    expect(first.clearOfTitle).toBe(true);
+  });
+
+  test('a closed group header shows its focus ring, from Tab and from the pad', async ({
+    page,
+  }) => {
+    await openWithPad(page, { preset: 'menus' });
+    const dimensions = page.locator('#paramPanel details.param-group:not([open]) > summary').first();
+    const hide = page.locator('#paramPanel .param-group').first().locator('xpath=preceding::button[1]');
+    await dimensions.scrollIntoViewIfNeeded();
+    // From Tab: the button before the header, then Tab.
+    await hide.focus();
+    await page.keyboard.press('Tab');
+    await expect(dimensions).toBeFocused();
+    const box = await dimensions.boundingBox();
+    expect(await ringShareOnTopEdge(page, box), 'from Tab').toBeGreaterThan(0.5);
+    // From the pad: the same button, then the bumper.
+    await hide.focus();
+    await press(page, BUTTON.rb);
+    await expect(dimensions).toBeFocused();
+    expect(await dimensions.getAttribute('data-focus-source')).toBe('gamepad');
+    expect(await ringShareOnTopEdge(page, await dimensions.boundingBox()), 'from the pad').toBeGreaterThan(0.5);
   });
 });

@@ -51,6 +51,14 @@ summary:focus-visible,
   outline-offset: var(--focus-ring-offset, 2px) !important;
 }
 
+/* A disclosure's header fills its box, and the box clips what overflows it
+   (its rounded corners): drawn outside the header, the ring would be cut
+   away, so it is drawn just inside, at its full width. */
+.forge-disclosure > summary:focus,
+.forge-disclosure > summary:focus-visible {
+  outline-offset: calc(-1 * var(--focus-ring-width, 3px)) !important;
+}
+
 /* ============================================================================
    Shared Control Contract (.forge-control)
    ============================================================================
@@ -13445,13 +13453,75 @@ body.tutorial-body-locked {
   margin-top: var(--space-2xs);
 }
 
+/* Keys scrolls in one place: the header, the tabs and the footer stay put
+   and only the body between them scrolls. */
 .shortcuts-modal-content {
   max-width: 700px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 2 * var(--space-lg));
+  overflow: hidden;
 }
 
+@supports (max-height: 100dvh) {
+  .shortcuts-modal-content {
+    max-height: calc(100dvh - 2 * var(--space-lg));
+  }
+}
+
+/* `position: relative` makes the body the containing block of the list's
+   visually hidden labels; while the dialog was, they stretched its scroll
+   area thousands of pixels past the last row. */
 .shortcuts-modal-body {
-  max-height: 60vh;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+}
+
+.keys-tabs {
+  flex: none;
+}
+
+.keys-panel {
+  padding-top: var(--space-md);
+}
+
+.keys-panel-actions {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: var(--space-md);
+}
+
+.controller-readout {
+  margin: var(--space-sm) 0 var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-secondary);
+}
+
+.controller-readout h3 {
+  margin: 0 0 var(--space-2xs);
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+}
+
+.controller-readout-line {
+  margin: var(--space-2xs) 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.controller-readout-line:empty {
+  display: none;
+}
+
+.controller-readout .controller-readout-test {
+  min-height: var(--size-touch-target);
+  min-width: var(--size-touch-target);
+  margin-top: var(--space-2xs);
 }
 
 .shortcuts-preset-bar {
@@ -13635,7 +13705,7 @@ body.tutorial-body-locked {
 
 .shortcuts-modal-footer {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   padding-top: var(--space-md);
   border-top: 1px solid var(--color-border);

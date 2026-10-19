@@ -8,9 +8,9 @@
  * the pattern this app uses, because "silently absent" tells a user
  * nothing and a missing tab cannot be asked about.
  *
- * APG tabs, automatic activation: exactly one tab is in the page tab order
- * (roving tabindex), Left/Right move between tabs and select as they go,
- * Home/End jump to the ends.
+ * APG tabs (tablist.js), automatic activation: exactly one tab is in the
+ * page tab order (roving tabindex), Left/Right move between tabs and select
+ * as they go, Home/End jump to the ends.
  *
  * Unavailable tabs keep `aria-disabled="true"`, so they are announced as
  * unavailable, but they are reachable and selectable like any other, and
@@ -28,12 +28,7 @@ import {
   closeModal,
   setupModalCloseHandlers,
 } from './modal-manager.js';
-import {
-  GAMEPAD_ACTIONS,
-  GAMEPAD_PRESETS,
-  gamepadDiagramLabel,
-  gamepadInputLabel,
-} from './gamepad-controller.js';
+import { createTabList, selectTabIn } from './tablist.js';
 import {
   downloadFailure,
   downloadWithStatus,
@@ -46,8 +41,9 @@ const TAB_IDS = [
   'prefs-tab-editor',
   'prefs-tab-3dprint',
   'prefs-tab-advanced',
-  // Upstream's Axes and Buttons tabs are one Controller tab here: the
-  // sticks and the buttons are assigned in one list.
+  // Upstream's Axes and Buttons tabs are one Controller tab here. It points
+  // to the Keys dialog, where the sticks and the buttons are assigned in one
+  // list beside the keyboard shortcuts.
   'prefs-tab-controller',
   // Keyboard is a Forge addition: the shortcuts editor had to live
   // somewhere once Edit ▸ Preferences stopped being a synonym for it.
@@ -62,81 +58,6 @@ function tabs() {
   return TAB_IDS.map(el).filter(Boolean);
 }
 
-/**
- * Select a tab: update aria-selected, the roving tabindex and panel
- * visibility. Unavailable tabs select like any other -- their panel is where
- * the reason lives, so refusing to show it is what hid the explanation.
- *
- * @param {HTMLElement} tab
- * @param {{focus?: boolean}} [options]
- */
-export function selectTab(tab, { focus = true } = {}) {
-  if (!tab) return;
-
-  for (const t of tabs()) {
-    const selected = t === tab;
-    t.setAttribute('aria-selected', String(selected));
-    // Roving tabindex: only the selected tab is a page tab stop.
-    t.setAttribute('tabindex', selected ? '0' : '-1');
-    t.classList.toggle('active', selected);
-
-    const panel = el(t.getAttribute('aria-controls'));
-    if (panel) panel.hidden = !selected;
-  }
-
-  if (focus) tab.focus();
-}
-
-/**
- * Move selection one step in `direction`, wrapping.
- *
- * @param {HTMLElement} from
- * @param {number} direction -1 or 1
- * @returns {boolean}
- */
-function moveSelection(from, direction) {
-  const list = tabs();
-  const start = list.indexOf(from);
-  if (start === -1) return false;
-
-  const next = list[(start + direction + list.length) % list.length];
-  if (!next) return false;
-  selectTab(next);
-  return true;
-}
-
-/** First/last tab, for Home/End. */
-function selectEdge(fromEnd) {
-  const list = tabs();
-  const target = fromEnd ? list[list.length - 1] : list[0];
-  if (target) selectTab(target);
-}
-
-/** @param {KeyboardEvent} event */
-function onTablistKeydown(event) {
-  const tab = event.target.closest('[role="tab"]');
-  if (!tab) return;
-
-  switch (event.key) {
-    case 'ArrowRight':
-      if (moveSelection(tab, 1)) event.preventDefault();
-      break;
-    case 'ArrowLeft':
-      if (moveSelection(tab, -1)) event.preventDefault();
-      break;
-    case 'Home':
-      selectEdge(false);
-      event.preventDefault();
-      break;
-    case 'End':
-      selectEdge(true);
-      event.preventDefault();
-      break;
-    default:
-      break;
-  }
-}
-
 let wired = false;
 
 /** @type {PreferencesHandlers} */
@@ -145,14 +66,13 @@ let activeHandlers = {};
 /**
  * @typedef {Object} PreferencesHandlers
  * @property {() => void} [onOpenShortcuts]
+ * @property {() => void} [onOpenController]
  * @property {(id: string) => void} [onColorSchemeChange]
  * @property {() => string} [getColorScheme]
  * @property {(enabled: boolean) => void} [onZoomToCursorChange]
  * @property {() => boolean} [getZoomToCursor]
  * @property {() => Object} [getEditorPrefs]
  * @property {(name: string, value: number|boolean) => number|boolean} [onEditorPrefChange]
- * @property {() => {supported: boolean, padName: string|null}} [getGamepadStatus]
- * @property {GamepadHandlers} [gamepad]
  * @property {EngineHandlers} [engine]
  */
 
@@ -170,191 +90,6 @@ let activeHandlers = {};
  * @property {(message: string, title: string, confirmLabel: string, cancelLabel: string) => Promise<boolean>} confirm
  * @property {(details: {title: string, message: string, technical: string}) => void} showError
  */
-
-/**
- * @typedef {Object} GamepadHandlers
- * @property {ReturnType<typeof import('./gamepad-controller.js').createGamepadMapping>} mapping
- * @property {(timeoutMs: number) => Promise<string|null>} capture - waits
- *   for one press on the controller
- * @property {() => void} cancelCapture
- * @property {(text: string) => void} announce
- */
-
-/** How long Change waits for a press, in milliseconds. */
-const GAMEPAD_CAPTURE_MS = 5000;
-const GAMEPAD_CAPTURE_PROMPT =
-  'Press a button on your controller. Esc cancels.';
-
-/**
- * The Controller tab's read-only status line, so a user can verify that
- * their controller was seen.
- *
- * @param {{supported: boolean, padName: string|null}} [status]
- * @returns {string}
- */
-export function formatGamepadStatus(status) {
-  if (!status?.supported) {
-    return 'This browser does not offer game controller input.';
-  }
-  if (!status.padName) {
-    return 'No controller detected. Connect one and press any button.';
-  }
-  return `Controller detected: ${status.padName}.`;
-}
-
-/** The action whose Change button is waiting for a press, if any. */
-let capturingAction = null;
-
-/**
- * Write the Controller tab from the saved mapping: the pickers, the
- * picture's words for the layout, and one row per action with its button
- * and a Change button named for the action.
- */
-function renderGamepadPanel() {
-  const gamepad = activeHandlers.gamepad;
-  const body = el('prefsGamepadAssignments')?.querySelector('tbody');
-  if (!gamepad || !body) return;
-  const now = gamepad.mapping.get();
-
-  const family = el('prefsGamepadFamily');
-  if (family) family.value = now.family;
-  const preset = el('prefsGamepadPreset');
-  if (preset) preset.value = now.preset;
-
-  for (const part of document.querySelectorAll(
-    '#prefsGamepadDiagram [data-part]'
-  )) {
-    part.textContent = gamepadDiagramLabel(part.dataset.part, now.family);
-  }
-
-  if (body.rows.length !== GAMEPAD_ACTIONS.length) {
-    body.textContent = '';
-    for (const action of GAMEPAD_ACTIONS) {
-      const row = document.createElement('tr');
-      row.dataset.action = action.id;
-      const name = document.createElement('th');
-      name.scope = 'row';
-      name.id = `prefsGamepadAction-${action.id}`;
-      name.textContent = action.name;
-      const cell = document.createElement('td');
-      const wrap = document.createElement('div');
-      wrap.className = 'gamepad-assignment';
-      const input = document.createElement('span');
-      input.className = 'gamepad-input';
-      input.id = `prefsGamepadInput-${action.id}`;
-      const change = document.createElement('button');
-      change.type = 'button';
-      change.className = 'btn btn-sm btn-outline gamepad-change';
-      change.id = `prefsGamepadChange-${action.id}`;
-      change.textContent = 'Change';
-      // "Change Activate": the visible word and the row's action, so each
-      // button says which action it changes.
-      change.setAttribute('aria-labelledby', `${change.id} ${name.id}`);
-      // On the button itself: a listener on the table makes screen readers
-      // call the whole table clickable.
-      change.addEventListener('click', () =>
-        changeGamepadAssignment(action.id)
-      );
-      wrap.append(input, change);
-      cell.append(wrap);
-      row.append(name, cell);
-      body.append(row);
-    }
-  }
-
-  for (const action of GAMEPAD_ACTIONS) {
-    if (action.id === capturingAction) continue;
-    const input = el(`prefsGamepadInput-${action.id}`);
-    if (input) {
-      input.textContent = gamepadInputLabel(
-        now.assignments[action.id],
-        now.family
-      );
-    }
-  }
-}
-
-/**
- * Change one action's button: wait for one press on the controller (Escape
- * stops waiting), then assign it and say what changed.
- * @param {string} actionId
- */
-async function changeGamepadAssignment(actionId) {
-  const gamepad = activeHandlers.gamepad;
-  if (!gamepad || capturingAction) return;
-  capturingAction = actionId;
-  const input = el(`prefsGamepadInput-${actionId}`);
-  if (input) input.textContent = GAMEPAD_CAPTURE_PROMPT;
-  gamepad.announce?.(GAMEPAD_CAPTURE_PROMPT);
-
-  // Escape stops the wait and nothing else: in the capture phase, before
-  // the dialog's own Escape closes it.
-  const onEscape = (event) => {
-    if (event.key !== 'Escape') return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    gamepad.cancelCapture();
-  };
-  document.addEventListener('keydown', onEscape, true);
-  let pressed = null;
-  try {
-    pressed = await gamepad.capture(GAMEPAD_CAPTURE_MS);
-  } finally {
-    document.removeEventListener('keydown', onEscape, true);
-    capturingAction = null;
-  }
-
-  if (!pressed) {
-    renderGamepadPanel();
-    gamepad.announce?.('Nothing changed.');
-    return;
-  }
-  const { swappedWith } = gamepad.mapping.assign(actionId, pressed);
-  renderGamepadPanel();
-  const now = gamepad.mapping.get();
-  const said = (id) =>
-    `${GAMEPAD_ACTIONS.find((a) => a.id === id).name}: ${gamepadInputLabel(
-      now.assignments[id],
-      now.family
-    )}.`;
-  gamepad.announce?.(
-    swappedWith ? `${said(actionId)} ${said(swappedWith)}` : said(actionId)
-  );
-}
-
-/** Controller tab: the pickers and Reset to preset. */
-function wireControllerTab() {
-  el('prefsGamepadFamily')?.addEventListener('change', (event) => {
-    activeHandlers.gamepad?.mapping.setFamily(event.target.value);
-    renderGamepadPanel();
-  });
-
-  el('prefsGamepadPreset')?.addEventListener('change', (event) => {
-    activeHandlers.gamepad?.mapping.setPreset(event.target.value);
-    renderGamepadPanel();
-  });
-
-  el('prefsGamepadReset')?.addEventListener('click', () => {
-    const gamepad = activeHandlers.gamepad;
-    if (!gamepad) return;
-    gamepad.mapping.reset();
-    renderGamepadPanel();
-    const preset = GAMEPAD_PRESETS[gamepad.mapping.get().preset];
-    gamepad.announce?.(`${preset.name} restored.`);
-  });
-}
-
-/**
- * Render the status line. Skipped entirely when no handler was provided:
- * a claim about controller support with no data behind it would be a false
- * reason.
- */
-function renderGamepadStatus() {
-  if (!activeHandlers.getGamepadStatus) return;
-  const node = el('prefsGamepadStatus');
-  if (!node) return;
-  node.textContent = formatGamepadStatus(activeHandlers.getGamepadStatus());
-}
 
 /** The words an engine goes by, on its radio and in what is said. */
 function engineLabel(entry) {
@@ -591,8 +326,6 @@ function syncControls() {
     }
   }
 
-  renderGamepadStatus();
-  renderGamepadPanel();
   syncEngineGroup();
 }
 
@@ -693,17 +426,10 @@ export function initPreferencesDialog(handlers = {}) {
   if (!modal || wired) return;
 
   const tablist = el('preferencesTablist');
-  if (tablist) {
-    tablist.addEventListener('keydown', onTablistKeydown);
-    tablist.addEventListener('click', (event) => {
-      const tab = event.target.closest('[role="tab"]');
-      if (tab) selectTab(tab);
-    });
-  }
+  if (tablist) createTabList({ tablist, tabs });
 
   wireThreeDViewTab();
   wireEditorTab();
-  wireControllerTab();
 
   // `change`, so a radio chosen by the arrow keys switches as a click does.
   el('engineRows')?.addEventListener('change', (event) => {
@@ -712,12 +438,6 @@ export function initPreferencesDialog(handlers = {}) {
       chooseEngine(input.value);
     }
   });
-
-  // The status line heals itself while the dialog is open — without this,
-  // "No controller detected" would sit beside a pad that was plugged in a
-  // second after opening, and only a close-and-reopen would fix it.
-  window.addEventListener('gamepadconnected', renderGamepadStatus);
-  window.addEventListener('gamepaddisconnected', renderGamepadStatus);
 
   // The shared helper wires the close button, the overlay and Escape;
   // wiring those by hand risks a dialog without Escape, which is a WCAG
@@ -734,6 +454,13 @@ export function initPreferencesDialog(handlers = {}) {
     // buttons. Closing first keeps one dialog on screen at a time.
     close();
     handlers.onOpenShortcuts?.();
+  });
+
+  // The controller's settings moved to the Keys dialog; this tab points
+  // there, as the Keyboard tab does.
+  el('preferencesOpenController')?.addEventListener('click', () => {
+    close();
+    handlers.onOpenController?.();
   });
 
   wired = true;
@@ -766,7 +493,7 @@ export function openPreferencesDialog(options = {}) {
 
   // Set state before opening so the dialog never paints a wrong tab, and do
   // not steal focus here -- openModal moves focus into the dialog itself.
-  if (target) selectTab(target, { focus: false });
+  if (target) selectTabIn(tabs(), target, { focus: false });
 
   openModal(modal);
 }
@@ -774,6 +501,5 @@ export function openPreferencesDialog(options = {}) {
 /** Test seam: forget the wiring so a fresh DOM can be wired again. */
 export function _resetPreferencesDialogForTests() {
   wired = false;
-  capturingAction = null;
   engineBusy = false;
 }

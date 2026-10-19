@@ -2422,4 +2422,83 @@ test.describe('ASCII City Walk — a game controller', () => {
       )
     ).toBe(true)
   })
+
+  test('Controller opens Keys on its Controller tab over the game, and Escape comes back to the button', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await launchGame(page)
+    const button = page.locator('#cityWalkControllerBtn')
+    await expect(button).toHaveText('Controller')
+    await expect(button).toHaveAccessibleName('Controller settings')
+    await button.click()
+    await expect(page.locator('#shortcutsModal')).not.toHaveClass(/hidden/)
+    await expect(page.locator('#keys-tab-controller')).toBeFocused()
+    await expect(page.locator('#keysWalkSection')).toBeVisible()
+    await expect(page.locator('#keysWalkAssignments tbody tr')).toHaveCount(7)
+    // Keys is drawn over the game, not under it.
+    const onTop = await page.evaluate(() => {
+      const r = document
+        .querySelector('#shortcutsModal .modal-content')
+        .getBoundingClientRect()
+      const hit = document.elementFromPoint(
+        r.left + r.width / 2,
+        r.top + r.height / 2
+      )
+      return !!hit?.closest('#shortcutsModal')
+    })
+    expect(onTop).toBe(true)
+
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#shortcutsModal')).toHaveClass(/hidden/)
+    await expect(page.locator('#cityWalkLayer')).toBeVisible()
+    await expect(button).toBeFocused()
+    // The game's trap is back: Tab stays in the layer.
+    for (let i = 0; i < 4; i++) {
+      await page.keyboard.press('Tab')
+      expect(
+        await page.evaluate(
+          () => !!document.activeElement?.closest('#cityWalkLayer')
+        )
+      ).toBe(true)
+    }
+
+    // The help has its own way there.
+    await page.locator('#cityWalkHelpBtn').click()
+    await page.locator('#cityWalkHelpControllerBtn').click()
+    await expect(page.locator('#keys-tab-controller')).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkHelpControllerBtn')).toBeFocused()
+  })
+
+  test('X given to Map opens the map and A no longer does; the game ignores the pad under Keys', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await launchGame(page)
+    await enterCity(page)
+    const status = page.locator('#cityWalkHudStatus')
+
+    await page.locator('#cityWalkControllerBtn').click()
+    await expect(page.locator('#keysWalkSection')).toBeVisible()
+    await page.locator('#keysWalkChange-map').click()
+    await expect(page.locator('#keysWalkInput-map')).toHaveText(
+      'Press a button on your controller. Esc cancels.'
+    )
+    await press(page, 2)
+    await expect(page.locator('#keysWalkInput-map')).toHaveText('X')
+    // A press while Keys is open moves nothing in the city.
+    await press(page, 2)
+    await press(page, 0)
+    await expect(status).toContainText('street view')
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#shortcutsModal')).toHaveClass(/hidden/)
+
+    await press(page, 0)
+    await expect(status).toContainText('street view')
+    await press(page, 2)
+    await expect(status).toContainText('map view')
+    await press(page, 1)
+    await expect(status).toContainText('street view')
+  })
 })

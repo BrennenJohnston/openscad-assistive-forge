@@ -487,8 +487,18 @@ test('the Keyboard tab reaches the shortcuts editor', async ({ page }) => {
   await openPreferences(page);
 
   await page.getByRole('tab', { name: 'Keyboard' }).click();
-  await page.locator('#preferencesOpenShortcuts').click();
+  // It names the dialog the shortcuts live in, as the Controller tab does.
+  await expect(page.locator('#prefs-panel-keyboard p')).toHaveText(
+    'Every keyboard shortcut in this app can be viewed and changed in the Keys dialog.'
+  );
+  await page
+    .getByRole('button', { name: 'Open the keyboard shortcuts' })
+    .click();
   await expect(page.locator('#shortcutsModal')).not.toHaveClass(/hidden/);
+  await expect(page.locator('#keys-tab-keyboard')).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
   // One dialog on screen at a time.
   await expect(page.locator('#preferencesModal')).toHaveClass(/hidden/);
   await expect(page.locator('#shortcutsModalBody')).not.toBeEmpty();
@@ -723,21 +733,10 @@ test('in Classic the dialog leaves the viewport visible while arrow keys live-ap
   });
 });
 
-test('the Controller tab says what it sees when no controller is attached', async ({
+test('the Controller tab points to Keys, which opens on its Controller tab', async ({
   page,
 }) => {
   test.setTimeout(240_000);
-  // The no-controller sentence is true only where no controller is attached,
-  // and a test machine can have one. Hide any real pad from the page, keeping
-  // the Gamepad API itself, so the case means the same on every machine.
-  await page.addInitScript(() => {
-    navigator.getGamepads = () => [];
-    window.addEventListener(
-      'gamepadconnected',
-      (event) => event.stopImmediatePropagation(),
-      true
-    );
-  });
   await openPreferences(page);
 
   await page.locator('#prefs-tab-3dview').click();
@@ -745,102 +744,27 @@ test('the Controller tab says what it sees when no controller is attached', asyn
   const tab = page.locator('#prefs-tab-controller');
   await expect(tab).toHaveAttribute('aria-selected', 'true');
   await expect(tab).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('#prefs-panel-controller')).toContainText(
+    'The controller settings live in the Keys dialog, beside the keyboard shortcuts.'
+  );
+  await page.locator('#preferencesOpenController').click();
 
-  // With the Gamepad API present and no device in sight (made so above),
-  // the honest report is the no-controller invitation: never a made-up pad,
-  // and never the unsupported-browser claim.
-  const status = page.locator('#prefsGamepadStatus');
-  await expect(status).toBeVisible();
-  await expect(status).toHaveText(
-    'No controller detected. Connect one and press any button.'
+  // One dialog on screen at a time, and focus on the tab it opened.
+  await expect(page.locator('#preferencesModal')).toHaveClass(/hidden/);
+  await expect(page.locator('#shortcutsModal')).not.toHaveClass(/hidden/);
+  await expect(page.locator('#keys-tab-controller')).toBeFocused();
+  await expect(page.locator('#keys-tab-controller')).toHaveAttribute(
+    'aria-selected',
+    'true'
   );
   await expect(page.locator('#prefsGamepadAssignments tbody tr')).toHaveCount(
     29
   );
-});
-
-test('a button changed in the Controller tab is kept after a reload', async ({
-  page,
-}) => {
-  test.setTimeout(300_000);
-  // A stand-in Xbox pad the page reads through navigator.getGamepads().
-  await page.addInitScript(() => {
-    window.__padButtons = Array.from({ length: 17 }, () => ({
-      pressed: false,
-      touched: false,
-      value: 0,
-    }));
-    const pad = {
-      id: 'Test pad (STANDARD GAMEPAD Vendor: 045e Product: 02ea)',
-      index: 0,
-      connected: true,
-      mapping: 'standard',
-      timestamp: 0,
-      axes: [0, 0, 0, 0],
-      get buttons() {
-        return window.__padButtons;
-      },
-    };
-    Object.defineProperty(Navigator.prototype, 'getGamepads', {
-      configurable: true,
-      value: () => [pad, null, null, null],
-    });
-  });
-  const openController = async () => {
-    await openPreferences(page);
-    await page.locator('#prefs-tab-3dview').click();
-    for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
-    await expect(page.locator('#prefs-tab-controller')).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-  };
-  const buttonOf = (action) =>
-    page.locator(`#prefsGamepadInput-${action}`).textContent();
-
-  await openController();
-  await expect(page.locator('#prefsGamepadStatus')).toHaveText(
-    'Controller detected: Test pad.'
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#shortcutsModal')).toHaveClass(/hidden/);
+  expect(await page.evaluate(() => document.activeElement.id)).toBe(
+    'editMenuBtn'
   );
-  await expect(page.locator('#prefsGamepadFamily')).toHaveValue('xbox');
-  expect(await buttonOf('activate')).toBe('A');
-
-  const change = page.locator('#prefsGamepadChange-activate');
-  await expect(change).toHaveAccessibleName('Change Activate');
-  await change.click();
-  await expect(page.locator('#prefsGamepadInput-activate')).toHaveText(
-    'Press a button on your controller. Esc cancels.'
-  );
-  await page.evaluate(() => {
-    window.__padButtons[2] = { pressed: true, touched: true, value: 1 };
-  });
-  await expect(page.locator('#prefsGamepadInput-activate')).toHaveText('X');
-  await page.evaluate(() => {
-    window.__padButtons[2] = { pressed: false, touched: false, value: 0 };
-  });
-  // X was Reset View's in the Camera preset, the default: the two swap.
-  expect(await buttonOf('resetView')).toBe('A');
-
-  // The tab passes the WCAG 2.2 A and AA rules, and the rule that a
-  // control's visible words are in its name.
-  const results = await new AxeBuilder({ page })
-    .options({ rules: { 'label-content-name-mismatch': { enabled: true } } })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-    .include('#preferencesModal')
-    .analyze();
-  expect(
-    results.violations.map(
-      (v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`
-    )
-  ).toEqual([]);
-
-  // openPreferences() loads the page afresh: the saved mapping is read again.
-  await openController();
-  expect(await buttonOf('activate')).toBe('X');
-  expect(await buttonOf('resetView')).toBe('A');
-
-  await page.locator('#prefsGamepadReset').click();
-  expect(await buttonOf('activate')).toBe('A');
 });
 
 test('the shortcuts dialog’s headings step down one level at a time', async ({

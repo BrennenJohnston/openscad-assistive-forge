@@ -7,12 +7,17 @@
  * @license GPL-3.0-or-later
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   initPreferencesDialog,
+  openPreferencesDialog,
   renderEngineGroup,
   _resetPreferencesDialogForTests,
 } from '../../src/js/preferences-dialog.js';
+
+const INDEX = readFileSync(path.resolve(__dirname, '../../index.html'), 'utf8');
 
 const files = (js, wasm) => ({
   'openscad.js': { sha256: 'a'.repeat(64), size: js },
@@ -91,6 +96,70 @@ async function setUp(engine) {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+});
+
+describe('the Controller tab', () => {
+  let originalRects;
+
+  beforeEach(() => {
+    const doc = new DOMParser().parseFromString(INDEX, 'text/html');
+    document.body.innerHTML = '';
+    document.body.append(
+      document.importNode(doc.getElementById('preferencesModal'), true)
+    );
+    _resetPreferencesDialogForTests();
+    // jsdom lays nothing out: every element counts as having a box here.
+    originalRects = Element.prototype.getClientRects;
+    Element.prototype.getClientRects = function () {
+      return [{ width: 10, height: 10 }];
+    };
+  });
+
+  afterEach(() => {
+    Element.prototype.getClientRects = originalRects;
+    document.body.innerHTML = '';
+    document.body.style.overflow = '';
+  });
+
+  it('is one enabled tab where Axes and Buttons were', () => {
+    initPreferencesDialog({});
+    openPreferencesDialog({ tab: 'controller' });
+    const labels = [
+      ...document.querySelectorAll('#preferencesTablist [role="tab"]'),
+    ].map((t) => t.textContent.trim());
+    expect(labels).toEqual([
+      '3D View',
+      'Editor',
+      '3D Print',
+      'Advanced',
+      'Controller',
+      'Keyboard',
+    ]);
+    const tab = document.getElementById('prefs-tab-controller');
+    expect(tab.hasAttribute('aria-disabled')).toBe(false);
+    expect(tab.getAttribute('aria-selected')).toBe('true');
+    expect(document.getElementById('prefs-panel-controller').hidden).toBe(
+      false
+    );
+  });
+
+  it('points to the Keys dialog, where the controller is set', () => {
+    const onOpenController = vi.fn();
+    initPreferencesDialog({ onOpenController });
+    openPreferencesDialog({ tab: 'controller' });
+    const panel = document.getElementById('prefs-panel-controller');
+    expect(panel.querySelector('p').textContent.replace(/\s+/g, ' ').trim()).toBe(
+      'The controller settings live in the Keys dialog, beside the keyboard shortcuts.'
+    );
+    expect(panel.querySelector('#prefsGamepadAssignments')).toBeNull();
+    const button = document.getElementById('preferencesOpenController');
+    expect(button.textContent.trim()).toBe('Open the controller settings');
+    button.click();
+    expect(onOpenController).toHaveBeenCalledTimes(1);
+    expect(
+      document.getElementById('preferencesModal').classList.contains('hidden')
+    ).toBe(true);
+  });
 });
 
 describe('the Engine group', () => {
