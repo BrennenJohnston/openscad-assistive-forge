@@ -57,194 +57,161 @@ import { fileURLToPath } from 'node:url';
  * it would bake the starvation into the model permanently.
  */
 export const MEASURED_SECONDS = {
-  // The City Walk suite was once one file. Packing by cost put all of it on
-  // one shard, where two workers then spent most of the run driving 3D city
-  // sessions at the same time on a two-core runner with software rendering:
-  // that shard's overhead (wall time beyond the work divided by its workers)
-  // went from 1.6 to 5.6 minutes, its flaky count from 6 to 11, and two cases
-  // tipped over into failing. Splitting the file does nothing for
-  // Playwright's own --shard, since the pieces sort next to their parent, but
-  // it is exactly what a cost packer needs: it can put the pieces on
-  // different shards.
-  'ascii-city-walk-controls.spec.js': 2068,
-  // The seven City Walk weights are estimates scaled from a green local
-  // Chromium board (per-test durations summed per file, times one constant,
-  // x1.8, set so the street file lands in its known CI range): the packer
-  // uses ratios, and a same-day, same-machine green board is the best ratio
-  // data there is. The next green CI board replaces them.
-  //
-  // Two of this file's cases hold a walk key until something happens rather
-  // than for a fixed time (the find, and axe over the open bubble), which is
-  // correct, since a wall-clock hold is a bet on the frame rate, but it does
-  // mean their cost scales with how slow the runner is. They are the ones to
-  // watch.
-  'ascii-city-walk.spec.js': 2078,
-  // Priced from whole-lane CI evidence: across three diagnostic runs the
-  // three heavy Chromium lanes ran nearly equal wall time (34:52, 35:50 and
-  // 37:04 on the last), each anchored by one of walk, controls and street, so
-  // street's true CI cost stands level with the other two, not at half. A
-  // local hardware ratio under-priced it about 2x, and the packer answered by
-  // stacking extra co-files onto street's lanes, precisely the lane that kept
-  // overflowing its clock on Edge.
-  'ascii-city-walk-street.spec.js': 2050,
-  // Not measured on CI. Estimated from a local machine, where the file runs
-  // 37.5 s against the controls file's 84 s, and the controls file is 417.4
-  // there: 37.5 / 84 * 417.4 ~= 186, rounded up because every one of its
-  // eight cases builds a city. Left unlisted it would be booked at
-  // DEFAULT_WEIGHT_S, 60, and lopside a shard by two minutes.
-  'ascii-city-walk-teleport.spec.js': 211,
-  // Same estimate, same caveat: 29.4 s here against the controls file's 84 s,
-  // so 29.4 / 84 * 417.4 ~= 146. Two cases, both of which load a city.
-  'ascii-city-walk-perf-smoke.spec.js': 66,
-  // An unmeasured city spec is not a cheap newcomer: every one of its cases
-  // builds a 3D city, so this file and the furniture file need entries rather
-  // than DEFAULT_WEIGHT_S.
+  // The City Walk suites skip on CI (CI_SKIPPED, below), so no CI run
+  // measures them, and on CI each is planned at CI_SKIPPED_WEIGHT_S. These
+  // seven numbers plan a local board: a green local Chromium board's
+  // per-file sums times 1.8, with the street file priced level with the
+  // walk and controls files from whole-lane CI evidence when the suites
+  // still ran there, and the teleport and perf-smoke files scaled from the
+  // controls file. Two of the walk file's cases hold a key until something
+  // happens, so their cost follows the frame rate: the ones to watch.
   'ascii-city-walk-calibration.spec.js': 228,
-  // Scaled by test count from a green-run measurement when two cases were
-  // added (both launch the game and enter a city, the dominant cost here, so
-  // they are typical rather than cheap), not freshly measured. Leaving the
-  // old number would be 22% low on the one file that grew, which is how a
-  // lane projects 25 minutes and takes 32: Edge has about two minutes of
-  // margin, and 29 unbooked seconds is a sixth of it.
+  'ascii-city-walk-controls.spec.js': 2068,
   'ascii-city-walk-furniture.spec.js': 164,
-  'classic-panels.spec.js': 442.5,
-  // Two cases turn the Alt View on inside Classic (about 15 s locally
-  // together); booked at 40 more for the look's software drawing on CI.
-  'classic-mode.spec.js': 440.8,
-  'menu-parity.spec.js': 253.9,
-  'accessibility.spec.js': 195.8,
-  // Every pose is now read once the camera holds still: one local pass went
-  // from 90 s to 114 s, so 165.5 is scaled by the same ratio.
-  'camera-face-view-orbit.spec.js': 210.0,
-  // Measured 142.1; four cases on what a tour says (about 9 s locally) add
-  // 15, and one on a step scrolled out of the Customizer (about 7 s) adds 15.
-  'tutorials.spec.js': 172.1,
-  // Measured 269.2; a case on a target half behind a phone's bar (about 7 s
-  // locally) adds 10.
-  'tour-interaction.spec.js': 279.2,
-  'preferences-dialog.spec.js': 90.6,
-  // Two cases, an example and a failing upload, and the braille sign's
-  // return to a cached preview: 8.5 s together locally.
-  'preview-stats.spec.js': 30.0,
-  // One case on the simple box: measured 5 locally.
-  'parameter-filter.spec.js': 15.0,
-  // Two cases on the simple box: measured 28 locally.
-  'main-page-return.spec.js': 40.0,
-  // Two cases with a draft debounce each: measured 27 locally.
-  'draft-after-edit.spec.js': 40.0,
-  // Six cases, each an upload and a preview: measured 26 locally, booked with room.
-  'page-fits-window.spec.js': 40.0,
-  'responsive-audit.spec.js': 91.9,
-  // One more case (the phone's starting size, about 15 s) on top of the measured 71.4.
-  'theme-switching.spec.js': 90.0,
-  // Nine cases, the surfaces read element by element, then a phone width and
-  // the system settings: about 84 s locally, booked with room; two slider
-  // cases (about 17 s locally) add 30, and the page's height and the echo
-  // drawer's three (about 21 s) add 35.
-  'alt-view-consistency.spec.js': 185.0,
-  // Two cases, each loading the box: 17.6 s locally; booked at 30; a third
-  // (off and on again, a theme change, about 25 s) adds 30; a fourth (the
-  // sounds, about 20 s) adds 30; a slider drag in the fourth (about 10 s)
-  // adds 10.
-  'alt-view-reveal.spec.js': 100.0,
-  // Eight cases, each loading the box, most waiting out the key's 5 s arrival
-  // or the tune: about 75 s locally; booked at 110.
-  'alt-view-arrival.spec.js': 110.0,
-  // One case on the box with WebGL switched off: 4.9 s locally; booked at 15.
-  'alt-view-without-webgl.spec.js': 15.0,
-  // Eighteen cases, each loading the box and picturing every icon button in
-  // four states, one picture a state; the phone cases also tap one camera
-  // drawer button of each kind: 186 s locally, 748 s on a pull request's
-  // Chromium shard (the sum of its cases, 2026-10-17). One picture per
-  // button per state had taken about 40 test-minutes on CI.
-  // Chromium only (PROJECT_IGNORES): forcing :hover is a CDP feature.
-  'alt-view-icon-states.spec.js': 748.0,
-  // Five cases, each loading the box and turning the look on (one drags the
-  // view for a second and a half): 45 s locally; booked at 100 for the
-  // look's software drawing on CI. A sixth (a drawer's slide and a menu's
-  // latch, about 16 s locally) adds 40. A seventh (Classic's zoom buttons,
-  // about 14 s locally) adds 40, and four camera presses in the drag's case
-  // about 10.
-  'alt-view-sounds.spec.js': 200.0,
-  // Two cases, each loading the box, turning the look on and watching about
-  // twenty drawer presses for 1.2 s each: 48 s locally; booked at 110 for
-  // the look's software drawing on CI.
-  'alt-view-drawers.spec.js': 110.0,
-  // Three cases, each loading the box (one in Classic), turning the look on
-  // and watching its drawers for up to nine seconds: about 80 s locally;
-  // booked at 150 for the look's software drawing on CI.
-  'alt-view-entry.spec.js': 150.0,
-  // Two cases, each loading the box (the second again in Classic), the look
-  // drawn as lines at five sizes and read pixel by pixel, and turned: 25 s
-  // locally; booked at 90 for the look's software drawing on CI.
-  'alt-view-vector.spec.js': 90.0,
-  // Four cases, each loading the box and reading the computed cursor of the
-  // page, a button and a field in one look (the fourth under forced colors):
-  // 11.8 s locally, 30.5 s on a pull request's Chromium shard (the sum of
-  // its cases, 2026-10-18); booked at 35.
-  'alt-view-cursors.spec.js': 35.0,
-  'editor-content-sync.spec.js': 70.4,
-  'saved-projects.spec.js': 68.5,
-  'classic-stow.spec.js': 66.8,
-  'mobile-viewport.spec.js': 72.0,
-  'memory-banner.spec.js': 66.6,
-  'editor-truth.spec.js': 60.8,
-  'classic-mobile-gate.spec.js': 43.4,
-  'tour-nudge.spec.js': 51.7,
-  'folder-import.spec.js': 49.9,
-  'parity-regression.spec.js': 44.4,
-  'first-visit-choice.spec.js': 94.1,
-  'coff-color-probe.spec.js': 44.0,
-  'classic-render-workflow.spec.js': 44.2,
-  'console-fidelity.spec.js': 41.6,
-  'preference-matrix.spec.js': 54.0,
-  'csg-color-injection.spec.js': 39.3,
-  'editor-wrap-marks.spec.js': 41.2,
-  'stakeholder-acceptance.spec.js': 38.4,
-  'manifest-loading.spec.js': 71.2,
-  'drawer-reduction.spec.js': 15.8,
-  // Measured 34.2; a fifth case (a second run, about 15 s locally) adds 15.
-  'console-tail.spec.js': 49.2,
-  'axis-depth-truth.spec.js': 29.2,
-  'welcome-spotlight.spec.js': 30.2,
-  'editor-fold-markers.spec.js': 28.0,
-  'classic-tutorial.spec.js': 25.9,
-  // 25.0 was measured in CI for four cases. A fifth (the tile template's
-  // render) measured 4.1 s locally against a warm dev server, where the other
-  // four came to about 24 s: close enough to the CI number to add 5 and be
-  // slightly conservative. Re-measure from a CI shard log next time this file
-  // is touched.
-  'wasm-smoke.spec.js': 33.4,
-  'auto-preview.spec.js': 61.8,
-  'library-panel.spec.js': 19.6,
-  'terminology.spec.js': 28.3,
-  'keyguard-compilation-smoke.spec.js': 13.4,
-  'welcome-surface.spec.js': 16.3,
-  'svg-preparer.spec.js': 11.9,
-  'expert-mode.spec.js': 11.3,
-  'basic-workflow.spec.js': 11.3,
-  'classic-preview-flush.spec.js': 9.8,
-  'examples.spec.js': 29.2,
-  'axis-mark-colors.spec.js': 9.2,
-  'stl-view.spec.js': 8.4,
-  'editor-wrap.spec.js': 6.1,
-  'braille-card.spec.js': 6.7,
-  'features-guide.spec.js': 3.9,
-  'dialog-centering.spec.js': 2.6,
-  // Everything below is skipped in CI for want of a fixture, so it costs the
-  // lane nothing today. Kept in the table, at the measured zero, so that a
-  // file which starts running again is visible as a change rather than as a
-  // silent newcomer.
+  'ascii-city-walk-perf-smoke.spec.js': 66,
+  'ascii-city-walk-street.spec.js': 2050,
+  'ascii-city-walk-teleport.spec.js': 211,
+  'ascii-city-walk.spec.js': 2078,
+
+  // Every number below is the sum of the durations the list reporter
+  // printed for that file, every attempt counted (a retry too: the shard
+  // pays for it), on the seven Chromium shards of Test Suite run 39167740032
+  // (develop, 2026-10-18, green), rounded up to the next tenth of a second.
+  // Re-measure the same way, from a green run.
+  'accessibility.spec.js': 243.3,
+  'alt-view-arrival.spec.js': 115.4,
+  'alt-view-consistency.spec.js': 234.8,
+  'alt-view-cursors.spec.js': 35.7,
+  'alt-view-drawers.spec.js': 79.7,
+  'alt-view-entry.spec.js': 62.0,
+  'alt-view-icon-states.spec.js': 810.0,
+  'alt-view-reveal.spec.js': 85.2,
+  'alt-view-sounds.spec.js': 194.3,
+  'alt-view-vector.spec.js': 55.7,
+  'alt-view-without-webgl.spec.js': 4.7,
+  'auto-preview.spec.js': 45.1,
+  'axis-depth-truth.spec.js': 25.4,
+  'axis-mark-colors.spec.js': 7.9,
+  'back-guard.spec.js': 52.9,
+  'background-shapes.spec.js': 6.2,
+  'basic-workflow.spec.js': 11.9,
+  'braille-card.spec.js': 31.4,
+  'camera-face-view-orbit.spec.js': 125.2,
+  'classic-mobile-gate.spec.js': 36.2,
+  'classic-mode.spec.js': 454.5,
+  'classic-names.spec.js': 29.8,
+  'classic-pane-focus.spec.js': 13.0,
+  'classic-panels.spec.js': 339.3,
+  'classic-preview-flush.spec.js': 5.8,
+  'classic-render-workflow.spec.js': 38.7,
+  'classic-stow.spec.js': 43.1,
+  'classic-tutorial.spec.js': 17.5,
+  'coff-color-probe.spec.js': 25.5,
+  'console-fidelity.spec.js': 30.5,
+  'console-tail.spec.js': 27.9,
+  'csg-color-injection.spec.js': 21.6,
+  'dialog-centering.spec.js': 1.8,
+  'dialog-focus-return.spec.js': 71.8,
+  'dialog-focus-sweep.spec.js': 24.4,
+  'draft-after-edit.spec.js': 25.5,
+  'drawer-reduction.spec.js': 18.4,
+  'drawing-editor-close-focus.spec.js': 6.0,
+  'drawing-editor.spec.js': 502.6,
+  'dxf-roundtrip.spec.js': 22.0,
+  'echo-drawer-phone.spec.js': 15.3,
+  'edges-overlay.spec.js': 11.4,
+  'editor-content-sync.spec.js': 56.6,
+  'editor-fold-markers.spec.js': 31.4,
+  'editor-truth.spec.js': 38.3,
+  'editor-wrap-marks.spec.js': 40.8,
+  'editor-wrap.spec.js': 7.6,
+  'engine-depth.spec.js': 3.9,
+  'engine-recovery.spec.js': 13.4,
+  'engine-stale-cache.spec.js': 4.4,
+  'escape-cancel-render.spec.js': 30.4,
+  'examples.spec.js': 16.5,
+  'expert-mode.spec.js': 21.6,
+  'export-messages.spec.js': 29.1,
+  'features-guide.spec.js': 7.1,
+  'first-visit-choice.spec.js': 89.0,
+  'first-visit-links.spec.js': 6.8,
+  'folder-import.spec.js': 48.9,
+  'folder-projects.spec.js': 10.6,
+  'folder-write-back.spec.js': 20.1,
+  'gamepad-navigation.spec.js': 32.8,
+  'guide-example-focus.spec.js': 15.1,
+  'header-names.spec.js': 38.9,
+  'ink-modes.spec.js': 130.8,
+  'invariants-selftest.spec.js': 3.7,
+  'keyguard-compilation-smoke.spec.js': 14.7,
+  'keyguard-workflow.spec.js': 5.0,
+  'layered-design.spec.js': 95.5,
+  'layout-rework-number-box.spec.js': 8.3,
+  'library-panel.spec.js': 20.6,
+  'link-failure-notice.spec.js': 27.8,
+  'linked-drawing.spec.js': 38.2,
+  'main-page-return.spec.js': 6.4,
+  'manifest-loading.spec.js': 90.7,
+  'memory-banner.spec.js': 77.7,
+  'menu-dialog-focus.spec.js': 55.7,
+  'menu-parity.spec.js': 304.0,
+  'menu-reach.spec.js': 38.9,
+  'mesh-companion.spec.js': 10.2,
+  'mobile-drawer.spec.js': 11.7,
+  'mobile-toolbar.spec.js': 101.3,
+  'mobile-viewport.spec.js': 75.5,
+  'overlay-placement.spec.js': 112.1,
+  'page-fits-window.spec.js': 52.2,
+  'param-links.spec.js': 93.7,
+  'parameter-filter.spec.js': 5.1,
+  'parity-regression.spec.js': 35.4,
+  'potrace-engine.spec.js': 1.8,
+  'preference-matrix.spec.js': 33.3,
+  'preferences-dialog.spec.js': 137.2,
+  'preview-stats.spec.js': 24.3,
+  'project-link-lane.spec.js': 3.9,
+  'project-share.spec.js': 27.6,
+  'project-switch.spec.js': 73.4,
+  'publish-dialog.spec.js': 50.3,
+  'real-start.spec.js': 52.3,
+  'recovery-mode.spec.js': 33.6,
+  'responsive-audit.spec.js': 93.2,
+  'saved-projects-dialogs.spec.js': 36.2,
+  'saved-projects-focus.spec.js': 22.5,
+  'saved-projects.spec.js': 95.7,
+  'self-disabling-controls-focus.spec.js': 74.7,
+  'settings-follow-the-person.spec.js': 15.1,
+  'share-settings.spec.js': 41.4,
+  'stakeholder-acceptance.spec.js': 27.5,
+  'startup-questions.spec.js': 9.9,
+  'status-announcements.spec.js': 51.6,
+  'stl-view.spec.js': 13.1,
+  'svg-edit-door.spec.js': 316.5,
+  'svg-preparer.spec.js': 10.0,
+  'terminology.spec.js': 28.1,
+  'theme-switching.spec.js': 148.9,
+  'touch-targets.spec.js': 32.9,
+  'tour-interaction.spec.js': 211.8,
+  'tour-nudge.spec.js': 58.9,
+  'trace-start-cancel.spec.js': 119.5,
+  'tutorials.spec.js': 206.7,
+  'typed-preset.spec.js': 10.2,
+  'ui-schema.spec.js': 909.4,
+  'wasm-smoke.spec.js': 24.8,
+  'welcome-spotlight.spec.js': 34.2,
+  'welcome-surface.spec.js': 13.2,
+
+  // Ran on no lane of that run: every case skips on CI for want of a
+  // fixture. Kept at zero, so that a file which starts running again is
+  // visible as a change rather than as a silent newcomer.
   'benchmark-runner.spec.js': 0,
   'companion-navigation.spec.js': 0,
   'echo-drawer.spec.js': 0,
   'full-render-color.spec.js': 0,
   'generic-project-baseline.spec.js': 0,
   'keyguard-parser-smoke.spec.js': 0,
-  'keyguard-workflow.spec.js': 0,
   'library-archive.spec.js': 0,
   'lwfl-parity-reproduction.spec.js': 0,
-  'mobile-drawer.spec.js': 0,
   'mobile-number-input.spec.js': 0,
   'param-groups.spec.js': 0,
   'preset-audit-sweep.spec.js': 0,
@@ -255,169 +222,6 @@ export const MEASURED_SECONDS = {
   'stakeholder-bugfix-verification.spec.js': 0,
   'stakeholder-zip-acceptance.spec.js': 0,
   'zip-workflow.spec.js': 0,
-
-  // Summed from the Chromium shard logs of one run, by the method this file's
-  // header describes. Booked at DEFAULT_WEIGHT_S, seven new files were 420 s
-  // of imaginary work, and the planner's own 25-minute guard went red at 25.1
-  // projected minutes, which is exactly what that guard is for.
-  // `folder-write-back.spec.js` is deliberately absent: it has no CI
-  // measurement yet, so it keeps the default.
-  'param-links.spec.js': 73.1,
-  'publish-dialog.spec.js': 23.4,
-  'share-settings.spec.js': 53.5,
-  'ink-modes.spec.js': 45.5,
-  'dxf-roundtrip.spec.js': 26.9,
-
-  // Summed from the Chromium shards of one run, the same method. svg-edit-door
-  // had grown from 6 cases to 12 and was still booked at 34.1, a 3.8x
-  // under-count; overlay-placement was new and was riding the 60 s default
-  // against a real 107.9. Between them that was 143 seconds of work the
-  // planner could not see, and the Edge lanes of that run ended at 35 minutes
-  // with "25 did not run".
-  'svg-edit-door.spec.js': 129.8,
-  'overlay-placement.spec.js': 107.9,
-
-  // One load of the drawing editor's tile with every walk the editor has on
-  // it, then the Drawing / Charm switch cases, one of which renders the charm
-  // twice to prove the session is cheaper. Measured locally at 37 s for nine
-  // cases, it looked well inside its booking; a green CI board measured
-  // 190.6 s, over the booking by a fifth. The local number was not wrong, it
-  // was the wrong number, and this file is Chromium only, so nothing else was
-  // absorbing the difference.
-  //
-  // Chromium only (PROJECT_IGNORES): the two-shard lanes were a third of a
-  // minute from their 35-minute ceiling before this file existed.
-  'drawing-editor.spec.js': 220.0,
-  // Five cases: the 2000x2000 noise picture is built and traced twice,
-  // because the conversion is fast enough that one run cannot carry both
-  // mid-conversion checks (13,401 ms with imagetracerjs, 1,872 with Potrace,
-  // same picture and throttle). Measured locally at 33.8 s for the file;
-  // booked at the same four-times ratio the files above carry. Chromium only
-  // (PROJECT_IGNORES): CPU throttling is a CDP feature, and the other lanes
-  // have no headroom (see the note below).
-  'trace-start-cancel.spec.js': 135.0,
-  // Four of these cases open the editor door on a fixture for the credit
-  // line. Measured locally: 13 cases in about 42 s. DEFAULT_WEIGHT_S, 60, was
-  // already close; 70 keeps the same slack the measurement had.
-  'ink-modes.spec.js': 70.0,
-  // The editor's door spec: layout, ordering and worker cases, two of which
-  // combine a 210-shape drawing for real, then the flatten worker, the
-  // budget, the shapes row, choosing rows, the row-to-picture link, the phone
-  // sheet and the touch walks. At 62 cases a green CI board measured 242.8 s
-  // and it was booked at 280; at 79 cases a pull-request run's Chromium
-  // shards (2026-10-09) measured 400.9, booked as measured. Local is not the
-  // number to book: the same file runs 205 s on a local machine, and booking
-  // that would hide an overrun instead of finding it.
-  'svg-edit-door.spec.js': 400.9,
-  // From the same green board: layered-design 51.2 s, ink-modes 76.6 s,
-  // trace-start-cancel 59.4 s, dxf-roundtrip 22.4 s, potrace-engine 3.3 s.
-  // Only ink-modes is over its booking, by 6.6 s against a 70 that was itself
-  // rounded up from 42: inside the rounding, so it is left alone and written
-  // down rather than nudged. layered-design is not listed and rides
-  // DEFAULT_WEIGHT_S at 60, which its 51.2 fits.
-  //
-  // potrace-engine: one case, a ring traced through the real worker on both
-  // engines, which is also the only place the wasm is proved to load under
-  // COOP/COEP. Measured locally: 2.9 s on Chromium, 3.6 s on WebKit, 7.8 s on
-  // Firefox. Booked at 10 rather than scaled up like the three files above:
-  // it is a tenth of their size, and rounding 7.8 to 10 is already the whole
-  // margin those ratios exist to buy.
-  'potrace-engine.spec.js': 10.0,
-  // The shared-link files, measured locally on Chromium. Booked at
-  // DEFAULT_WEIGHT_S they added three minutes of test time to every lane and
-  // put the three-shard Edge and Firefox lanes at 35.2 and 35.1 of their
-  // 35-minute ceiling (34.7 and 34.6 without them); booked at what they cost,
-  // the lanes project to 34.9 and 34.8.
-  //   first-visit-links   two cases, 3 s and 27 s (the second holds the
-  //                       engine 6 s on every worker restart); both skip on
-  //                       CI, so this is what a local board pays.
-  //   project-link-lane   two cases, 3.9 s (Firefox 8.6 s); one skips on CI.
-  //   link-failure-notice six cases, 17.8 to 18.5 s (Firefox 36 s); no
-  //                       engine, so all six run on CI.
-  'first-visit-links.spec.js': 40.0,
-  'project-link-lane.spec.js': 10.0,
-  'link-failure-notice.spec.js': 30.0,
-  // Measured locally; CI reads its own on the first run.
-  'layout-rework-number-box.spec.js': 60.0,
-  // Three cases, each loading the simple box: 19.9 s locally; booked at 40.
-  'gamepad-navigation.spec.js': 40.0,
-  // The shared checks' self-test: small pages served on a routed host, no app
-  // and no engine. Nine cases in 3.8 s locally; booked at 10, the rounding
-  // potrace-engine carries.
-  'invariants-selftest.spec.js': 10.0,
-  // Five cases, each a first visit that downloads the engine: 39.1 measured
-  // at four, scaled to five.
-  'real-start.spec.js': 48.9,
-  // Skipped in Chromium (its own script stack is the limit there); in the
-  // Firefox lane one case of about 9 s.
-  'engine-depth.spec.js': 5.0,
-  // Summed from the Chromium shards of one pull-request run (2026-10-09), the
-  // method above; real-start.spec.js just before is from the same run. The
-  // grown files above it in this table (menu-parity, tutorials, auto-preview,
-  // dxf-roundtrip, svg-edit-door) carry numbers from the same run.
-  // classic-mode (403.9), classic-panels (392.4) and preferences-dialog
-  // (88.9) measured within their bookings and are left alone.
-  // Measured at five cases (30.0); a sixth, at 1280 x 600, scales it to 36.
-  'menu-reach.spec.js': 36.0,
-  'project-switch.spec.js': 52.2,
-  // Four cases, 22.2 s locally; booked at 25 until a CI run measures it.
-  'project-share.spec.js': 25.0,
-  // Two cases, 5.8 s locally with a warm engine; booked at 20 for the cold
-  // engine load each CI case pays.
-  'engine-recovery.spec.js': 20.0,
-  // Two cases, about 14 s each locally (a model slow on purpose); booked at 40.
-  'escape-cancel-render.spec.js': 40.0,
-  // Two cases, about 10 s locally with a warm engine; booked at 20 likewise.
-  'mesh-companion.spec.js': 20.0,
-  // Two cases, about 8 s and 2 s locally with a warm engine; booked at 20.
-  'folder-projects.spec.js': 20.0,
-  // One case, about 9 s locally with a warm engine; booked at 15.
-  'typed-preset.spec.js': 15.0,
-  // One case, about 4 s locally with a warm engine; booked at 15.
-  'background-shapes.spec.js': 15.0,
-  // Two cases, about 7 s locally with a warm engine; booked at 20.
-  'echo-drawer-phone.spec.js': 20.0,
-  // Six cases, 34.6 to 41.1 s locally (each one loads the app); booked at 45.
-  'menu-dialog-focus.spec.js': 45.0,
-  // Five cases, about 2 s each locally with a warm engine; booked at 30 for
-  // the cold engine load two of them wait for on CI.
-  'saved-projects-focus.spec.js': 30.0,
-  // Nine cases, about 47 s locally (each one loads the app); booked at 60.
-  'dialog-focus-return.spec.js': 60.0,
-  // Two cases, about 6 s each locally; booked at 25.
-  'guide-example-focus.spec.js': 25.0,
-  // Eight cases, 48.8 s locally (each one loads the app; one generates); 60.
-  'self-disabling-controls-focus.spec.js': 60.0,
-  // Three cases, about 3 s each locally with a warm engine; booked at 20.
-  'classic-pane-focus.spec.js': 20.0,
-  // One case, about 3 s locally with a warm engine; booked at 20.
-  'drawing-editor-close-focus.spec.js': 20.0,
-  // Four cases, about 7 s each locally (a first visit; three load the app).
-  'dialog-focus-sweep.spec.js': 40.0,
-  // Six cases, about 5 s each locally with a warm engine; booked at 50.
-  'status-announcements.spec.js': 50.0,
-  // Three cases, about 8 s each locally (each loads the app); booked at 30.
-  'export-messages.spec.js': 30.0,
-  // Five cases, about 3 s each locally with a warm engine; booked at 25.
-  'header-names.spec.js': 25.0,
-  // Four cases, about 6 s each locally (one opens the code editor); booked at 30.
-  'touch-targets.spec.js': 30.0,
-  // Four cases in Classic Standard, about 4 s each locally; booked at 25.
-  'classic-names.spec.js': 25.0,
-  // Two cases, 7.1 s together locally (no engine wait); booked at 20.
-  'saved-projects-dialogs.spec.js': 20.0,
-  // Two cases, a few seconds each locally (neither waits for the engine); 20.
-  'startup-questions.spec.js': 20.0,
-  // Two cases, each an interrupted start and a file opened: 16.1 s locally;
-  // booked at 30.
-  'recovery-mode.spec.js': 30.0,
-  // Eight groups (two window sizes, four looks), each loading the charm once
-  // for its seven cases, then the desktop camera panel cases, the phone
-  // drawer, sheet and sideways cases, each loading the simple box.
-  // 906 s for its 68 timed cases on a CI shard log (the Alt View groups slow
-  // there, drawn in software), before twenty-six phone cases were added,
-  // about 15 s each; booked at 1300.
-  'ui-schema.spec.js': 1300.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */
@@ -458,12 +262,8 @@ export const DEFAULT_WEIGHT_S = 60;
  * 35.0 of its 35 minutes. Reverse: delete the two entries once the lanes are
  * re-split.
  *
- * alt-view-cursors.spec.js runs on Chromium only. It reads the computed
- * cursor of three elements in each look, a cascade fact every engine
- * resolves the same way, and the Edge lane projected to 35.0 of its 35
- * minutes before the file existed (booked at its measured 35 s it put the
- * lane at 35.1; at 15 s, 35.02). Reverse: delete the two entries once the
- * lanes are re-measured or re-split.
+ * trace-start-cancel.spec.js runs on Chromium only: it slows the processor
+ * through the DevTools protocol, which the other engines do not have.
  */
 export const PROJECT_IGNORES = Object.freeze({
   chromium: [],
@@ -472,7 +272,6 @@ export const PROJECT_IGNORES = Object.freeze({
     'trace-start-cancel.spec.js',
     'potrace-engine.spec.js',
     'alt-view-icon-states.spec.js',
-    'alt-view-cursors.spec.js',
   ],
   firefox: [
     'wasm-smoke.spec.js',
@@ -480,7 +279,6 @@ export const PROJECT_IGNORES = Object.freeze({
     'trace-start-cancel.spec.js',
     'potrace-engine.spec.js',
     'alt-view-icon-states.spec.js',
-    'alt-view-cursors.spec.js',
   ],
 });
 
