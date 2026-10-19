@@ -167,7 +167,7 @@ export const MEASURED_SECONDS = {
   // 101.3 by the two runs above, plus three cases since (the first row in
   // high contrast at two heights, and held sideways: 7 s locally), booked at
   // about four times that.
-  'mobile-toolbar.spec.js': 149.3,
+  'mobile-toolbar.spec.js': 189.3,
   'mobile-viewport.spec.js': 75.5,
   'overlay-placement.spec.js': 168.9,
   'page-fits-window.spec.js': 62.0,

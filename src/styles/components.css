@@ -12817,13 +12817,19 @@ body.tutorial-body-locked {
     justify-content: flex-end;
   }
 
-  .workflow-actions .btn-text {
-    display: none;
-  }
-
   .workflow-actions .btn {
     min-width: var(--size-touch-target);
     padding: var(--space-xs);
+  }
+}
+
+/* Full Screen and Help keep their words from 740px wide, where a phone held
+   sideways fits them beside the menu bar in every look; at 690px the Alt
+   View's row, which holds two more buttons, would draw them over its
+   neighbours. */
+@media (max-width: 739px) {
+  .workflow-actions .btn-text {
+    display: none;
   }
 }
 

@@ -4097,31 +4097,21 @@ body[data-mobile-toolbar='relocated']
 
 /* A phone with a project open. Main Page is twice a button wide, as the
    desktop's is wider than a button, with its words where they fit: 101px in
-   dark and light, 92px in the Alt View's font. In high contrast its words
-   make it 116px and wrap the header to three rows, so it shows its arrow
-   alone there and keeps its name. Held upright, the Customizer button heads
-   the Preview Settings row with its word, except in the Alt View, whose row
-   holds two more buttons and would put the row's arrow over HC. Held
-   sideways it heads the header (mobile-toolbar.js) as its arrow alone, in
-   the header's button look; open, it keeps the shared pressed color. The
-   switch's two options take the small padding. */
+   dark and light, 92px in the Alt View's font. Held upright, the Customizer
+   button heads the Preview Settings row with its word, except in the Alt
+   View, whose row holds two more buttons and would put the row's arrow over
+   HC. Held sideways it heads the header (mobile-toolbar.js) in the header's
+   button look; open, it keeps the shared pressed color. The switch's two
+   options take the small padding. */
 @media (max-width: 767px) {
   body[data-mobile-toolbar='relocated'] .header-content > #clearFileBtn {
     min-width: calc(2 * var(--size-touch-target) + var(--space-xs));
     justify-content: center;
   }
 
-  :root[data-high-contrast='true']
-    body[data-mobile-toolbar='relocated']
-    #clearFileBtn
-    .clear-file-label,
   :root[data-ui-variant='mono']
     body[data-mobile-toolbar='relocated']
     .preview-drawer-header
-    #mobileDrawerToggle
-    .btn-label,
-  body[data-mobile-toolbar='relocated']
-    .app-header
     #mobileDrawerToggle
     .btn-label {
     display: none;
@@ -4158,6 +4148,24 @@ body[data-mobile-toolbar='relocated']
     #mobileDrawerToggle[aria-expanded='true'] {
     border: 1px solid currentColor;
     border-radius: var(--border-radius-md);
+  }
+}
+
+/* Below 740px the header has no room for these words: upright, in high
+   contrast, Main Page's make it 116px and wrap the header to three rows;
+   held sideways at 640px, in high contrast, they push Keys off the screen.
+   From 740px the header keeps one line with them in every look. The buttons
+   keep their names either way. */
+@media (max-width: 739px) {
+  :root[data-high-contrast='true']
+    body[data-mobile-toolbar='relocated']
+    #clearFileBtn
+    .clear-file-label,
+  body[data-mobile-toolbar='relocated']
+    .app-header
+    #mobileDrawerToggle
+    .btn-label {
+    display: none;
   }
 }
 

@@ -582,6 +582,112 @@ for (const height of HEIGHTS) {
 test.describe('Held sideways (740x360)', () => {
   test.use({ viewport: { width: 740, height: 360 }, hasTouch: true });
 
+  // Held sideways both rows have room for the words an upright phone has to
+  // drop: the Customizer button's, Main Page's in high contrast, and Full
+  // Screen's and Help's. Each row stays one line with nothing drawn over a
+  // neighbour.
+  for (const look of [
+    { label: '' },
+    { label: ' in high contrast', highContrast: true },
+    { label: ' in the Alt View', altView: true },
+  ]) {
+    test(`toolbar-sideways-words: the buttons keep their words, each row one line${look.label}`, async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await page.addInitScript((l) => {
+        if (l.altView) {
+          localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+        }
+        if (l.highContrast) {
+          localStorage.setItem('openscad-forge-high-contrast', 'true');
+        }
+      }, look);
+      await loadSampleProject(page);
+      await switchToStandard(page);
+      if (look.altView) {
+        await skipWithoutWebGL(
+          page,
+          'no WebGL: the Alt View draws its characters from the 3D picture'
+        );
+        await page.locator('#_hfmToggle').click();
+        await expect(page.locator('html')).toHaveAttribute(
+          'data-ui-variant',
+          'mono'
+        );
+      }
+      await page.waitForTimeout(600);
+
+      const facts = await page.evaluate(() => {
+        const shown = (selector) =>
+          document
+            .querySelector(selector)
+            .checkVisibility({ visibilityProperty: true });
+        const crowding = (row) => {
+          const boxes = [
+            ...row.querySelectorAll('button, a[href], [role="switch"]'),
+          ]
+            .filter(
+              (el) =>
+                !el.closest('[role="menu"]') &&
+                el.checkVisibility({ visibilityProperty: true }) &&
+                el.getBoundingClientRect().width > 0
+            )
+            .map((el) => ({ id: el.id, r: el.getBoundingClientRect() }));
+          const overlaps = [];
+          for (let a = 0; a < boxes.length; a++) {
+            for (let b = a + 1; b < boxes.length; b++) {
+              const p = boxes[a].r;
+              const q = boxes[b].r;
+              const inside = (o, i) =>
+                o.left <= i.left &&
+                o.right >= i.right &&
+                o.top <= i.top &&
+                o.bottom >= i.bottom;
+              if (inside(p, q) || inside(q, p)) continue;
+              const ox = Math.min(p.right, q.right) - Math.max(p.left, q.left);
+              const oy = Math.min(p.bottom, q.bottom) - Math.max(p.top, q.top);
+              if (ox > 0.5 && oy > 0.5) {
+                overlaps.push(`${boxes[a].id} x ${boxes[b].id}`);
+              }
+            }
+          }
+          const middles = boxes.map((x) => x.r.top + x.r.height / 2);
+          return {
+            overlaps,
+            spread: Math.round(Math.max(...middles) - Math.min(...middles)),
+            offscreen: boxes
+              .filter((x) => x.r.right > innerWidth + 0.5 || x.r.left < -0.5)
+              .map((x) => x.id),
+          };
+        };
+        return {
+          words: {
+            customizer: shown('#mobileDrawerToggle .btn-label'),
+            mainPage: shown('#clearFileBtn .clear-file-label'),
+            fullScreen: shown('#focusModeBtn .btn-text'),
+            help: shown('#featuresGuideBtn .btn-text'),
+          },
+          header: crowding(document.querySelector('.app-header')),
+          row: crowding(document.querySelector('.preview-drawer-header')),
+        };
+      });
+      expect(facts.words, 'the words shown').toEqual({
+        customizer: true,
+        mainPage: true,
+        fullScreen: true,
+        help: true,
+      });
+      for (const part of ['header', 'row']) {
+        expect(facts[part].overlaps, `${part}: nothing overlaps`).toEqual([]);
+        expect(facts[part].offscreen, `${part}: nothing off screen`).toEqual(
+          []
+        );
+        expect(facts[part].spread, `${part}: one line`).toBeLessThanOrEqual(4);
+      }
+    });
+  }
+
   test('toolbar-sideways: the Customizer button heads the header, and the settings row with the menu bar fits', async ({
     page,
   }) => {
