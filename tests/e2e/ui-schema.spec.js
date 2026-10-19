@@ -1407,7 +1407,7 @@ for (const height of [915, 810]) {
       // does, at the right end of its title row; there is no X. Open, the
       // arrow points left, the way the sheet's edge travels to close (S1).
       if (height === 915) {
-        test("S1: the open Customizer closes by its own arrow, pointing left, where the X was", async ({
+        test('S1: the open Customizer closes by its own arrow, pointing left, where the X was', async ({
           page,
         }) => {
           test.setTimeout(WASM_READY_TIMEOUT + 60_000);
@@ -1426,7 +1426,10 @@ for (const height of [915, 810]) {
             await arrow.getAttribute('title'),
             'no tooltip to say the name twice'
           ).toBeNull();
-          const state = await page.evaluate(readToggle, '#collapseParamPanelBtn');
+          const state = await page.evaluate(
+            readToggle,
+            '#collapseParamPanelBtn'
+          );
           expect.soft(state.expanded, 'S1: open').toBe(true);
           expect
             .soft(
@@ -1443,8 +1446,12 @@ for (const height of [915, 810]) {
               .getBoundingClientRect();
             return { gap: row.right - b.right, w: b.width, h: b.height };
           });
-          expect.soft(place.w, 'a touch target wide').toBeGreaterThanOrEqual(44);
-          expect.soft(place.h, 'a touch target high').toBeGreaterThanOrEqual(44);
+          expect
+            .soft(place.w, 'a touch target wide')
+            .toBeGreaterThanOrEqual(44);
+          expect
+            .soft(place.h, 'a touch target high')
+            .toBeGreaterThanOrEqual(44);
           expect
             .soft(place.gap, 'at the right end of the title row')
             .toBeLessThanOrEqual(24);
@@ -1523,21 +1530,27 @@ for (const height of [915, 810]) {
         // Every control fits inside it at the width it opens at, the Presets
         // open: the preset buttons ran off its right edge in the Alt View.
         const spill = await page.evaluate(() => {
-          const panel = document.getElementById('paramPanel')
-          const presets = document.getElementById('presetControls')
-          const wasOpen = presets?.open
-          if (presets) presets.open = true
-          const edge = panel.getBoundingClientRect().right
+          const panel = document.getElementById('paramPanel');
+          const presets = document.getElementById('presetControls');
+          const wasOpen = presets?.open;
+          if (presets) presets.open = true;
+          const edge = panel.getBoundingClientRect().right;
           const out = [...panel.querySelectorAll('button, select, input')]
             .filter((el) => el.checkVisibility())
             .filter((el) => el.getBoundingClientRect().right > edge + 0.5)
-            .map((el) => `${el.id || el.getAttribute('aria-label') || el.tagName} ends at ${Math.round(el.getBoundingClientRect().right)}`)
-          if (presets) presets.open = wasOpen
-          return { edge: Math.round(edge), out }
-        })
+            .map(
+              (el) =>
+                `${el.id || el.getAttribute('aria-label') || el.tagName} ends at ${Math.round(el.getBoundingClientRect().right)}`
+            );
+          if (presets) presets.open = wasOpen;
+          return { edge: Math.round(edge), out };
+        });
         expect
-          .soft(spill.out, `S6: nothing past the Customizer's right edge at x ${spill.edge}`)
-          .toEqual([])
+          .soft(
+            spill.out,
+            `S6: nothing past the Customizer's right edge at x ${spill.edge}`
+          )
+          .toEqual([]);
         const after = await page.evaluate(readPreviewBox);
         expect
           .soft(
@@ -1710,7 +1723,8 @@ for (const height of [915, 810]) {
 // column starts closed; with nothing open the preview keeps at least 40
 // percent of the screen; the camera controls open over the preview's right
 // edge, stacked as on the desktop, see-through, at most a quarter of the
-// width, every button 44 px.
+// width, every button 44 px; and a menu opens as a phone's sheet with its
+// close button, whatever the width (S7).
 const SIDEWAYS_SIZES = [
   { width: 667, height: 375 },
   { width: 740, height: 360 },
@@ -1796,6 +1810,41 @@ function readSidewaysCamera() {
   };
 }
 
+/** The simple box open in Standard on a phone held sideways. */
+async function openSideways(page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    localStorage.setItem('openscad-forge-theme', 'dark');
+    localStorage.setItem(
+      'openscad-forge-ui-mode',
+      JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+    );
+  });
+  await page.goto('/?example=simple-box', { timeout: 60_000 });
+  test.skip(
+    !(await page.evaluate((q) => matchMedia(q).matches, SIDEWAYS_QUERY)),
+    'this browser does not report a touch screen held sideways'
+  );
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: WASM_READY_TIMEOUT,
+  });
+  await page.waitForFunction(() => window.previewManager?.mesh, null, {
+    timeout: WASM_READY_TIMEOUT,
+  });
+  const notNow = page.locator('#saveProjectNotNow');
+  if (
+    await notNow.waitFor({ state: 'visible', timeout: 3_000 }).then(
+      () => true,
+      () => false
+    )
+  ) {
+    await notNow.click();
+  }
+  await page.waitForTimeout(1_000);
+}
+
 for (const size of SIDEWAYS_SIZES) {
   test.describe(`A phone held sideways, ${size.width} x ${size.height}`, () => {
     // No isMobile: Firefox rejects it when the browser context is created.
@@ -1805,37 +1854,7 @@ for (const size of SIDEWAYS_SIZES) {
       page,
     }) => {
       test.setTimeout(WASM_READY_TIMEOUT + 60_000);
-      await page.addInitScript(() => {
-        localStorage.setItem('openscad-forge-first-visit-seen', 'true');
-        localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
-        localStorage.setItem('openscad-forge-theme', 'dark');
-        localStorage.setItem(
-          'openscad-forge-ui-mode',
-          JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
-        );
-      });
-      await page.goto('/?example=simple-box', { timeout: 60_000 });
-      test.skip(
-        !(await page.evaluate((q) => matchMedia(q).matches, SIDEWAYS_QUERY)),
-        'this browser does not report a touch screen held sideways'
-      );
-      await page.waitForSelector('body[data-wasm-ready="true"]', {
-        state: 'attached',
-        timeout: WASM_READY_TIMEOUT,
-      });
-      await page.waitForFunction(() => window.previewManager?.mesh, null, {
-        timeout: WASM_READY_TIMEOUT,
-      });
-      const notNow = page.locator('#saveProjectNotNow');
-      if (
-        await notNow.waitFor({ state: 'visible', timeout: 3_000 }).then(
-          () => true,
-          () => false
-        )
-      ) {
-        await notNow.click();
-      }
-      await page.waitForTimeout(1_000);
+      await openSideways(page);
 
       const rows = await page.evaluate(readSidewaysRows);
       expect
@@ -1891,6 +1910,40 @@ for (const size of SIDEWAYS_SIZES) {
         )
         .toBe(true);
       expect.soft(c.small, 'buttons under 44 px').toEqual([]);
+    });
+
+    test('S7: a menu is a sheet that keeps its close button', async ({
+      page,
+    }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+      await openSideways(page);
+      await page.locator('#fileMenuBtn').click();
+      await expect(page.locator('#fileMenuModal')).toBeVisible();
+      await page.waitForTimeout(300);
+      const m = await page.evaluate(() => {
+        const modal = document.getElementById('fileMenuModal');
+        const close = modal.querySelector('.toolbar-menu-close');
+        const c = close.getBoundingClientRect();
+        const content = modal
+          .querySelector('.toolbar-menu-content')
+          .getBoundingClientRect();
+        return {
+          close: close.checkVisibility() ? `${c.width}x${c.height}` : 'hidden',
+          left: content.left,
+          right: content.right,
+        };
+      });
+      expect
+        .soft(m.close, 'S7: the sheet keeps its close button')
+        .not.toBe('hidden');
+      expect
+        .soft(
+          m.left <= 0.5 && m.right >= size.width - 0.5,
+          `S7: a sheet across the screen (${m.left} to ${m.right})`
+        )
+        .toBe(true);
+      await page.locator('#fileMenuModal .toolbar-menu-close').click();
+      await expect(page.locator('#fileMenuModal')).toBeHidden();
     });
   });
 }

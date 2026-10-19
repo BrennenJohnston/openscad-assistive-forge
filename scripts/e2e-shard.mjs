@@ -207,7 +207,7 @@ export const MEASURED_SECONDS = {
   // 1474.1 by the two runs above, plus four cases since (the open phone
   // Customizer closed by its own arrow, in four looks: 28 s locally), booked
   // at about four times that.
-  'ui-schema.spec.js': 1586.1,
+  'ui-schema.spec.js': 1706.1,
   'wasm-smoke.spec.js': 35.6,
   'welcome-spotlight.spec.js': 37.4,
   'welcome-surface.spec.js': 18.6,
