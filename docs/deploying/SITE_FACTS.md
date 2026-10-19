@@ -34,6 +34,8 @@ The application:
 - Renders previews with **Three.js**.
 - Exports STL / OBJ / OFF / AMF for slicing.
 - Stores nothing on a server. All file input and output is local.
+- Keeps its engine's build, the changes to it and their measurements on
+  the `engine-research` branch of the same repository.
 
 ## Data handling
 

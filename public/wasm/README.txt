@@ -13,6 +13,8 @@ Recipe: scripts/build-openscad-wasm.sh, run by the "Build OpenSCAD wasm"
 Previous Build: OpenSCAD-2026.04.03+forge.1, the same build with
         Emscripten's 64 KiB stack
 License: GPL-2.0-or-later (see COPYING in repository root)
+Research branch: engine-research in this repository holds this engine alone,
+        the patches, the measurements behind them and a page to try it.
 
 Contents:
 - openscad-official/openscad.js    - Emscripten-compiled JavaScript loader
