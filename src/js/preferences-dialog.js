@@ -34,6 +34,12 @@ import {
   gamepadDiagramLabel,
   gamepadInputLabel,
 } from './gamepad-controller.js';
+import {
+  downloadFailure,
+  downloadWithStatus,
+  engineSize,
+  megabytes,
+} from './engine-choice.js';
 
 const TAB_IDS = [
   'prefs-tab-3dview',
@@ -350,14 +356,6 @@ function renderGamepadStatus() {
   node.textContent = formatGamepadStatus(activeHandlers.getGamepadStatus());
 }
 
-/** Decimal megabytes with one decimal, the unit the rows speak in. */
-const megabytes = (bytes) => (bytes / 1e6).toFixed(1);
-
-/** What an engine takes once kept: its loader and its binary. */
-const keptBytes = (entry) =>
-  (entry.files?.['openscad.js']?.size ?? 0) +
-  (entry.files?.['openscad.wasm']?.size ?? 0);
-
 /** The words an engine goes by, on its radio and in what is said. */
 function engineLabel(entry) {
   return entry.builtIn
@@ -413,7 +411,7 @@ export async function renderEngineGroup({ focus } = {}) {
       state.className = 'engine-state';
       state.id = `engineState-${entry.id}`;
       state.textContent = kept[i]
-        ? `Kept in this browser (${megabytes(keptBytes(entry))} MB)`
+        ? `Kept in this browser (${megabytes(engineSize(entry))} MB)`
         : `Not downloaded (${megabytes(entry.zip.size)} MB)`;
       radio.setAttribute('aria-describedby', state.id);
       const button = document.createElement('button');
@@ -451,32 +449,19 @@ async function downloadEngine(entry) {
   const engine = activeHandlers.engine;
   if (!engine || engineBusy) return;
   const confirmed = await engine.confirm(
-    `Download the ${entry.name} engine? It is about ${megabytes(entry.zip.size)} MB to download and takes ${megabytes(keptBytes(entry))} MB in this browser until you remove it or clear the cache.`,
+    `Download the ${entry.name} engine? It is about ${megabytes(entry.zip.size)} MB to download and takes ${megabytes(engineSize(entry))} MB in this browser until you remove it or clear the cache.`,
     'Download an official engine',
     'Download',
     'Not now'
   );
   if (!confirmed) return;
   engineBusy = true;
-  // Spoken at 0 and 50 percent; at the end the engine-ready sentence speaks
-  // instead of a third count.
-  let spoken = -1;
   try {
-    await engine.download(entry.id, (percent) => {
-      const mark = [0, 50].filter((m) => percent >= m && spoken < m).pop();
-      if (mark !== undefined) spoken = mark;
-      engine.status(`Downloading the ${entry.name} engine: ${percent}%`, {
-        announce: mark !== undefined,
-      });
-    });
+    await downloadWithStatus(engine, entry);
     engine.announce(`Engine ready: ${engineLabel(entry)}.`);
     await renderEngineGroup({ focus: { id: entry.id, part: 'radio' } });
   } catch (error) {
-    engine.showError({
-      title: 'Engine download failed',
-      message: 'Nothing was kept. Check your connection and try again.',
-      technical: error.message,
-    });
+    engine.showError(downloadFailure(error));
     await renderEngineGroup({ focus: { id: entry.id, part: 'button' } });
   } finally {
     engineBusy = false;

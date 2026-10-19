@@ -12632,6 +12632,13 @@ body.tutorial-body-locked {
   color: var(--color-text-primary);
 }
 
+.friendly-error-modal-body .error-offer {
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  margin: var(--space-md) 0 0 0;
+  line-height: 1.6;
+}
+
 .friendly-error-modal-body .error-details-toggle {
   margin-top: var(--space-md);
 }
@@ -12657,9 +12664,16 @@ body.tutorial-body-locked {
 
 .friendly-error-modal-footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: var(--space-sm);
   padding-top: var(--space-md);
   border-top: 1px solid var(--color-border);
+}
+
+.friendly-error-modal-footer--stacked {
+  flex-direction: column;
+  align-items: stretch;
 }
 
 [data-high-contrast='true'] .friendly-error-modal-content {

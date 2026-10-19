@@ -259,7 +259,9 @@ import {
   getChosenEngineId,
   isDownloaded as isEngineDownloaded,
   loadEnginesManifest,
+  offerEngineAfterFault,
   remove as removeEngine,
+  resetEngineOffer,
   setChosenEngineId,
   switchTo as switchEngineTo,
 } from './js/engine-choice.js';
@@ -3259,10 +3261,19 @@ async function initApp() {
       await ensureWasmInitialized();
     }
 
-    // If a project was loaded while WASM was still initializing (e.g. manifest
-    // deep-link on first visit), the auto-preview controller could not be created
-    // at handleFile time. Now that WASM is ready, retroactively set it up and
-    // trigger the initial preview so the 3D object appears.
+    await previewOpenFileAfterStart();
+
+    // Restore pending draft if one was deferred
+    restorePendingDraft();
+  };
+
+  /**
+   * A project loaded while the engine was still starting (a manifest
+   * deep-link on a first visit, or an engine that failed and was started
+   * again) has no auto-preview controller: handleFile could not make one.
+   * Once the engine is ready, make it and preview the open file.
+   */
+  async function previewOpenFileAfterStart() {
     const postInitState = stateManager.getState();
     if (
       postInitState.uploadedFile &&
@@ -3293,22 +3304,19 @@ async function initApp() {
             .forcePreview(postInitState.parameters)
             .then((initiated) => {
               if (initiated) {
-                console.log('[FirstVisit] Deferred initial preview started');
+                console.log('[Preview] Deferred initial preview started');
               }
             })
             .catch((error) => {
               console.error(
-                '[FirstVisit] Deferred initial preview failed:',
+                '[Preview] Deferred initial preview failed:',
                 error
               );
             });
         }
       }
     }
-
-    // Restore pending draft if one was deferred
-    restorePendingDraft();
-  };
+  }
 
   if (firstVisitContinue && firstVisitModal) {
     firstVisitContinue.addEventListener('click', () =>
@@ -4238,6 +4246,36 @@ async function initApp() {
     ...engineHandlers,
     enginePath: () => renderController?.getEnginePath() ?? null,
   };
+  // The engine offer for a failure's dialog, or nothing. The failure itself
+  // is still shown when the engine list cannot be read: only the offer is
+  // missing from its dialog.
+  const engineOffer = (code, run) =>
+    offerEngineAfterFault({ code, handlers: engineHandlers, run }).catch(
+      (error) => {
+        console.warn(
+          '[Engine] The engine list could not be read; no engine offer:',
+          error
+        );
+        return null;
+      }
+    );
+
+  /**
+   * The dialog for an engine that did not start, with the engine offer when
+   * the failure may be the engine's.
+   * @param {Error & {code?: string, details?: string}} error
+   * @param {(id: string) => Promise<void>} run - start that engine and do
+   *   again what failed
+   */
+  async function showEngineStartFailure(error, run) {
+    const details = error?.details ? ` Details: ${error.details}` : '';
+    showErrorModal({
+      title: 'Engine Initialization Failed',
+      ...engineStartFailureNotice(error?.code),
+      technical: error.message + details,
+      ...(await engineOffer(error?.code, run)),
+    });
+  }
 
   // -- Toolbar: Edit menu --------------------------------------------------
   // Order and labels transcribed from upstream MainWindow.ui. Omitted: Show
@@ -6089,17 +6127,24 @@ async function initApp() {
         _announceError(
           'OpenSCAD engine failed to initialize. Some features may not work.'
         );
-        const details = error?.details ? ` Details: ${error.details}` : '';
-        showErrorModal({
-          title: 'Engine Initialization Failed',
-          ...engineStartFailureNotice(error?.code),
-          technical: error.message + details,
-        });
+        await showEngineStartFailure(error, startEngineAgain);
         return false;
       }
     }
 
     return wasmInitialized;
+  }
+
+  /**
+   * After a failed start, the engine the person picked: a new controller,
+   * since the failed one has stopped its worker, then the open file's
+   * preview. Another failure shows its own dialog and offer.
+   * @param {string} id
+   */
+  async function startEngineAgain(id) {
+    setChosenEngineId(id);
+    renderController = null;
+    if (await ensureWasmInitialized()) await previewOpenFileAfterStart();
   }
 
   // Initialize render controller immediately for now (future: can be deferred)
@@ -12650,6 +12695,7 @@ if (rounded) {
         message: friendlyError.explanation,
         suggestion: friendlyError.suggestion,
         technical: error.message,
+        ...(await engineOffer(error.code, renderWithEngine)),
       });
     } finally {
       primaryActionBtn.disabled = false;
@@ -12658,6 +12704,30 @@ if (rounded) {
       stateManager.setHistoryEnabled(true);
       // Always restore button to correct state based on current conditions
       updatePrimaryActionButton();
+    }
+  }
+
+  /**
+   * After a failed render, the engine the person picked, then the same
+   * render again through the button that started it. An engine that does
+   * not start shows its own dialog and offer.
+   * @param {string} id
+   */
+  async function renderWithEngine(id) {
+    try {
+      await switchEngineTo(await loadEnginesManifest(), id, {
+        renderController,
+        rerun: async () => primaryActionBtn.click(),
+      });
+    } catch (error) {
+      console.error('[Engine] The engine did not start:', error);
+      updateStatus('OpenSCAD engine failed to initialize', 'error', {
+        announce: false,
+      });
+      _announceError(
+        'OpenSCAD engine failed to initialize. Some features may not work.'
+      );
+      await showEngineStartFailure(error, renderWithEngine);
     }
   }
 
@@ -13166,6 +13236,8 @@ if (rounded) {
    */
   function resetProjectUiState() {
     lastGeneratedParamsHash = null;
+    // "Not now" to another engine holds for one file.
+    resetEngineOffer();
     stateManager.setState({ stl: null, stlStats: null, generatedOutput: null });
     document.getElementById('downloadFallbackLink')?.classList.add('hidden');
     const notices = document.getElementById('parameterNotices');

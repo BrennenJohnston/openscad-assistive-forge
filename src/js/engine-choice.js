@@ -21,6 +21,7 @@ import {
 import { requestPersistentStorage } from './storage-manager.js';
 import { engineFileUrl } from '../worker/engine-url.js';
 import { engineFileMismatch } from '../worker/engine-integrity.js';
+import { isEngineFault } from './error-translator.js';
 
 /** The cache the downloaded engines live in; sw.js keeps it at every update. */
 export const ENGINE_CACHE = 'forge-engines-v1';
@@ -322,4 +323,124 @@ export async function switchTo(manifest, id, { renderController, rerun }) {
   await renderController.restart({ enginePath: engine.path });
   if (rerun) await rerun();
   return engine;
+}
+
+/** "Not now" for this file: no offer until the next file opens. */
+let offerDeclined = false;
+
+/** A file opened: the engine may be offered again. */
+export function resetEngineOffer() {
+  offerDeclined = false;
+}
+
+/** Decimal megabytes with one decimal, the unit the engine words speak in. */
+export const megabytes = (bytes) => (bytes / 1e6).toFixed(1);
+
+/**
+ * Download an engine with its count in the status line, spoken at 0 and 50
+ * percent only: what follows the download speaks instead of a third count.
+ * @param {{download: Function, status: Function}} handlers - download(id,
+ *   onProgress) and status(text, {announce})
+ * @param {Object} entry - the engine's manifest entry
+ */
+export async function downloadWithStatus(handlers, entry) {
+  let spoken = -1;
+  await handlers.download(entry.id, (percent) => {
+    const mark = [0, 50].filter((m) => percent >= m && spoken < m).pop();
+    if (mark !== undefined) spoken = mark;
+    handlers.status(`Downloading the ${entry.name} engine: ${percent}%`, {
+      announce: mark !== undefined,
+    });
+  });
+}
+
+/** What the error dialog says when a download failed. */
+export const downloadFailure = (error) => ({
+  title: 'Engine download failed',
+  message: 'Nothing was kept. Check your connection and try again.',
+  technical: error.message,
+});
+
+/**
+ * What the error dialog offers when a failure may be the engine's: one more
+ * paragraph and its buttons, or null when there is nothing to offer (the
+ * failure is the model's, "Not now" was chosen for this file, or no official
+ * engine is listed). With the Forge engine in use the offer is the newest
+ * official engine; when an official engine failed as well, the other
+ * official snapshots and the Forge engine again.
+ *
+ * @param {Object} options
+ * @param {string} [options.code] - the failure's code
+ * @param {Object} options.handlers - manifest(), chosenId(), isDownloaded(id),
+ *   download(id, onProgress), status(text, {announce}), showError(details)
+ * @param {(id: string) => Promise<unknown>} options.run - start that engine
+ *   and do again what failed
+ * @returns {Promise<{extra: string, actions: Object[]}|null>}
+ */
+export async function offerEngineAfterFault({ code, handlers, run }) {
+  if (!isEngineFault(code) || offerDeclined) return null;
+  const manifest = await handlers.manifest();
+  const official = manifest.engines.filter((entry) => !entry.builtIn);
+  if (official.length === 0) return null;
+  const builtIn = manifest.engines.find((entry) => entry.builtIn);
+  const inUse = handlers.chosenId();
+
+  const tryEngine = async (entry) => {
+    try {
+      if (!(await handlers.isDownloaded(entry.id))) {
+        await downloadWithStatus(handlers, entry);
+      }
+    } catch (error) {
+      handlers.showError(downloadFailure(error));
+      return;
+    }
+    handlers.status(`Trying the model again with the ${entry.name} engine.`, {
+      announce: true,
+    });
+    await run(entry.id);
+  };
+
+  if (inUse === builtIn?.id || !official.some((e) => e.id === inUse)) {
+    const newest = official[0];
+    const kept = await handlers.isDownloaded(newest.id);
+    const size = kept
+      ? 'already kept in this browser'
+      : `about ${megabytes(newest.zip.size)} MB to download, ${megabytes(engineSize(newest))} MB kept in this browser`;
+    return {
+      extra: `This may be a fault in the rendering engine rather than in the model. You can try the official OpenSCAD engine (snapshot ${newest.date}, ${size}).`,
+      actions: [
+        {
+          label: kept ? 'Try it' : 'Download and try it',
+          primary: true,
+          onClick: () => tryEngine(newest),
+        },
+        {
+          label: 'Not now',
+          focus: true,
+          onClick: () => {
+            offerDeclined = true;
+          },
+        },
+      ],
+    };
+  }
+
+  const others = official.filter((entry) => entry.id !== inUse);
+  const kept = await Promise.all(
+    others.map((entry) => handlers.isDownloaded(entry.id))
+  );
+  return {
+    extra: `The official engine failed on this model too. The other ${others.length === 3 ? 'three' : others.length} official snapshots are here to try, or you can go back to the Forge engine.`,
+    actions: [
+      ...others.map((entry, i) => ({
+        label: `${entry.name} (official), ${kept[i] ? 'kept' : `${megabytes(entry.zip.size)} MB`}`,
+        onClick: () => tryEngine(entry),
+      })),
+      {
+        label: 'Back to the Forge engine',
+        onClick: () => run(builtIn.id),
+      },
+      { label: 'Keep the official engine', focus: true, onClick: () => {} },
+    ],
+  };
 }
