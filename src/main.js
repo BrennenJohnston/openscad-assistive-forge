@@ -6587,11 +6587,16 @@ async function initApp() {
     if (existingWarning) existingWarning.remove();
 
     // A library: it defines modules or functions and draws nothing itself.
-    // No option is missing, so no guidance to look for one.
+    // No option is missing, so no guidance to look for one, and nothing
+    // failed: the badge the preview controller set to its error state is
+    // the plain one a preview has before anything is drawn.
     if (error?.libraryFile) {
       updateStatus(
         'This file defines modules or functions and draws nothing on its own. Open a file that uses it to see a shape.'
       );
+      previewStateIndicator.className = 'preview-state-indicator state-idle';
+      previewStateIndicator.textContent = 'No preview: a library file';
+      previewContainer.classList.remove('preview-error');
       return true;
     }
 

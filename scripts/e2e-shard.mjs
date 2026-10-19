@@ -183,7 +183,9 @@ export const MEASURED_SECONDS = {
   'parity-regression.spec.js': 38.7,
   'potrace-engine.spec.js': 2.4,
   'preference-matrix.spec.js': 40.7,
-  'preview-stats.spec.js': 24.3,
+  // 24.3 by the two runs above, plus one case since (a library file's plain
+  // badge: 1.7 s locally), booked at four times that.
+  'preview-stats.spec.js': 31.1,
   'project-link-lane.spec.js': 3.9,
   'project-share.spec.js': 31.7,
   'project-switch.spec.js': 73.4,
