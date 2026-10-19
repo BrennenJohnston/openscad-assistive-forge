@@ -596,8 +596,18 @@ test('the Keyboard tab reaches the shortcuts editor', async ({ page }) => {
   await openPreferences(page);
 
   await page.getByRole('tab', { name: 'Keyboard' }).click();
-  await page.locator('#preferencesOpenShortcuts').click();
+  // It names the dialog the shortcuts live in, as the Controller tab does.
+  await expect(page.locator('#prefs-panel-keyboard p')).toHaveText(
+    'Every keyboard shortcut in this app can be viewed and changed in the Keys dialog.'
+  );
+  await page
+    .getByRole('button', { name: 'Open the keyboard shortcuts' })
+    .click();
   await expect(page.locator('#shortcutsModal')).not.toHaveClass(/hidden/);
+  await expect(page.locator('#keys-tab-keyboard')).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
   // One dialog on screen at a time.
   await expect(page.locator('#preferencesModal')).toHaveClass(/hidden/);
   await expect(page.locator('#shortcutsModalBody')).not.toBeEmpty();
