@@ -203,6 +203,11 @@ export const MEASURED_SECONDS = {
   'welcome-spotlight.spec.js': 37.4,
   'welcome-surface.spec.js': 18.6,
 
+  // Not yet measured on CI, booked from a local run at about four times its
+  // local cost (CI draws in software): engine-choice, two cases that load the
+  // box two and three times and download one official engine, 19 s locally.
+  'engine-choice.spec.js': 80.0,
+
   // Ran on no lane of either run: every case skips on CI for want of a
   // fixture. Kept at zero, so that a file which starts running again is
   // visible as a change rather than as a silent newcomer.

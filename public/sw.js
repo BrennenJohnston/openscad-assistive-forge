@@ -6,6 +6,12 @@
 const CACHE_VERSION = '__SW_CACHE_VERSION__';
 const CACHE_NAME = `openscad-forge-${CACHE_VERSION}`;
 
+// The official OpenSCAD engines a person chose to download
+// (src/js/engine-choice.js). They outlive every version of the app: only
+// Remove and the app's Clear Cache delete them.
+const ENGINE_CACHE = 'forge-engines-v1';
+const KEPT_CACHES = [ENGINE_CACHE];
+
 // Assets to cache immediately on install
 const PRECACHE_ASSETS = [
   '/',
@@ -64,7 +70,12 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name.startsWith('openscad-forge-') && name !== CACHE_NAME)
+          .filter(
+            (name) =>
+              name.startsWith('openscad-forge-') &&
+              name !== CACHE_NAME &&
+              !KEPT_CACHES.includes(name)
+          )
           .map((name) => {
             console.log('[Service Worker] Deleting old cache:', name);
             return caches.delete(name);
@@ -103,6 +114,13 @@ self.addEventListener('fetch', (event) => {
   // (the old Monaco-from-jsdelivr caching branch was dead code: the
   // dependency was removed and the CSP blocks that origin anyway).
   if (url.origin !== self.location.origin) {
+    return;
+  }
+
+  // A downloaded engine is answered from its own cache. This worker never
+  // stores one: only a download that checked every byte puts it there.
+  if (url.pathname.startsWith('/wasm/engines/')) {
+    event.respondWith(keptEngineFirst(request));
     return;
   }
 
@@ -241,6 +259,19 @@ async function cacheFirst(request) {
     
     throw error;
   }
+}
+
+/**
+ * A kept engine's file from ENGINE_CACHE, else the network (stored nowhere).
+ * cache: 'reload' skips the kept copy, as the engine worker asks when a copy
+ * fails its integrity check.
+ */
+async function keptEngineFirst(request) {
+  if (request.cache !== 'reload') {
+    const kept = await (await caches.open(ENGINE_CACHE)).match(request);
+    if (kept) return kept;
+  }
+  return fetch(request);
 }
 
 /**
