@@ -10,6 +10,7 @@
 import { test, expect } from '@playwright/test';
 import { announcementsSince, recordAnnouncements } from './helpers/invariants.js';
 import { canSound, listenForSound, probeSound } from './helpers/sound.js';
+import { skipWithoutWebGL } from './helpers/webgl.js';
 
 const SENTENCE = 'A key appeared next to the theme button.';
 
@@ -305,7 +306,6 @@ test.describe('The key that stays', () => {
     page,
   }) => {
     test.setTimeout(240_000);
-    await recordAnnouncements(page);
     await openMainPage(page, { [UNLOCK]: count({ entries: 1 }) });
     await expect(page.locator('#_hfmToggle')).toHaveCount(0);
     await watchKey(page);
@@ -316,7 +316,185 @@ test.describe('The key that stays', () => {
       'crack',
     ]);
     expect((await keySeen(page)).arrival).toEqual([]);
-    await expect.poll(async () => (await sentences(page)).length, { timeout: 10_000 }).toBe(1);
+  });
+});
+
+// The second finding cracks the glass around the key: lines drawn out from
+// its border, held, and receding, about 4.3 s in all; a retro crack and a
+// tense melody; then a sentence.
+const CRACK = 'Something cracked around the key.';
+const CRACK_SECONDS = 0.6;
+const THRILLER_SECONDS = 3.0;
+const said = async (page, text) =>
+  (await announcementsSince(page, 0)).filter((a) => a.text === text);
+
+// When the key was marked with the crack and when the mark and its lines went,
+// on the page's clock, and how many lines were drawn.
+async function watchCrack(page) {
+  await page.evaluate(() => {
+    const seen = (window.__crack = { marked: null, cleared: null, lines: 0, drawn: false });
+    new MutationObserver(() => {
+      const key = document.getElementById('_hfmToggle');
+      if (!key) return;
+      const overlay = key.querySelector('.alt-view-crack');
+      if (overlay) {
+        seen.drawn = true;
+        seen.lines = overlay.querySelectorAll('polyline').length;
+      }
+      const marked = key.getAttribute('data-moment') === 'crack';
+      if (marked && seen.marked === null) seen.marked = performance.now();
+      if (!marked && !overlay && seen.marked !== null && seen.cleared === null) {
+        seen.cleared = performance.now();
+      }
+    }).observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['data-moment'],
+    });
+  });
+}
+
+const crackSeen = (page) => page.evaluate(() => window.__crack);
+
+// A trusted key press lets the page make sound; the probe's own sound is
+// started by a click after it.
+async function canSoundAfterTyping(page) {
+  await page.evaluate(() => document.dispatchEvent(new MouseEvent('click')));
+  return canSound(page);
+}
+
+test.describe('The crack', () => {
+  test('a second finding cracks the glass around the key for about 4.3 s, with the crack, the thriller and then the sentence', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const crackRequests = [];
+    page.on('request', (request) => {
+      if (request.url().endsWith('/sounds/moments/crack.wav')) crackRequests.push(request.url());
+    });
+    await recordAnnouncements(page);
+    await listenForSound(page);
+    await openMainPage(page, {
+      'openscad-customizer-hfm-unlock': 'true',
+      [UNLOCK]: count({ entries: 1 }),
+    });
+    await expect(page.locator('#_hfmToggle')).toBeVisible();
+    await page.waitForTimeout(1_000);
+    await probeSound(page);
+    await watchCrack(page);
+    const before = await page.evaluate(() => window.__sounds.length);
+    await typeSequence(page);
+    const pressed = await page.evaluate(() => performance.now());
+    const sounding = await canSoundAfterTyping(page);
+
+    await expect.poll(async () => (await crackSeen(page)).cleared, { timeout: 8_000 }).not.toBeNull();
+    const crack = await crackSeen(page);
+    expect(crack.lines).toBe(7);
+    const lasted = crack.cleared - crack.marked;
+    expect(lasted, 'drawn 0.8 s, held 1.5 s, receding 2 s').toBeGreaterThan(3_800);
+    expect(lasted, 'ended by its lines, before the 5 s fallback').toBeLessThan(4_900);
+    await expect(page.locator('.alt-view-crack')).toHaveCount(0);
+    expect(crackRequests, 'fetched once, ahead').toHaveLength(1);
+
+    await expect.poll(async () => (await said(page, CRACK)).length, { timeout: 10_000 }).toBe(1);
+    const [sentence] = await said(page, CRACK);
+    if (sounding) {
+      const heard = (await page.evaluate(() => window.__sounds)).slice(before);
+      expect(heard.map((s) => Math.round(s.seconds * 10) / 10).sort((a, c) => a - c)).toEqual([
+        CRACK_SECONDS,
+        THRILLER_SECONDS,
+      ]);
+      expect(sentence.t - pressed, 'after the thriller').toBeGreaterThanOrEqual(3_000);
+    } else {
+      expect(sentence.t - pressed).toBeLessThan(2_000);
+    }
+    await page.waitForTimeout(1_000);
+    expect(await said(page, CRACK)).toHaveLength(1);
+  });
+
+  test('with reduced motion the second finding draws nothing and still sounds and speaks', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await recordAnnouncements(page);
+    await listenForSound(page);
+    await openMainPage(page, {
+      'openscad-customizer-hfm-unlock': 'true',
+      [UNLOCK]: count({ entries: 1 }),
+    });
+    await expect(page.locator('#_hfmToggle')).toBeVisible();
+    await probeSound(page);
+    await watchCrack(page);
+    const before = await page.evaluate(() => window.__sounds.length);
+    await typeSequence(page);
+    const sounding = await canSoundAfterTyping(page);
+
+    await expect.poll(async () => (await said(page, CRACK)).length, { timeout: 10_000 }).toBe(1);
+    const crack = await crackSeen(page);
+    expect(crack.drawn).toBe(false);
+    expect(crack.marked).toBeNull();
+    if (sounding) {
+      const heard = (await page.evaluate(() => window.__sounds)).slice(before);
+      expect(heard.map((s) => Math.round(s.seconds * 10) / 10).sort((a, c) => a - c)).toEqual([
+        CRACK_SECONDS,
+        THRILLER_SECONDS,
+      ]);
+    }
+  });
+
+  test('on a later visit the crack brings the key and one sentence says both', async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => localStorage.setItem('openscad-forge-sounds', 'false'));
+    await recordAnnouncements(page);
+    await openMainPage(page, { [UNLOCK]: count({ entries: 1 }) });
+    await watchCrack(page);
+    await typeSequence(page);
+
+    await expect(page.locator('#_hfmToggle')).toBeVisible({ timeout: 10_000 });
+    await expect.poll(async () => (await crackSeen(page)).lines).toBe(7);
+    const both = `${SENTENCE} ${CRACK}`;
+    await expect.poll(async () => (await said(page, both)).length, { timeout: 5_000 }).toBe(1);
+    await page.waitForTimeout(1_000);
+    expect(await said(page, both)).toHaveLength(1);
+    expect(await sentences(page), 'never the first sentence alone').toEqual([]);
+    expect(await said(page, CRACK), 'never the crack alone').toEqual([]);
+  });
+
+  test("the lines wear the look the key would turn on: green and amber in Forge, the DOS blue in Classic, the DOS yellow in Classic's DOS look", async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-sounds', 'false');
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await openBox(page);
+    // Each check starts from one finding, so the next is a crack.
+    const crackColor = async () => {
+      await page.evaluate(
+        ([name, value]) => localStorage.setItem(name, value),
+        [UNLOCK, count({ entries: 1 })]
+      );
+      await typeSequence(page);
+      const line = page.locator('#_hfmToggle .alt-view-crack polyline').first();
+      await expect(line).toBeAttached();
+      return line.evaluate((el) => getComputedStyle(el).stroke);
+    };
+
+    expect(await crackColor(), 'Forge dark').toBe('rgb(0, 255, 0)');
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
+    expect(await crackColor(), 'Forge light').toBe('rgb(255, 176, 0)');
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+    expect(await crackColor(), 'Classic').toBe('rgb(0, 0, 204)');
+
+    await skipWithoutWebGL(page, 'the Alt View draws from the 3D picture');
+    await page.locator('#_hfmToggle').click();
+    await expect(page.locator('html')).toHaveAttribute('data-ui-variant', 'mono');
+    expect(await crackColor(), "Classic's DOS look").toBe('rgb(255, 255, 85)');
   });
 });
 

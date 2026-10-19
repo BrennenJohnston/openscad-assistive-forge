@@ -165,6 +165,11 @@ const SCROLL_END_DB = -2;
 const SCROLL_WAY_CENTS = 70;
 const SCROLL_STRAY_CENTS = 15;
 const SCROLL_STRAY_DB = 1;
+// The key's moments, each a recording made retro (8 bits at 11,025 Hz), at a
+// level of its own: the loudest 200 ms of each on the unlock tune's.
+const MOMENT_FILES = {
+  crack: ['/sounds/moments/crack.wav', -7.2],
+};
 // A browser that has not let the page make sound yet leaves the audio
 // context waiting; past this the sound is given up.
 const START_TIMEOUT_MS = 1000;
@@ -175,8 +180,9 @@ const START_TIMEOUT_MS = 1000;
 // and long, a few dB over it; the snaps, the lists and the latches a little
 // under; the dials, as often as fifteen a second, and a drawer's parts
 // further under; the camera's ticks, typing and a scroll's ticks, in the
-// background, the furthest. Every sound stays within 20 dB of every other,
-// so none stands out and none is lost when the volume moves.
+// background, the furthest; the key's rare moments each at a level of its
+// own. Every sound stays within 20 dB of every other, so none stands out and
+// none is lost when the volume moves.
 const GROUP_LEVELS_DB = {
   switch: -7,
   keys: 0,
@@ -188,6 +194,7 @@ const GROUP_LEVELS_DB = {
   selectors: -5,
   latches: -9,
   scroll: -16,
+  moments: 0,
 };
 // Muting fades the master out over this, so a sound stops without a click.
 const MUTE_RAMP_S = 0.02;
@@ -376,7 +383,7 @@ function _startAt(context, buffer, group, when, levelDb, offset = 0) {
 
 /**
  * The gain a group's sounds pass through, or null before the first sound.
- * @param {'switch'|'keys'|'dials'|'camera'|'drawers'|'typing'|'snaps'|'selectors'|'latches'|'scroll'} name
+ * @param {'switch'|'keys'|'dials'|'camera'|'drawers'|'typing'|'snaps'|'selectors'|'latches'|'scroll'|'moments'} name
  * @returns {GainNode|null}
  */
 export function soundGroup(name) {
@@ -428,6 +435,14 @@ export function duck(name, byDb = DUCK_DB, forMs = DUCK_MS) {
  */
 export function preloadCrtSounds() {
   _fetchAhead(Object.values(FILES), 'switch');
+}
+
+/** Fetch the key's moments now, once, so a crack is not waiting on them. */
+export function preloadMomentSounds() {
+  _fetchAhead(
+    Object.values(MOMENT_FILES).map(([url]) => url),
+    'moment'
+  );
 }
 
 /**
@@ -821,6 +836,21 @@ export async function playControlSound(kind) {
   }
   duck('camera');
   return buffer.duration / rate;
+}
+
+/**
+ * Play one of the key's moments whole. Call it from the press that made it.
+ * @param {keyof typeof MOMENT_FILES} name
+ * @returns {Promise<number>} The sound's length in seconds once it has begun
+ */
+export async function playMomentSound(name) {
+  if (!MOMENT_FILES[name]) throw new Error(`No such moment: ${name}`);
+  const [url, levelDb] = MOMENT_FILES[name];
+  const context = _audioContext();
+  const running = context.resume();
+  const buffer = await _bufferFor(url, context);
+  await _start(context, running, buffer, 'moments', { own: true, levelDb });
+  return buffer.duration;
 }
 
 /**

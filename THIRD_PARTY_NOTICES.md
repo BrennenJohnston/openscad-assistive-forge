@@ -603,6 +603,19 @@ magedu: https://freesound.org/s/277300/
 
 ---
 
+## Crack Sound (CC0-1.0)
+
+A short sound the Alt View's key makes, `public/sounds/moments/crack.wav`,
+from "loud crack" by cairhien: https://freesound.org/s/865450/
+
+**License**: CC0 1.0 Universal (public domain dedication)  
+**Dedication**: https://creativecommons.org/publicdomain/zero/1.0/  
+**Note**: One crack cut out, made mono and levelled, resampled to 11,025 Hz
+and quantized to 8 bits for a retro sound, then resampled to 32 kHz mono.
+CC0 asks for no credit; it is given with thanks.
+
+---
+
 ## Iosevka Term (OFL-1.1)
 
 The mono UI variant self-hosts the Iosevka Term Regular WOFF2 font.

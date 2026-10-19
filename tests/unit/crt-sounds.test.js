@@ -27,6 +27,7 @@ const DURATIONS = {
   '/sounds/drawers/latch-close.wav': 0.3,
   '/sounds/switches/lever-on-1.wav': 0.13,
   '/sounds/switches/lever-on-2.wav': 0.131,
+  '/sounds/moments/crack.wav': 0.6,
 };
 
 function wavHeader(bytes) {
@@ -289,6 +290,25 @@ describe('the switch, selector and latch files', () => {
     expect(total).toBeGreaterThan(0);
     expect(total).toBeLessThan(40_000);
   });
+});
+
+// The key's moments: retro samples of a crack and, later, of glass breaking.
+const MOMENTS_DIR = join(SOUNDS_DIR, 'moments');
+
+describe("the key's moment files", () => {
+  it.each(['crack.wav'])(
+    '%s is a 32 kHz mono 16-bit WAV under 1 s with its peak at or under -1 dBFS',
+    (file) => {
+      const bytes = readFileSync(join(MOMENTS_DIR, file));
+      const header = wavHeader(bytes);
+      expect(header.riff).toBe('RIFF');
+      expect(header.channels).toBe(1);
+      expect(header.rate).toBe(32000);
+      expect(header.bits).toBe(16);
+      expect(header.dataBytes / 2 / 32000).toBeLessThan(1);
+      expect(peakOf(bytes)).toBeLessThanOrEqual(10 ** (-1 / 20));
+    }
+  );
 });
 
 describe('playing a switch sound', () => {
@@ -595,10 +615,27 @@ describe('playing a switch sound', () => {
       'selectors',
       'latches',
       'scroll',
+      'moments',
     ]) {
       expect(soundGroup(name).connectedTo, `${name} into the master`).toBe(masters[0]);
     }
     expect(() => soundGroup('hum')).toThrow('No such sound group: hum');
+  });
+
+  it("plays the key's crack whole in the moments group, 7.2 dB down on a level of its own, fetched ahead once", async () => {
+    const { playMomentSound, preloadMomentSounds, soundGroup } = await load();
+    const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
+    preloadMomentSounds();
+    expect(urls()).toEqual(['/sounds/moments/crack.wav']);
+    await expect(playMomentSound('crack')).resolves.toBeCloseTo(0.6, 6);
+    expect(urls(), 'fetched once').toHaveLength(1);
+    const [source] = sources;
+    expect(source.started).toBe(true);
+    expect(source.connectedTo).toBe(source.level);
+    expect(source.level.gain.value).toBeCloseTo(db(-7.2), 6);
+    expect(source.level.connectedTo).toBe(soundGroup('moments'));
+    expect(soundGroup('moments').gain.value, 'the group itself at 0 dB').toBe(1);
+    await expect(playMomentSound('thud')).rejects.toThrow('No such moment: thud');
   });
 
   it('a key or a dial click lowers the camera group 8 dB for 150 ms, with 60 ms ramps', async () => {

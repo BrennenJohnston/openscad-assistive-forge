@@ -50,6 +50,14 @@ vi.mock('../../src/js/crt-sounds.js', () => ({
   playScrollSound: vi.fn(async () => 0.055),
   preloadScrollSounds: vi.fn(),
   playTypingSound: vi.fn(async () => 0.1),
+  playMomentSound: vi.fn(async () => 0.6),
+  preloadMomentSounds: vi.fn(),
+}))
+
+// The tunes, each resolving with the seconds until it ends.
+vi.mock('../../src/js/unlock-jingle.js', () => ({
+  playUnlockJingle: vi.fn(async () => 3.8),
+  playThrillerTune: vi.fn(async ({ after = 0 } = {}) => after + 3),
 }))
 
 // The screen waits for its sound to start, which the mock settles on a tick.
@@ -2099,7 +2107,8 @@ describe('every finding of the code counts', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(seen.moments).toEqual(['crack'])
     expect(stored().entries).toBe(2)
-    await vi.advanceTimersByTimeAsync(200)
+    // Here no animation runs, so the crack is cleared by its fallback.
+    await vi.advanceTimersByTimeAsync(5000)
     expect(key().hasAttribute('data-moment')).toBe(false)
     expect(key().hasAttribute('data-alt-key')).toBe(false)
   })
@@ -2189,7 +2198,9 @@ describe('every finding of the code counts', () => {
     expect(seen.arrival).toEqual([])
     expect(seen.moments).toEqual(['crack'])
     expect(document.getElementById('gatedTab').hidden).toBe(false)
-    expect(written).toContain('A key appeared next to the theme button.')
+    expect(written).toEqual([
+      'A key appeared next to the theme button. Something cracked around the key.',
+    ])
   })
 
   it('on a later visit the third finding brings the key through the glass, to stay', async () => {
@@ -2214,6 +2225,141 @@ describe('every finding of the code counts', () => {
     controller.handleUnlock({ moment: true })
     await vi.advanceTimersByTimeAsync(0)
     expect(seen.moments).toEqual(['crack'])
+  })
+})
+
+describe('the crack', () => {
+  const UNLOCK_KEY = 'openscad-forge-alt-unlock'
+  const CRACK = 'Something cracked around the key.'
+  const APPEARED = 'A key appeared next to the theme button.'
+  const key = () => document.getElementById('_hfmToggle')
+  const found = (entries) =>
+    localStorage.setItem(
+      UNLOCK_KEY,
+      JSON.stringify({ entries, permanent: false, pendingBreak: false })
+    )
+  // The recede animation's end, as a browser reports it from a line.
+  const recedeEnds = () => {
+    const event = new Event('animationend', { bubbles: true })
+    Object.defineProperty(event, 'animationName', { value: 'alt-view-crack-recede' })
+    key().querySelector('.alt-view-crack polyline').dispatchEvent(event)
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: [
+        'setTimeout',
+        'clearTimeout',
+        'requestAnimationFrame',
+        'cancelAnimationFrame',
+      ],
+    })
+    localStorage.clear()
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+  })
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+    document.body.innerHTML = ''
+    localStorage.clear()
+  })
+
+  it('draws seven lines into the key, hidden from assistive tech, while the key names the moment, and clears both when the lines have receded', async () => {
+    pageWithHeaderAndDpad()
+    localStorage.setItem('openscad-customizer-hfm-unlock', 'true')
+    found(1)
+    const controller = await freshController()
+    controller.handleUnlock()
+    controller.handleUnlock({ moment: true })
+
+    const overlay = key().querySelector('svg.alt-view-crack')
+    expect(overlay).not.toBeNull()
+    expect(overlay.getAttribute('aria-hidden')).toBe('true')
+    expect(overlay.querySelectorAll('polyline')).toHaveLength(7)
+    expect(key().getAttribute('data-moment')).toBe('crack')
+    expect(key().querySelector('svg'), 'the key icon stays first').not.toBe(overlay)
+
+    recedeEnds()
+    expect(key().querySelector('.alt-view-crack')).toBeNull()
+    expect(key().hasAttribute('data-moment')).toBe(false)
+  })
+
+  it('says the crack once, 600 ms after the press with sounds off', async () => {
+    const written = pageWithHeaderAndDpad()
+    found(1)
+    const controller = await freshController()
+    controller.handleUnlock()
+    await vi.advanceTimersByTimeAsync(1000)
+    written.length = 0
+
+    controller.handleUnlock({ moment: true })
+    await vi.advanceTimersByTimeAsync(500)
+    expect(written).toEqual([])
+    await vi.advanceTimersByTimeAsync(200)
+    expect(written).toEqual([CRACK])
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(written).toEqual([CRACK])
+  })
+
+  it('with sounds on, plays the crack, then the thriller 150 ms after it, and says the crack after the thriller', async () => {
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'true')
+    const written = pageWithHeaderAndDpad()
+    found(1)
+    const controller = await freshController()
+    const { playMomentSound } = await import('../../src/js/crt-sounds.js')
+    const { playThrillerTune, playUnlockJingle } = await import('../../src/js/unlock-jingle.js')
+    controller.handleUnlock()
+    await vi.advanceTimersByTimeAsync(1000)
+    written.length = 0
+
+    controller.handleUnlock({ moment: true })
+    expect(playMomentSound).toHaveBeenCalledWith('crack')
+    expect(playThrillerTune).toHaveBeenCalledWith({ after: 0.15 })
+    expect(playUnlockJingle, 'no unlock tune for a crack').not.toHaveBeenCalled()
+    // The thriller ends 3.15 s from the press; the sentence 300 ms after.
+    await vi.advanceTimersByTimeAsync(3400)
+    expect(written).toEqual([])
+    await vi.advanceTimersByTimeAsync(100)
+    expect(written).toEqual([CRACK])
+  })
+
+  it('on a later visit, the crack brings the key with no drop and no unlock tune, and one sentence says both', async () => {
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'true')
+    const written = pageWithHeaderAndDpad()
+    found(1)
+    const controller = await freshController()
+    const { playUnlockJingle } = await import('../../src/js/unlock-jingle.js')
+    expect(key()).toBeNull()
+
+    controller.handleUnlock({ moment: true })
+    expect(key().hasAttribute('data-arrival')).toBe(false)
+    expect(key().getAttribute('data-moment')).toBe('crack')
+    expect(playUnlockJingle).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(written).toEqual([`${APPEARED} ${CRACK}`])
+  })
+
+  it('with reduced motion draws nothing and names no moment, and still sounds and speaks', async () => {
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'true')
+    vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+      matches: query.includes('prefers-reduced-motion: reduce'),
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
+    const written = pageWithHeaderAndDpad()
+    found(1)
+    const controller = await freshController()
+    const { playMomentSound } = await import('../../src/js/crt-sounds.js')
+    controller.handleUnlock()
+    controller.handleUnlock({ moment: true })
+    expect(key().querySelector('.alt-view-crack')).toBeNull()
+    expect(key().hasAttribute('data-moment')).toBe(false)
+    expect(playMomentSound).toHaveBeenCalledWith('crack')
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(written).toContain(CRACK)
   })
 })
 

@@ -4,7 +4,8 @@
  * fanfare), each at three quarters of its first speed with its pitch kept.
  * It is synthesized from these notes in the browser, so nothing is
  * downloaded. Each phrase is levelled to the same peak before they are
- * joined, as the version that was chosen was.
+ * joined, as the version that was chosen was. The thriller, the melody of a
+ * crack around the key, is made the same way in the same voice.
  * @license GPL-3.0-or-later
  */
 
@@ -92,13 +93,43 @@ const PHRASES = [
   },
 ];
 
+// A minor: a creeping E, F lead over a bass that climbs A, A sharp, B, C,
+// stopping on G sharp against D, a tritone, unresolved.
+const THRILLER = [
+  {
+    length: 2.25,
+    notes: [
+      ...[0, 0.25, 0.5, 0.75].map((t, i) =>
+        pulse(i % 2 ? 'F5' : 'E5', t, 0.2, 0.25, { gain: 0.15, release: 0.04 })
+      ),
+      pulse('F5', 1.0, 0.2, 0.25, { gain: 0.15, release: 0.04 }),
+      pulse('F#5', 1.25, 0.2, 0.25, { gain: 0.15, release: 0.04 }),
+      pulse('G5', 1.5, 0.2, 0.25, { gain: 0.15, release: 0.04 }),
+      pulse('G#5', 1.75, 0.5, 0.25, { gain: 0.16, release: 0.3 }),
+      pulse('D5', 1.75, 0.5, 0.5, { gain: 0.09, release: 0.3 }),
+      ...[
+        ['A2', 0],
+        ['A2', 0.25],
+        ['A2', 0.5],
+        ['A2', 0.75],
+        ['A#2', 1.0],
+        ['A#2', 1.25],
+        ['B2', 1.5],
+      ].map(([note, t]) =>
+        triangle(note, t, 0.18, { gain: 0.28, release: 0.04 })
+      ),
+      triangle('C3', 1.75, 0.5, { gain: 0.28, release: 0.3 }),
+    ],
+  },
+];
+
 /**
- * The tune as played: every time stretched, every frequency kept.
+ * A table of phrases as played: every time stretched, every frequency kept.
  * @returns {{ phrases: Array<{ start: number, length: number, notes: Array<Object> }>, seconds: number }}
  */
-export function jingleSchedule() {
+function schedule(table) {
   let start = 0;
-  const phrases = PHRASES.map(({ length, notes }) => {
+  const phrases = table.map(({ length, notes }) => {
     const phrase = {
       start,
       length: length * STRETCH,
@@ -118,6 +149,16 @@ export function jingleSchedule() {
     return phrase;
   });
   return { phrases, seconds: start };
+}
+
+/** The tune as played. */
+export function jingleSchedule() {
+  return schedule(PHRASES);
+}
+
+/** The thriller as played. */
+export function thrillerSchedule() {
+  return schedule(THRILLER);
 }
 
 function pulseWave(context, duty) {
@@ -147,7 +188,11 @@ function scheduleNote(context, note) {
 }
 
 async function renderPhrase(phrase) {
-  const frames = Math.ceil(SAMPLE_RATE * 1.3 * STRETCH);
+  // Past the phrase's end, so a release is not cut short; at least the 1.3 s
+  // at full speed the tune was rendered in when it was chosen.
+  const frames = Math.ceil(
+    SAMPLE_RATE * Math.max(1.3 * STRETCH, phrase.length + 0.2)
+  );
   const offline = new OfflineAudioContext(1, frames, SAMPLE_RATE);
   phrase.notes.forEach((note) => scheduleNote(offline, note));
   const rendered = await offline.startRendering();
@@ -160,12 +205,8 @@ async function renderPhrase(phrase) {
   return data.map((x) => x * scale);
 }
 
-/**
- * The tune's samples, mono at 44.1 kHz.
- * @returns {Promise<Float32Array>}
- */
-export async function renderJingle() {
-  const parts = await Promise.all(jingleSchedule().phrases.map(renderPhrase));
+async function renderTune({ phrases }) {
+  const parts = await Promise.all(phrases.map(renderPhrase));
   const joined = new Float32Array(
     parts.reduce((n, part) => n + part.length, 0)
   );
@@ -178,20 +219,34 @@ export async function renderJingle() {
 }
 
 /**
- * Play the tune once. Call it from the press that found the Alt View: the
- * audio context is made before the first wait, inside that press, because a
- * browser lets a page make sound only after a person has used it.
- * @returns {Promise<number>} The tune's length in seconds, once it has begun
+ * The tune's samples, mono at 44.1 kHz.
+ * @returns {Promise<Float32Array>}
  */
-export async function playUnlockJingle() {
+export function renderJingle() {
+  return renderTune(jingleSchedule());
+}
+
+/**
+ * The thriller's samples, mono at 44.1 kHz.
+ * @returns {Promise<Float32Array>}
+ */
+export function renderThriller() {
+  return renderTune(thrillerSchedule());
+}
+
+// The audio context is made before the first wait, inside the press that
+// asked for the tune, because a browser lets a page make sound only after a
+// person has used it. `after` seconds from the press, it starts.
+async function playTune(render, after = 0) {
   const Context = window.AudioContext || window.webkitAudioContext;
   if (!Context || typeof OfflineAudioContext === 'undefined') {
     throw new Error('Web Audio is not available');
   }
+  const askedAt = performance.now();
   const context = new Context();
   const running = context.resume();
   try {
-    const samples = await renderJingle();
+    const samples = await render();
     const buffer = context.createBuffer(1, samples.length, SAMPLE_RATE);
     buffer.copyToChannel(samples, 0);
     let timer = null;
@@ -208,10 +263,29 @@ export async function playUnlockJingle() {
     source.buffer = buffer;
     source.connect(context.destination);
     source.addEventListener('ended', () => context.close());
-    source.start();
-    return buffer.duration;
+    const wait = Math.max(0, after - (performance.now() - askedAt) / 1000);
+    source.start(context.currentTime + wait);
+    return wait + buffer.duration;
   } catch (error) {
     context.close();
     throw error;
   }
+}
+
+/**
+ * Play the tune once. Call it from the press that found the Alt View.
+ * @returns {Promise<number>} The tune's length in seconds, once it has begun
+ */
+export function playUnlockJingle() {
+  return playTune(renderJingle);
+}
+
+/**
+ * Play the thriller once, `after` seconds from the press that asked for it.
+ * Call it from that press.
+ * @param {{after?: number}} [options]
+ * @returns {Promise<number>} Seconds from now until it ends, once scheduled
+ */
+export function playThrillerTune({ after = 0 } = {}) {
+  return playTune(renderThriller, after);
 }
