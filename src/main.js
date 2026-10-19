@@ -227,7 +227,7 @@ import {
   STORAGE_KEY_WASM_INIT_COMPLETED,
   PRESET_SORT_KEY,
 } from './js/storage-keys.js';
-import { isSidewaysPhone } from './js/phone-drawers.js';
+import { isPhoneLayout, isSidewaysPhone } from './js/phone-drawers.js';
 import {
   ensureScopedPrefsSeeded,
   readScopedPref,
@@ -10208,6 +10208,8 @@ if (rounded) {
 
     // Toggle function (assigned to outer scope variable)
     toggleParamPanel = function () {
+      // On a phone the same arrow closes the sheet (drawer-controller.js).
+      if (isPhoneLayout()) return;
       setParamPanelCollapsed(!isCollapsed);
     };
 
@@ -10239,6 +10241,21 @@ if (rounded) {
             'Collapse customizer panel'
           );
           collapseParamPanelBtn.title = 'Collapse panel';
+        } else if (!isPhoneLayout()) {
+          // Back from a phone, where the arrow carried the sheet's state.
+          collapseParamPanelBtn.setAttribute(
+            'aria-expanded',
+            String(!isCollapsed)
+          );
+          collapseParamPanelBtn.setAttribute(
+            'aria-label',
+            isCollapsed
+              ? 'Expand customizer panel'
+              : 'Collapse customizer panel'
+          );
+          collapseParamPanelBtn.title = isCollapsed
+            ? 'Expand panel'
+            : 'Collapse panel';
         }
       }, 150);
     });

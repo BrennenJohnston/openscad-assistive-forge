@@ -1403,6 +1403,58 @@ for (const height of [915, 810]) {
       // No isMobile: Firefox rejects it when the browser context is created.
       test.use({ viewport: { width: 412, height }, hasTouch: true });
 
+      // The open sheet closes by its own arrow, as the desktop's Customizer
+      // does, at the right end of its title row; there is no X. Open, the
+      // arrow points left, the way the sheet's edge travels to close (S1).
+      if (height === 915) {
+        test("S1: the open Customizer closes by its own arrow, pointing left, where the X was", async ({
+          page,
+        }) => {
+          test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+          await openPhoneProject(page, look);
+          await page.waitForTimeout(500);
+          const toggle = page.locator('#mobileDrawerToggle');
+          await toggle.click();
+          await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+          await page.waitForTimeout(700);
+          expect(await page.locator('#drawerCloseBtn').count(), 'no X').toBe(0);
+
+          const arrow = page.locator('#paramPanel #collapseParamPanelBtn');
+          await expect(arrow).toBeVisible();
+          await expect(arrow).toHaveAccessibleName('Close customizer panel');
+          expect(
+            await arrow.getAttribute('title'),
+            'no tooltip to say the name twice'
+          ).toBeNull();
+          const state = await page.evaluate(readToggle, '#collapseParamPanelBtn');
+          expect.soft(state.expanded, 'S1: open').toBe(true);
+          expect
+            .soft(
+              angleDiff(state.arrow ?? 999, ANGLE.left),
+              `S1: the open arrow points at ${Math.round(state.arrow)} degrees`
+            )
+            .toBeLessThanOrEqual(1);
+          const place = await page.evaluate(() => {
+            const b = document
+              .getElementById('collapseParamPanelBtn')
+              .getBoundingClientRect();
+            const row = document
+              .querySelector('#paramPanel .panel-header-title-row')
+              .getBoundingClientRect();
+            return { gap: row.right - b.right, w: b.width, h: b.height };
+          });
+          expect.soft(place.w, 'a touch target wide').toBeGreaterThanOrEqual(44);
+          expect.soft(place.h, 'a touch target high').toBeGreaterThanOrEqual(44);
+          expect
+            .soft(place.gap, 'at the right end of the title row')
+            .toBeLessThanOrEqual(24);
+
+          await arrow.click();
+          await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+          await expect(toggle).toBeFocused();
+        });
+      }
+
       test('S6: the Customizer opens from the left over the preview, see-through, at a width that is kept', async ({
         page,
       }) => {

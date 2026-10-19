@@ -1456,7 +1456,6 @@ describe('the Alt View is heard', () => {
       'cameraPanelToggle',
       'previewDrawerToggle',
       'mobileDrawerToggle',
-      'drawerCloseBtn',
       'cameraDrawerToggle',
       'asciiDrawerToggle',
       'classicEditorCloseBtn',

@@ -1237,51 +1237,25 @@ body[data-app-surface='welcome'] #uiModeToggle {
   }
 }
 
-/* Mobile drawer close button -- lives in the sticky panel-header title row */
-.drawer-close-btn {
-  /* min-width/min-height provided by .forge-control */
-  z-index: var(--z-index-base);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius-md);
-  display: none; /* Hidden by default, shown on mobile via drawer-open */
-  flex-shrink: 0;
-  transition:
-    background-color var(--motion-base) ease,
-    border-color var(--motion-base) ease;
-}
-
-@media (hover: hover) {
-  .drawer-close-btn:hover {
-    background: var(--color-hover-bg);
-    transform: scale(1.05);
-  }
-}
-
-.drawer-close-btn:active {
-  transform: scale(0.95);
-}
-
-/* Show close button only when drawer is open on mobile.
-   The button lives inside the sticky .panel-header, so it stays
-   visible when scrolling without needing position:fixed (which is
-   broken by the parent transform on the off-canvas drawer). */
+/* On a phone the Customizer's own arrow closes the open sheet, at the right
+   end of its sticky title row, as the desktop's collapses the column; S1
+   turns it to point left while the sheet is open. Closed, the sheet and the
+   arrow are out of sight together. Its desktop look lives in the 768 px
+   rules below, so the phone gives it the same look here. */
 @media (max-width: 767px) {
-  .param-panel.drawer-open .drawer-close-btn {
-    display: flex !important;
+  .param-panel .panel-header-title-row #collapseParamPanelBtn {
+    display: none;
+  }
+
+  .param-panel.drawer-open .panel-header-title-row #collapseParamPanelBtn {
+    display: flex;
     align-items: center;
     justify-content: center;
-    position: static;
     margin-left: auto;
     flex-shrink: 0;
-    z-index: var(--z-index-base);
-  }
-}
-
-/* Ensure close button is hidden on desktop */
-@media (min-width: 768px) {
-  .drawer-close-btn {
-    display: none !important;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
   }
 }
 

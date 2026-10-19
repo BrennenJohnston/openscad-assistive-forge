@@ -367,7 +367,7 @@ test.describe('Drawers in the Alt View', () => {
       const popOut = {
         press: '#mobileDrawerToggle',
         box: '#paramPanel',
-        inside: '#drawerCloseBtn',
+        inside: '#collapseParamPanelBtn',
       };
       const camera = {
         press: '#cameraDrawerToggle',

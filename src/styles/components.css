@@ -548,13 +548,6 @@ details.param-group.forge-disclosure[open] > summary::before {
   outline-offset: 2px;
 }
 
-/* Desktop only - hide collapse button on mobile (drawer toggle is used instead) */
-@media (max-width: 767px) {
-  .param-panel .btn-collapse-panel {
-    display: none;
-  }
-}
-
 /* ============================================================================
    Mobile Drawer Toggle Button
    ============================================================================ */

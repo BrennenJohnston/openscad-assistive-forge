@@ -507,7 +507,7 @@ function isMobileDrawerOpen() {
  * Tab after typing a value can carry the Presets section off the top) was
  * given up on and its step skipped. On a phone the sheet shows only a few
  * rows, and a target scrolled to smoothly after the card was placed left
- * the card over the sheet and its Close button.
+ * the card over the sheet and its closing arrow.
  *
  * @param {HTMLElement|null} el - The step's target
  */
@@ -570,9 +570,9 @@ function openMobileDrawer() {
  * Used when advancing to a step that targets elements outside the param panel
  */
 function closeMobileDrawer() {
-  const closeBtn = document.getElementById('drawerCloseBtn');
-  if (closeBtn && isMobileViewport() && isMobileDrawerOpen()) {
-    closeBtn.click();
+  const arrow = document.getElementById('collapseParamPanelBtn');
+  if (arrow && isMobileViewport() && isMobileDrawerOpen()) {
+    arrow.click();
   }
 }
 
@@ -842,7 +842,7 @@ function handleDrawerStateChange(isNowOpen) {
     }
 
     // Re-resolve the step target - it will pick the first visible target
-    // from the selector list (e.g., @mobile-drawer-close when open,
+    // from the selector list (e.g., @collapse-param-panel when open,
     // @mobile-drawer-toggle when closed)
     const newTarget = resolveStepTarget(step, { requireVisible: true });
 
@@ -913,15 +913,15 @@ function checkIfAnyTargetInsideDrawer(step) {
  *
  * The question is whether the step can be shown at all without opening it,
  * not whether any target lives inside the panel. The step that teaches
- * opening the panel lists `@mobile-drawer-close` first, which resolves in
+ * opening the panel lists `@collapse-param-panel` first, which resolves in
  * the DOM while the drawer is shut; opening the drawer for it would ring
- * the Close button and teach the opposite of what the card says.
+ * the closing arrow and teach the opposite of what the card says.
  *
  * If some target is inside the panel but another one outside is already on
  * screen, the step has something to point at and the panel stays as the
  * user left it. That step then arrives with the drawer shut and the ring on
  * the Customizer button, and the drawer observer moves the ring to the
- * Close button when the user opens it: the step follows the user through
+ * closing arrow when the user opens it: the step follows the user through
  * both halves of what it is teaching.
  *
  * A collapsed desktop panel still expands: there the only visible candidate
@@ -1090,15 +1090,14 @@ const TUTORIALS = {
         content: `
           <p><strong>Customizer</strong> is where you change the model.</p>
           <ul>
-            <li><strong>Small screens:</strong> press the highlighted <strong>Customizer</strong> button to open the panel. When it is open, the highlight moves to the <strong>Close</strong> (X) button so you can close it again.</li>
+            <li><strong>Small screens:</strong> press the highlighted <strong>Customizer</strong> button to open the panel. When it is open, the highlight moves to its <strong>arrow</strong>, which closes it again.</li>
             <li><strong>Wide screens:</strong> the Customizer panel is on the left. Use the edge <strong>collapse</strong> button to shrink or expand it.</li>
           </ul>
         `,
         contentCompact: `
-          <p>Press the highlighted <strong>Customizer</strong> button to open the panel. The highlight then moves to <strong>Close</strong>.</p>
+          <p>Press the highlighted <strong>Customizer</strong> button to open the panel. The highlight then moves to its closing <strong>arrow</strong>.</p>
         `,
-        highlightSelector:
-          '@mobile-drawer-close, @mobile-drawer-toggle, @collapse-param-panel',
+        highlightSelector: '@collapse-param-panel, @mobile-drawer-toggle',
         position: 'right',
       },
       {
@@ -1267,12 +1266,12 @@ const TUTORIALS = {
           <p>On mobile, the <strong>Customizer</strong> drawer sits on top of the app.</p>
           <p class="tutorial-hint">Close it now so you can reach the top buttons like <strong>Help</strong>.</p>
         `,
-        highlightSelector: '@mobile-drawer-close, @collapse-param-panel',
+        highlightSelector: '@collapse-param-panel',
         position: 'left',
         showWhen: { mobile: true, desktop: false },
         completion: {
           type: 'domEvent',
-          selector: '#drawerCloseBtn, #collapseParamPanelBtn',
+          selector: '#collapseParamPanelBtn',
           event: 'click',
         },
       },
