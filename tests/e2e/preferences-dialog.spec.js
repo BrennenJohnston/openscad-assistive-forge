@@ -110,6 +110,115 @@ test('Edit ▸ Preferences opens a real dialog with upstream tab order', async (
   expect((await tabState(page)).map((t) => t.label)).toEqual(TAB_ORDER);
 });
 
+// Preferences scrolls in one place, as Keys does: its header, its tabs and
+// Done stay put and only the settings between them scroll, on a phone either
+// way up and in a desktop window where high contrast makes the settings taller.
+for (const where of [
+  {
+    label: 'on a phone, 412 x 915',
+    viewport: { width: 412, height: 915 },
+    touch: true,
+  },
+  {
+    label: 'on a phone held sideways, 740 x 360',
+    viewport: { width: 740, height: 360 },
+    touch: true,
+  },
+  {
+    label: 'at 1280 x 720 in high contrast',
+    viewport: { width: 1280, height: 720 },
+    highContrast: true,
+  },
+]) {
+  test.describe(`Preferences ${where.label}`, () => {
+    test.use({ viewport: where.viewport, hasTouch: !!where.touch });
+
+    test('scrolls in one place: its tabs and Done stay, only the settings scroll', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      if (where.highContrast) {
+        await page.addInitScript(() =>
+          localStorage.setItem('openscad-forge-high-contrast', 'true')
+        );
+      }
+      await openPreferences(page);
+      await page.waitForTimeout(400);
+      const read = () =>
+        page.evaluate(() => {
+          const box = document.querySelector(
+            '#preferencesModal .modal-content'
+          );
+          const done = document
+            .getElementById('preferencesModalDone')
+            .getBoundingClientRect();
+          return {
+            box: [box.scrollHeight, box.clientHeight],
+            doneOnScreen: done.top >= 0 && done.bottom <= innerHeight + 0.5,
+            tabTop: Math.round(
+              document
+                .getElementById('prefs-tab-3dview')
+                .getBoundingClientRect().top
+            ),
+          };
+        });
+      const before = await read();
+      expect(before.box[0], "the dialog's own scroll").toBeLessThanOrEqual(
+        before.box[1] + 1
+      );
+      expect(before.doneOnScreen, 'Done on screen').toBe(true);
+
+      await page
+        .locator('#preferencesModal .preferences-modal-body')
+        .evaluate((body) => {
+          body.scrollTop = body.scrollHeight;
+        });
+      await page.waitForTimeout(200);
+      const after = await read();
+      expect(after.tabTop, 'the tabs stay where they were').toBe(before.tabTop);
+      expect(after.doneOnScreen, 'Done still on screen').toBe(true);
+    });
+  });
+}
+
+// A finger needs room to set a slider: never shorter than three touch
+// targets, the floor the Customizer's own sliders keep.
+test.describe('Preferences on a phone, its sliders', () => {
+  test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
+
+  test("each slider's value sits beside it, and the slider has room", async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await openPreferences(page);
+    await page.waitForTimeout(400);
+    const rows = await page.evaluate(() =>
+      ['gridOpacityInput', 'prefsCustomizerOpacity'].map((id) => {
+        const input = document.getElementById(id);
+        const r = input.getBoundingClientRect();
+        const v = input
+          .closest('.slider-container')
+          .querySelector('.slider-value')
+          .getBoundingClientRect();
+        const middle = v.top + v.height / 2;
+        return {
+          id,
+          beside: middle > r.top && middle < r.bottom && v.left >= r.right - 1,
+          width: Math.round(r.width),
+        };
+      })
+    );
+    expect(
+      rows.filter((r) => !r.beside).map((r) => r.id),
+      'sliders whose value is not beside them'
+    ).toEqual([]);
+    expect(
+      rows.filter((r) => r.width < 3 * 44).map((r) => `${r.id} ${r.width}px`),
+      'sliders shorter than three touch targets'
+    ).toEqual([]);
+  });
+});
+
 test('the tab bar follows the APG pattern', async ({ page }) => {
   test.setTimeout(240_000);
   await openPreferences(page);

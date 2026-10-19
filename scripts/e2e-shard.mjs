@@ -164,7 +164,10 @@ export const MEASURED_SECONDS = {
   'menu-reach.spec.js': 41.1,
   'mesh-companion.spec.js': 13.1,
   'mobile-drawer.spec.js': 13.2,
-  'mobile-toolbar.spec.js': 101.3,
+  // 101.3 by the two runs above, plus three cases since (the first row in
+  // high contrast at two heights, and held sideways: 7 s locally), booked at
+  // about four times that.
+  'mobile-toolbar.spec.js': 189.3,
   'mobile-viewport.spec.js': 75.5,
   'overlay-placement.spec.js': 168.9,
   'page-fits-window.spec.js': 62.0,
@@ -195,13 +198,16 @@ export const MEASURED_SECONDS = {
   'svg-preparer.spec.js': 12.0,
   'terminology.spec.js': 29.8,
   'theme-switching.spec.js': 189.6,
-  'touch-targets.spec.js': 47.4,
+  'touch-targets.spec.js': 103.4,
   'tour-interaction.spec.js': 271.6,
   'tour-nudge.spec.js': 59.8,
   'trace-start-cancel.spec.js': 153.9,
   'tutorials.spec.js': 206.7,
   'typed-preset.spec.js': 10.3,
-  'ui-schema.spec.js': 1474.1,
+  // 1474.1 by the two runs above, plus four cases since (the open phone
+  // Customizer closed by its own arrow, in four looks: 28 s locally), booked
+  // at about four times that.
+  'ui-schema.spec.js': 1623.1,
   'wasm-smoke.spec.js': 35.6,
   'welcome-spotlight.spec.js': 37.4,
   'welcome-surface.spec.js': 18.6,
@@ -218,7 +224,7 @@ export const MEASURED_SECONDS = {
   'keys-dialog.spec.js': 95.0,
   // 137.2 by the two runs above, plus one case since (the Engine group, which
   // downloads an engine and switches twice: 9.3 s locally), booked at 40.
-  'preferences-dialog.spec.js': 177.2,
+  'preferences-dialog.spec.js': 237.2,
 
   // Ran on no lane of either run: every case skips on CI for want of a
   // fixture. Kept at zero, so that a file which starts running again is

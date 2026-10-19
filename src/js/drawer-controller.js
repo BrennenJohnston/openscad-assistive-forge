@@ -45,7 +45,9 @@ const TYPED_INPUTS = new Set([
 export function initDrawerController() {
   const drawer = document.getElementById('paramPanel');
   const toggleBtn = document.getElementById('mobileDrawerToggle');
-  const closeBtn = document.getElementById('drawerCloseBtn');
+  // The Customizer's own arrow, the desktop's collapse button: on a phone
+  // it closes the open sheet, where an X used to.
+  const arrowBtn = document.getElementById('collapseParamPanelBtn');
   const previewPanel = document.querySelector('.preview-panel');
   const grip = document.getElementById('customizerWidthGrip');
 
@@ -135,10 +137,19 @@ export function initDrawerController() {
     // A control focused anywhere in the sheet stays clear of its header.
     drawer.style.scrollPaddingTop = `${stuck}px`;
     if (search && drawer.contains(search)) {
-      drawer.scrollTop +=
+      // A short sheet could not scroll its parameters up to the header and
+      // left the row above them half under it; room at its end lets it.
+      drawer.style.paddingBottom = '';
+      const lift =
         search.getBoundingClientRect().top -
         drawer.getBoundingClientRect().top -
         stuck;
+      const room = drawer.scrollHeight - drawer.clientHeight - drawer.scrollTop;
+      if (lift > room) {
+        const padding = parseFloat(getComputedStyle(drawer).paddingBottom) || 0;
+        drawer.style.paddingBottom = `${padding + lift - room}px`;
+      }
+      drawer.scrollTop += lift;
     }
     const first = [search, container]
       .filter(Boolean)
@@ -150,7 +161,7 @@ export function initDrawerController() {
           !el.isContentEditable
       );
     if (!first) {
-      (closeBtn || toggleBtn).focus();
+      (arrowBtn || toggleBtn).focus();
       return;
     }
     // The sheet is still sliding in, so the browser's own scroll to a
@@ -194,9 +205,12 @@ export function initDrawerController() {
 
     toggleBtn.setAttribute('aria-expanded', 'true');
     toggleBtn.setAttribute('aria-label', 'Close customizer panel');
+    // No tooltip on a phone: it made a screen reader say the name twice.
+    arrowBtn?.setAttribute('aria-expanded', 'true');
+    arrowBtn?.setAttribute('aria-label', 'Close customizer panel');
+    arrowBtn?.removeAttribute('title');
     drawer.classList.add('drawer-open');
     previewPanel?.classList.add('customizer-sheet-open');
-    closeBtn?.classList.remove('hidden');
     placePanel();
     const slide = slideDrawer(sheetParts(), {
       from: 'left',
@@ -259,6 +273,7 @@ export function initDrawerController() {
 
     toggleBtn.setAttribute('aria-expanded', 'false');
     toggleBtn.setAttribute('aria-label', 'Open customizer panel');
+    arrowBtn?.setAttribute('aria-expanded', 'false');
 
     // Focus leaves before the sheet slides away out of reach.
     if (triggerEl) {
@@ -276,7 +291,6 @@ export function initDrawerController() {
         if (isOpen) return;
         drawer.classList.remove('drawer-open');
         previewPanel?.classList.remove('customizer-sheet-open');
-        closeBtn?.classList.add('hidden');
         if (grip) grip.hidden = true;
       },
     });
@@ -333,10 +347,11 @@ export function initDrawerController() {
   // re-decided rather than fixed at open time.
   document.addEventListener('forge:tutorial-run-change', syncTour);
 
-  // Wire up close button
-  if (closeBtn) {
-    closeBtn.addEventListener('click', () => close());
-  }
+  // On a phone the arrow closes the open sheet; on a desktop it collapses
+  // the column (main.js), and the two never both act on one press.
+  arrowBtn?.addEventListener('click', () => {
+    if (isPhoneLayout() && isOpen) close();
+  });
 
   registerPhoneDrawer('customizer', { isOpen: () => isOpen, close });
   registerLookDrawer('phone-customizer', {

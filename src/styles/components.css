@@ -548,13 +548,6 @@ details.param-group.forge-disclosure[open] > summary::before {
   outline-offset: 2px;
 }
 
-/* Desktop only - hide collapse button on mobile (drawer toggle is used instead) */
-@media (max-width: 767px) {
-  .param-panel .btn-collapse-panel {
-    display: none;
-  }
-}
-
 /* ============================================================================
    Mobile Drawer Toggle Button
    ============================================================================ */
@@ -2561,6 +2554,17 @@ dialog:modal {
   margin-right: 0;
 }
 
+/* On a narrow phone every slider's label goes above it, as the speed's
+   always does, so the slider and its value have the row's width rather than
+   what the label leaves. */
+@media (max-width: 480px) {
+  .preview-setting:has(> .slider-container) {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 /* Ensure slider value uses tabular figures for stable width */
 .preview-setting.rotation-speed-setting .slider-value {
   min-width: 4.5rem;
@@ -4050,15 +4054,6 @@ body.high-contrast .param-tooltip {
 
 /* Mobile responsiveness - stack on small screens */
 @media (max-width: 480px) {
-  .slider-container {
-    flex-wrap: wrap;
-  }
-
-  .slider-container input[type='range'] {
-    flex-basis: 100%;
-    order: 1;
-  }
-
   .slider-spinbox {
     flex: 1;
     min-width: 60px;
@@ -12822,13 +12817,19 @@ body.tutorial-body-locked {
     justify-content: flex-end;
   }
 
-  .workflow-actions .btn-text {
-    display: none;
-  }
-
   .workflow-actions .btn {
     min-width: var(--size-touch-target);
     padding: var(--space-xs);
+  }
+}
+
+/* Full Screen and Help keep their words from 740px wide, where a phone held
+   sideways fits them beside the menu bar in every look; at 690px the Alt
+   View's row, which holds two more buttons, would draw them over its
+   neighbours. */
+@media (max-width: 739px) {
+  .workflow-actions .btn-text {
+    display: none;
   }
 }
 
@@ -16921,8 +16922,39 @@ body.tutorial-body-locked {
    disabled tab, which stays focusable so its reason can be read out, gets
    the same ring from that contract. */
 
+/* Preferences scrolls in one place, as Keys does: the header, the tabs and
+   Done stay put and only the settings between them scroll. */
+.preferences-modal-content {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 2 * var(--space-lg));
+  overflow: hidden;
+}
+
+@supports (max-height: 100dvh) {
+  .preferences-modal-content {
+    max-height: calc(100dvh - 2 * var(--space-lg));
+  }
+}
+
+.preferences-tabs {
+  flex: none;
+}
+
+/* `position: relative` keeps the settings' visually hidden text inside the
+   body; positioned against the dialog, it stretched the dialog's own scroll. */
 .preferences-modal-body {
+  position: relative;
+  flex: 1 1 auto;
   min-height: 12rem;
+  overflow-y: auto;
+}
+
+/* On a short screen the floor would push Done out of the dialog. */
+@media (max-height: 500px) {
+  .preferences-modal-body {
+    min-height: 0;
+  }
 }
 
 .preferences-panel-reason {

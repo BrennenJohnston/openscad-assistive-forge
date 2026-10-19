@@ -3,7 +3,9 @@
  * rule, above WCAG's 24. The walk measured help buttons at 20, reset buttons
  * at 21 by 26, camera view buttons at 32 tall, the file manager's close at
  * 32, the Keep checkbox at 20, the drawing editor's header buttons at 38,
- * and CodeMirror's search panel at 21 with 13 px checkboxes.
+ * and CodeMirror's search panel at 21 with 13 px checkboxes. On phones the
+ * menu bar's buttons stood 32 tall upright, and the bottom bar's Camera and
+ * Lens toggles 36 held sideways.
  *
  * @license GPL-3.0-or-later
  */
@@ -17,6 +19,17 @@ test.describe.configure({ timeout: 180_000 });
 test.use({ viewport: { width: 1280, height: 800 }, hasTouch: true });
 
 const MIN = 44;
+
+// The touch rules key on the pointer the browser reports; Playwright's
+// Firefox reports none for a touch context, so those cases need one.
+async function skipUnless(page, query, what) {
+  test.skip(
+    !(await page.evaluate((q) => matchMedia(q).matches, query)),
+    `this browser does not report ${what}`
+  );
+}
+const SIDEWAYS =
+  '(orientation: landscape) and (pointer: coarse) and (max-height: 500px)';
 
 async function openBox(page) {
   await page.addInitScript(() => {
@@ -187,6 +200,64 @@ test.describe('the Alt View’s controls on a phone', () => {
       page,
       '#asciiDrawerBody input[type="range"]',
       'a Lens drawer slider'
+    );
+  });
+});
+
+test.describe('the menu bar on an upright phone', () => {
+  test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
+  for (const look of [
+    { label: '' },
+    { label: ', in high contrast', highContrast: true },
+  ]) {
+    test(`its menu buttons${look.label}`, async ({ page }) => {
+      // The menu bar is Standard's.
+      await page.addInitScript((l) => {
+        localStorage.setItem(
+          'openscad-forge-ui-mode',
+          JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+        );
+        if (l.highContrast) {
+          localStorage.setItem('openscad-forge-high-contrast', 'true');
+        }
+      }, look);
+      await openBox(page);
+      await skipUnless(page, '(pointer: coarse)', 'a touch screen');
+      await expectAtLeast(
+        page,
+        '#toolbarMenuBar .toolbar-menu-btn',
+        'a menu button'
+      );
+    });
+  }
+});
+
+test.describe('the bottom bar on a phone held sideways', () => {
+  test.use({ viewport: { width: 740, height: 360 }, hasTouch: true });
+  test('the Camera toggle', async ({ page }) => {
+    await openBox(page);
+    await skipUnless(page, SIDEWAYS, 'a touch screen held sideways');
+    await expectAtLeast(page, '#cameraDrawerToggle', 'the Camera toggle');
+  });
+
+  test('the Lens and Camera toggles in the Alt View', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await openBox(page);
+    await skipUnless(page, SIDEWAYS, 'a touch screen held sideways');
+    await skipWithoutWebGL(
+      page,
+      'no WebGL: the Alt View draws its characters from the 3D picture'
+    );
+    const key = page.locator('#_hfmToggle');
+    await expect(key).toBeVisible();
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'true');
+    await expectAtLeast(
+      page,
+      '#asciiDrawerToggle, #cameraDrawerToggle',
+      'a bottom bar toggle'
     );
   });
 });

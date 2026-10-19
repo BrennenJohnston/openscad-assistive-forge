@@ -55,11 +55,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The engine is built with WebAssembly's own exceptions: Chrome follows a
   model that repeats a module inside itself more than twice as deep before
   "Model Too Deep", and every model renders 10 to 45 percent faster.
-- On a phone held upright, the header's first row holds the Customizer and
-  Main Page arrows, the Simplified/Standard switch, GitHub and Keys; the
+- On a phone held upright, the header holds Main Page, twice a button wide
+  with its words, the Simplified/Standard switch, GitHub and Keys; the
+  Customizer button heads the Preview Settings row, before its arrow. The
   Customizer comes in from the left over the preview, see-through so the model
   shows behind it while a value changes, at a width you drag and that is
-  kept; Preview Settings & Info drops from its row.
+  kept, and closes by its own arrow, as on a desktop; Preview Settings & Info
+  drops from its row.
 - On a phone, the camera controls open in a see-through drawer as tall as its
   buttons, with a picture on each view button; one drawer is open at a time.
 - Full Screen on a phone with a drawer open gives the drawer the room its
@@ -68,7 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   beside it takes the rest of the row; on a phone they share a row.
 - On a phone held sideways, the header and the menu bar each keep to one row,
   the camera controls open as a column at the right edge, and the Customizer
-  is a column beside the preview.
+  is a column beside the preview. From 740 px wide the buttons keep their
+  words.
 - In the Alt View the drawers and Classic's panes slide open and shut like
   desk drawers; the look comes on with them shut, then opens the ones that
   were open. With reduced motion they open at once.
@@ -76,6 +79,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - A focused Customizer group header shows its focus ring again.
+- On a phone, and on a desktop in high contrast, Preferences scrolls only its
+  settings; its tabs and Done stay in view.
+- On a phone a slider's value sits beside the slider, not on a line above it.
+- A phone held sideways at 844 or 915 px wide opens a menu as a sheet with its
+  close button, as narrower phones do.
+- On a touch screen the menu bar's buttons are 44 px tall, and held sideways
+  the Camera and Lens toggles too.
 - In the Alt View a selected tab in Preferences and Keys is filled; every tab
   looked the same before.
 - The desktop Lens drawer, open in the Alt View, leaves with the switch to

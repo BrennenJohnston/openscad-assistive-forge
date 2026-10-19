@@ -18,7 +18,7 @@ function mountDrawer() {
     <button id="mobileDrawerToggle" aria-expanded="false" aria-label="Open customizer panel">Customizer</button>
     <aside id="paramPanel" role="region" aria-label="Customizer">
       <h2 id="parameters-heading">Customizer</h2>
-      <button id="drawerCloseBtn" class="hidden">Close</button>
+      <button id="collapseParamPanelBtn" aria-expanded="true" aria-label="Collapse customizer panel" title="Collapse panel">Arrow</button>
       <button id="startBtn">Start conversion</button>
       <button id="cropBtn">Crop first</button>
     </aside>
@@ -87,7 +87,7 @@ describe('the customizer drawer stands aside for the drawing editor', () => {
     toggle().click();
     vi.advanceTimersByTime(300);
     expect(isOpen()).toBe(true);
-    document.getElementById('drawerCloseBtn').click();
+    document.getElementById('collapseParamPanelBtn').click();
     expect(isOpen()).toBe(false);
     window.dispatchEvent(new CustomEvent('drawing-editor:close'));
     expect(isOpen()).toBe(false);

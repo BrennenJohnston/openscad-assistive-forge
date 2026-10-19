@@ -917,14 +917,14 @@ test.describe('A tour that follows the user', () => {
       );
     });
 
-    test('Opening the panel keeps the card up and walks the ring to the Close button', async ({
+    test('Opening the panel keeps the card up and walks the ring to its closing arrow', async ({
       page,
     }) => {
       test.setTimeout(240_000);
       await introTourAtStep3(page);
 
       await page.locator('#mobileDrawerToggle').click();
-      await expect(page.locator('#drawerCloseBtn')).toHaveClass(
+      await expect(page.locator('#collapseParamPanelBtn')).toHaveClass(
         /tutorial-target-highlight/,
         { timeout: 10_000 }
       );
@@ -937,9 +937,9 @@ test.describe('A tour that follows the user', () => {
       );
 
       // The card must not be sitting on the drawer's only way out: a top dock
-      // starting at y 8 would cover the X.
+      // starting at y 8 would cover its arrow.
       const closeIsPressable = await page.evaluate(() => {
-        const btn = document.getElementById('drawerCloseBtn');
+        const btn = document.getElementById('collapseParamPanelBtn');
         const r = btn.getBoundingClientRect();
         const hit = document.elementFromPoint(
           Math.round(r.left + r.width / 2),
@@ -992,7 +992,7 @@ test.describe('A tour that follows the user', () => {
       );
       expect(await drawerOpen(page)).toBe(true);
 
-      await page.locator('#drawerCloseBtn').click();
+      await page.locator('#collapseParamPanelBtn').click();
       await expect(page.locator('#tutorialRequirement')).toHaveText(
         'Open the Customizer to continue.',
         { timeout: 10_000 }
@@ -1445,7 +1445,7 @@ test.describe('Cards that stay readable', () => {
       ).toBeNull();
 
       // Closing the drawer hands the card its own modality back.
-      await page.locator('#drawerCloseBtn').click();
+      await page.locator('#collapseParamPanelBtn').click();
       await page.waitForTimeout(800);
       await expect(page.locator('.tutorial-panel')).toHaveAttribute(
         'aria-modal',
@@ -1466,12 +1466,12 @@ test.describe('Cards that stay readable', () => {
       // Backwards is the short way round: the card's controls sit at the end of
       // the document, so one Shift+Tab from the drawer's first control reaches
       // them.
-      await page.locator('#drawerCloseBtn').focus();
+      await page.locator('#collapseParamPanelBtn').focus();
       await page.keyboard.press('Shift+Tab');
       expect(await inTour()).toBe(true);
 
       // and forwards arrives too, rather than cycling the drawer forever
-      await page.locator('#drawerCloseBtn').focus();
+      await page.locator('#collapseParamPanelBtn').focus();
       let reached = 0;
       for (let i = 1; i <= 60; i++) {
         await page.keyboard.press('Tab');

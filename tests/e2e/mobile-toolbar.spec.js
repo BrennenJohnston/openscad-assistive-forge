@@ -31,8 +31,19 @@ const WASM_READY_TIMEOUT = 180_000;
 const HEIGHTS = [915, 810];
 
 // What Chromium measures, and the ceiling: what four stacked rows cost.
+// Measured again with the Customizer button in the settings row and Main Page
+// twice a button wide: the same 93 and 135.
 const TOP_CHROME = { simplified: 93, standard: 135 };
 const BASE_TOP_CHROME = { simplified: 147, standard: 187 };
+// A phone held sideways, as phone-drawers.js and layout.css ask for it. A
+// browser that reports no touch pointer (Playwright's Firefox) never matches.
+const SIDEWAYS_QUERY =
+  '(orientation: landscape) and (pointer: coarse) and (max-height: 500px)';
+const skipUnlessSideways = async (page) =>
+  test.skip(
+    !(await page.evaluate((q) => matchMedia(q).matches, SIDEWAYS_QUERY)),
+    'this browser does not report a touch screen held sideways'
+  );
 const QUARTET = [
   '#contrastToggle',
   '#themeToggle',
@@ -218,28 +229,37 @@ for (const height of HEIGHTS) {
     });
   });
 
-  // The header's first row holds the Customizer button, Main Page, the
-  // Simplified/Standard switch, GitHub and Keys, left to right, and the
-  // switch never sits on a row of its own: with the Customizer button up
-  // here, the Customizer row below keeps the Preview Settings toggle and the
-  // four controls. Main Page and the Customizer button show their arrows
-  // alone at this width and keep their names.
-  test.describe(`The first header row (412x${height})`, () => {
+  // The header's first row holds Main Page, the Simplified/Standard switch,
+  // GitHub and Keys, left to right, and the switch never sits on a row of its
+  // own. Main Page is twice a button wide, with its words where they fit (its
+  // arrow alone in high contrast). The Customizer button leads the Preview
+  // Settings row, at the left of its arrow, with its word where it fits (its
+  // arrow alone in the Alt View, whose row holds two more buttons). Nothing in
+  // either row sits on a neighbour: a row can be as wide as the screen and
+  // still have two controls drawn over each other.
+  test.describe(`The first header row and the settings row (412x${height})`, () => {
     test.use({ viewport: { width: 412, height } });
 
-    for (const altView of [false, true]) {
-      test(`toolbar-first-row: the Customizer button, Main Page, the switch, GitHub and Keys share one row${altView ? ' in the Alt View' : ''}`, async ({
+    for (const look of [
+      { label: '' },
+      { label: ' in high contrast', highContrast: true },
+      { label: ' in the Alt View', altView: true },
+    ]) {
+      test(`toolbar-first-row: Main Page, the switch, GitHub and Keys share one row, and the Customizer button leads the settings row${look.label}`, async ({
         page,
       }) => {
         test.setTimeout(240_000);
-        if (altView) {
-          await page.addInitScript(() =>
-            localStorage.setItem('openscad-customizer-hfm-unlock', 'true')
-          );
-        }
+        await page.addInitScript((l) => {
+          if (l.altView) {
+            localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+          }
+          if (l.highContrast) {
+            localStorage.setItem('openscad-forge-high-contrast', 'true');
+          }
+        }, look);
         await loadSampleProject(page);
         await switchToStandard(page);
-        if (altView) {
+        if (look.altView) {
           await skipWithoutWebGL(
             page,
             'no WebGL: the Alt View draws its characters from the 3D picture'
@@ -254,7 +274,6 @@ for (const height of HEIGHTS) {
 
         const row = await page.evaluate(() => {
           const wanted = {
-            customizer: '#mobileDrawerToggle',
             mainPage: '#clearFileBtn',
             mode: '#uiModeToggle',
             github: '.app-header .github-link',
@@ -263,14 +282,22 @@ for (const height of HEIGHTS) {
           return Object.entries(wanted).map(([key, selector]) => {
             const el = document.querySelector(selector);
             const r = el.getBoundingClientRect();
+            const content = el.closest('.header-content');
             return {
               key,
               inHeader: !!el.closest('.app-header'),
               top: Math.round(r.top),
               left: Math.round(r.left),
+              right: Math.round(r.right),
               width: Math.round(r.width),
               height: Math.round(r.height),
               name: el.getAttribute('aria-label'),
+              rowRight: content
+                ? Math.round(
+                    content.getBoundingClientRect().right -
+                      parseFloat(getComputedStyle(content).paddingRight)
+                  )
+                : innerWidth,
             };
           });
         });
@@ -283,19 +310,103 @@ for (const height of HEIGHTS) {
           expect(c.width, `${c.key} width`).toBeGreaterThanOrEqual(44);
           expect(c.height, `${c.key} height`).toBeGreaterThanOrEqual(44);
         }
-        const tops = row.map((c) => c.top);
-        expect(
-          Math.max(...tops) - Math.min(...tops),
-          `one row (${where})`
-        ).toBeLessThanOrEqual(2);
-        expect(
-          [...row].sort((a, b) => a.left - b.left).map((c) => c.key),
-          'left to right'
-        ).toEqual(['customizer', 'mainPage', 'mode', 'github', 'keys']);
-        expect(row.find((c) => c.key === 'customizer').name).toBe(
-          'Customizer panel'
+        // One row where the four fit. A platform with wider glyphs wraps the
+        // row rather than clipping it (layout.css): then a control starts the
+        // next line only where the first line had no room left for it. Main
+        // Page stands beside the lines, centered on them.
+        const minTop = Math.min(...row.map((c) => c.top));
+        const first = row.filter((c) => c.top - minTop <= 2);
+        const later = row.filter(
+          (c) => c.top - minTop > 2 && c.key !== 'mainPage'
         );
-        expect(row.find((c) => c.key === 'mainPage').name).toBe('Main Page');
+        if (later.length === 0) {
+          expect(
+            [...row].sort((a, b) => a.left - b.left).map((c) => c.key),
+            'left to right'
+          ).toEqual(['mainPage', 'mode', 'github', 'keys']);
+        }
+        for (const c of later) {
+          expect(
+            Math.max(...first.map((f) => f.right)) + c.width,
+            `${c.key} wraps only where the row has no room for it (${where})`
+          ).toBeGreaterThan(c.rowRight);
+        }
+        const lines = 1 + new Set(later.map((c) => c.top)).size;
+        const mainPage = row.find((c) => c.key === 'mainPage');
+        expect(mainPage.name).toBe('Main Page');
+        expect(
+          mainPage.width,
+          'Main Page is twice a button wide'
+        ).toBeGreaterThanOrEqual(92);
+
+        const words = await page.evaluate(() => ({
+          mainPage: document
+            .querySelector('#clearFileBtn .clear-file-label')
+            .checkVisibility(),
+          customizer: document
+            .querySelector('#mobileDrawerToggle .btn-label')
+            .checkVisibility(),
+        }));
+        expect(words.mainPage, "Main Page's words").toBe(!look.highContrast);
+        expect(words.customizer, "the Customizer button's word").toBe(
+          !look.altView
+        );
+
+        // The Customizer button leads the settings row, the arrow next.
+        const settings = await page.evaluate(() => {
+          const button = document.getElementById('mobileDrawerToggle');
+          const r = button.getBoundingClientRect();
+          return {
+            parent: button.parentElement.className,
+            next: button.nextElementSibling?.id ?? null,
+            first: button.parentElement.firstElementChild === button,
+            name: button.getAttribute('aria-label'),
+            width: Math.round(r.width),
+            height: Math.round(r.height),
+          };
+        });
+        expect(settings.parent).toContain('preview-drawer-header-left');
+        expect(settings.first, 'the first control of the row').toBe(true);
+        expect(settings.next).toBe('previewDrawerToggle');
+        expect(settings.name).toBe('Customizer panel');
+        expect(settings.width).toBeGreaterThanOrEqual(44);
+        expect(settings.height).toBeGreaterThanOrEqual(44);
+
+        // Nothing in the header or the settings row sits on a neighbour or
+        // runs off the screen.
+        const crowding = await page.evaluate(() => {
+          const boxes = [];
+          for (const el of document.querySelectorAll(
+            '.app-header button, .app-header a, .preview-drawer-header button'
+          )) {
+            if (!el.checkVisibility()) continue;
+            const r = el.getBoundingClientRect();
+            if (!r.width || !r.height) continue;
+            boxes.push({ id: el.id || String(el.className).split(' ')[0], r });
+          }
+          const overlaps = [];
+          for (let a = 0; a < boxes.length; a++) {
+            for (let b = a + 1; b < boxes.length; b++) {
+              const p = boxes[a].r;
+              const q = boxes[b].r;
+              const ox = Math.min(p.right, q.right) - Math.max(p.left, q.left);
+              const oy = Math.min(p.bottom, q.bottom) - Math.max(p.top, q.top);
+              if (ox > 0.5 && oy > 0.5) {
+                overlaps.push(
+                  `${boxes[a].id} x ${boxes[b].id} = ${Math.round(ox)}px`
+                );
+              }
+            }
+          }
+          const offscreen = boxes
+            .filter((b) => b.r.right > innerWidth + 0.5 || b.r.left < -0.5)
+            .map((b) => b.id);
+          return { overlaps, offscreen };
+        });
+        expect(crowding.overlaps, 'no control sits on a neighbour').toEqual([]);
+        expect(crowding.offscreen, 'no control runs off the screen').toEqual(
+          []
+        );
 
         // Tab order follows the row.
         const order = await page.evaluate(() => {
@@ -309,7 +420,6 @@ for (const height of HEIGHTS) {
         expect(
           order.filter((id) =>
             [
-              'mobileDrawerToggle',
               'clearFileBtn',
               'uiModeToggle',
               'github-link',
@@ -318,18 +428,21 @@ for (const height of HEIGHTS) {
           ),
           'the header in tab order'
         ).toEqual([
-          'mobileDrawerToggle',
           'clearFileBtn',
           'uiModeToggle',
           'github-link',
           'shortcutsToggle',
         ]);
 
-        // The header is one row high.
+        // The header is as tall as its lines: one where the four fit.
         const header = await page.evaluate(() =>
-          Math.round(document.querySelector('.app-header').getBoundingClientRect().height)
+          Math.round(
+            document.querySelector('.app-header').getBoundingClientRect().height
+          )
         );
-        expect(header, 'the header height').toBeLessThan(60);
+        expect(header, `the header height, ${lines} line(s)`).toBeLessThan(
+          60 * lines
+        );
       });
     }
   });
@@ -353,11 +466,7 @@ for (const height of HEIGHTS) {
 
         const placement = await control.evaluate((el) => ({
           inCustomizerRow: !!el.closest('.preview-drawer-header'),
-          name: (
-            el.getAttribute('aria-label') ||
-            el.textContent ||
-            ''
-          ).trim(),
+          name: (el.getAttribute('aria-label') || el.textContent || '').trim(),
         }));
         expect(
           placement.inCustomizerRow,
@@ -407,7 +516,10 @@ for (const height of HEIGHTS) {
             };
           }
         }
-        return { present: true, text: h.textContent.replace(/\s+/g, ' ').trim() };
+        return {
+          present: true,
+          text: h.textContent.replace(/\s+/g, ' ').trim(),
+        };
       });
       expect(
         heading1.present,
@@ -496,6 +608,179 @@ for (const height of HEIGHTS) {
   });
 }
 
+// Held sideways the menu bar shares the settings row, which has no room left,
+// so the Customizer button keeps its place at the head of the header's first
+// row, where there is room; Main Page is twice a button wide here too.
+test.describe('Held sideways (740x360)', () => {
+  test.use({ viewport: { width: 740, height: 360 }, hasTouch: true });
+
+  // Held sideways both rows have room for the words an upright phone has to
+  // drop: the Customizer button's, Main Page's in high contrast, and Full
+  // Screen's and Help's. Each row stays one line with nothing drawn over a
+  // neighbour.
+  for (const look of [
+    { label: '' },
+    { label: ' in high contrast', highContrast: true },
+    { label: ' in the Alt View', altView: true },
+  ]) {
+    test(`toolbar-sideways-words: the buttons keep their words, each row one line${look.label}`, async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await page.addInitScript((l) => {
+        if (l.altView) {
+          localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+        }
+        if (l.highContrast) {
+          localStorage.setItem('openscad-forge-high-contrast', 'true');
+        }
+      }, look);
+      await loadSampleProject(page);
+      await skipUnlessSideways(page);
+      await switchToStandard(page);
+      if (look.altView) {
+        await skipWithoutWebGL(
+          page,
+          'no WebGL: the Alt View draws its characters from the 3D picture'
+        );
+        await page.locator('#_hfmToggle').click();
+        await expect(page.locator('html')).toHaveAttribute(
+          'data-ui-variant',
+          'mono'
+        );
+      }
+      await page.waitForTimeout(600);
+
+      const facts = await page.evaluate(() => {
+        const shown = (selector) =>
+          document
+            .querySelector(selector)
+            .checkVisibility({ visibilityProperty: true });
+        const crowding = (row) => {
+          const boxes = [
+            ...row.querySelectorAll('button, a[href], [role="switch"]'),
+          ]
+            .filter(
+              (el) =>
+                !el.closest('[role="menu"]') &&
+                el.checkVisibility({ visibilityProperty: true }) &&
+                el.getBoundingClientRect().width > 0
+            )
+            .map((el) => ({ id: el.id, r: el.getBoundingClientRect() }));
+          const overlaps = [];
+          for (let a = 0; a < boxes.length; a++) {
+            for (let b = a + 1; b < boxes.length; b++) {
+              const p = boxes[a].r;
+              const q = boxes[b].r;
+              const inside = (o, i) =>
+                o.left <= i.left &&
+                o.right >= i.right &&
+                o.top <= i.top &&
+                o.bottom >= i.bottom;
+              if (inside(p, q) || inside(q, p)) continue;
+              const ox = Math.min(p.right, q.right) - Math.max(p.left, q.left);
+              const oy = Math.min(p.bottom, q.bottom) - Math.max(p.top, q.top);
+              if (ox > 0.5 && oy > 0.5) {
+                overlaps.push(`${boxes[a].id} x ${boxes[b].id}`);
+              }
+            }
+          }
+          const middles = boxes.map((x) => x.r.top + x.r.height / 2);
+          return {
+            overlaps,
+            spread: Math.round(Math.max(...middles) - Math.min(...middles)),
+            offscreen: boxes
+              .filter((x) => x.r.right > innerWidth + 0.5 || x.r.left < -0.5)
+              .map((x) => x.id),
+          };
+        };
+        return {
+          words: {
+            customizer: shown('#mobileDrawerToggle .btn-label'),
+            mainPage: shown('#clearFileBtn .clear-file-label'),
+            fullScreen: shown('#focusModeBtn .btn-text'),
+            help: shown('#featuresGuideBtn .btn-text'),
+          },
+          header: crowding(document.querySelector('.app-header')),
+          row: crowding(document.querySelector('.preview-drawer-header')),
+        };
+      });
+      expect(facts.words, 'the words shown').toEqual({
+        customizer: true,
+        mainPage: true,
+        fullScreen: true,
+        help: true,
+      });
+      for (const part of ['header', 'row']) {
+        expect(facts[part].overlaps, `${part}: nothing overlaps`).toEqual([]);
+        expect(facts[part].offscreen, `${part}: nothing off screen`).toEqual(
+          []
+        );
+        expect(facts[part].spread, `${part}: one line`).toBeLessThanOrEqual(4);
+      }
+    });
+  }
+
+  test('toolbar-sideways: the Customizer button heads the header, and the settings row with the menu bar fits', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await loadSampleProject(page);
+    await skipUnlessSideways(page);
+    await switchToStandard(page);
+    const facts = await page.evaluate(() => {
+      const button = document.getElementById('mobileDrawerToggle');
+      const back = document.getElementById('clearFileBtn');
+      const header = document.querySelector('.header-content');
+      const row = document.querySelector('.preview-drawer-header');
+      return {
+        inHeader: button.parentElement === header,
+        beforeMainPage: button.nextElementSibling === back,
+        mainPageWidth: Math.round(back.getBoundingClientRect().width),
+        rowFits: row.scrollWidth <= row.clientWidth + 1,
+        menuInRow: !!row.querySelector('#toolbarMenuBar'),
+      };
+    });
+    expect(facts.menuInRow, 'the menu bar shares the settings row').toBe(true);
+    expect(facts.inHeader, 'the Customizer button is in the header').toBe(true);
+    expect(facts.beforeMainPage, 'at its head, before Main Page').toBe(true);
+    expect(
+      facts.mainPageWidth,
+      'Main Page is twice a button wide'
+    ).toBeGreaterThanOrEqual(92);
+    expect(facts.rowFits, 'the settings row fits its width').toBe(true);
+
+    // Open, the button takes the accent fill, which is the header's own
+    // color here: its edge is what still shows it is pressed.
+    await page.locator('#mobileDrawerToggle').click();
+    await expect(page.locator('#mobileDrawerToggle')).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    // Past the colors' transition: mid-way the edge is neither color.
+    await page.waitForTimeout(600);
+    const pressed = await page.evaluate(() => {
+      const cs = getComputedStyle(
+        document.getElementById('mobileDrawerToggle')
+      );
+      return {
+        fill: cs.backgroundColor,
+        edge: cs.borderTopColor,
+        width: parseFloat(cs.borderTopWidth),
+        header: getComputedStyle(document.querySelector('.app-header'))
+          .backgroundColor,
+      };
+    });
+    expect(pressed.width, 'the open button has an edge').toBeGreaterThanOrEqual(
+      1
+    );
+    expect(
+      pressed.edge,
+      `its edge stands out from the header (${JSON.stringify(pressed)})`
+    ).not.toBe(pressed.header);
+  });
+});
+
 test.describe('High contrast grows the row rather than hiding it', () => {
   test.use({ viewport: { width: 412, height: 810 } });
 
@@ -512,7 +797,9 @@ test.describe('High contrast grows the row rather than hiding it', () => {
       document.documentElement.setAttribute('data-high-contrast', 'true')
     );
     await page.locator('#fileInput').setInputFiles(FIXTURE);
-    await expect(page.locator('#welcomeScreen')).toBeHidden({ timeout: 60_000 });
+    await expect(page.locator('#welcomeScreen')).toBeHidden({
+      timeout: 60_000,
+    });
     await expect(page.locator('#mainInterface')).toBeVisible({
       timeout: 20_000,
     });
@@ -580,7 +867,9 @@ test.describe('The row goes home when the window grows', () => {
       'data-mobile-toolbar',
       'relocated'
     );
-    await expect(page.locator('#preview-settings-heading')).toHaveClass(/sr-only/);
+    await expect(page.locator('#preview-settings-heading')).toHaveClass(
+      /sr-only/
+    );
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.locator('body')).toHaveAttribute(
@@ -646,7 +935,9 @@ test.describe('The row follows the surface, not just the viewport', () => {
     });
 
     await page.locator('#fileInput').setInputFiles(FIXTURE);
-    await expect(page.locator('#welcomeScreen')).toBeHidden({ timeout: 60_000 });
+    await expect(page.locator('#welcomeScreen')).toBeHidden({
+      timeout: 60_000,
+    });
     await expect(page.locator('#mainInterface')).toBeVisible({
       timeout: 20_000,
     });
@@ -657,9 +948,7 @@ test.describe('The row follows the surface, not just the viewport', () => {
     } catch {
       // no modal
     }
-    await expect
-      .poll(async () => (await state()).toolbar)
-      .toBe('relocated');
+    await expect.poll(async () => (await state()).toolbar).toBe('relocated');
     expect(await state()).toMatchObject({
       surface: 'project',
       inWorkflowRow: false,
@@ -764,5 +1053,49 @@ test.describe('The bottom bar toggles say their name once', () => {
       )
       .toBe('mono');
     await nameOnly(page, 'asciiDrawerToggle', 'Lens controls');
+  });
+});
+
+// On a phone, as on the desktop, a slider's value sits on the slider's own
+// row, to its right, so the number and the control it reports read together;
+// and a finger has room to set it: never shorter than three touch targets,
+// the floor the Customizer's own sliders keep.
+test.describe("A slider's value sits beside it (412x915)", () => {
+  test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
+
+  test('slider-value-beside: every slider in Preview Settings, with room', async ({
+    page,
+  }) => {
+    test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+    await loadSampleProject(page);
+    await page.locator('#previewDrawerToggle').click();
+    await expect(page.locator('#rotationSpeedInput')).toBeVisible();
+    await page.waitForTimeout(600);
+    const rows = await page.evaluate(() =>
+      [...document.querySelectorAll('#previewInfoContent .slider-container')]
+        .filter((c) => c.querySelector('.slider-value') && c.offsetParent)
+        .map((c) => {
+          const r = c
+            .querySelector('input[type="range"]')
+            .getBoundingClientRect();
+          const v = c.querySelector('.slider-value').getBoundingClientRect();
+          const middle = v.top + v.height / 2;
+          return {
+            id: c.querySelector('input[type="range"]').id,
+            beside:
+              middle > r.top && middle < r.bottom && v.left >= r.right - 1,
+            width: Math.round(r.width),
+          };
+        })
+    );
+    expect(rows.map((r) => r.id)).toContain('rotationSpeedInput');
+    expect(
+      rows.filter((r) => !r.beside).map((r) => r.id),
+      'sliders whose value is not beside them'
+    ).toEqual([]);
+    expect(
+      rows.filter((r) => r.width < 3 * 44).map((r) => `${r.id} ${r.width}px`),
+      'sliders shorter than three touch targets'
+    ).toEqual([]);
   });
 });

@@ -1237,51 +1237,25 @@ body[data-app-surface='welcome'] #uiModeToggle {
   }
 }
 
-/* Mobile drawer close button -- lives in the sticky panel-header title row */
-.drawer-close-btn {
-  /* min-width/min-height provided by .forge-control */
-  z-index: var(--z-index-base);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius-md);
-  display: none; /* Hidden by default, shown on mobile via drawer-open */
-  flex-shrink: 0;
-  transition:
-    background-color var(--motion-base) ease,
-    border-color var(--motion-base) ease;
-}
-
-@media (hover: hover) {
-  .drawer-close-btn:hover {
-    background: var(--color-hover-bg);
-    transform: scale(1.05);
-  }
-}
-
-.drawer-close-btn:active {
-  transform: scale(0.95);
-}
-
-/* Show close button only when drawer is open on mobile.
-   The button lives inside the sticky .panel-header, so it stays
-   visible when scrolling without needing position:fixed (which is
-   broken by the parent transform on the off-canvas drawer). */
+/* On a phone the Customizer's own arrow closes the open sheet, at the right
+   end of its sticky title row, as the desktop's collapses the column; S1
+   turns it to point left while the sheet is open. Closed, the sheet and the
+   arrow are out of sight together. Its desktop look lives in the 768 px
+   rules below, so the phone gives it the same look here. */
 @media (max-width: 767px) {
-  .param-panel.drawer-open .drawer-close-btn {
-    display: flex !important;
+  .param-panel .panel-header-title-row #collapseParamPanelBtn {
+    display: none;
+  }
+
+  .param-panel.drawer-open .panel-header-title-row #collapseParamPanelBtn {
+    display: flex;
     align-items: center;
     justify-content: center;
-    position: static;
     margin-left: auto;
     flex-shrink: 0;
-    z-index: var(--z-index-base);
-  }
-}
-
-/* Ensure close button is hidden on desktop */
-@media (min-width: 768px) {
-  .drawer-close-btn {
-    display: none !important;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
   }
 }
 
@@ -4121,21 +4095,32 @@ body[data-mobile-toolbar='relocated']
   }
 }
 
-/* A phone with a project open: the header's first row also carries the
-   Customizer button (mobile-toolbar.js moves it there), so Main Page and the
-   Customizer button show their arrows alone, keeping their names, and the
-   switch's two options take the small padding. Measured at 412px: Main Page
-   101px and the Customizer button 98px with their words, the switch 194px
-   (206px in the Alt View's font); the 396px row holds the five only this
-   way. The Customizer button takes the header's button look, and its open
-   state keeps the shared pressed color. */
+/* A phone with a project open. Main Page is twice a button wide, as the
+   desktop's is wider than a button, with its words where they fit: 101px in
+   dark and light, 92px in the Alt View's font. Held upright, the Customizer
+   button heads the Preview Settings row with its word, except in the Alt
+   View, whose row holds two more buttons and would put the row's arrow over
+   HC. Held sideways it heads the header (mobile-toolbar.js) in the header's
+   button look; open, it keeps the shared pressed color. The switch's two
+   options take the small padding. */
 @media (max-width: 767px) {
-  body[data-mobile-toolbar='relocated'] #clearFileBtn .clear-file-label,
-  body[data-mobile-toolbar='relocated']
-    .app-header
+  body[data-mobile-toolbar='relocated'] .header-content > #clearFileBtn {
+    min-width: calc(2 * var(--size-touch-target) + var(--space-xs));
+    justify-content: center;
+  }
+
+  :root[data-ui-variant='mono']
+    body[data-mobile-toolbar='relocated']
+    .preview-drawer-header
     #mobileDrawerToggle
     .btn-label {
     display: none;
+  }
+
+  body[data-mobile-toolbar='relocated']
+    .preview-drawer-header
+    #mobileDrawerToggle {
+    flex-shrink: 0;
   }
 
   body[data-mobile-toolbar='relocated'] .app-header .ui-mode-option {
@@ -4154,6 +4139,33 @@ body[data-mobile-toolbar='relocated']
   body[data-mobile-toolbar='relocated'] .app-header #mobileDrawerToggle {
     justify-content: center;
     flex-shrink: 0;
+  }
+
+  /* Open, it takes the accent fill (S3), which is the header's own color, so
+     an edge in its pressed text color keeps its shape in view. */
+  body[data-mobile-toolbar='relocated']
+    .app-header
+    #mobileDrawerToggle[aria-expanded='true'] {
+    border: 1px solid currentColor;
+    border-radius: var(--border-radius-md);
+  }
+}
+
+/* Below 740px the header has no room for these words: upright, in high
+   contrast, Main Page's make it 116px and wrap the header to three rows;
+   held sideways at 640px, in high contrast, they push Keys off the screen.
+   From 740px the header keeps one line with them in every look. The buttons
+   keep their names either way. */
+@media (max-width: 739px) {
+  :root[data-high-contrast='true']
+    body[data-mobile-toolbar='relocated']
+    #clearFileBtn
+    .clear-file-label,
+  body[data-mobile-toolbar='relocated']
+    .app-header
+    #mobileDrawerToggle
+    .btn-label {
+    display: none;
   }
 }
 
@@ -4642,6 +4654,12 @@ body[data-mobile-toolbar='relocated']
   :root .preview-panel .actions-bar {
     flex-direction: row;
     align-items: stretch;
+  }
+
+  /* The toggles keep the touch size, as they do upright; the small-button
+     rule would hold them at 36px. */
+  :root .actions-bar .camera-drawer-toggle-btn {
+    min-height: var(--size-touch-target);
   }
 
   /* No blur on the drawer: a blurred box would hold its fixed body inside

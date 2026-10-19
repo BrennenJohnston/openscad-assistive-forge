@@ -40,6 +40,14 @@
     border-color 150ms ease;
 }
 
+/* The 32px bar is for a mouse; a finger gets the full touch target, as
+   Classic's menu bar does. */
+@media (pointer: coarse) {
+  .toolbar-menu-btn {
+    min-height: var(--size-touch-target);
+  }
+}
+
 .toolbar-menu-btn:hover {
   background: var(--color-hover-bg);
   border-color: var(--color-text-primary);
@@ -142,8 +150,10 @@
    as a desktop menu does, with no title bar: the list's own name carries the
    menu's name, and Escape, a click outside or the button closes it. The
    anchor comes from toolbar-menu-controller.js; the fallbacks keep the panel
-   on screen if it ever opens without one. A phone keeps the sheet below. */
-@media (min-width: 768px) {
+   on screen if it ever opens without one. A phone keeps the sheet below,
+   held either way: sideways it can be wider than 768px (phone-drawers.js
+   has the same query). */
+@media (min-width: 768px) and (not ((orientation: landscape) and (pointer: coarse) and (max-height: 500px))) {
   .toolbar-menu-content {
     position: absolute;
     left: var(--menu-anchor-x, 0);
@@ -376,7 +386,10 @@
    Mobile: Full-width modals
    ============================================================================ */
 
-@media (max-width: 767px) {
+/* A phone's menu is a sheet from the bottom edge with its title and close
+   button, upright or held sideways at any width. */
+@media (max-width: 767px),
+  (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
   .toolbar-menu-modal {
     align-items: flex-end;
     justify-content: stretch;
@@ -388,7 +401,9 @@
     border-radius: var(--border-radius-sm) var(--border-radius-sm) 0 0;
     margin-top: 0;
   }
+}
 
+@media (max-width: 767px) {
   /* Toolbar layout: action buttons on first row, menu bar on second row */
   .workflow-progress {
     flex-wrap: wrap;

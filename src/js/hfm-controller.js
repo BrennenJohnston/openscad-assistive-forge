@@ -197,7 +197,6 @@ const _HFM_DRAWER_BUTTONS = [
   '#previewDrawerToggle',
   '#lensDrawerToggle',
   '#mobileDrawerToggle',
-  '#drawerCloseBtn',
   '#cameraDrawerToggle',
   '#asciiDrawerToggle',
   '#classicEditorCloseBtn',
