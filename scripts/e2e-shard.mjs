@@ -224,7 +224,7 @@ export const MEASURED_SECONDS = {
   'keys-dialog.spec.js': 95.0,
   // 137.2 by the two runs above, plus one case since (the Engine group, which
   // downloads an engine and switches twice: 9.3 s locally), booked at 40.
-  'preferences-dialog.spec.js': 177.2,
+  'preferences-dialog.spec.js': 217.2,
 
   // Ran on no lane of either run: every case skips on CI for want of a
   // fixture. Kept at zero, so that a file which starts running again is

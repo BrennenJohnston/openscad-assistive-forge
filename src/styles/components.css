@@ -16914,8 +16914,39 @@ body.tutorial-body-locked {
    disabled tab, which stays focusable so its reason can be read out, gets
    the same ring from that contract. */
 
+/* Preferences scrolls in one place, as Keys does: the header, the tabs and
+   Done stay put and only the settings between them scroll. */
+.preferences-modal-content {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 2 * var(--space-lg));
+  overflow: hidden;
+}
+
+@supports (max-height: 100dvh) {
+  .preferences-modal-content {
+    max-height: calc(100dvh - 2 * var(--space-lg));
+  }
+}
+
+.preferences-tabs {
+  flex: none;
+}
+
+/* `position: relative` keeps the settings' visually hidden text inside the
+   body; positioned against the dialog, it stretched the dialog's own scroll. */
 .preferences-modal-body {
+  position: relative;
+  flex: 1 1 auto;
   min-height: 12rem;
+  overflow-y: auto;
+}
+
+/* On a short screen the floor would push Done out of the dialog. */
+@media (max-height: 500px) {
+  .preferences-modal-body {
+    min-height: 0;
+  }
 }
 
 .preferences-panel-reason {
