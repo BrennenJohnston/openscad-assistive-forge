@@ -30,6 +30,7 @@ export {
 
 import { RENDER_QUALITY } from './quality-tiers.js';
 import { filterFilesForMount } from './mount-filter.js';
+import { DEFAULT_ENGINE_PATH, startupEnginePath } from './engine-choice.js';
 
 /**
  * Estimate render time based on SCAD content complexity
@@ -308,6 +309,11 @@ export class RenderController {
     this.onInitProgress = callback;
   }
 
+  /** @returns {string} The folder of the engine the worker runs. */
+  getEnginePath() {
+    return this.enginePath ?? DEFAULT_ENGINE_PATH;
+  }
+
   /**
    * Initialize the Web Worker
    * @param {Object} options - Initialization options
@@ -407,13 +413,31 @@ export class RenderController {
         const assetBaseUrl = options.assetBaseUrl;
         const cachedCapabilities = options.cachedCapabilities;
         this._initUsedCachedCapabilities = !!cachedCapabilities;
-        this.worker.postMessage({
-          type: 'INIT',
-          payload: {
-            ...(assetBaseUrl ? { assetBaseUrl } : {}),
-            ...(cachedCapabilities ? { cachedCapabilities } : {}),
-          },
-        });
+        const sendInit = (enginePath) => {
+          this.enginePath = enginePath;
+          this.worker?.postMessage({
+            type: 'INIT',
+            payload: {
+              ...(assetBaseUrl ? { assetBaseUrl } : {}),
+              ...(cachedCapabilities ? { cachedCapabilities } : {}),
+              enginePath,
+            },
+          });
+        };
+        // The first start asks which engine was chosen; a restart keeps the
+        // engine it was given.
+        const enginePath = options.enginePath ?? this.enginePath;
+        if (enginePath) {
+          sendInit(enginePath);
+        } else {
+          startupEnginePath().then(sendInit, (error) => {
+            console.warn(
+              '[RenderController] Could not read the chosen engine; starting the Forge engine:',
+              error
+            );
+            sendInit(DEFAULT_ENGINE_PATH);
+          });
+        }
 
         // Set up ready handler
         this.readyResolve = resolveInit;
@@ -453,11 +477,16 @@ export class RenderController {
    * Restart the worker (workaround for OpenSCAD WASM state corruption between renders)
    * Passes cached capabilities so the new worker skips callMain(['--help']),
    * preventing a second callMain() invocation before the actual render.
+   * @param {Object} [options]
+   * @param {string} [options.enginePath] - start another engine instead
    * @returns {Promise<void>}
    */
-  async restart() {
+  async restart({ enginePath } = {}) {
+    const switching = !!enginePath && enginePath !== this.enginePath;
     if (this._restartInProgress) {
-      return this._restartInProgress;
+      return switching
+        ? this._restartInProgress.then(() => this.restart({ enginePath }))
+        : this._restartInProgress;
     }
 
     const doRestart = async () => {
@@ -468,6 +497,11 @@ export class RenderController {
       this.terminate(); // also stops health monitoring
       this.initPromise = null;
       this.ready = false;
+      if (switching) {
+        // Another engine is asked for its own capabilities.
+        this.enginePath = enginePath;
+        this.capabilities = null;
+      }
       await this.init({ cachedCapabilities: this.capabilities || null });
       // Resume health monitoring after reinit
       this.startHealthMonitoring();

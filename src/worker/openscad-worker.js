@@ -137,7 +137,11 @@ async function ensureOpenSCADModule() {
  * Initialize OpenSCAD WASM
  * @param {string} baseUrl - Base URL for fetching assets (optional, defaults to current origin)
  */
-async function initWASM(baseUrl = '', cachedCapabilities = null) {
+async function initWASM(
+  baseUrl = '',
+  cachedCapabilities = null,
+  enginePath = '/wasm/openscad-official'
+) {
   // The engine bytes fetched again past every cache, when the first copy
   // failed the integrity check and the fresh one passed.
   let verifiedEngineBinary = null;
@@ -162,8 +166,16 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
       },
     });
 
-    // Load official OpenSCAD WASM from vendored location
-    const wasmBasePath = `${assetBaseUrl}/wasm/openscad-official`;
+    // The engine's folder: the vendored Forge engine, or an official
+    // snapshot under /wasm/engines/ (engine-choice.js). Nothing else loads.
+    if (
+      !/^\/wasm\/(openscad-official|engines\/official-\d{4}-\d{2}-\d{2})$/.test(
+        enginePath
+      )
+    ) {
+      throw new Error(`Unknown engine folder: ${enginePath}`);
+    }
+    const wasmBasePath = `${assetBaseUrl}${enginePath}`;
     const wasmJsUrl = `${wasmBasePath}/openscad.js`;
 
     if (import.meta.env.DEV)
@@ -2232,7 +2244,8 @@ self.onmessage = async (e) => {
     case 'INIT':
       await initWASM(
         payload?.assetBaseUrl,
-        payload?.cachedCapabilities || null
+        payload?.cachedCapabilities || null,
+        payload?.enginePath
       );
       break;
 

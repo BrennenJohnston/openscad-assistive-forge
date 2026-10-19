@@ -69,6 +69,7 @@ const EXPECTED_KEYS = {
   STORAGE_KEY_MANIFOLD_ENGINE: 'openscad-forge-manifold-engine',
   STORAGE_KEY_SOUNDS: 'openscad-forge-sounds',
   STORAGE_KEY_SOUND_KINDS_OFF: 'openscad-forge-sound-kinds-off',
+  STORAGE_KEY_ENGINE: 'openscad-forge-engine',
 
   // UI mode (ui-mode-controller.js)
   STORAGE_KEY_UI_MODE: 'openscad-forge-ui-mode',

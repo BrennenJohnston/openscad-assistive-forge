@@ -371,6 +371,9 @@ export const STORAGE_KEY_SOUNDS = getAppPrefKey('sounds');
 // Preferences ▸ Advanced ▸ Sounds in Alt View: the kinds turned off, a JSON
 // list of their names (hfm-controller.js); none unless set.
 export const STORAGE_KEY_SOUND_KINDS_OFF = getAppPrefKey('sound-kinds-off');
+// Preferences ▸ Advanced ▸ Engine: the chosen engine's id in
+// public/wasm/engines.json (engine-choice.js); the Forge engine unless set.
+export const STORAGE_KEY_ENGINE = getAppPrefKey('engine');
 
 // --- UI mode (ui-mode-controller.js) ---
 // The controller has always persisted under this name; centralized here so

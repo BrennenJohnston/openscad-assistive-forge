@@ -34,6 +34,12 @@ import {
   gamepadDiagramLabel,
   gamepadInputLabel,
 } from './gamepad-controller.js';
+import {
+  downloadFailure,
+  downloadWithStatus,
+  engineSize,
+  megabytes,
+} from './engine-choice.js';
 
 const TAB_IDS = [
   'prefs-tab-3dview',
@@ -147,6 +153,22 @@ let activeHandlers = {};
  * @property {(name: string, value: number|boolean) => number|boolean} [onEditorPrefChange]
  * @property {() => {supported: boolean, padName: string|null}} [getGamepadStatus]
  * @property {GamepadHandlers} [gamepad]
+ * @property {EngineHandlers} [engine]
+ */
+
+/**
+ * @typedef {Object} EngineHandlers
+ * @property {() => Promise<{engines: Object[]}>} manifest
+ * @property {() => string} chosenId
+ * @property {(id: string) => Promise<boolean>} isDownloaded
+ * @property {(id: string, onProgress: (percent: number) => void) => Promise<unknown>} download
+ * @property {(id: string) => Promise<boolean>} remove - true when the
+ *   removed engine was the chosen one
+ * @property {(id: string) => Promise<unknown>} switchTo
+ * @property {(text: string, options: {announce: boolean}) => void} status
+ * @property {(text: string) => void} announce
+ * @property {(message: string, title: string, confirmLabel: string, cancelLabel: string) => Promise<boolean>} confirm
+ * @property {(details: {title: string, message: string, technical: string}) => void} showError
  */
 
 /**
@@ -334,6 +356,178 @@ function renderGamepadStatus() {
   node.textContent = formatGamepadStatus(activeHandlers.getGamepadStatus());
 }
 
+/** The words an engine goes by, on its radio and in what is said. */
+function engineLabel(entry) {
+  return entry.builtIn
+    ? `${entry.name} (default, built in)`
+    : `${entry.name} (official)`;
+}
+
+/** One engine change at a time: a second press waits for nothing. */
+let engineBusy = false;
+
+/**
+ * Advanced ▸ Engine: one row per engine in the manifest. An official engine
+ * that is not kept in this browser cannot be chosen until it is downloaded,
+ * because arrowing through the radios must never start a download; its
+ * Download button asks first.
+ *
+ * @param {{focus?: {id: string, part: 'radio'|'button'}}} [options] - where
+ *   focus goes once the rows are written again
+ */
+export async function renderEngineGroup({ focus } = {}) {
+  const engine = activeHandlers.engine;
+  const rows = el('engineRows');
+  if (!engine || !rows) return;
+  const manifest = await engine.manifest();
+  const chosen = engine.chosenId();
+  const kept = await Promise.all(
+    manifest.engines.map((entry) => engine.isDownloaded(entry.id))
+  );
+
+  rows.textContent = '';
+  manifest.engines.forEach((entry, i) => {
+    const row = document.createElement('div');
+    row.className = 'engine-row';
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'prefsEngine';
+    radio.id = `engine-${entry.id}`;
+    radio.value = entry.id;
+    radio.checked = entry.id === chosen;
+    radio.disabled = !kept[i];
+    const label = document.createElement('label');
+    label.htmlFor = radio.id;
+    label.textContent = engineLabel(entry);
+    // The radio and its name wrap as one, so a narrow screen never leaves
+    // the radio alone on a line.
+    const name = document.createElement('span');
+    name.className = 'engine-name';
+    name.append(radio, label);
+    row.append(name);
+
+    if (!entry.builtIn) {
+      const state = document.createElement('span');
+      state.className = 'engine-state';
+      state.id = `engineState-${entry.id}`;
+      state.textContent = kept[i]
+        ? `Kept in this browser (${megabytes(engineSize(entry))} MB)`
+        : `Not downloaded (${megabytes(entry.zip.size)} MB)`;
+      radio.setAttribute('aria-describedby', state.id);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-sm btn-outline engine-action';
+      const verb = kept[i] ? 'Remove' : 'Download';
+      button.textContent = verb;
+      button.setAttribute('aria-label', `${verb} the ${entry.name} engine`);
+      button.addEventListener('click', () =>
+        kept[i] ? removeEngine(entry, manifest) : downloadEngine(entry)
+      );
+      row.append(state, button);
+    }
+    rows.append(row);
+  });
+
+  const current =
+    manifest.engines.find((entry) => entry.id === chosen) ??
+    manifest.engines[0];
+  const currentNote = el('engineCurrent');
+  if (currentNote) currentNote.textContent = `Engine: ${engineLabel(current)}`;
+
+  if (focus) {
+    const radio = el(`engine-${focus.id}`);
+    const target =
+      focus.part === 'radio' && !radio?.disabled
+        ? radio
+        : radio?.closest('.engine-row')?.querySelector('button');
+    target?.focus();
+  }
+}
+
+/** Ask, download with its progress in the status line, keep the choice. */
+async function downloadEngine(entry) {
+  const engine = activeHandlers.engine;
+  if (!engine || engineBusy) return;
+  const confirmed = await engine.confirm(
+    `Download the ${entry.name} engine? It is about ${megabytes(entry.zip.size)} MB to download and takes ${megabytes(engineSize(entry))} MB in this browser until you remove it or clear the cache.`,
+    'Download an official engine',
+    'Download',
+    'Not now'
+  );
+  if (!confirmed) return;
+  engineBusy = true;
+  try {
+    await downloadWithStatus(engine, entry);
+    engine.announce(`Engine ready: ${engineLabel(entry)}.`);
+    await renderEngineGroup({ focus: { id: entry.id, part: 'radio' } });
+  } catch (error) {
+    engine.showError(downloadFailure(error));
+    await renderEngineGroup({ focus: { id: entry.id, part: 'button' } });
+  } finally {
+    engineBusy = false;
+  }
+}
+
+/** Switch to a kept engine and say which one runs now. */
+async function chooseEngine(id) {
+  const engine = activeHandlers.engine;
+  if (!engine || engineBusy) return;
+  engineBusy = true;
+  try {
+    const manifest = await engine.manifest();
+    const entry = manifest.engines.find((e) => e.id === id);
+    await engine.switchTo(id);
+    engine.announce(`Engine: ${engineLabel(entry)}`);
+    await renderEngineGroup({ focus: { id, part: 'radio' } });
+  } catch (error) {
+    showEngineChangeError(engine, error);
+    await renderEngineGroup();
+  } finally {
+    engineBusy = false;
+  }
+}
+
+/** Forget a kept engine; when it was in use, run the Forge engine again. */
+async function removeEngine(entry, manifest) {
+  const engine = activeHandlers.engine;
+  if (!engine || engineBusy) return;
+  engineBusy = true;
+  try {
+    const wasInUse = await engine.remove(entry.id);
+    let sentence = `Removed the ${entry.name} engine.`;
+    if (wasInUse) {
+      const builtIn = manifest.engines.find((e) => e.builtIn);
+      await engine.switchTo(builtIn.id);
+      sentence += ` Engine: ${engineLabel(builtIn)}`;
+    }
+    engine.announce(sentence);
+    await renderEngineGroup({ focus: { id: entry.id, part: 'button' } });
+  } catch (error) {
+    showEngineChangeError(engine, error);
+    await renderEngineGroup();
+  } finally {
+    engineBusy = false;
+  }
+}
+
+function showEngineChangeError(engine, error) {
+  engine.showError({
+    title: 'Engine change failed',
+    message: 'The engine did not start. Choose the Forge engine to go back.',
+    technical: error.message,
+  });
+}
+
+/** The group, written again; a manifest that cannot be read says so. */
+function syncEngineGroup() {
+  renderEngineGroup().catch((error) => {
+    console.error('[Preferences] The engine list could not be read:', error);
+    const note = el('engineCurrent');
+    if (note)
+      note.textContent = `The engine list could not be read: ${error.message}`;
+  });
+}
+
 /**
  * Editor-tab control ids, paired with the preference each one writes.
  * `number` controls clamp through the preference owner and echo back what was
@@ -399,6 +593,7 @@ function syncControls() {
 
   renderGamepadStatus();
   renderGamepadPanel();
+  syncEngineGroup();
 }
 
 /** Editor tab: instant-apply on the running editor. */
@@ -510,6 +705,14 @@ export function initPreferencesDialog(handlers = {}) {
   wireEditorTab();
   wireControllerTab();
 
+  // `change`, so a radio chosen by the arrow keys switches as a click does.
+  el('engineRows')?.addEventListener('change', (event) => {
+    const input = event.target;
+    if (input?.name === 'prefsEngine' && input.checked) {
+      chooseEngine(input.value);
+    }
+  });
+
   // The status line heals itself while the dialog is open — without this,
   // "No controller detected" would sit beside a pad that was plugged in a
   // second after opening, and only a close-and-reopen would fix it.
@@ -572,4 +775,5 @@ export function openPreferencesDialog(options = {}) {
 export function _resetPreferencesDialogForTests() {
   wired = false;
   capturingAction = null;
+  engineBusy = false;
 }

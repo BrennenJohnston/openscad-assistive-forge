@@ -47,6 +47,8 @@ The production lane exists because styling that works in the dev server can be
 refused by the real policy. Anything touching CSS, the editor, or the Content
 Security Policy should run `npm run test:e2e:prod` as well.
 
+The engine choice is covered by `tests/e2e/engine-choice.spec.js` and `tests/e2e/engine-fault-ladder.spec.js`, and in the production lane by `engine-cache.spec.js`, where the service worker keeps a downloaded engine through an update.
+
 Harness files that live under `build/` must be named `*.pwalk.js`, not
 `*.spec.js` -- Vitest picks up `build/*.spec.js` and tries to run it.
 

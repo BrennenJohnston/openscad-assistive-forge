@@ -712,6 +712,33 @@ export function clearFriendlyError(container) {
 let _modalIdCounter = 0;
 
 /**
+ * The failures that may be the engine's own fault rather than the model's:
+ * an assertion inside CGAL, the WebAssembly runtime stopping, the engine
+ * failing to start or to restart. A model that is too deep, too slow, too
+ * big or simply wrong is not on the list: another engine would not help.
+ */
+const ENGINE_FAULT_CODES = new Set([
+  'CGAL_ASSERTION',
+  'WASM_ABORT',
+  'WASM_UNREACHABLE',
+  'WASM_OOB',
+  'INTERNAL_ERROR',
+  'ENGINE_OUT_OF_ROOM',
+  'WASM_DOUBLE_INVOKE',
+  'ENGINE_RESTART_FAILED',
+  'INIT_FAILED',
+  'ENGINE_COPY_MISMATCH',
+]);
+
+/**
+ * @param {string} [code] - a failure's code
+ * @returns {boolean} Whether another engine might not fail the same way
+ */
+export function isEngineFault(code) {
+  return ENGINE_FAULT_CODES.has(code);
+}
+
+/**
  * Show a modal error dialog for critical errors that block workflow.
  * Uses role="alertdialog" with focus trap and keyboard dismissal.
  * @param {Object} options
@@ -719,9 +746,20 @@ let _modalIdCounter = 0;
  * @param {string} options.message - Error explanation
  * @param {string} [options.suggestion] - What the user can try
  * @param {string} [options.technical] - Technical details (collapsible)
+ * @param {string} [options.extra] - one more paragraph, after the suggestion
+ * @param {Array<{label: string, primary?: boolean, focus?: boolean, onClick: Function}>} [options.actions]
+ *   - buttons in place of OK; each closes the dialog, then runs its onClick.
+ *   `focus` names the button focus starts on (the least risky one).
  * @returns {Promise<void>} Resolves when the user dismisses the dialog
  */
-export function showErrorModal({ title, message, suggestion, technical }) {
+export function showErrorModal({
+  title,
+  message,
+  suggestion,
+  technical,
+  extra,
+  actions,
+}) {
   return new Promise((resolve) => {
     const id = `error-modal-${++_modalIdCounter}`;
     const titleId = `${id}-title`;
@@ -782,6 +820,13 @@ export function showErrorModal({ title, message, suggestion, technical }) {
       body.appendChild(suggEl);
     }
 
+    if (extra) {
+      const extraEl = document.createElement('p');
+      extraEl.className = 'error-offer';
+      extraEl.textContent = extra;
+      body.appendChild(extraEl);
+    }
+
     if (technical) {
       const details = document.createElement('details');
       details.className = 'error-details-toggle';
@@ -800,12 +845,6 @@ export function showErrorModal({ title, message, suggestion, technical }) {
     footer.className = 'friendly-error-modal-footer';
     content.appendChild(footer);
 
-    const okBtn = document.createElement('button');
-    okBtn.type = 'button';
-    okBtn.className = 'btn btn-primary';
-    okBtn.textContent = 'OK';
-    footer.appendChild(okBtn);
-
     const trap = createFocusTrap(overlay, { onEscape: () => cleanup() });
 
     const cleanup = () => {
@@ -814,15 +853,48 @@ export function showErrorModal({ title, message, suggestion, technical }) {
       resolve();
     };
 
+    // The offered actions stand in for OK: one of them already says "not
+    // now", and a second way to say it would only be noise.
+    let firstFocus = null;
+    if (actions?.length) {
+      // A longer list reads as one choice per line: side by side, the
+      // labels wrap into narrow columns.
+      if (actions.length > 2) {
+        footer.classList.add('friendly-error-modal-footer--stacked');
+      }
+      for (const action of actions) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = action.primary
+          ? 'btn btn-primary'
+          : 'btn btn-secondary';
+        button.textContent = action.label;
+        button.addEventListener('click', () => {
+          cleanup();
+          action.onClick?.();
+        });
+        footer.appendChild(button);
+        if (action.focus) firstFocus = button;
+      }
+      firstFocus ??= footer.querySelector('button');
+    } else {
+      const okBtn = document.createElement('button');
+      okBtn.type = 'button';
+      okBtn.className = 'btn btn-primary';
+      okBtn.textContent = 'OK';
+      footer.appendChild(okBtn);
+      okBtn.addEventListener('click', cleanup);
+      firstFocus = okBtn;
+    }
+
     closeBtn.addEventListener('click', cleanup);
-    okBtn.addEventListener('click', cleanup);
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) cleanup();
     });
 
     document.body.appendChild(overlay);
-    okBtn.focus();
-    trap.activate({ initialFocus: okBtn });
+    firstFocus.focus();
+    trap.activate({ initialFocus: firstFocus });
 
     announceError(`Error: ${title}. ${message}`);
   });

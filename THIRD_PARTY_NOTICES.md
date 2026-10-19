@@ -9,10 +9,11 @@ Generated web applications include OpenSCAD compiled to WebAssembly (WASM) for c
 **License**: GNU General Public License v2.0 or later
 **Project**: https://openscad.org/
 **Source Code**: https://github.com/openscad/openscad
-**WASM Build**: OpenSCAD-2026.04.03+forge.1, built for Forge from OpenSCAD's source (includes Manifold support)
-**Build Source**: OpenSCAD commit `98d891340e6007524e69f399162016f9b22584ff`, the commit behind the official 2026.04.03 snapshot, built by `scripts/build-openscad-wasm.sh` in this repository
-**Change to OpenSCAD's source**: one compile definition, `CGAL_ALWAYS_ROUND_TO_NEAREST`, added in `CMakeLists.txt`; `public/wasm/README.txt` says why
+**WASM Build**: OpenSCAD-2026.04.03+forge.3, built for Forge from OpenSCAD's source (includes Manifold support)
+**Build Source**: OpenSCAD commit `98d891340e6007524e69f399162016f9b22584ff`, the commit behind the official 2026.04.03 snapshot, built by `scripts/build-openscad-wasm.sh` in this repository, with the libraries built from openscad-wasm commit `dc2ff913b4193b1ebfef863da3f7e84f8fbc1e11`
+**Changes to OpenSCAD's build**: three: the compile definition `CGAL_ALWAYS_ROUND_TO_NEAREST`, WebAssembly's own exceptions (`-fwasm-exceptions`), and an 8 MiB stack; the patches and the reasons are on this repository's `engine-research` branch
 **Vendored Location**: `public/wasm/openscad-official/`
+**Official snapshots**: four official OpenSCAD WebAssembly snapshots (2026.10.18, 2026.04.03, 2026.01.03, 2025.03.25), downloaded unchanged from `https://files.openscad.org/snapshots/` at build time and served from this site only when a person chooses one; this OpenSCAD notice covers them
 
 ### Manifold Geometry Library
 

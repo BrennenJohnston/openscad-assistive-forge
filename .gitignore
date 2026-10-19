@@ -7,6 +7,9 @@ dist/
 .vscode/
 .idea/
 public/wasm/openscad.*
+# The official OpenSCAD engines, written by npm run setup-wasm from
+# public/wasm/engines.json; their zips are cached under build/
+public/wasm/engines/
 public/libraries/*/
 !public/libraries/README.md
 public/fonts/*.ttf

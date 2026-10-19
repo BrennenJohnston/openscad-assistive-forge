@@ -40,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   menus and typing each have theirs; a controller's buttons sound as the
   controls they stand for would. Preferences > Advanced turns each kind
   off on its own.
+- Preferences > Advanced > Engine chooses the engine: the Forge build or one
+  of four official OpenSCAD snapshots, downloaded only when you ask and kept
+  in the browser. When a model fails in a way that may be the engine's
+  fault, the error dialog offers the official engine, then the older
+  snapshots.
 
 ### Changed
 

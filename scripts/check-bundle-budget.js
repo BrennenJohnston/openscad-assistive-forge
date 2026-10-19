@@ -22,9 +22,11 @@ import { gzipSync } from 'zlib';
 // the initial page load (same rationale as the WASM binary exclusion).
 // liblouis/ holds the braille translation tables loaded only by the
 // Braille Card Customizer's worker; examples/ascii-city/ holds the
-// City Walk game's map extracts, fetched only when a player picks a city.
+// City Walk game's map extracts, fetched only when a player picks a city;
+// wasm/engines/ holds the official OpenSCAD engines' loaders and checksums,
+// fetched only when a person downloads one of them.
 // Entries are dist-relative path prefixes (POSIX separators).
-const EXCLUDED_DIRS = ['liblouis', 'examples/ascii-city'];
+const EXCLUDED_DIRS = ['liblouis', 'examples/ascii-city', 'wasm/engines'];
 
 // The vendored OpenSCAD libraries ship whole, but the app loads only their
 // .scad files (not weighed here) and each library's manifest.json. The rest
@@ -38,7 +40,10 @@ const LIBRARY_MANIFEST = /^libraries\/([^/]+\/)?manifest\.json$/;
 // the one thing the app cannot work without. It is not code anybody here is
 // going to shrink, and weighing it would make the wasm line so loose it could
 // never catch anything. Kept out by name rather than by accident of extension.
-const WASM_EXCLUDED_DIRS = ['wasm/openscad-official'];
+// The official engines in wasm/engines/ are served only when a person
+// chooses to download one, never on a first visit, and four of them would
+// drown the line the same way.
+const WASM_EXCLUDED_DIRS = ['wasm/openscad-official', 'wasm/engines'];
 
 // The braille engine's two files: the binary, and the loader Vite emits as a
 // chunk named after vendor/liblouis/liblouis.mjs (liblouis-<hash>.js). The

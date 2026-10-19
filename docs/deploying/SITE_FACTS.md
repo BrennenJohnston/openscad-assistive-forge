@@ -28,12 +28,15 @@ grips, adaptive utensils — without installing a desktop CAD toolchain.
 
 The application:
 
-- Runs the official **OpenSCAD WebAssembly build** in a Web Worker
-  inside your browser.
+- Runs **OpenSCAD compiled to WebAssembly** in a Web Worker inside your
+  browser: by default my own build of it, from OpenSCAD's source with
+  three build changes, or an official OpenSCAD snapshot you choose.
 - Builds a parameter form from OpenSCAD Customizer annotations.
 - Renders previews with **Three.js**.
 - Exports STL / OBJ / OFF / AMF for slicing.
 - Stores nothing on a server. All file input and output is local.
+- Keeps its engine's build, the changes to it and their measurements on
+  the `engine-research` branch of the same repository.
 
 ## Data handling
 

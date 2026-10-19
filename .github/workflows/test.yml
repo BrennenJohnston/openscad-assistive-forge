@@ -75,6 +75,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache the official OpenSCAD engines
+        uses: actions/cache@v4
+        with:
+          path: build/engines-cache
+          key: openscad-engines-${{ hashFiles('public/wasm/engines.json') }}
+
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
 
@@ -136,6 +142,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Cache the official OpenSCAD engines
+        uses: actions/cache@v4
+        with:
+          path: build/engines-cache
+          key: openscad-engines-${{ hashFiles('public/wasm/engines.json') }}
 
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
@@ -226,6 +238,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
+      - name: Cache the official OpenSCAD engines
+        uses: actions/cache@v4
+        with:
+          path: build/engines-cache
+          key: openscad-engines-${{ hashFiles('public/wasm/engines.json') }}
+
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
       
@@ -341,6 +359,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache the official OpenSCAD engines
+        uses: actions/cache@v4
+        with:
+          path: build/engines-cache
+          key: openscad-engines-${{ hashFiles('public/wasm/engines.json') }}
+
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
 
@@ -402,6 +426,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
+      - name: Cache the official OpenSCAD engines
+        uses: actions/cache@v4
+        with:
+          path: build/engines-cache
+          key: openscad-engines-${{ hashFiles('public/wasm/engines.json') }}
+
       - name: Build project
         run: npm run build
 

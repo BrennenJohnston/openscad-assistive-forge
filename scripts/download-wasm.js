@@ -2,9 +2,11 @@
  * OpenSCAD WASM Setup Script
  * @license GPL-3.0-or-later
  * 
- * This script downloads Liberation fonts for OpenSCAD text() support.
- * WASM binaries are vendored in git (public/wasm/openscad-official/) and
- * do NOT need to be downloaded by this script.
+ * This script downloads Liberation fonts for OpenSCAD text() support, and
+ * the official OpenSCAD engines the app offers as alternatives (listed in
+ * public/wasm/engines.json, written to public/wasm/engines/). The Forge
+ * engine itself is vendored in git (public/wasm/openscad-official/) and is
+ * only checked here, never downloaded.
  */
 
 import { mkdir, writeFile, unlink, readdir, readFile } from 'fs/promises';
@@ -13,6 +15,7 @@ import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
 import { downloadFile } from './lib/download-file.mjs';
+import { setupEngines } from './lib/engines.mjs';
 import { createGunzip } from 'zlib';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -281,7 +284,6 @@ console.log('===================');
 console.log('');
 console.log('✓ OpenSCAD WASM: built from OpenSCAD source, with Manifold support');
 console.log('✓ Source: scripts/build-openscad-wasm.sh (OpenSCAD commit 98d891340e)');
-console.log('✓ Build: OpenSCAD-2026.04.03+forge.1 WebAssembly-web');
 console.log('✓ Location: public/wasm/openscad-official/');
 console.log('');
 console.log('The engine files are vendored in the repository.');
@@ -373,6 +375,25 @@ async function setup() {
     }
     console.warn(`⚠ ${missingAfterSetup.length} font(s) missing: ${list}`);
     console.warn('  text() function will not work correctly without fonts.');
+  }
+
+  console.log('');
+  console.log('Official OpenSCAD engines (the alternatives the app offers)');
+  console.log('------------------------------------------------------------');
+  const engines = await setupEngines({ root: join(__dirname, '..') });
+  console.log(
+    `  ${engines.fetched.length} downloaded, ${engines.written.length} written, ` +
+      `${engines.found.length} already in place`
+  );
+  if (engines.problems.length > 0) {
+    for (const problem of engines.problems) console.error(`✗ ${problem}`);
+    if (strictMode) {
+      console.error('✗ STRICT MODE: an official engine is missing or does not match public/wasm/engines.json.');
+      console.error('  Ensure outbound HTTPS access to files.openscad.org is available.');
+      process.exitCode = 1;
+      return;
+    }
+    console.warn('⚠ The app still runs with the Forge engine; the engines above are not offered.');
   }
 
   console.log('');
