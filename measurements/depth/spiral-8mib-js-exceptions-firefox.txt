@@ -1,0 +1,9 @@
+browser: firefox 144.0.2 args: []
+GL: ANGLE (Intel, Intel(R) HD Graphics Direct3D11 vs_5_0 ps_5_0), or similar
+{"id":"spiral_d0110","final":"Preview ready","preview":"Preview ready","at":"1.60","engine":"COMPLETE 9688 tri 765 ms","workers":2,"prompt":true}
+{"id":"spiral_d0111","final":"Preview ready","preview":"Preview ready","at":"1.62","engine":"COMPLETE 9704 tri 701 ms","workers":2,"prompt":true}
+{"id":"spiral_d0150","final":"Preview ready","preview":"Preview ready","at":"1.87","engine":"COMPLETE 10384 tri 930 ms","workers":2,"prompt":true}
+{"id":"spiral_d0189","final":"Preview ready","preview":"Preview ready","at":"2.12","engine":"COMPLETE 11236 tri 1213 ms","workers":2,"prompt":true}
+{"id":"spiral_d0190","final":"Preview ready","preview":"Preview ready","at":"2.20","engine":"COMPLETE 11272 tri 1318 ms","workers":2,"prompt":true}
+{"id":"spiral_d0250","final":"Preview ready","preview":"Preview ready","at":"4.23","engine":"COMPLETE 24856 tri 3200 ms","workers":2,"prompt":true}
+{"id":"spiral_d0400","final":"Preview failed: Something Went Wrong","preview":"Preview failed: Something Went Wrong","at":"1.10","engine":"ERROR RENDER_FAILED: Rendering error: too much recursion","workers":2,"prompt":true}

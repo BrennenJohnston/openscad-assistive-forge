@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenSCAD research engine: try it</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+      }
+      body {
+        max-width: 48rem;
+        margin: 0 auto;
+        padding: 1rem;
+      }
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        font: 1rem ui-monospace, monospace;
+      }
+      button {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 0 1rem;
+        font: inherit;
+      }
+      :focus-visible {
+        outline: 3px solid Highlight;
+        outline-offset: 2px;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>OpenSCAD research engine</h1>
+      <p>
+        This page starts the engine in <code>../engine/</code> in a worker,
+        renders the model below to a binary STL, and says how many triangles
+        it has and how long it took. Nothing leaves your computer.
+      </p>
+      <form id="form">
+        <p>
+          <label for="source">OpenSCAD model</label><br />
+          <textarea id="source" rows="8" spellcheck="false">cube(10);</textarea>
+        </p>
+        <p><button type="submit" id="render">Render</button></p>
+      </form>
+      <p id="result" role="status"></p>
+      <details>
+        <summary>The engine's output</summary>
+        <pre id="output"></pre>
+      </details>
+    </main>
+    <script type="module">
+      const form = document.getElementById('form');
+      const button = document.getElementById('render');
+      const result = document.getElementById('result');
+      const output = document.getElementById('output');
+
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        button.disabled = true;
+        result.textContent = 'Rendering...';
+        output.textContent = '';
+        const worker = new Worker(new URL('./worker.js', import.meta.url), {
+          type: 'module',
+        });
+        worker.onmessage = ({ data }) => {
+          worker.terminate();
+          button.disabled = false;
+          output.textContent = data.output.join('\n');
+          if (data.ok) {
+            result.textContent =
+              `${data.triangles} triangles. The engine started in ` +
+              `${Math.round(data.loadMs)} ms and rendered in ` +
+              `${Math.round(data.renderMs)} ms.`;
+          } else {
+            result.textContent = data.error
+              ? `The engine failed: ${data.error}`
+              : `The render failed (exit ${data.status}); the engine's output says why.`;
+          }
+        };
+        worker.onerror = (event) => {
+          worker.terminate();
+          button.disabled = false;
+          result.textContent = `The worker could not start: ${event.message}`;
+        };
+        worker.postMessage({ source: document.getElementById('source').value });
+      });
+    </script>
+  </body>
+</html>

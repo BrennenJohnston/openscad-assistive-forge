@@ -1,0 +1,9 @@
+browser: webkit 26.0 args: []
+GL: Apple GPU
+{"id":"spiral_d0100","final":"Preview ready","preview":"Preview ready","at":"2.45","engine":"COMPLETE 9508 tri 535 ms","workers":2,"prompt":true}
+{"id":"spiral_d0111","final":"Preview ready","preview":"Preview ready","at":"2.34","engine":"COMPLETE 9704 tri 573 ms","workers":2,"prompt":true}
+{"id":"spiral_d0120","final":"Preview ready","preview":"Preview ready","at":"2.44","engine":"COMPLETE 9864 tri 680 ms","workers":2,"prompt":true}
+{"id":"spiral_d0150","final":"Preview ready","preview":"Preview ready","at":"2.80","engine":"COMPLETE 10384 tri 817 ms","workers":2,"prompt":true}
+{"id":"spiral_d0190","final":"Preview ready","preview":"Preview ready","at":"2.74","engine":"COMPLETE 11272 tri 1065 ms","workers":2,"prompt":true}
+{"id":"spiral_d0250","final":"Preview ready","preview":"Preview ready","at":"5.28","engine":"COMPLETE 24856 tri 3271 ms","workers":2,"prompt":true}
+{"id":"spiral_d0400","final":"Preview ready","preview":"Preview ready","at":"26.81","engine":"COMPLETE 81360 tri 23963 ms","workers":2,"prompt":true}

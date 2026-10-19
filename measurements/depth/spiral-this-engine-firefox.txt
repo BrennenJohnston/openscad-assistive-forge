@@ -1,0 +1,9 @@
+browser: firefox 144.0.2 args: []
+GL: ANGLE (Intel, Intel(R) HD Graphics Direct3D11 vs_5_0 ps_5_0), or similar
+{"id":"spiral_d0100","final":"Preview ready","preview":"Preview ready","at":"1.13","engine":"COMPLETE 9508 tri 489 ms","workers":2,"prompt":true}
+{"id":"spiral_d0111","final":"Preview ready","preview":"Preview ready","at":"1.32","engine":"COMPLETE 9704 tri 558 ms","workers":2,"prompt":true}
+{"id":"spiral_d0120","final":"Preview ready","preview":"Preview ready","at":"1.34","engine":"COMPLETE 9864 tri 609 ms","workers":2,"prompt":true}
+{"id":"spiral_d0150","final":"Preview ready","preview":"Preview ready","at":"1.41","engine":"COMPLETE 10384 tri 785 ms","workers":2,"prompt":true}
+{"id":"spiral_d0190","final":"Preview ready","preview":"Preview ready","at":"1.69","engine":"COMPLETE 11272 tri 1033 ms","workers":2,"prompt":true}
+{"id":"spiral_d0250","final":"Preview ready","preview":"Preview ready","at":"3.42","engine":"COMPLETE 24856 tri 2740 ms","workers":2,"prompt":true}
+{"id":"spiral_d0400","final":"Preview ready","preview":"Preview ready","at":"20.71","engine":"COMPLETE 81360 tri 19682 ms","workers":2,"prompt":true}

@@ -1,0 +1,8 @@
+browser: firefox 144.0.2 args: []
+GL: ANGLE (Intel, Intel(R) HD Graphics Direct3D11 vs_5_0 ps_5_0), or similar
+{"id":"FibonacciSphere","final":"Preview ready","preview":"Preview ready","at":"13.02","engine":"COMPLETE 83046 tri 12008 ms","workers":2}
+{"id":"Plug_Puller_SingleFile","final":"Preview ready","preview":"Preview ready","at":"2.93","engine":"COMPLETE 298 tri 12 ms","workers":3}
+{"id":"CYL_bear_box","final":"Preview ready","preview":"Preview ready","at":"13.09","engine":"COMPLETE 7962 tri 5114 ms","workers":2,"prompt":true}
+{"id":"text_box","final":"Preview ready","preview":"Preview ready","at":"7.94","engine":"COMPLETE 2276 tri 278 ms","workers":2,"prompt":true}
+{"id":"spinning_picture_ornament","final":"Preview ready","preview":"Preview ready","at":"17.21","engine":"COMPLETE 85494 tri 7248 ms","workers":2,"prompt":true}
+{"id":"MarioWorld","final":"Preview ready","preview":"Preview ready","at":"6.53","engine":"COMPLETE 25278 tri 5740 ms","workers":2}

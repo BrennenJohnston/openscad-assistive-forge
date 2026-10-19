@@ -1,0 +1,5 @@
+# The engine's files are checked byte for byte against their SHA-256, and the
+# patches must apply on any system: git never changes their line endings.
+engine/** -text
+changes/** -text
+*.sh text eol=lf

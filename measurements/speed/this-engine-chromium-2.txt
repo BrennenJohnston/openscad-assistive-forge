@@ -1,0 +1,8 @@
+browser: chromium 143.0.7499.4 args: ["--use-angle=d3d11"]
+GL: ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x000046A6) Direct3D11 vs_5_0 ps_5_0, D3D11)
+{"id":"FibonacciSphere","final":"Preview ready","preview":"Preview ready","at":"5.38","engine":"COMPLETE 83046 tri 4270 ms","workers":2}
+{"id":"Plug_Puller_SingleFile","final":"Preview ready","preview":"Preview ready","at":"1.81","engine":"COMPLETE 298 tri 106 ms","workers":3}
+{"id":"CYL_bear_box","final":"Preview ready","preview":"Preview ready","at":"13.73","engine":"COMPLETE 7962 tri 4332 ms","workers":2,"prompt":true}
+{"id":"text_box","final":"Preview ready","preview":"Preview ready","at":"8.87","engine":"COMPLETE 2276 tri 370 ms","workers":2,"prompt":true}
+{"id":"spinning_picture_ornament","final":"Preview ready","preview":"Preview ready","at":"13.05","engine":"COMPLETE 85494 tri 3924 ms","workers":2,"prompt":true}
+{"id":"MarioWorld","final":"Preview ready","preview":"Preview ready","at":"2.31","engine":"COMPLETE 25278 tri 1379 ms","workers":2}

@@ -1,0 +1,28 @@
+openscad-wasm dc2ff913 (main on 2026-10-17), Makefile. One change:
+
+The line that rewrites Boost's -fwasm-exceptions to -fexceptions in
+Boost.Build's emscripten.jam is removed, so Boost is built with WebAssembly's
+own exceptions like every other library in the image. The image itself is
+built from this recipe by scripts/build-openscad-wasm.sh with
+EMSCRIPTEN_FLAGS=-fwasm-exceptions -O3 on emscripten/emsdk:6.0.5 (pinned by
+digest); those are build arguments, not changes to this file. GMP 6.3.0 and
+MPFR 4.2.1, the versions this Makefile names, are fetched from ftp.gnu.org
+before make runs, because gmplib.org refused connections from the build
+machine; the files are the same releases.
+
+Made by removing the line with grep -v, as scripts/build-openscad-wasm.sh
+does, then git diff. To apply it in an openscad-wasm checkout at dc2ff913:
+git apply openscad-wasm-dc2ff913.patch
+
+diff --git a/Makefile b/Makefile
+index 06d3cf0..69e35ab 100644
+--- a/Makefile
++++ b/Makefile
+@@ -311,7 +311,6 @@ libs/boost:
+ 	tar xf boost-1.87.0-b2-nodocs.tar.xz -C libs
+ 	mv libs/boost-1.87.0 $@
+ 	rm boost-1.87.0-b2-nodocs.tar.xz
+-	sed -i -E 's/-fwasm-exceptions/-fexceptions/g' libs/boost/tools/build/src/tools/emscripten.jam
+ 
+ libs/gmp:
+ 	wget -O gmp-6.3.0.tar.xz https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz

@@ -1,0 +1,9 @@
+browser: chromium 143.0.7499.4 args: ["--use-angle=d3d11"]
+GL: ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x000046A6) Direct3D11 vs_5_0 ps_5_0, D3D11)
+{"id":"spiral_d0100","final":"Preview ready","preview":"Preview ready","at":"2.43","engine":"COMPLETE 9508 tri 597 ms","workers":2,"prompt":true}
+{"id":"spiral_d0111","final":"Preview ready","preview":"Preview ready","at":"1.45","engine":"COMPLETE 9704 tri 517 ms","workers":2,"prompt":true}
+{"id":"spiral_d0120","final":"Preview ready","preview":"Preview ready","at":"1.72","engine":"COMPLETE 9864 tri 633 ms","workers":2,"prompt":true}
+{"id":"spiral_d0150","final":"Preview ready","preview":"Preview ready","at":"1.72","engine":"COMPLETE 10384 tri 639 ms","workers":2,"prompt":true}
+{"id":"spiral_d0190","final":"Preview ready","preview":"Preview ready","at":"1.67","engine":"COMPLETE 11272 tri 604 ms","workers":2,"prompt":true}
+{"id":"spiral_d0250","final":"Preview ready","preview":"Preview ready","at":"3.48","engine":"COMPLETE 24856 tri 2398 ms","workers":2,"prompt":true}
+{"id":"spiral_d0400","final":"Preview ready","preview":"Preview ready","at":"24.74","engine":"COMPLETE 81360 tri 23206 ms","workers":2,"prompt":true}
