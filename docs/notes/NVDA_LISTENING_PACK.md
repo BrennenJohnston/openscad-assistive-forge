@@ -332,6 +332,10 @@ shows is never spoken.
 | What should happen | Heard it? | What NVDA actually said |
 |---|---|---|
 | When the key appears: "A key appeared next to the theme button." once, about 4 s after the last press when sounds are on (it waits for a short tune), or at once with Preferences > Advanced > Play sounds off | ☐ | |
+| Found a second time, with the key showing: "Something cracked around the key." once, about 3.5 s after the last press when sounds are on (it waits for a short melody), or at once with sounds off | ☐ | |
+| Found a second time on a later visit, before the key shows: "A key appeared next to the theme button. Something cracked around the key." once, as one sentence | ☐ | |
+| Found a third time: "The key is here to stay." once, about 4 s after the last press when sounds are on (after a short fanfare), or at once with sounds off; found with the Alt View on, it waits until the key turns the look off, after "Alt View off." | ☐ | |
+| After a reload the key is there and nothing is said about it | ☐ | |
 | The key reads "Alt View, toggle button, not pressed"; pressing it says "Alt View on. The preview is drawn with characters and the interface follows." then "pressed"; again, "Alt View off." | ☐ | |
 | At the left of the Generate button's row, under the preview, "Expand Lens controls" (beside the heading "Lens") opens the Lens drawer; Tab goes through Edges, Focus, Glow and Surfaces with their values, Surfaces with its description; Escape closes the drawer and returns to the button, now "Collapse Lens controls" no longer | ☐ | |
 | "Edges" groups the toggle buttons Soft, Normal and Sharp; a press says "Edges 70%" (or 100%, 160%), once | ☐ | |

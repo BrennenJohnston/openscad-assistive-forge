@@ -50,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The key that turns the Alt View on stays in the toolbar once it has been
+  found three times, the size of the theme buttons beside it.
 - The Keyboard Shortcuts dialog is Keys, with a Keyboard tab and a Controller
   tab, and only its list scrolls; before, it had two scroll bars.
 - The engine is built with WebAssembly's own exceptions: Chrome follows a
