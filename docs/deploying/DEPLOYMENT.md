@@ -58,6 +58,38 @@ built from source by `scripts/build-liblouis-wasm.sh`.
 - For local development, `npm run setup-wasm` downloads fonts without
   `--strict` (lenient — proceeds even if fonts fail to download)
 
+### Official OpenSCAD Engines
+
+The same first script downloads the four official OpenSCAD WebAssembly
+snapshots a person can choose instead of the Forge engine (2026.10.18,
+2026.04.03, 2026.01.03 and 2025.03.25), from
+`https://files.openscad.org/snapshots/`. `public/wasm/engines.json` pins
+each zip's address, size and SHA-256, and the size and SHA-256 of the two
+files inside it. The script checks every byte, keeps the zips in
+`build/engines-cache/` so a second build downloads nothing, and writes each
+engine to `public/wasm/engines/<id>/` (gitignored), which Vite copies to
+`dist/wasm/engines/`. The site serves them itself, so the headers below need
+no change, and a browser fetches one only when a person chooses it.
+
+**Requirements:**
+- Outbound HTTPS access to `files.openscad.org` (about 13 MB, once)
+- In `--strict` mode the build **fails** if a zip cannot be downloaded or
+  any byte differs from the manifest; `npm run setup-wasm` warns instead,
+  and the app runs with the Forge engine alone
+
+**To pin a newer snapshot:**
+1. Download its `OpenSCAD-<date>-WebAssembly-web.zip` from
+   `https://files.openscad.org/snapshots/` and note its size and SHA-256.
+2. Unzip it and note the size and SHA-256 of `openscad.js` and
+   `openscad.wasm`.
+3. Add an entry to `public/wasm/engines.json` in the shape of the others
+   (`id` `official-YYYY-MM-DD`, `name`, `date`, `snapshot`, `path`, `zip`,
+   `files`). The first official entry is the one the error dialog offers
+   first.
+4. Run `npm run setup-wasm`, then the engine tests
+   (`tests/unit/download-engines.test.js`, `tests/e2e/engine-choice.spec.js`,
+   `tests/e2e/engine-fault-ladder.spec.js`).
+
 ### 3. Deploy (Cloudflare Git Integration)
 
 This repo uses Cloudflare's built-in GitHub integration. Pushes to `main`

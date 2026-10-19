@@ -2,7 +2,7 @@
 
 Things we know about but haven't fixed yet, along with workarounds you can use in the meantime. If you hit something not listed here, please [open an issue](https://github.com/BrennenJohnston/openscad-assistive-forge/issues).
 
-**Last updated**: 2026-10-17
+**Last updated**: 2026-10-18
 
 ---
 
@@ -138,6 +138,22 @@ against either editor.
 **Workaround**: Lower the setting that sets how many times the model repeats, or render it in desktop OpenSCAD.
 
 **Root Cause**: Each level of a repeated module takes some of the browser's own stack for WebAssembly, which is smaller than desktop OpenSCAD's.
+
+---
+
+#### KI-014: Choosing Another Engine
+
+**Status**: Documented  
+**Affected**: All browsers  
+**Severity**: Low
+
+**Description**: The app runs its own build of OpenSCAD's engine, the Forge engine: OpenSCAD 2026.04.03 built with three changes, documented on the repository's `engine-research` branch. I built it with AI coding tools, so it may fail on a model where OpenSCAD's own build works. When a model fails to start or render in a way that may be the engine's fault, the error dialog offers the official OpenSCAD engine (snapshot 2026.10.18). If that fails too, it offers the three older official snapshots or the Forge engine again. "Not now" holds until you open another file. Preferences > Advanced > Engine lists all five engines and which one is in use.
+
+An official engine is downloaded only when you ask (2.9 to 3.4 MB to download, 9.7 to 11.1 MB kept). It stays in this browser until you remove it there or use Clear cache & reload, which also chooses the Forge engine again. Your choice is kept for your next visit.
+
+**Workaround**: See "A Model Fails and the Dialog Offers Another Engine" in the [Troubleshooting Guide](../guides/TROUBLESHOOTING_USER_GUIDE.md).
+
+**Root Cause**: The Forge engine differs from OpenSCAD's own build, and either one can fail where the other works. The dialog is never offered for "Model Too Deep" or a time limit: on those the official engines do worse than the Forge engine (KI-013).
 
 ---
 

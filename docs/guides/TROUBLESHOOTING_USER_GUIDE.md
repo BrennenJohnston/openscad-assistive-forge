@@ -64,6 +64,20 @@ Before diving into specific issues, try these common solutions:
 3. **Reduce complexity**: Very complex models may exceed memory limits
 4. **Refresh and retry**: WASM can sometimes enter bad state
 
+### A Model Fails and the Dialog Offers Another Engine
+
+**Symptoms:** The error dialog says the failure may be the rendering engine's rather than the model's, and offers the official OpenSCAD engine.
+
+The app runs its own build of OpenSCAD's engine (the Forge engine); OpenSCAD's own builds are there to try when it may be the cause. In the order I would try them:
+
+1. **Download and try it** (or **Try it**, once it is kept): the status line counts the download, then the same start or render runs again on the official engine. If the model works now, you can keep using that engine; Preferences > Advanced > Engine shows which one is in use.
+2. **An older official snapshot**, if the official engine fails too: the next dialog lists the three older snapshots with their download sizes. A model that worked before may work on the snapshot it was made with.
+3. **Back to the Forge engine**, in that dialog or in Preferences > Advanced > Engine, when no official engine helps.
+
+**Not now** keeps the Forge engine; the dialog does not ask again until you open another file. Downloaded engines stay in this browser until you remove them in Preferences or use Clear cache & reload.
+
+If no engine works, please send me the model and the engine named in the status line (or in Preferences > Advanced > Engine) when it failed, as [Still Having Issues?](#still-having-issues) describes.
+
 ---
 
 ## Parameter Issues

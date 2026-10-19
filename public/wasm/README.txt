@@ -1,18 +1,21 @@
 OpenSCAD WASM Files
 ===================
 
-This directory contains OpenSCAD's WebAssembly engine with Manifold support,
-built for Forge from OpenSCAD's own source with two changes.
+This directory contains OpenSCAD's WebAssembly engines. openscad-official/ is
+the Forge engine, the one the app starts with: OpenSCAD's own source with
+Manifold support, built for Forge with three changes.
 
-Build: OpenSCAD-2026.04.03+forge.2 (98d891340e, CGAL_ALWAYS_ROUND_TO_NEAREST, 8 MiB stack)
+Build: OpenSCAD-2026.04.03+forge.3 (98d891340e, CGAL_ALWAYS_ROUND_TO_NEAREST, 8 MiB stack, WebAssembly exceptions)
 Source: https://github.com/openscad/openscad at commit
         98d891340e6007524e69f399162016f9b22584ff, the commit behind the
         official 2026.04.03 snapshot
-Recipe: scripts/build-openscad-wasm.sh, run by the "Build OpenSCAD wasm"
-        workflow (.github/workflows/build-openscad-wasm.yml)
-Previous Build: OpenSCAD-2026.04.03+forge.1, the same build with
-        Emscripten's 64 KiB stack
-License: GPL-2.0-or-later (see COPYING in repository root)
+Recipe: scripts/build-openscad-wasm.sh, wasm-exceptions variant, run by the
+        "Build OpenSCAD wasm" workflow
+        (.github/workflows/build-openscad-wasm.yml)
+Previous Build: OpenSCAD-2026.04.03+forge.2, the same built with
+        Emscripten's JavaScript-based exceptions
+License: GPL-2.0-or-later, OpenSCAD's own (its text is
+        licenses/OpenSCAD-COPYING on the engine-research branch)
 Research branch: engine-research in this repository holds this engine alone,
         the patches, the measurements behind them and a page to try it.
 
@@ -21,35 +24,33 @@ Contents:
 - openscad-official/openscad.wasm  - WebAssembly binary with Manifold CSG support
 - openscad-official/INTEGRITY.json - Build name, sizes and SHA-256 of the two files
 - openscad-official.zip            - The two engine files as the recipe built them
+- engines.json                     - The four official OpenSCAD snapshots a
+                                     person can choose instead: each zip's
+                                     address, size and SHA-256, and its two
+                                     files' sizes and SHA-256
+- engines/<id>/                    - Those snapshots, written by
+                                     npm run setup-wasm (not committed)
 
-The Two Changes:
-1. The build adds the compile definition CGAL_ALWAYS_ROUND_TO_NEAREST beside
-   the CGAL_DISABLE_ROUNDING_MATH_CHECK that OpenSCAD's CMakeLists.txt already
+The Three Changes:
+1. The compile definition CGAL_ALWAYS_ROUND_TO_NEAREST beside the
+   CGAL_DISABLE_ROUNDING_MATH_CHECK that OpenSCAD's CMakeLists.txt already
    sets for Emscripten.
-2. The engine is linked with an 8 MiB stack (-sSTACK_SIZE=8388608).
-Nothing else differs from upstream: built without them (the "baseline"
-variant), the recipe gives the official 2026.04.03 engine back byte for byte.
+2. WebAssembly's own exceptions (-fwasm-exceptions) in place of Emscripten's
+   JavaScript-based ones, with the libraries built the same way.
+3. An 8 MiB stack (-sSTACK_SIZE=8388608).
+Built with none of them (the "baseline" variant), the recipe gives the
+official 2026.04.03 engine back byte for byte. Why each change was made, what
+it measured, and how the toolchain differs from the official build are in the
+engine-research branch's README.
 
-Why the first:
-WebAssembly can only round to nearest. Without the definition, CGAL's interval
-arithmetic expects to switch the rounding mode and is unsound in a browser.
-minkowski() hulls failed a CGAL assertion and fell back to a method that took
-about a minute on some models, and the meshes that did come out differed
-slightly from desktop OpenSCAD's. With it, those models preview in seconds and
-have the volume desktop OpenSCAD gives them.
-
-Why the second:
-Emscripten's default stack is 64 KiB. A model that repeats a module a few
-dozen to a few hundred levels deep ran past it, and the overrun damaged memory
-instead of stopping: Firefox and Safari failed with "indirect call to null"
-and similar. OpenSCAD's own recursion guard assumes 8 MiB on Emscripten, so it
-never fired. With 8 MiB, such models render as on desktop in Firefox and
-Safari; Chrome still stops at a depth of its own (its script stack). Ordinary
-models render in the same time.
+INTEGRITY.json's knownIssues lines about projection() and roof() are older
+than the current measurements: projection() renders on this engine and on the
+four official snapshots, and roof() is not switched on in any of them (an
+unknown module).
 
 Why This Engine?
 - Includes Manifold geometry engine (5-30x faster CSG operations)
-- Built from OpenSCAD's source in OpenSCAD's own build image
+- Built from OpenSCAD's source with a pinned, repeatable recipe
 - Supports --enable=manifold, --enable=fast-csg flags
 
 Performance Benefits:
@@ -58,10 +59,12 @@ Performance Benefits:
 - Binary STL export: 18x faster than ASCII
 
 Earlier Builds:
-- OpenSCAD-2026.04.03+forge.1: the same with the 64 KiB stack, replaced
-  because deep models overran it
+- OpenSCAD-2026.04.03+forge.2: JavaScript-based exceptions, replaced because
+  Chrome stopped deep models at about 110 levels
+- OpenSCAD-2026.04.03+forge.1: the 64 KiB stack, replaced because deep models
+  overran it
 - OpenSCAD-2026.04.03: the official snapshot, replaced because of the
-  rounding fault above
+  rounding fault
 - OpenSCAD-2025.03.25.wasm24456 (March 25, 2025)
 - openscad-wasm-prebuilt@1.2.0 (npm package, no Manifold support): lacked
   Manifold, outdated, slow on complex models
