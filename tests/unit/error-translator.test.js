@@ -203,6 +203,23 @@ describe('Error Translator', () => {
       expect(pre.textContent).toBe('stack trace here');
     });
 
+    // A screen reader reads the dialog's name and words as focus moves into
+    // it; the same words in a live region as well are heard twice.
+    test('the dialog says the failure itself: nothing goes to the live region', async () => {
+      const region = document.getElementById('srAnnouncerAssertive');
+      const written = [];
+      const observer = new MutationObserver(() => {
+        if (region.textContent) written.push(region.textContent);
+      });
+      observer.observe(region, { childList: true, characterData: true, subtree: true });
+
+      showErrorModal({ title: 'Geometry Check Failed', message: 'The engine stopped.' });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      observer.disconnect();
+
+      expect(written).toEqual([]);
+    });
+
     test('should resolve when OK button is clicked', async () => {
       const promise = showErrorModal({
         title: 'Error',

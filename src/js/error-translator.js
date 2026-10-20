@@ -864,11 +864,11 @@ export function showErrorModal({
       if (e.target === overlay) cleanup();
     });
 
+    // Nothing goes to a live region: a screen reader reads the dialog's name
+    // and words as focus moves into it, and a second telling is a repeat.
     document.body.appendChild(overlay);
     firstFocus.focus();
     trap.activate({ initialFocus: firstFocus });
-
-    announceError(`Error: ${title}. ${message}`);
   });
 }
 

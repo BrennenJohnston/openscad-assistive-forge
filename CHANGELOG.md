@@ -92,6 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A focused Customizer group header shows its focus ring again.
 - Closing an error message puts focus back where you were, or on Generate
   after a failed render; before, focus was lost to the page.
+- A screen reader hears a failed render, or an engine that does not start,
+  once, as its error dialog opens; before, the failure was said twice.
 - On a phone, and on a desktop in high contrast, Preferences scrolls only its
   settings; its tabs and Done stay in view.
 - On a phone a slider's value sits beside the slider, not on a line above it.

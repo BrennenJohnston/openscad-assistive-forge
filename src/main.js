@@ -138,7 +138,6 @@ import {
 import {
   translateError,
   previewFailureSentence,
-  engineErrorLine,
   findFailedCheck,
   findMissingLibrary,
   showErrorModal,
@@ -6278,10 +6277,10 @@ async function initApp() {
       } catch (error) {
         console.error('Failed to initialize OpenSCAD WASM:', error);
         hideWasmLoadingIndicator(wasmLoadingOverlay);
-        updateStatus('OpenSCAD engine failed to initialize');
-        _announceError(
-          'OpenSCAD engine failed to initialize. Some features may not work.'
-        );
+        // Said by its dialog alone.
+        updateStatus('OpenSCAD engine failed to initialize', 'error', {
+          announce: false,
+        });
         await showEngineStartFailure(error, startEngineAgain);
         return false;
       }
@@ -12857,16 +12856,12 @@ if (rounded) {
         code: error.code,
         details: error.details,
       });
-      // Said once, assertively, with the engine's own line where it gave
-      // one: the message panels leave error lines to this.
+      // Said once, by the dialog as focus moves into it, the engine's own
+      // line read with its technical details: the message panels leave
+      // error lines to it.
       updateStatus(`Error: ${friendlyError.title}`, 'error', {
         announce: false,
       });
-      const engineLine = engineErrorLine(error.details);
-      _announceError(
-        `Error: ${friendlyError.title}. ${friendlyError.explanation}` +
-          (engineLine ? ` ${engineLine}` : '')
-      );
 
       showErrorModal({
         title: friendlyError.title,
@@ -12904,9 +12899,6 @@ if (rounded) {
       updateStatus('OpenSCAD engine failed to initialize', 'error', {
         announce: false,
       });
-      _announceError(
-        'OpenSCAD engine failed to initialize. Some features may not work.'
-      );
       await showEngineStartFailure(error, renderWithEngine);
     }
   }
