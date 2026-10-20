@@ -184,6 +184,12 @@ function renderGamepadPanel() {
   if (family) family.value = now.family;
   const preset = el('prefsGamepadPreset');
   if (preset) preset.value = now.preset;
+  // Not chosen yet reads as what the Joy-Cons do until then.
+  const joyCon = handlers.joyCon?.get();
+  const hold = el('prefsJoyConHold');
+  if (hold) hold.value = joyCon?.hold ?? 'sideways';
+  const pair = el('prefsJoyConPair');
+  if (pair) pair.value = joyCon?.pair ?? 'together';
 
   for (const part of document.querySelectorAll(
     '#prefsGamepadDiagram [data-part]'
@@ -460,6 +466,13 @@ function wireControllerTab() {
   el('prefsGamepadPreset')?.addEventListener('change', (event) => {
     handlers.gamepad?.mapping.setPreset(event.target.value);
     renderGamepadPanel();
+  });
+
+  el('prefsJoyConHold')?.addEventListener('change', (event) => {
+    handlers.joyCon?.set({ hold: event.target.value });
+  });
+  el('prefsJoyConPair')?.addEventListener('change', (event) => {
+    handlers.joyCon?.set({ pair: event.target.value });
   });
 
   for (const table of TABLES) {

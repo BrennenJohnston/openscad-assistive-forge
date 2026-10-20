@@ -116,7 +116,14 @@ import {
   closeModal,
   initStaticModals,
   isAnyModalOpen,
+  setupModalCloseHandlers,
 } from './js/modal-manager.js';
+import {
+  joyConKind,
+  joyConLayout,
+  loadJoyConChoice,
+  saveJoyConChoice,
+} from './js/joycon.js';
 import {
   disableKeepingFocus,
   firstParameterControl,
@@ -1896,6 +1903,15 @@ async function initApp() {
     }
   }
 
+  // How the person holds one Joy-Con and uses the two (joycon.js): the
+  // app's controller reads a Joy-Con through that layout. Kept, asked once.
+  let joyConChoice = loadJoyConChoice();
+  const setJoyConChoice = (part) => {
+    joyConChoice = { ...joyConChoice, ...part };
+    saveJoyConChoice(joyConChoice);
+    syncControllerPanel();
+  };
+
   // Initialize gamepad controller (if supported)
   let gamepadController = null;
   if (isGamepadSupported()) {
@@ -1903,6 +1919,7 @@ async function initApp() {
       cameraSensitivity: 1.0,
       parameterSensitivity: 1.0,
       deadzone: 0.15,
+      layout: (pad) => joyConLayout(pad, joyConChoice),
     });
     console.log('[Input] Gamepad controller initialized');
   }
@@ -1936,7 +1953,41 @@ async function initApp() {
       announce: (text) => announceImmediate(text),
       pad: () => gamepadController?.activePad() ?? null,
     },
+    joyCon: {
+      get: () => joyConChoice,
+      set: setJoyConChoice,
+    },
   });
+
+  // The first time one Joy-Con, or the two, connect: how is it held, or how
+  // are the two used. Closing without a choice asks again the next time.
+  const joyConModals = {
+    hold: document.getElementById('joyConHoldModal'),
+    pair: document.getElementById('joyConPairModal'),
+  };
+  for (const [part, modal] of Object.entries(joyConModals)) {
+    if (!modal) continue;
+    setupModalCloseHandlers(modal);
+    modal.querySelectorAll(`[data-${part}]`).forEach((button) => {
+      button.addEventListener('click', () => {
+        setJoyConChoice({ [part]: button.dataset[part] });
+        closeModal(modal);
+      });
+    });
+  }
+  const askJoyCon = (info) => {
+    const kind = joyConKind(info);
+    if (!kind) return;
+    const part = kind === 'pair' ? 'pair' : 'hold';
+    if (joyConChoice[part] || isAnyModalOpen()) return;
+    if (joyConModals[part]) openModal(joyConModals[part]);
+  };
+  if (gamepadController) {
+    gamepadController.on('connected', askJoyCon);
+    // A pad the browser already listed at start connected before this.
+    const listed = gamepadController.getGamepadInfo();
+    if (listed) askJoyCon(listed);
+  }
 
   // Storage UI - Update storage display
   const formatStorageUsage = (usage) => {
@@ -16735,7 +16786,8 @@ if (rounded) {
     gamepadController.on('connected', applyGamepadMapping);
     gamepadController.on('input', ({ name, repeat }) => {
       if (gamepadNavigator.isPaused()) return;
-      const action = actionByInput[name];
+      // A Joy-Con's layout gives its buttons their own jobs.
+      const action = (gamepadController.layoutInputs() ?? actionByInput)[name];
       if (!action || (repeat && !repeatingActions.has(action))) return;
       gamepadCommands[action]?.();
     });

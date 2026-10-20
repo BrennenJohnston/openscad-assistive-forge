@@ -737,6 +737,9 @@ class GamepadState {
     this.buttons = gamepad.buttons.map((b) =>
       typeof b === 'object' ? b.pressed : b > 0.5
     );
+    this.values = gamepad.buttons.map((b) =>
+      typeof b === 'object' ? b.value : b
+    );
     this.axes = [...gamepad.axes];
   }
 
@@ -772,14 +775,11 @@ class GamepadState {
     return Math.sign(value) * Math.min(1, (size - deadzone) / (1 - deadzone));
   }
 
+  // For analog triggers: the value the last update read, so a layout's
+  // translated pad answers too.
   getButtonValue(index) {
-    // For analog triggers
-    const gamepad = navigator.getGamepads()[this.gamepadIndex];
-    if (gamepad?.buttons[index]) {
-      const button = gamepad.buttons[index];
-      return typeof button === 'object' ? button.value : button;
-    }
-    return 0;
+    const value = this.values?.[index];
+    return typeof value === 'number' ? value : 0;
   }
 }
 
@@ -816,6 +816,11 @@ export class GamepadController {
     // Whether each listed pad had a button down at the last poll, so a new
     // press on another pad can be told from one held all along
     this._downBefore = new Map();
+
+    // A pad read through a layout (a Joy-Con): `layout` gives it for a
+    // listed pad, or null to read the pad as it is.
+    this.layoutFor = options.layout ?? null;
+    this._layout = null;
 
     // Bound event handlers
     this._onGamepadConnected = this._onGamepadConnected.bind(this);
@@ -989,6 +994,7 @@ export class GamepadController {
       mapping: gamepad.mapping,
       buttons: gamepad.buttons.length,
       axes: gamepad.axes.length,
+      layout: this._layout?.name ?? null,
     };
   }
 
@@ -1021,6 +1027,15 @@ export class GamepadController {
   }
 
   /**
+   * The jobs the pad in use's layout gives its inputs, which stand in for
+   * the person's preset; null when the pad is read as it is.
+   * @returns {Object<string, string>|null} input name to action id
+   */
+  layoutInputs() {
+    return this._layout?.inputs ?? null;
+  }
+
+  /**
    * Listen to this pad from now on. Inputs held on the pad before start
    * fresh, so the press that chose it counts.
    * @param {Gamepad} gamepad
@@ -1029,6 +1044,7 @@ export class GamepadController {
   _usePad(gamepad) {
     this.state.gamepadIndex = gamepad.index;
     this.state.connected = true;
+    this._layout = this.layoutFor?.(gamepad) ?? null;
     this.state.buttons.fill(false);
     this._repeatIn = {};
     this.emit('connected', this.getGamepadInfo());
@@ -1086,7 +1102,10 @@ export class GamepadController {
       }
     }
 
-    this.state.update(gamepad);
+    // A layout reads the pad as a full pad's controls; the choice behind it
+    // can change while the pad is in use, so it is asked every poll.
+    this._layout = gamepad ? (this.layoutFor?.(gamepad) ?? null) : null;
+    this.state.update(this._layout ? this._layout.view(gamepad) : gamepad);
 
     if (this.state.connected) {
       this._processInput(elapsed);
@@ -1174,9 +1193,13 @@ export class GamepadController {
       });
     }
 
-    // The left stick pans, both ways, up moving the view up.
-    const panX = axis('cameraPanX');
-    const panY = -axis('cameraPanY');
+    // The left stick pans, both ways, up moving the view up; through a
+    // layout, the axes its four buttons hold.
+    const layout = this._layout;
+    const panX = layout ? state.getShapedAxis(4, deadzone) : axis('cameraPanX');
+    const panY = -(layout
+      ? state.getShapedAxis(5, deadzone)
+      : axis('cameraPanY'));
     if ((panX !== 0 || panY !== 0) && step > 0) {
       this.emit('camera:pan', {
         x: panX * PAN_SHARE_PER_S * step,
@@ -1185,10 +1208,11 @@ export class GamepadController {
     }
 
     // The zoom inputs zoom by how far they are pressed; a button that is
-    // only on or off zooms at full speed.
+    // only on or off zooms at full speed. A layout zooms on the triggers it
+    // puts SL and SR on.
     const zoom =
-      this._inputValue(actions.cameraZoomIn) -
-      this._inputValue(actions.cameraZoomOut);
+      this._inputValue(layout ? 'rt' : actions.cameraZoomIn) -
+      this._inputValue(layout ? 'lt' : actions.cameraZoomOut);
     if (zoom !== 0 && step > 0) {
       this.emit('camera:zoom', { delta: zoom * ZOOM_SHARE_PER_S * step });
     }

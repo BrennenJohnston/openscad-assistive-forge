@@ -1063,6 +1063,14 @@ body[data-mobile-toolbar='relocated']
   display: none;
 }
 
+/* The Joy-Con questions: one button a choice, one to a row. */
+.joycon-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
 /* Save Project Modal */
 .save-project-modal .modal-body {
   display: flex;
