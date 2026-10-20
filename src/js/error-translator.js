@@ -6,6 +6,7 @@
 
 import { announceError } from './announcer.js';
 import { createFocusTrap } from './focus-trap.js';
+import { canTakeFocusBack } from './modal-manager.js';
 import {
   MODEL_NOT_2D_SUGGESTION,
   MODEL_NOT_2D_EXPLANATION,
@@ -707,6 +708,9 @@ export function isEngineFault(code) {
  * @param {Array<{label: string, primary?: boolean, focus?: boolean, onClick: Function}>} [options.actions]
  *   - buttons in place of OK; each closes the dialog, then runs its onClick.
  *   `focus` names the button focus starts on (the least risky one).
+ * @param {HTMLElement|(() => HTMLElement|null)} [options.returnFocus] - where
+ *   focus goes on closing if the control that had it is gone or hidden by
+ *   then (a render's Cancel button)
  * @returns {Promise<void>} Resolves when the user dismisses the dialog
  */
 export function showErrorModal({
@@ -716,8 +720,10 @@ export function showErrorModal({
   technical,
   extra,
   actions,
+  returnFocus,
 }) {
   return new Promise((resolve) => {
+    const opener = document.activeElement;
     const id = `error-modal-${++_modalIdCounter}`;
     const titleId = `${id}-title`;
     const descId = `${id}-desc`;
@@ -804,9 +810,18 @@ export function showErrorModal({
 
     const trap = createFocusTrap(overlay, { onEscape: () => cleanup() });
 
+    // Closed, focus goes back where the person was, never to the page body,
+    // where a keyboard or screen reader user loses their place.
     const cleanup = () => {
       trap.deactivate();
       overlay.remove();
+      [
+        opener,
+        typeof returnFocus === 'function' ? returnFocus() : returnFocus,
+        document.getElementById('main-content'),
+      ]
+        .find(canTakeFocusBack)
+        ?.focus();
       resolve();
     };
 

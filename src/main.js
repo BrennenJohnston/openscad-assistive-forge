@@ -12766,6 +12766,8 @@ if (rounded) {
         message: friendlyError.explanation,
         suggestion: friendlyError.suggestion,
         technical: error.message,
+        // Cancel had focus while the render ran, and is gone once it fails.
+        returnFocus: primaryActionBtn,
         ...(await engineOffer(error.code, renderWithEngine)),
       });
     } finally {
