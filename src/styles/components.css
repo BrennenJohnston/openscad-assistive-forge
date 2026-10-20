@@ -17139,8 +17139,31 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   min-width: 0;
 }
 
+/* Drawn as the select beside it is. */
 .preferences-select-row input[type='text'] {
   min-height: var(--size-touch-target);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  -webkit-text-fill-color: var(--color-text-primary);
+}
+
+.preferences-select-row input[type='text']:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: var(--focus-ring);
+}
+
+.preferences-select-row input[type='text']:focus:not(:focus-visible) {
+  box-shadow: none;
+  border-color: var(--color-border);
+}
+
+/* Room for the alternative look's ring, drawn 5 px outside the field. */
+.gamepad-presets .preferences-select-row {
+  gap: var(--space-md);
 }
 
 .gamepad-preset-actions {

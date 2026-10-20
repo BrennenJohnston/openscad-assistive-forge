@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connected, the app asks once how to use them: together as one controller,
   the left or the right only, or separately, the left for the Customizer and
   the right for the camera. Keys > Controller changes either answer.
+- Keys > Controller keeps controller presets of your own: save the buttons
+  under a name, step to them with the View button, delete them, and export
+  or import them as a file that keeps them through a cleared browser or
+  carries them to another.
 - Under 40% Focus, the Alt View draws the model as lines, bold at 35%
   and the thinnest at 0%: its creases, its outline, and its rounded parts
   as a dimmer wireframe, with a Surfaces slider for how solid the faces
