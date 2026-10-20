@@ -23,7 +23,7 @@ let bodyOverflowBefore = null;
  * @param {Element|null} el
  * @returns {boolean}
  */
-function canTakeFocusBack(el) {
+export function canTakeFocusBack(el) {
   return Boolean(
     el &&
     el !== document.body &&
