@@ -319,6 +319,56 @@ describe('Error Translator', () => {
       await promise;
       expect(document.querySelector('[data-testid="friendly-error-modal"]')).toBeNull();
     });
+
+    // Closed, the dialog leaves focus where the person can go on, never on
+    // the page body, where a keyboard or screen reader user loses their place.
+    test('closing puts focus back on the control that had it', async () => {
+      const opener = document.createElement('button');
+      opener.textContent = 'Import';
+      document.body.appendChild(opener);
+      opener.focus();
+
+      const promise = showErrorModal({ title: 'Error', message: 'Problem' });
+      document.querySelector('.friendly-error-modal-footer .btn-primary').click();
+      await promise;
+
+      expect(document.activeElement).toBe(opener);
+    });
+
+    test('when that control is hidden by then, focus goes to the one named', async () => {
+      const cancel = document.createElement('button');
+      cancel.textContent = 'Cancel';
+      const generate = document.createElement('button');
+      generate.textContent = 'Generate';
+      document.body.append(cancel, generate);
+      cancel.focus();
+
+      const promise = showErrorModal({
+        title: 'Error',
+        message: 'Problem',
+        returnFocus: () => generate,
+      });
+      cancel.classList.add('hidden');
+      document.querySelector('.friendly-error-modal-close').click();
+      await promise;
+
+      expect(document.activeElement).toBe(generate);
+    });
+
+    test('with nothing to go back to, focus goes to the main region', async () => {
+      const main = document.createElement('main');
+      main.id = 'main-content';
+      main.tabIndex = -1;
+      document.body.appendChild(main);
+
+      const promise = showErrorModal({ title: 'Error', message: 'Problem' });
+      document
+        .querySelector('.friendly-error-modal-footer .btn-primary')
+        .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await promise;
+
+      expect(document.activeElement).toBe(main);
+    });
   });
 
   describe('showErrorToast', () => {
