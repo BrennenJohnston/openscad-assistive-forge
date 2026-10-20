@@ -151,8 +151,11 @@ export const MEASURED_SECONDS = {
   // trigger visits, in Standard, Simplified and on a phone; the D-pad down
   // the Customizer; a group header's ring; the controller's Keys button:
   // 33 s locally), booked at about four times that; and one more (a PS5 pad
-  // beside a 3D mouse's virtual joystick: 5.3 s locally), the same way.
-  'gamepad-navigation.spec.js': 186.3,
+  // beside a 3D mouse's virtual joystick: 5.3 s locally), the same way; and
+  // three more (Joy-Cons: the two questions and a kept choice: 16.1 s
+  // locally), the same way; and one more (a Joy-Con question answered on
+  // the Main Page: 4.7 s locally), the same way.
+  'gamepad-navigation.spec.js': 269.5,
   'guide-example-focus.spec.js': 15.1,
   'header-names.spec.js': 38.9,
   'ink-modes.spec.js': 140.6,

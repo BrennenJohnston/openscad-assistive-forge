@@ -7101,6 +7101,103 @@
         </div>
       </div>
     </div>
+    <!-- Joy-Cons: asked once when one, or the two, first connect -->
+    <div
+      class="modal hidden"
+      id="joyConHoldModal"
+      role="dialog"
+      aria-labelledby="joyConHoldTitle"
+      aria-describedby="joyConHoldNote"
+      aria-modal="true"
+      aria-hidden="true"
+    >
+      <div class="modal-overlay"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="joyConHoldTitle">How do you hold the Joy-Con?</h2>
+          <button type="button" class="modal-close" aria-label="Close">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p id="joyConHoldNote">
+            You can change this any time in Keys, on the Controller tab.
+          </p>
+          <div class="joycon-choices">
+            <button type="button" class="btn btn-outline" data-hold="sideways">
+              Sideways, SL and SR on top
+            </button>
+            <button type="button" class="btn btn-outline" data-hold="upright">
+              Upright
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      class="modal hidden"
+      id="joyConPairModal"
+      role="dialog"
+      aria-labelledby="joyConPairTitle"
+      aria-describedby="joyConPairNote"
+      aria-modal="true"
+      aria-hidden="true"
+    >
+      <div class="modal-overlay"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="joyConPairTitle">How do you want to use the two Joy-Cons?</h2>
+          <button type="button" class="modal-close" aria-label="Close">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p id="joyConPairNote">
+            You can change this any time in Keys, on the Controller tab.
+          </p>
+          <div class="joycon-choices">
+            <button type="button" class="btn btn-outline" data-pair="together">
+              Together, as one controller
+            </button>
+            <button type="button" class="btn btn-outline" data-pair="left">
+              Left only, held sideways
+            </button>
+            <button type="button" class="btn btn-outline" data-pair="right">
+              Right only, held sideways
+            </button>
+            <button
+              type="button"
+              class="btn btn-outline"
+              data-pair="separately"
+            >
+              Separately: left for the Customizer, right for the camera
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
     <!-- Features Guide Modal -->
     <div
       class="modal hidden"
@@ -9056,6 +9153,28 @@
                 <option value="nintendo">Nintendo</option>
                 <option value="generic">Generic</option>
               </select>
+            </div>
+            <!-- The Joy-Cons' own choices, shown while the layout is
+                 Nintendo (controller-panel.js). -->
+            <div id="prefsJoyConRows" class="joycon-rows" hidden>
+              <div class="preferences-select-row">
+                <label for="prefsJoyConHold">One Joy-Con, held</label>
+                <select id="prefsJoyConHold">
+                  <option value="sideways">Sideways</option>
+                  <option value="upright">Upright</option>
+                </select>
+              </div>
+              <div class="preferences-select-row">
+                <label for="prefsJoyConPair">Two Joy-Cons</label>
+                <select id="prefsJoyConPair">
+                  <option value="together">Together, as one controller</option>
+                  <option value="left">Left only, held sideways</option>
+                  <option value="right">Right only, held sideways</option>
+                  <option value="separately">
+                    Separately: left for the Customizer, right for the camera
+                  </option>
+                </select>
+              </div>
             </div>
             <!-- A picture of the buttons for sighted readers; the list of
                  actions below names every button in full, so the picture is

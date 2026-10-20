@@ -1063,6 +1063,14 @@ body[data-mobile-toolbar='relocated']
   display: none;
 }
 
+/* The Joy-Con questions: one button a choice, one to a row. */
+.joycon-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
 /* Save Project Modal */
 .save-project-modal .modal-body {
   display: flex;
@@ -17128,6 +17136,13 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 .preferences-select-row select {
   flex: 1;
   min-width: 0;
+}
+
+/* Set in under the layout picker: they belong to the Nintendo layout. */
+.joycon-rows {
+  margin-inline-start: var(--space-sm);
+  padding-inline-start: var(--space-sm);
+  border-inline-start: var(--border-width-base, 2px) solid var(--color-border);
 }
 
 /* The picture's units are CSS pixels at its widest, so its words take the

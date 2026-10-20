@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each action take the button you press, and tests the controller: what the
   browser reads from it, each press shown and said once. Preferences >
   Controller, in place of the Axes and Buttons tabs, opens it.
+- A Nintendo Joy-Con works on its own, held sideways or upright: its stick
+  turns the view, its four buttons pan, SL and SR zoom. With the two
+  connected, the app asks once how to use them: together as one controller,
+  the left or the right only, or separately, the left for the Customizer and
+  the right for the camera. Keys > Controller changes either answer.
 - Under 40% Focus, the Alt View draws the model as lines, bold at 35%
   and the thinnest at 0%: its creases, its outline, and its rounded parts
   as a dimmer wireframe, with a Surfaces slider for how solid the faces

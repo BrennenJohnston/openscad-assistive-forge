@@ -113,6 +113,7 @@ import {
 } from './size-calibration.js';
 import { createDocumentFocusTrap } from '../focus-trap.js';
 import { GamepadController, createWalkMapping } from '../gamepad-controller.js';
+import { joyConWalkLayout, loadJoyConChoice } from '../joycon.js';
 import { announce } from '../announcer.js';
 import { themeManager } from '../theme-manager.js';
 import {
@@ -397,12 +398,15 @@ let activeSession = null;
  *   game's table of controller buttons, shared with Keys ▸ Controller
  * @param {(options: {onClose: () => void}) => void} [deps.openControllerSettings]
  *   opens Keys on its Controller tab; `onClose` runs when it closes
+ * @param {() => {hold: string|null, pair: string|null}} [deps.joyConChoice]
+ *   how the person holds one Joy-Con and uses the two, as the app keeps it
  */
 export async function launchCityWalk({
   hfmCtrl,
   triggerEl,
   walkMapping,
   openControllerSettings,
+  joyConChoice,
 }) {
   if (activeSession) return;
 
@@ -418,6 +422,7 @@ export async function launchCityWalk({
     triggerEl,
     walkMapping,
     openControllerSettings,
+    joyConChoice,
   });
   activeSession = session;
   session.open();
@@ -429,6 +434,7 @@ function createSession({
   triggerEl: providedTrigger,
   walkMapping: providedWalkMapping,
   openControllerSettings,
+  joyConChoice: providedJoyConChoice,
 }) {
   const root = document.documentElement;
   // Capture the trigger before any DOM work so exit can restore focus.
@@ -503,8 +509,13 @@ function createSession({
     state.themeUnsub = themeManager.addListener(syncThemeButtons);
 
     // A controller walks and looks here; the app's own use of it stands
-    // down while this layer is shown.
-    state.pad = new GamepadController();
+    // down while this layer is shown. One Joy-Con is read through the
+    // game's layout: its stick walks and its four buttons look.
+    const keptJoyCon = providedJoyConChoice ? null : loadJoyConChoice();
+    const joyConChoice = providedJoyConChoice ?? (() => keptJoyCon);
+    state.pad = new GamepadController({
+      layout: (pad) => joyConWalkLayout(pad, joyConChoice()),
+    });
     state.pad.on('input', handlePadInput);
     state.pad.init();
 
@@ -841,6 +852,13 @@ function createSession({
         'Start opens this help, the bumpers step through the landmarks, ' +
         'the right trigger walks to the chosen one and the left trigger ' +
         'starts auto-walk. The Controller button changes these.',
+      // Accessibility-critical string: one Joy-Con's own layout, by the
+      // names printed on it.
+      'On one Joy-Con: the stick walks and the four buttons look around. ' +
+        'ZR or ZL opens the map, R or L closes the map or this help, ' +
+        'SL and SR step through the landmarks, pressing the stick walks ' +
+        'to the chosen one, Home or Capture starts auto-walk, and Plus or ' +
+        'Minus opens this help',
       // Accessibility-critical strings. The help teaches the default first,
       // and the default is drag: hover-follow stays one press away on the
       // Mouse look button.
@@ -3019,15 +3037,17 @@ function createSession({
    * help, a question, a tour, auto-walk; never the game), Start the help,
    * LB and RB the landmarks, RT the walk to the chosen landmark, LT
    * auto-walk; on a Nintendo pad the printed A and B swap places, as in
-   * the app. Nothing while Keys is open over the game.
+   * the app. One Joy-Con's layout has its own table instead. Nothing while
+   * Keys is open over the game.
    * @param {{name: string, repeat: boolean}} event
    */
   function handlePadInput({ name, repeat }) {
     if (repeat || state.keysOpen) return;
+    const layoutInputs = state.pad?.layoutInputs();
     const { assignments } = walkMapping.get();
-    const action = Object.keys(assignments).find(
-      (id) => assignments[id] === name
-    );
+    const action = layoutInputs
+      ? layoutInputs[name]
+      : Object.keys(assignments).find((id) => assignments[id] === name);
     const dialogOpen = state.travel || state.refs.found?.hidden === false;
     if (action === 'help') {
       toggleHelp(!state.helpOpen);
@@ -3083,7 +3103,8 @@ function createSession({
    * The controller's sticks and D-pad this frame, each -1 to 1: the left
    * stick walks (up forward) and steps sideways, the right stick turns and
    * looks (up looks up), the D-pad walks and turns. A small push past the
-   * dead zone moves slowly.
+   * dead zone moves slowly. One Joy-Con's layout puts its stick on the left
+   * stick and its four buttons on the right.
    */
   function padAxes() {
     const pad = state.pad;

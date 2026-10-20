@@ -15,9 +15,17 @@ const BUTTON = { a: 0, b: 1, rb: 5, rt: 7, select: 8, home: 16 };
 
 async function openWithPad(
   page,
-  { preset = null, mode = 'standard', custom = null, besideJoystick = false } = {}
+  {
+    preset = null,
+    mode = 'standard',
+    custom = null,
+    besideJoystick = false,
+    joyCon = null,
+    joyConChoice = null,
+    url = '/?example=simple-box',
+  } = {}
 ) {
-  await page.addInitScript(({ chosen, mode, custom, besideJoystick }) => {
+  await page.addInitScript(({ chosen, mode, custom, besideJoystick, joyCon, joyConChoice }) => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     localStorage.setItem('openscad-forge-theme', 'dark');
@@ -31,20 +39,41 @@ async function openWithPad(
         JSON.stringify({ preset: chosen ?? 'camera', custom })
       );
     }
-    window.__padButtons = Array.from({ length: besideJoystick ? 18 : 17 }, () => ({
-      pressed: false,
-      touched: false,
-      value: 0,
-    }));
+    if (joyConChoice) {
+      localStorage.setItem('openscad-forge-joycon', JSON.stringify(joyConChoice));
+    }
+    // As a browser listed Joy-Cons: the right one alone, or the two merged.
+    const joyConShape = {
+      right: {
+        id: 'Wireless Gamepad (STANDARD GAMEPAD Vendor: 057e Product: 2007)',
+        buttons: 17,
+        axes: 2,
+      },
+      pair: {
+        id: 'Joy-Con L+R (STANDARD GAMEPAD Vendor: 057e Product: 200e)',
+        buttons: 22,
+        axes: 4,
+      },
+    }[joyCon];
+    window.__padButtons = Array.from(
+      { length: joyConShape?.buttons ?? (besideJoystick ? 18 : 17) },
+      () => ({
+        pressed: false,
+        touched: false,
+        value: 0,
+      })
+    );
     const pad = {
-      id: besideJoystick
-        ? 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)'
-        : 'Test pad (STANDARD GAMEPAD Vendor: 045e Product: 02ea)',
+      id:
+        joyConShape?.id ??
+        (besideJoystick
+          ? 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)'
+          : 'Test pad (STANDARD GAMEPAD Vendor: 045e Product: 02ea)'),
       index: besideJoystick ? 2 : 0,
       connected: true,
       mapping: 'standard',
       timestamp: 0,
-      axes: [0, 0, 0, 0],
+      axes: new Array(joyConShape?.axes ?? 4).fill(0),
       get buttons() {
         return window.__padButtons;
       },
@@ -69,16 +98,18 @@ async function openWithPad(
       configurable: true,
       value: () => list,
     });
-  }, { chosen: preset, mode, custom, besideJoystick });
-  await page.goto('/?example=simple-box', { timeout: 60_000 });
+  }, { chosen: preset, mode, custom, besideJoystick, joyCon, joyConChoice });
+  await page.goto(url, { timeout: 60_000 });
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
     timeout: WASM_READY_TIMEOUT,
   });
-  await page
-    .locator('.param-control')
-    .first()
-    .waitFor({ state: 'attached', timeout: 60_000 });
+  if (url !== '/') {
+    await page
+      .locator('.param-control')
+      .first()
+      .waitFor({ state: 'attached', timeout: 60_000 });
+  }
   const notNow = page.locator('#saveProjectNotNow');
   if (
     await notNow.waitFor({ state: 'visible', timeout: 3_000 }).then(
@@ -238,6 +269,82 @@ const where = (page) =>
       source: el?.getAttribute('data-focus-source') ?? null,
     };
   });
+
+test.describe('Joy-Cons', () => {
+  test('one Joy-Con connecting the first time asks how it is held, and keeps the answer', async ({
+    page,
+  }) => {
+    await openWithPad(page, { joyCon: 'right' });
+    const ask = page.locator('#joyConHoldModal');
+    await expect(ask).toBeVisible();
+    await expect(page.locator('#joyConHoldTitle')).toHaveText(
+      'How do you hold the Joy-Con?'
+    );
+    await ask.getByRole('button', { name: 'Sideways, SL and SR on top' }).click();
+    await expect(ask).toBeHidden();
+    const kept = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem('openscad-forge-joycon') ?? '{}')
+    );
+    expect(kept).toEqual({ hold: 'sideways', pair: null });
+    await expect(page.locator('#prefsJoyConHold')).toHaveValue('sideways');
+  });
+
+  test('the two together ask how they are used', async ({ page }) => {
+    await openWithPad(page, { joyCon: 'pair' });
+    const ask = page.locator('#joyConPairModal');
+    await expect(ask).toBeVisible();
+    for (const name of [
+      'Close',
+      'Together, as one controller',
+      'Left only, held sideways',
+      'Right only, held sideways',
+      'Separately: left for the Customizer, right for the camera',
+    ]) {
+      await expect(ask.getByRole('button', { name, exact: true })).toBeVisible();
+    }
+    // Closed without an answer, focus lands on the project's first
+    // parameter, not on the main region a screen reader reads whole.
+    await page.keyboard.press('Escape');
+    await expect(ask).toBeHidden();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document
+            .getElementById('parametersContainer')
+            .contains(document.activeElement)
+        )
+      )
+      .toBe(true);
+  });
+
+  test('answered on the Main Page, the question leaves focus on the file upload', async ({
+    page,
+  }) => {
+    await openWithPad(page, { joyCon: 'right', url: '/' });
+    const ask = page.locator('#joyConHoldModal');
+    await expect(ask).toBeVisible();
+    await ask.getByRole('button', { name: 'Upright', exact: true }).click();
+    await expect(ask).toBeHidden();
+    await expect(page.locator('#fileInput')).toBeFocused();
+  });
+
+  test('held sideways, the trigger presses the control that has focus and the side button goes back', async ({
+    page,
+  }) => {
+    await openWithPad(page, {
+      joyCon: 'right',
+      joyConChoice: { hold: 'sideways', pair: null },
+    });
+    await expect(page.locator('#joyConHoldModal')).toBeHidden();
+    const file = page.locator('#fileMenuBtn');
+    await file.focus();
+    // ZR is button 7 and R button 8 on a right Joy-Con alone.
+    await press(page, 7);
+    await expect(file).toHaveAttribute('aria-expanded', 'true');
+    await press(page, 8);
+    await expect(file).toHaveAttribute('aria-expanded', 'false');
+  });
+});
 
 test.describe('The right trigger reaches every part of the window', () => {
   test('the theme row and Preview Settings in their turn, and the Customizer past its own toggle', async ({
