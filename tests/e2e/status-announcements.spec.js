@@ -262,3 +262,110 @@ test('one warning is said by its line; several also by their count, once', async
     JSON.stringify(said)
   ).toHaveLength(1);
 });
+
+// An error dialog is read as focus moves into it, so the failure is said
+// there alone; the status line keeps it for the eye.
+const errorDialog = (page) =>
+  page.locator('[data-testid="friendly-error-modal"]').first();
+
+test('an example that cannot be loaded is said by its error dialog alone', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+  });
+  await recordAnnouncements(page);
+  await page.route('**/examples/simple-box/simple_box.scad', (route) =>
+    route.fulfill({ status: 404, body: 'not here' })
+  );
+  await page.goto('/?example=simple-box');
+  await expect(errorDialog(page)).toContainText('Example Load Failed', {
+    timeout: 180_000,
+  });
+  await expect(page.locator('#statusArea')).toHaveText('Error loading example');
+  await page.waitForTimeout(SETTLE_MS);
+
+  const said = await announcementsSince(page, 0);
+  expect(
+    said.filter((a) =>
+      /Error loading example|Example Load Failed/.test(a.text)
+    ),
+    JSON.stringify(said)
+  ).toEqual([]);
+});
+
+test('an SVG export with no 2D shape is said by its error dialog alone', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    // The next `__notTwoD` renders are answered, in place of the worker, with
+    // the failure an SVG export with nothing drawn in it sends.
+    window.__notTwoD = 0;
+    const RealWorker = window.Worker;
+    window.Worker = class extends RealWorker {
+      postMessage(message, ...rest) {
+        if (message?.type === 'RENDER' && window.__notTwoD > 0) {
+          window.__notTwoD -= 1;
+          const { requestId } = message.payload;
+          setTimeout(() =>
+            this.onmessage?.({
+              data: {
+                type: 'ERROR',
+                payload: {
+                  requestId,
+                  message:
+                    'SVG output is empty or too small. Your model may not produce 2D geometry.',
+                  details: '',
+                },
+              },
+            })
+          );
+          return;
+        }
+        super.postMessage(message, ...rest);
+      }
+    };
+  });
+  await recordAnnouncements(page);
+  await page.goto('/');
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: 180_000,
+  });
+  // Its generate setting already asks for the SVG.
+  await page.locator('#fileInput').setInputFiles({
+    name: 'flat.scad',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(
+      ['generate = "SVG"; // [3D, SVG]', 'cube(10);', ''].join('\n')
+    ),
+  });
+  await page.locator('#saveProjectNotNow').click({ timeout: 30_000 });
+  await expect(page.locator('.preview-state-indicator')).toHaveClass(
+    /state-current/,
+    { timeout: 120_000 }
+  );
+  await page.evaluate(() => {
+    const format = document.getElementById('outputFormat');
+    format.value = 'svg';
+    format.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.waitForTimeout(SETTLE_MS);
+  await page.evaluate(() => (window.__notTwoD = 1));
+  await page.locator('#primaryActionBtn').click();
+  await expect(errorDialog(page)).toContainText('SVG Export Issue', {
+    timeout: 120_000,
+  });
+  await page.waitForTimeout(SETTLE_MS);
+
+  const said = await announcementsSince(page, 0);
+  expect(
+    said.filter((a) => /requires 2D geometry|SVG Export Issue/.test(a.text)),
+    JSON.stringify(said)
+  ).toEqual([]);
+});

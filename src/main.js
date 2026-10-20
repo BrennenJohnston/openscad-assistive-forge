@@ -12828,11 +12828,11 @@ if (rounded) {
             actualLower.includes('dxf') ||
             actualLower.includes('first layer');
 
-          updateStatus(
-            `Error: ${currentFormat.toUpperCase()} export requires 2D geometry`
-          );
-
+          const statusLine = `Error: ${currentFormat.toUpperCase()} export requires 2D geometry`;
           if (alreadySet2D) {
+            // Said by the error dialog alone. The guidance below stands down
+            // when another dialog is open, so its line is still said.
+            updateStatus(statusLine, 'error', { announce: false });
             showErrorModal({
               title: `${currentFormat.toUpperCase()} Export Issue`,
               message: `The "${actualGenerateValue}" setting is selected, but the rendering engine could not produce 2D geometry. This can happen due to browser-based rendering limitations with complex models.`,
@@ -12840,6 +12840,7 @@ if (rounded) {
                 'Re-generate, or export the 3D model as STL and use desktop OpenSCAD for SVG/DXF export.',
             });
           } else {
+            updateStatus(statusLine);
             showDependencyGuidanceModal({
               label: 'generate',
               current: actualGenerateValue,
