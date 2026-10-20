@@ -328,6 +328,38 @@ describe('the Controller tab', () => {
     ).toBe(false);
   });
 
+  // As a browser listed a PS5 pad beside a 3D mouse's virtual joystick.
+  const JOYSTICK = 'Unknown Gamepad (Vendor: beef Product: 046d)';
+  const DUALSENSE =
+    'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)';
+  const ownersPads = () => {
+    pads[1] = { ...stubPad({ id: JOYSTICK, mapping: '', buttons: 4, axes: 10 }), index: 1 };
+    pads[2] = { ...stubPad({ id: DUALSENSE, buttons: 18 }), index: 2 };
+  };
+
+  it('the readout shows the standard gamepad, and names the other device', () => {
+    ownersPads();
+    frame(0);
+    expect(text('controllerReadoutPad')).toBe(
+      `${DUALSENSE}: mapping standard, 18 buttons, 4 axes. Also connected: ${JOYSTICK}.`
+    );
+  });
+
+  it('the readout shows the pad the app listens to', () => {
+    ownersPads();
+    _resetControllerPanelForTests();
+    initControllerPanel({
+      getGamepadStatus: () => ({ supported: true, padName: null }),
+      gamepad: { mapping, capture, cancelCapture, announce, pad: () => pads[1] },
+      walkMapping,
+    });
+    open();
+    frame(0);
+    expect(text('controllerReadoutPad')).toBe(
+      `${JOYSTICK}: mapping not standard, 4 buttons, 10 axes. Also connected: ${DUALSENSE}.`
+    );
+  });
+
   it('a test takes each press, speaks it once and at most every 250 ms, and ends without a press', async () => {
     pads[0] = stubPad();
     frame(0);

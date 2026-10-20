@@ -1933,6 +1933,7 @@ async function initApp() {
           : Promise.resolve(null),
       cancelCapture: () => gamepadController?.cancelCapture(),
       announce: (text) => announceImmediate(text),
+      pad: () => gamepadController?.activePad() ?? null,
     },
   });
 

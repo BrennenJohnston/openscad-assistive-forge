@@ -15,9 +15,9 @@ const BUTTON = { a: 0, b: 1, rb: 5, rt: 7, select: 8, home: 16 };
 
 async function openWithPad(
   page,
-  { preset = null, mode = 'standard', custom = null } = {}
+  { preset = null, mode = 'standard', custom = null, besideJoystick = false } = {}
 ) {
-  await page.addInitScript(({ chosen, mode, custom }) => {
+  await page.addInitScript(({ chosen, mode, custom, besideJoystick }) => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     localStorage.setItem('openscad-forge-theme', 'dark');
@@ -31,14 +31,16 @@ async function openWithPad(
         JSON.stringify({ preset: chosen ?? 'camera', custom })
       );
     }
-    window.__padButtons = Array.from({ length: 17 }, () => ({
+    window.__padButtons = Array.from({ length: besideJoystick ? 18 : 17 }, () => ({
       pressed: false,
       touched: false,
       value: 0,
     }));
     const pad = {
-      id: 'Test pad (STANDARD GAMEPAD Vendor: 045e Product: 02ea)',
-      index: 0,
+      id: besideJoystick
+        ? 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)'
+        : 'Test pad (STANDARD GAMEPAD Vendor: 045e Product: 02ea)',
+      index: besideJoystick ? 2 : 0,
       connected: true,
       mapping: 'standard',
       timestamp: 0,
@@ -47,11 +49,27 @@ async function openWithPad(
         return window.__padButtons;
       },
     };
+    // As a browser listed a PS5 pad beside a 3D mouse's virtual joystick:
+    // the joystick first, not a standard gamepad.
+    const joystick = {
+      id: 'Unknown Gamepad (Vendor: beef Product: 046d)',
+      index: 1,
+      connected: true,
+      mapping: '',
+      timestamp: 0,
+      axes: new Array(10).fill(0),
+      buttons: Array.from({ length: 4 }, () => ({
+        pressed: false,
+        touched: false,
+        value: 0,
+      })),
+    };
+    const list = besideJoystick ? [null, joystick, pad, null] : [pad, null, null, null];
     Object.defineProperty(Navigator.prototype, 'getGamepads', {
       configurable: true,
-      value: () => [pad, null, null, null],
+      value: () => list,
     });
-  }, { chosen: preset, mode, custom });
+  }, { chosen: preset, mode, custom, besideJoystick });
   await page.goto('/?example=simple-box', { timeout: 60_000 });
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
@@ -70,10 +88,15 @@ async function openWithPad(
   ) {
     await notNow.click();
   }
+  // Each listed pad announces itself; beside the joystick, in the order a
+  // browser announced them, the pad first and the joystick after it.
   await page.evaluate(() => {
-    const e = new Event('gamepadconnected');
-    e.gamepad = navigator.getGamepads()[0];
-    window.dispatchEvent(e);
+    const listed = navigator.getGamepads().filter(Boolean);
+    for (const gamepad of listed.reverse()) {
+      const e = new Event('gamepadconnected');
+      e.gamepad = gamepad;
+      window.dispatchEvent(e);
+    }
   });
 }
 
@@ -141,6 +164,19 @@ test.describe('A game controller drives the interface', () => {
     expect(ring.source).toBe('gamepad');
     expect(ring.outline).not.toBe('none');
     expect(ring.width).toBeGreaterThanOrEqual(2);
+  });
+
+  test('beside a 3D mouse joystick listed first, the PS5 pad still steps with its bumper', async ({
+    page,
+  }) => {
+    await openWithPad(page, { preset: 'menus', besideJoystick: true });
+    await page.locator('#fileMenuBtn').focus();
+    await page.keyboard.press('Tab');
+    const expected = await activeId(page);
+    expect(expected).toBeTruthy();
+    await page.locator('#fileMenuBtn').focus();
+    await press(page, BUTTON.rb);
+    expect(await activeId(page)).toBe(expected);
   });
 
   test('the Keys button on the controller opens Keys on its Controller tab', async ({
