@@ -598,9 +598,9 @@ describe('the Controller tab', () => {
       expect(message()).toBe('Give the preset a name.');
       expect(announce).toHaveBeenLastCalledWith('Give the preset a name.');
       expect(document.activeElement).toBe(name());
-      expect(name().getAttribute('aria-describedby')).toBe(
-        'prefsGamepadPresetMessage'
-      );
+      // Said once: the field does not carry the line as its description, or
+      // a screen reader reads it again with the field.
+      expect(name().hasAttribute('aria-describedby')).toBe(false);
       expect(store.list()).toEqual([]);
     });
 
@@ -609,6 +609,8 @@ describe('the Controller tab', () => {
       name().value = 'Racing';
       document.getElementById('prefsGamepadPresetSave').click();
 
+      // Pressed from the keyboard, the button has focus when it asks.
+      removeButton().focus();
       removeButton().click();
       let ask = document.querySelector('[role="alertdialog"]');
       expect(ask.textContent).toContain(
@@ -617,11 +619,18 @@ describe('the Controller tab', () => {
       ask.querySelector('[data-action="cancel"]').click();
       await flush();
       expect(mine()).toEqual([['mine:Racing', 'Racing']]);
+      expect(document.activeElement).toBe(removeButton());
 
       removeButton().click();
       ask = document.querySelector('[role="alertdialog"]');
+      // Focus moves once, to the Preset list: not back to Delete first.
+      const landed = [];
+      const note = (e) => landed.push(e.target);
+      document.addEventListener('focusin', note);
       ask.querySelector('[data-action="confirm"]').click();
       await flush();
+      document.removeEventListener('focusin', note);
+      expect(landed).toEqual([preset()]);
       expect(mine()).toEqual([]);
       expect(preset().value).toBe('camera');
       expect(buttonOf('activate')).toBe('X');

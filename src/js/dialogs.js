@@ -22,6 +22,9 @@ import { escapeHtml } from './html-utils.js';
  * @param {boolean} [options.focusConfirm=false] - Open on the confirm button
  *   instead of Cancel, for a question whose cancel is the answer that throws
  *   work away
+ * @param {(confirmed: boolean) => HTMLElement|null} [options.returnFocus] -
+ *   Where focus goes on closing, by the answer, for a question whose yes
+ *   removes the control that asked it (else focus goes back to that control)
  * @returns {Promise<boolean>} True if confirmed, false if canceled
  */
 export function showConfirmDialog(
@@ -29,7 +32,7 @@ export function showConfirmDialog(
   title = 'Confirm Action',
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
-  { destructive = false, focusConfirm = false } = {}
+  { destructive = false, focusConfirm = false, returnFocus = null } = {}
 ) {
   return new Promise((resolve) => {
     const modal = document.createElement('div');
@@ -58,7 +61,9 @@ export function showConfirmDialog(
 
     document.body.appendChild(modal);
 
+    let answer = false;
     const cleanup = (result) => {
+      answer = result;
       closeModal(modal);
       document.body.removeChild(modal);
       resolve(result);
@@ -92,6 +97,7 @@ export function showConfirmDialog(
       focusTarget: modal.querySelector(
         focusConfirm ? '[data-action="confirm"]' : '[data-action="cancel"]'
       ),
+      ...(returnFocus ? { returnFocus: () => returnFocus(answer) } : {}),
     });
   });
 }

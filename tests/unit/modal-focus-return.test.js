@@ -123,6 +123,23 @@ describe('a dialog closing', () => {
     expect(document.activeElement).toBe(first)
   })
 
+  it('asks a return place given as a function when the dialog closes', () => {
+    // A question whose yes removes the control that asked it names where
+    // focus goes by the answer, so focus moves once and not twice.
+    const remove = button('Delete this preset')
+    const list = button('Preset')
+    remove.focus()
+    let answer = null
+    const modal = dialogWithButton()
+    openModal(modal, { returnFocus: () => (answer ? list : remove) })
+    answer = true
+    const landed = []
+    document.addEventListener('focusin', (e) => landed.push(e.target))
+    closeModal(modal)
+    expect(document.activeElement).toBe(list)
+    expect(landed).toEqual([list])
+  })
+
   it('does not return to a control that is not drawn', () => {
     // An input in a folded group is in the page but cannot take focus.
     const folded = button('Width')

@@ -279,14 +279,18 @@ async function deleteMinePreset() {
     'Delete Controller Preset',
     'Delete',
     'Cancel',
-    { destructive: true }
+    {
+      destructive: true,
+      // The Delete button hides with the preset: a yes puts focus on the
+      // Preset list in one move, not back on Delete first.
+      returnFocus: (yes) =>
+        yes ? el('prefsGamepadPreset') : el('prefsGamepadPresetDelete'),
+    }
   );
   if (!confirmed) return;
   gamepad.mapping.keepButtons();
   gamepad.presets.remove(mine.id);
   renderGamepadPanel();
-  // The Delete button hides with the preset, and the focus with it.
-  el('prefsGamepadPreset')?.focus();
   presetMessage(`Preset ${mine.name} deleted.`);
 }
 

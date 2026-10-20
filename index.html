@@ -9305,9 +9305,10 @@
               </button>
             </div>
             <!-- A person's own presets (gamepad-presets.js): written into the
-                 Preset list by controller-panel.js. The message line is not
-                 a live region: each result is also spoken once through the
-                 announcer. -->
+                 Preset list by controller-panel.js. Each result is spoken once
+                 through the announcer and stays on the message line to read
+                 again; the line is neither a live region nor the name field's
+                 description, which NVDA reads a second time with the field. -->
             <fieldset
               id="prefsGamepadMine"
               class="preferences-fieldset gamepad-presets"
@@ -9326,7 +9327,6 @@
                   id="prefsGamepadPresetName"
                   maxlength="60"
                   autocomplete="off"
-                  aria-describedby="prefsGamepadPresetMessage"
                 />
                 <button
                   type="button"

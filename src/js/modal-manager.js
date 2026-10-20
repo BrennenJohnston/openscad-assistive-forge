@@ -8,7 +8,7 @@ import { createFocusTrap, getFocusableElements } from './focus-trap.js';
 
 /**
  * Modal state storage
- * @type {Map<HTMLElement, {trigger: HTMLElement|null, focusTrap: Object}>}
+ * @type {Map<HTMLElement, {trigger: HTMLElement|(() => HTMLElement|null)|null, focusTrap: Object}>}
  */
 const modalStates = new Map();
 let bodyOverflowBefore = null;
@@ -44,9 +44,10 @@ export function canTakeFocusBack(el) {
  */
 function focusAfterClose(state, fallbackFocus) {
   const named = state?.fallbackFocus;
+  const trigger = state?.trigger;
   return (
     [
-      state?.trigger,
+      typeof trigger === 'function' ? trigger() : trigger,
       fallbackFocus,
       typeof named === 'function' ? named() : named,
       document.getElementById('main-content'),
@@ -59,9 +60,10 @@ function focusAfterClose(state, fallbackFocus) {
  * @param {HTMLElement} modal - Modal element to open
  * @param {Object} [options] - Options
  * @param {HTMLElement} [options.focusTarget] - Element to focus on open (defaults to first focusable)
- * @param {HTMLElement} [options.returnFocus] - Where focus returns on close
- *   (defaults to what had focus): a menu's button, when a menu item that
- *   closes with the menu opened the dialog
+ * @param {HTMLElement|(() => HTMLElement|null)} [options.returnFocus] - Where
+ *   focus returns on close (defaults to what had focus): a menu's button,
+ *   when a menu item that closes with the menu opened the dialog; a function
+ *   is asked then, for a place that depends on how the dialog was answered
  * @param {HTMLElement|(() => HTMLElement|null)} [options.fallbackFocus] -
  *   Where focus goes if that is gone or hidden by the time the dialog
  *   closes; a function is asked then, for a control drawn after opening
