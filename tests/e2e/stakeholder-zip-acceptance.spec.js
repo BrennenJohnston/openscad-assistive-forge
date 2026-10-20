@@ -378,8 +378,9 @@ test.describe('Stakeholder Acceptance Tests - the keyguard ZIP', () => {
       expect(titleText).toContain('Import / Export')
     }
 
-    // Import Presets button visible
-    const importBtn = page.locator('button:has-text("Import Presets")')
+    // Import Presets button visible, inside the modal: Keys > Controller's
+    // "Import presets" also answers to the text.
+    const importBtn = page.locator('.preset-modal button[data-action="import"]')
     const importVisible = await importBtn.isVisible().catch(() => false)
     console.log(`[Phase 7] Import button visible: ${importVisible}`)
 
@@ -509,7 +510,9 @@ test.describe('Stakeholder Acceptance Tests - the keyguard ZIP', () => {
           await manageBtn.click()
           await page.waitForTimeout(500)
 
-          const exportBtn = page.locator('button:has-text("Export All")')
+          // Inside the modal: the Stencil Maker's "Export all plates" also
+          // answers to the text.
+          const exportBtn = page.locator('.preset-modal button[data-action="export-all"]')
           if (await exportBtn.isVisible()) {
             // Set up download listener
             const downloadPromise = page.waitForEvent('download', { timeout: 5000 }).catch(() => null)

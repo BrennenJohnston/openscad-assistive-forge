@@ -398,8 +398,9 @@ test.describe('Bug 4: Imported preset auto-selection', () => {
     await manageBtn.click()
     await page.waitForTimeout(1000)
 
-    // Use "Import Presets" button
-    const importBtn = page.locator('button:has-text("Import Presets")')
+    // Use "Import Presets" button, scoped to the modal by its action hook:
+    // Keys > Controller's "Import presets" also answers to the text.
+    const importBtn = page.locator('.preset-modal button[data-action="import"]')
     await expect(importBtn).toBeVisible()
 
     await importBtn.click()

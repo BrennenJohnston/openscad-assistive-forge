@@ -157,13 +157,15 @@ test.describe('Stakeholder Acceptance Tests', () => {
         expect(titleText).toContain('Import / Export')
       }
       
-      // Check for Import Presets button
-      const importBtn = page.locator('button:has-text("Import Presets"), button[aria-label*="Import"]')
+      // Check for Import Presets button, inside the modal: Keys > Controller's
+      // "Import presets" also answers to the text.
+      const importBtn = page.locator('.preset-modal button[data-action="import"]')
       const importBtnExists = await importBtn.count() > 0
       console.log('Import Presets button found:', importBtnExists)
       
-      // Check for Export All Presets button
-      const exportBtn = page.locator('button:has-text("Export All"), button:has-text("Export All Presets")')
+      // Check for Export All Presets button, inside the modal: the Stencil
+      // Maker's "Export all plates" also answers to the text.
+      const exportBtn = page.locator('.preset-modal button[data-action="export-all"]')
       const exportBtnExists = await exportBtn.count() > 0
       console.log('Export All Presets button found:', exportBtnExists)
       
