@@ -205,7 +205,10 @@ export const MEASURED_SECONDS = {
   'share-settings.spec.js': 58.5,
   'stakeholder-acceptance.spec.js': 39.2,
   'startup-questions.spec.js': 9.9,
-  'status-announcements.spec.js': 67.1,
+  // 65.6 s for its first seven cases in Test Suite 39491434537, plus two
+  // error dialogs at the pace of the neighbour each is like: the failed
+  // preview's 8.6 s and the warnings case's 10.5 s.
+  'status-announcements.spec.js': 86.7,
   'stl-view.spec.js': 13.1,
   'svg-edit-door.spec.js': 422.5,
   'svg-preparer.spec.js': 12.0,

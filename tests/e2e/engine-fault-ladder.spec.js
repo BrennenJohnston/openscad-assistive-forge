@@ -107,6 +107,41 @@ async function standInEngineFaults(page) {
   });
 }
 
+/** Keep every sentence the page writes into its two live regions. */
+async function recordLiveRegions(page) {
+  await page.addInitScript(() => {
+    window.__liveWrites = [];
+    const text = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+    Object.defineProperty(Node.prototype, 'textContent', {
+      configurable: true,
+      get() {
+        return text.get.call(this);
+      },
+      set(value) {
+        if (
+          value &&
+          (this.id === 'srAnnouncer' || this.id === 'srAnnouncerAssertive')
+        ) {
+          window.__liveWrites.push(value);
+        }
+        text.set.call(this, value);
+      },
+    });
+  });
+}
+
+/**
+ * The live-region sentences that say what `words` matches. An error dialog
+ * is read as focus moves into it, so while it opens nothing else should say
+ * its failure.
+ */
+async function saidBesideTheDialog(page, words) {
+  // Past the polite region's 350 ms wait and a repeat's 100 ms gap.
+  await page.waitForTimeout(1_000);
+  const writes = await page.evaluate(() => window.__liveWrites);
+  return writes.filter((sentence) => words.test(sentence));
+}
+
 const errorDialog = (page) =>
   page.locator('[data-testid="friendly-error-modal"]').first();
 
@@ -165,6 +200,7 @@ test.describe('another engine after an engine fault', () => {
   }) => {
     test.setTimeout(WASM_READY_TIMEOUT * 2);
     const seen = await watch(page);
+    await recordLiveRegions(page);
     await damage(context, 'openscad-official', { damaged: true });
 
     await page.goto('/?example=simple-box', { timeout: 60_000 });
@@ -172,6 +208,12 @@ test.describe('another engine after an engine fault', () => {
     await expect(dialog).toBeVisible({ timeout: WASM_READY_TIMEOUT });
     await expect(dialog).toContainText('Engine Initialization Failed');
     await expect(dialog).toContainText(FIRST_OFFER);
+    expect(
+      await saidBesideTheDialog(
+        page,
+        /failed to initiali[sz]e|Initialization Failed/i
+      )
+    ).toEqual([]);
     await expect(buttonsOf(dialog)).toHaveText([
       'Download and try it',
       'Not now',
@@ -300,10 +342,13 @@ test.describe('another engine after an engine fault', () => {
   }) => {
     test.setTimeout(WASM_READY_TIMEOUT * 2);
     await standInEngineFaults(page);
+    await recordLiveRegions(page);
     await openBoxThenFail(page, 2);
+    const failure = /Geometry Check Failed|geometry code failed/;
 
     const first = await generateAndFail(page);
     await expect(first).toContainText(FIRST_OFFER);
+    expect(await saidBesideTheDialog(page, failure)).toEqual([]);
     await first.getByRole('button', { name: 'Not now' }).click();
     await expect(first).toHaveCount(0);
     // Back on the button that started the render, not the page body.
@@ -317,6 +362,7 @@ test.describe('another engine after an engine fault', () => {
     const plain = await generateAndFail(page);
     await expect(plain).not.toContainText('rendering engine rather than');
     await expect(buttonsOf(plain)).toHaveText(['OK']);
+    expect(await saidBesideTheDialog(page, failure)).toEqual([]);
     await plain.getByRole('button', { name: 'OK' }).click();
     await expect(plain).toHaveCount(0);
     await expect(page.locator('#primaryActionBtn')).toBeFocused();

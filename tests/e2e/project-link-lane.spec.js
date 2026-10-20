@@ -104,12 +104,21 @@ test.describe('A direct link to a project archive', () => {
     const dialog = page.locator('[data-testid="friendly-error-modal"]')
     await expect(dialog).toBeVisible()
     await expect(dialog.getByRole('heading', { name: /ZIP Extraction Failed/ })).toBeVisible()
+    // Past the announcer's polite wait.
+    await page.waitForTimeout(1_000)
 
     const history = await liveHistory(page)
     expect(
       history.some((h) => h.text === 'Failed to extract ZIP file'),
       `said or shown:\n${said(history)}`
     ).toBe(true)
+    // Shown in the status line, and said by the dialog alone.
+    expect(
+      history.filter(
+        (h) => h.src !== 'statusArea' && /Failed to extract ZIP|ZIP Extraction Failed/.test(h.text)
+      ),
+      `said or shown:\n${said(history)}`
+    ).toEqual([])
     expect(
       history.filter((h) => /Loaded project\.zip from URL|project\.zip loaded from URL/.test(h.text)),
       `said or shown:\n${said(history)}`

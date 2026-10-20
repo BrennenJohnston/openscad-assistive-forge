@@ -139,7 +139,6 @@ import {
 import {
   translateError,
   previewFailureSentence,
-  engineErrorLine,
   findFailedCheck,
   findMissingLibrary,
   showErrorModal,
@@ -6283,10 +6282,10 @@ async function initApp() {
       } catch (error) {
         console.error('Failed to initialize OpenSCAD WASM:', error);
         hideWasmLoadingIndicator(wasmLoadingOverlay);
-        updateStatus('OpenSCAD engine failed to initialize');
-        _announceError(
-          'OpenSCAD engine failed to initialize. Some features may not work.'
-        );
+        // Said by its dialog alone.
+        updateStatus('OpenSCAD engine failed to initialize', 'error', {
+          announce: false,
+        });
         await showEngineStartFailure(error, startEngineAgain);
         return false;
       }
@@ -12834,11 +12833,11 @@ if (rounded) {
             actualLower.includes('dxf') ||
             actualLower.includes('first layer');
 
-          updateStatus(
-            `Error: ${currentFormat.toUpperCase()} export requires 2D geometry`
-          );
-
+          const statusLine = `Error: ${currentFormat.toUpperCase()} export requires 2D geometry`;
           if (alreadySet2D) {
+            // Said by the error dialog alone. The guidance below stands down
+            // when another dialog is open, so its line is still said.
+            updateStatus(statusLine, 'error', { announce: false });
             showErrorModal({
               title: `${currentFormat.toUpperCase()} Export Issue`,
               message: `The "${actualGenerateValue}" setting is selected, but the rendering engine could not produce 2D geometry. This can happen due to browser-based rendering limitations with complex models.`,
@@ -12846,6 +12845,7 @@ if (rounded) {
                 'Re-generate, or export the 3D model as STL and use desktop OpenSCAD for SVG/DXF export.',
             });
           } else {
+            updateStatus(statusLine);
             showDependencyGuidanceModal({
               label: 'generate',
               current: actualGenerateValue,
@@ -12862,16 +12862,12 @@ if (rounded) {
         code: error.code,
         details: error.details,
       });
-      // Said once, assertively, with the engine's own line where it gave
-      // one: the message panels leave error lines to this.
+      // Said once, by the dialog as focus moves into it, the engine's own
+      // line read with its technical details: the message panels leave
+      // error lines to it.
       updateStatus(`Error: ${friendlyError.title}`, 'error', {
         announce: false,
       });
-      const engineLine = engineErrorLine(error.details);
-      _announceError(
-        `Error: ${friendlyError.title}. ${friendlyError.explanation}` +
-          (engineLine ? ` ${engineLine}` : '')
-      );
 
       showErrorModal({
         title: friendlyError.title,
@@ -12909,9 +12905,6 @@ if (rounded) {
       updateStatus('OpenSCAD engine failed to initialize', 'error', {
         announce: false,
       });
-      _announceError(
-        'OpenSCAD engine failed to initialize. Some features may not work.'
-      );
       await showEngineStartFailure(error, renderWithEngine);
     }
   }

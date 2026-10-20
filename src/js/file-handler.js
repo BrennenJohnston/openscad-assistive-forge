@@ -776,7 +776,10 @@ export function initFileHandler({
         } catch (error) {
           dismissOverlay();
           console.error('[ZIP] Extraction failed:', error);
-          updateStatus('Failed to extract ZIP file');
+          // Said by its dialog alone, as each error dialog below is.
+          updateStatus('Failed to extract ZIP file', 'error', {
+            announce: false,
+          });
           showErrorModal({
             title: 'ZIP Extraction Failed',
             message: 'Could not extract files from the uploaded ZIP archive.',
@@ -1518,7 +1521,9 @@ export function initFileHandler({
       }
     } catch (error) {
       console.error('Failed to extract parameters:', error);
-      updateStatus('Error: Failed to extract parameters');
+      updateStatus('Error: Failed to extract parameters', 'error', {
+        announce: false,
+      });
       showErrorModal({
         title: 'Parameter Extraction Failed',
         message: 'Could not read parameters from the uploaded file.',
@@ -1661,7 +1666,7 @@ export function initFileHandler({
       }
     } catch (error) {
       console.error('Failed to load example:', error);
-      updateStatus('Error loading example');
+      updateStatus('Error loading example', 'error', { announce: false });
       showErrorModal({
         title: 'Example Load Failed',
         message: 'The example file could not be loaded.',
