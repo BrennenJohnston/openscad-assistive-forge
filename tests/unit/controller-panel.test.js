@@ -23,6 +23,7 @@ import {
   createGamepadMapping,
   createWalkMapping,
 } from '../../src/js/gamepad-controller.js';
+import { createGamepadPresetStore } from '../../src/js/gamepad-presets.js';
 
 const INDEX = readFileSync(path.resolve(__dirname, '../../index.html'), 'utf8');
 const XBOX = 'Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e)';
@@ -525,5 +526,161 @@ describe('the Controller tab', () => {
     expect(document.getElementById('controllerReadoutTest').textContent).toBe(
       'Start the test'
     );
+  });
+
+  describe('your presets', () => {
+    let store;
+
+    /** The tab again, with a person's presets behind it. */
+    beforeEach(() => {
+      store = createGamepadPresetStore();
+      mapping = createGamepadMapping({
+        getPadId: () => XBOX,
+        userPresets: store,
+      });
+      initControllerPanel({
+        getGamepadStatus: () => ({ supported: true, padName: 'Xbox' }),
+        gamepad: { mapping, capture, cancelCapture, announce, presets: store },
+        walkMapping,
+      });
+      syncControllerPanel();
+    });
+
+    const preset = () => document.getElementById('prefsGamepadPreset');
+    const mine = () =>
+      [...preset().querySelectorAll('optgroup option')].map((o) => [
+        o.value,
+        o.textContent,
+      ]);
+    const message = () => text('prefsGamepadPresetMessage');
+    const name = () => document.getElementById('prefsGamepadPresetName');
+    const removeButton = () =>
+      document.getElementById('prefsGamepadPresetDelete');
+
+    it('Save preset keeps the buttons under a name, adds it to the Preset list and chooses it', () => {
+      expect(preset().querySelector('optgroup')).toBeNull();
+      expect(removeButton().hidden).toBe(true);
+      mapping.assign('activate', 'x');
+      name().value = 'Racing';
+      document.getElementById('prefsGamepadPresetSave').click();
+      expect(announce).toHaveBeenLastCalledWith('Preset Racing saved.');
+      expect(message()).toBe('Preset Racing saved.');
+      expect(preset().querySelector('optgroup').label).toBe('Your presets');
+      expect(mine()).toEqual([['mine:Racing', 'Racing']]);
+      expect(preset().value).toBe('mine:Racing');
+      expect(name().value).toBe('');
+      expect(removeButton().hidden).toBe(false);
+      expect(buttonOf('activate')).toBe('X');
+
+      // Changed and saved again under its name, it is updated, in the
+      // letters typed this time.
+      mapping.assign('back', 'y');
+      name().value = 'racing';
+      name().dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+      );
+      expect(announce).toHaveBeenLastCalledWith('Preset racing updated.');
+      expect(mine()).toEqual([['mine:racing', 'racing']]);
+      mapping.assign('back', 'b');
+      document.getElementById('prefsGamepadReset').click();
+      expect(buttonOf('back')).toBe('Y');
+      expect(announce).toHaveBeenLastCalledWith('racing restored.');
+
+      // Chosen from the list, a built-in preset hides Delete.
+      preset().value = 'menus';
+      preset().dispatchEvent(new Event('change', { bubbles: true }));
+      expect(removeButton().hidden).toBe(true);
+    });
+
+    it('a name it cannot take is said, and focus stays in the name', () => {
+      name().value = '  ';
+      document.getElementById('prefsGamepadPresetSave').click();
+      expect(message()).toBe('Give the preset a name.');
+      expect(announce).toHaveBeenLastCalledWith('Give the preset a name.');
+      expect(document.activeElement).toBe(name());
+      expect(name().getAttribute('aria-describedby')).toBe(
+        'prefsGamepadPresetMessage'
+      );
+      expect(store.list()).toEqual([]);
+    });
+
+    it('Delete this preset asks first, keeps the buttons in use and puts focus on the Preset list', async () => {
+      mapping.assign('activate', 'x');
+      name().value = 'Racing';
+      document.getElementById('prefsGamepadPresetSave').click();
+
+      removeButton().click();
+      let ask = document.querySelector('[role="alertdialog"]');
+      expect(ask.textContent).toContain(
+        'Delete the controller preset Racing? Its buttons stay in use until you choose another preset.'
+      );
+      ask.querySelector('[data-action="cancel"]').click();
+      await flush();
+      expect(mine()).toEqual([['mine:Racing', 'Racing']]);
+
+      removeButton().click();
+      ask = document.querySelector('[role="alertdialog"]');
+      ask.querySelector('[data-action="confirm"]').click();
+      await flush();
+      expect(mine()).toEqual([]);
+      expect(preset().value).toBe('camera');
+      expect(buttonOf('activate')).toBe('X');
+      expect(removeButton().hidden).toBe(true);
+      expect(document.activeElement).toBe(preset());
+      expect(announce).toHaveBeenLastCalledWith('Preset Racing deleted.');
+    });
+
+    it('Export writes the presets to a file, and Import adds the presets a file holds', async () => {
+      document.getElementById('prefsGamepadPresetExport').click();
+      expect(announce).toHaveBeenLastCalledWith(
+        'You have no presets of your own to export yet.'
+      );
+
+      store.save('Racing', mapping.get().assignments);
+      const clicked = [];
+      vi.stubGlobal('URL', {
+        ...URL,
+        createObjectURL: () => 'blob:presets',
+        revokeObjectURL: () => {},
+      });
+      const click = vi
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(function () {
+          clicked.push(this.download);
+        });
+      document.getElementById('prefsGamepadPresetExport').click();
+      expect(clicked).toEqual(['controller-presets.json']);
+      expect(announce).toHaveBeenLastCalledWith(
+        '1 preset exported to controller-presets.json.'
+      );
+      click.mockRestore();
+
+      // A file from another browser, with a preset this one lacks.
+      const other = createGamepadPresetStore({ storageKey: 'elsewhere' });
+      other.save('Reading', mapping.get().assignments);
+      const choose = async (contents) => {
+        const input = document.getElementById('prefsGamepadPresetFile');
+        // jsdom's File has no text(); a browser's does.
+        Object.defineProperty(input, 'files', {
+          configurable: true,
+          value: [
+            { name: 'controller-presets.json', text: async () => contents },
+          ],
+        });
+        input.dispatchEvent(new Event('change'));
+        await flush();
+        await flush();
+      };
+      await choose(other.toFile());
+      expect(announce).toHaveBeenLastCalledWith('1 preset imported.');
+      expect(mine()).toEqual([
+        ['mine:Racing', 'Racing'],
+        ['mine:Reading', 'Reading'],
+      ]);
+
+      await choose('{"type": "something else"}');
+      expect(message()).toBe('That file is not a controller presets file.');
+      expect(mine()).toHaveLength(2);
+    });
   });
 });

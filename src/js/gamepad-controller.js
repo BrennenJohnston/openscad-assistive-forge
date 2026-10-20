@@ -527,6 +527,8 @@ function validAssignments(table, actionIds, inputs) {
  * @param {string} [options.defaultPreset]
  * @param {string[]} [options.inputs] - the inputs an action may take
  * @param {string} [options.storageKey]
+ * @param {ReturnType<typeof import('./gamepad-presets.js').createGamepadPresetStore>} [options.userPresets]
+ *   a person's own presets, after the built-in ones
  */
 export function createGamepadMapping({
   getPadId = () => '',
@@ -536,11 +538,20 @@ export function createGamepadMapping({
   defaultPreset = DEFAULT_GAMEPAD_PRESET,
   inputs = GAMEPAD_INPUT_NAMES,
   storageKey = STORAGE_KEY_GAMEPAD_MAPPING,
+  userPresets = null,
 } = {}) {
   const actionIds = actions.map((a) => a.id);
-  const presetOrder = Object.keys(presets);
   const listeners = new Set();
+  const known = (id) => !!presets[id] || !!userPresets?.get(id);
+  const presetOrder = () => [
+    ...Object.keys(presets),
+    ...(userPresets?.list().map((preset) => preset.id) ?? []),
+  ];
   let saved = read();
+  // A change to the person's presets can change the table in use.
+  userPresets?.subscribe(() => {
+    for (const listener of listeners) listener();
+  });
 
   function read() {
     const raw = safeGetItem(storageKey);
@@ -558,7 +569,7 @@ export function createGamepadMapping({
       }
     }
     return {
-      preset: presets[data?.preset] ? data.preset : defaultPreset,
+      preset: known(data?.preset) ? data.preset : defaultPreset,
       family: FAMILY_IDS.includes(data?.family) ? data.family : null,
       custom: validAssignments(data?.custom, actionIds, inputs),
     };
@@ -572,12 +583,15 @@ export function createGamepadMapping({
   function get() {
     const family =
       saved.family ?? getFamily() ?? gamepadFamilyFromId(getPadId());
+    // A person's preset keeps the buttons they gave it, on any layout.
+    const mine = userPresets?.get(saved.preset);
     return {
-      preset: saved.preset,
+      preset: presets[saved.preset] || mine ? saved.preset : defaultPreset,
       family,
       familyChosen: saved.family !== null,
       assignments:
         saved.custom ??
+        mine?.assignments ??
         presetAssignments(saved.preset, family, presets, defaultPreset),
     };
   }
@@ -614,21 +628,44 @@ export function createGamepadMapping({
 
     /** Start from a preset's own table. */
     setPreset(presetId) {
-      if (!presets[presetId]) return;
+      if (!known(presetId)) return;
       saved = { ...saved, preset: presetId, custom: null };
       write();
     },
 
     /**
-     * The next preset in their order, round again, from its own table.
+     * The next preset in their order, the person's own after the built-in
+     * ones, round again, from its own table.
      * @returns {string} the preset now on
      */
     nextPreset() {
-      const at = presetOrder.indexOf(saved.preset);
-      const next = presetOrder[(at + 1) % presetOrder.length];
+      const order = presetOrder();
+      const at = order.indexOf(get().preset);
+      const next = order[(at + 1) % order.length];
       saved = { ...saved, preset: next, custom: null };
       write();
       return next;
+    },
+
+    /**
+     * A preset's name, built in or the person's own.
+     * @param {string} presetId
+     * @returns {string|null}
+     */
+    presetName(presetId) {
+      return (
+        presets[presetId]?.name ?? userPresets?.get(presetId)?.name ?? null
+      );
+    },
+
+    /**
+     * Keep the buttons in use as they are, under the default preset: for a
+     * person's preset that is deleted while in use.
+     */
+    keepButtons() {
+      const { assignments } = get();
+      saved = { ...saved, preset: defaultPreset, custom: assignments };
+      write();
     },
 
     /** Name the buttons as a family does; a person's own table is kept. */

@@ -17133,9 +17133,18 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   color: var(--color-text-primary);
 }
 
-.preferences-select-row select {
+.preferences-select-row select,
+.preferences-select-row input[type='text'] {
   flex: 1;
   min-width: 0;
+}
+
+.preferences-select-row input[type='text'] {
+  min-height: var(--size-touch-target);
+}
+
+.gamepad-preset-actions {
+  flex-wrap: wrap;
 }
 
 /* Set in under the layout picker: they belong to the Nintendo layout. */

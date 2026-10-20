@@ -38,6 +38,7 @@ const EXPECTED_KEYS = {
   STORAGE_KEY_GAMEPAD_MAPPING: 'openscad-forge-gamepad-mapping',
   STORAGE_KEY_GAMEPAD_WALK_MAPPING: 'openscad-forge-gamepad-walk-mapping',
   STORAGE_KEY_JOYCON: 'openscad-forge-joycon',
+  STORAGE_KEY_GAMEPAD_PRESETS: 'openscad-forge-gamepad-presets',
 
   // Preview settings (preview.js)
   STORAGE_KEY_MEASUREMENTS: 'openscad-forge-measurements',
