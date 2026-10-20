@@ -689,6 +689,25 @@ export const DEFAULT_GAMEPAD_ACTIONS = {
 };
 
 /**
+ * The pad to start with among those the browser lists: the first standard
+ * gamepad, else the first device. Software for 3D mice and other gear can
+ * add a virtual joystick that the browser lists before a real gamepad.
+ * @param {ArrayLike<Gamepad|null>} gamepads
+ * @returns {Gamepad|null}
+ */
+export function preferredPad(gamepads) {
+  const pads = Array.from(gamepads ?? []).filter(
+    (pad) => pad && pad.connected !== false
+  );
+  return pads.find((pad) => pad.mapping === 'standard') ?? pads[0] ?? null;
+}
+
+const anyButtonDown = (pad) =>
+  pad.buttons.some((button) =>
+    typeof button === 'object' ? button.pressed : button > 0.5
+  );
+
+/**
  * Gamepad state
  */
 class GamepadState {
@@ -794,6 +813,10 @@ export class GamepadController {
     // The pending capture of one input, while the Controller tab waits
     this._capture = null;
 
+    // Whether each listed pad had a button down at the last poll, so a new
+    // press on another pad can be told from one held all along
+    this._downBefore = new Map();
+
     // Bound event handlers
     this._onGamepadConnected = this._onGamepadConnected.bind(this);
     this._onGamepadDisconnected = this._onGamepadDisconnected.bind(this);
@@ -853,13 +876,8 @@ export class GamepadController {
     window.addEventListener('gamepaddisconnected', this._onGamepadDisconnected);
 
     // Check for already-connected gamepads
-    const gamepads = navigator.getGamepads();
-    for (const gamepad of gamepads) {
-      if (gamepad) {
-        this._onGamepadConnected({ gamepad });
-        break;
-      }
-    }
+    const gamepad = preferredPad(navigator.getGamepads());
+    if (gamepad) this._onGamepadConnected({ gamepad });
 
     console.log('[Gamepad] Controller initialized');
     return true;
@@ -980,7 +998,39 @@ export class GamepadController {
    */
   _onGamepadConnected(event) {
     console.log('[Gamepad] Connected:', event.gamepad.id);
-    this.state.gamepadIndex = event.gamepad.index;
+    // A pad in use stays in use, unless it is not a standard gamepad and
+    // this one is; any other pad takes over when a button is pressed on it.
+    const current = this.activePad();
+    if (
+      current &&
+      current.index !== event.gamepad.index &&
+      (current.mapping === 'standard' || event.gamepad.mapping !== 'standard')
+    ) {
+      return;
+    }
+    this._usePad(event.gamepad);
+  }
+
+  /**
+   * The pad in use, while the browser still lists it.
+   * @returns {Gamepad|null}
+   */
+  activePad() {
+    if (this.state.gamepadIndex === null) return null;
+    return navigator.getGamepads()[this.state.gamepadIndex] ?? null;
+  }
+
+  /**
+   * Listen to this pad from now on. Inputs held on the pad before start
+   * fresh, so the press that chose it counts.
+   * @param {Gamepad} gamepad
+   * @private
+   */
+  _usePad(gamepad) {
+    this.state.gamepadIndex = gamepad.index;
+    this.state.connected = true;
+    this.state.buttons.fill(false);
+    this._repeatIn = {};
     this.emit('connected', this.getGamepadInfo());
 
     // Auto-start polling
@@ -995,9 +1045,13 @@ export class GamepadController {
    */
   _onGamepadDisconnected(event) {
     console.log('[Gamepad] Disconnected:', event.gamepad.id);
+    this._downBefore.delete(event.gamepad.index);
+    if (event.gamepad.index !== this.state.gamepadIndex) return;
     this.state.connected = false;
     this.state.gamepadIndex = null;
     this.emit('disconnected', { id: event.gamepad.id });
+    const next = preferredPad(navigator.getGamepads());
+    if (next && next.index !== event.gamepad.index) this._usePad(next);
   }
 
   /**
@@ -1015,10 +1069,22 @@ export class GamepadController {
 
     // Get current gamepad state
     const gamepads = navigator.getGamepads();
-    const gamepad =
+    let gamepad =
       this.state.gamepadIndex !== null
         ? gamepads[this.state.gamepadIndex]
-        : gamepads.find((g) => g !== null);
+        : preferredPad(gamepads);
+
+    // A button newly pressed on another pad makes that pad the one in use.
+    for (const pad of gamepads) {
+      if (!pad || pad.connected === false) continue;
+      const down = anyButtonDown(pad);
+      const pressed = down && !this._downBefore.get(pad.index);
+      this._downBefore.set(pad.index, down);
+      if (pressed && pad.index !== gamepad?.index) {
+        this._usePad(pad);
+        gamepad = pad;
+      }
+    }
 
     this.state.update(gamepad);
 

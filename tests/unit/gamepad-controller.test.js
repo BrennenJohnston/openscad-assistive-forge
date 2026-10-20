@@ -226,3 +226,100 @@ describe('the controller tells its inputs', () => {
     expect(heard).toHaveLength(3);
   });
 });
+
+describe('the controller listens to the pad a person uses', () => {
+  // As a browser listed a PS5 pad beside a 3D mouse's virtual joystick:
+  // the joystick first, not a standard gamepad; the pad second.
+  const makePad = (index, id, mapping, buttons, axes) => ({
+    id,
+    index,
+    connected: true,
+    mapping,
+    axes: new Array(axes).fill(0),
+    buttons: Array.from({ length: buttons }, () => ({
+      pressed: false,
+      touched: false,
+      value: 0,
+    })),
+  });
+  let list;
+  let joystick;
+  let dualSense;
+  let controller;
+
+  beforeEach(() => {
+    joystick = makePad(
+      1,
+      'Unknown Gamepad (Vendor: beef Product: 046d)',
+      '',
+      4,
+      10
+    );
+    dualSense = makePad(
+      2,
+      'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      'standard',
+      18,
+      4
+    );
+    list = [null, joystick, dualSense, null];
+    Object.defineProperty(navigator, 'getGamepads', {
+      configurable: true,
+      value: () => list,
+    });
+    controller = new GamepadController();
+  });
+
+  afterEach(() => {
+    controller.destroy();
+  });
+
+  it('starts with the standard gamepad, not a joystick listed before it', () => {
+    controller.init();
+    expect(controller.state.gamepadIndex).toBe(2);
+  });
+
+  it('names the pad when it connects', () => {
+    let info;
+    controller.on('connected', (data) => (info = data));
+    controller.init();
+    expect(info?.id).toBe(dualSense.id);
+  });
+
+  it('keeps the gamepad when the joystick announces itself later', () => {
+    controller.init();
+    controller._onGamepadConnected({ gamepad: joystick });
+    expect(controller.state.gamepadIndex).toBe(2);
+  });
+
+  it('follows a press on another pad, and the press counts', () => {
+    const xbox = makePad(
+      0,
+      'Xbox Controller (STANDARD GAMEPAD)',
+      'standard',
+      17,
+      4
+    );
+    list = [xbox, joystick, dualSense, null];
+    controller.init();
+    expect(controller.state.gamepadIndex).toBe(0);
+    const heard = [];
+    controller.on('input', ({ name }) => heard.push(name));
+    controller._pollGamepads(1000);
+    dualSense.buttons[0] = { pressed: true, touched: true, value: 1 };
+    controller._pollGamepads(1016);
+    expect(controller.state.gamepadIndex).toBe(2);
+    expect(heard).toEqual(['a']);
+  });
+
+  it('a pad that leaves takes only itself away', () => {
+    controller.init();
+    list = [null, null, dualSense, null];
+    controller._onGamepadDisconnected({ gamepad: joystick });
+    expect(controller.state.gamepadIndex).toBe(2);
+    expect(controller.isConnected()).toBe(true);
+    list = [null, joystick, null, null];
+    controller._onGamepadDisconnected({ gamepad: dualSense });
+    expect(controller.state.gamepadIndex).toBe(1);
+  });
+});

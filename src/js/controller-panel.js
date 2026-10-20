@@ -19,6 +19,7 @@ import {
   GAMEPAD_PRESETS,
   gamepadDiagramLabel,
   gamepadInputLabel,
+  preferredPad,
 } from './gamepad-controller.js';
 
 /**
@@ -336,13 +337,20 @@ function readoutShown() {
   );
 }
 
-/** The first connected pad of the four the browser lists. */
-function firstPad() {
-  const pads = navigator.getGamepads?.() ?? [];
-  for (let i = 0; i < 4; i++) {
-    if (pads[i] && pads[i].connected !== false) return pads[i];
-  }
-  return null;
+/**
+ * The pad the app listens to, else the one it would start with, and the
+ * other devices the browser lists beside it.
+ * @returns {{pad: Gamepad|null, others: Gamepad[]}}
+ */
+function readoutPads() {
+  const listed = Array.from(navigator.getGamepads?.() ?? []).filter(
+    (pad) => pad && pad.connected !== false
+  );
+  const pad = handlers.gamepad?.pad?.() ?? preferredPad(listed);
+  return {
+    pad,
+    others: listed.filter((other) => other.index !== pad?.index),
+  };
 }
 
 function renderTestButton() {
@@ -366,17 +374,20 @@ function readoutFrame(now) {
   }
   const padLine = el('controllerReadoutPad');
   const pressLine = el('controllerReadoutPress');
-  const pad = firstPad();
+  const { pad, others } = readoutPads();
   if (!pad) {
     readout.padKey = null;
     readout.down = new Set();
     if (padLine) padLine.textContent = '';
     if (pressLine) pressLine.textContent = '';
   } else {
-    const key = `${pad.index}:${pad.id}`;
+    const key = [pad, ...others].map((p) => `${p.index}:${p.id}`).join('|');
     if (key !== readout.padKey) {
       readout.padKey = key;
-      if (padLine) padLine.textContent = readoutPadLine(pad);
+      const also = others.length
+        ? ` Also connected: ${others.map((other) => other.id).join('; ')}.`
+        : '';
+      if (padLine) padLine.textContent = readoutPadLine(pad) + also;
     }
     const family = handlers.gamepad?.mapping.get().family ?? 'generic';
     const parts = readoutParts(pad, family);
