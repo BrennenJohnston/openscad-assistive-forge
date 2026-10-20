@@ -1350,6 +1350,19 @@ body[data-ui-mode='classic'] {
   font-size: var(--font-size-sm, 0.875rem);
 }
 
+/* --- The Generate row's icons (setButtonTextWithIcon in main.js) --- */
+:root[data-ui-variant='mono'] .btn-emoji {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] .btn-emoji[data-icon='download']::before {
+  content: '[DL]';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+:root[data-ui-variant='mono'] .btn-emoji[data-icon='wait']::before {
+  content: '[WAIT]';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
 /* --- Image measurement browse button (emoji → bracketed-text) --- */
 :root[data-ui-variant='mono'] .measure-upload-btn {
   font-size: 0;
@@ -1434,6 +1447,54 @@ body[data-ui-mode='classic'] {
 :root[data-ui-variant='mono'] select option:hover {
   background: var(--color-accent) !important;
   color: var(--color-accent-text) !important;
+}
+
+/*
+ * On a touch screen a phone's own list (a sheet of radio dots in the
+ * system's colors) replaces the page's. Where the browser can draw the list
+ * in the page, it does, in the look; elsewhere the system's list is at
+ * least dark, as the look is in every theme.
+ */
+@media (pointer: coarse) {
+  :root[data-ui-variant='mono'] select {
+    color-scheme: dark;
+  }
+
+  @supports (appearance: base-select) {
+    :root[data-ui-variant='mono'] select,
+    :root[data-ui-variant='mono'] select::picker(select) {
+      appearance: base-select;
+    }
+
+    /* The page's list lays its button out as a flex row: the words stay
+       centered in the box, as the browser's list drew them. */
+    :root[data-ui-variant='mono'] select {
+      align-items: center;
+    }
+
+    :root[data-ui-variant='mono'] select::picker(select) {
+      border: 1px solid var(--color-border);
+      border-radius: 0;
+      background: var(--color-bg-primary);
+      color: var(--color-text-primary);
+      box-shadow: none;
+    }
+
+    :root[data-ui-variant='mono'] select option {
+      min-height: var(--size-touch-target);
+      padding-inline: var(--space-sm);
+      font-family: var(--font-family-mono);
+    }
+
+    :root[data-ui-variant='mono'] select option:focus-visible {
+      outline: var(--focus-ring-width, 3px) solid var(--color-focus);
+      outline-offset: calc(-1 * var(--focus-ring-width, 3px));
+    }
+
+    :root[data-ui-variant='mono'] select option::checkmark {
+      color: var(--color-accent);
+    }
+  }
 }
 
 /* --- Complexity badges → mono amber/green --- */
