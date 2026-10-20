@@ -396,7 +396,11 @@ unlock later that has controller buttons of its own adds its table here.
 
 Under the status line, **Test your controller** shows the controller as the
 browser reports it: its name, whether its buttons follow the standard
-layout, and how many buttons and axes it has. Below that it names what you
+layout, and how many buttons and axes it has. That is the controller the
+app listens to: the first gamepad it finds, then whichever one you last
+pressed a button on. Any other device the browser lists is named after it,
+under **Also connected**; software for a 3D mouse, for one, can add a
+virtual joystick there. Below that it names what you
 hold right now, each button with its number in brackets, a trigger with how
 far it is pressed, and a stick with both of its axes. **Start the test**
 takes every press for itself, so a press only shows there and a screen
