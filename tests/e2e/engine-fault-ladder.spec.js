@@ -306,6 +306,8 @@ test.describe('another engine after an engine fault', () => {
     await expect(first).toContainText(FIRST_OFFER);
     await first.getByRole('button', { name: 'Not now' }).click();
     await expect(first).toHaveCount(0);
+    // Back on the button that started the render, not the page body.
+    await expect(page.locator('#primaryActionBtn')).toBeFocused();
     expect(
       await page.evaluate(() =>
         window.__forgeEngineChoice.isDownloaded('official-2026-10-18')
@@ -317,6 +319,7 @@ test.describe('another engine after an engine fault', () => {
     await expect(buttonsOf(plain)).toHaveText(['OK']);
     await plain.getByRole('button', { name: 'OK' }).click();
     await expect(plain).toHaveCount(0);
+    await expect(page.locator('#primaryActionBtn')).toBeFocused();
 
     await page.locator('#fileInput').setInputFiles({
       name: 'plate.scad',
