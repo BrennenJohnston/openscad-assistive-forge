@@ -22,6 +22,7 @@ async function openWithPad(
     besideJoystick = false,
     joyCon = null,
     joyConChoice = null,
+    url = '/?example=simple-box',
   } = {}
 ) {
   await page.addInitScript(({ chosen, mode, custom, besideJoystick, joyCon, joyConChoice }) => {
@@ -98,15 +99,17 @@ async function openWithPad(
       value: () => list,
     });
   }, { chosen: preset, mode, custom, besideJoystick, joyCon, joyConChoice });
-  await page.goto('/?example=simple-box', { timeout: 60_000 });
+  await page.goto(url, { timeout: 60_000 });
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
     timeout: WASM_READY_TIMEOUT,
   });
-  await page
-    .locator('.param-control')
-    .first()
-    .waitFor({ state: 'attached', timeout: 60_000 });
+  if (url !== '/') {
+    await page
+      .locator('.param-control')
+      .first()
+      .waitFor({ state: 'attached', timeout: 60_000 });
+  }
   const notNow = page.locator('#saveProjectNotNow');
   if (
     await notNow.waitFor({ state: 'visible', timeout: 3_000 }).then(
@@ -299,6 +302,30 @@ test.describe('Joy-Cons', () => {
     ]) {
       await expect(ask.getByRole('button', { name, exact: true })).toBeVisible();
     }
+    // Closed without an answer, focus lands on the project's first
+    // parameter, not on the main region a screen reader reads whole.
+    await page.keyboard.press('Escape');
+    await expect(ask).toBeHidden();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document
+            .getElementById('parametersContainer')
+            .contains(document.activeElement)
+        )
+      )
+      .toBe(true);
+  });
+
+  test('answered on the Main Page, the question leaves focus on the file upload', async ({
+    page,
+  }) => {
+    await openWithPad(page, { joyCon: 'right', url: '/' });
+    const ask = page.locator('#joyConHoldModal');
+    await expect(ask).toBeVisible();
+    await ask.getByRole('button', { name: 'Upright', exact: true }).click();
+    await expect(ask).toBeHidden();
+    await expect(page.locator('#fileInput')).toBeFocused();
   });
 
   test('held sideways, the trigger presses the control that has focus and the side button goes back', async ({

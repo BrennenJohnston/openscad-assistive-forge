@@ -43,11 +43,12 @@ function canTakeFocusBack(el) {
  * page body, where a keyboard or screen reader user loses their place.
  */
 function focusAfterClose(state, fallbackFocus) {
+  const named = state?.fallbackFocus;
   return (
     [
       state?.trigger,
       fallbackFocus,
-      state?.fallbackFocus,
+      typeof named === 'function' ? named() : named,
       document.getElementById('main-content'),
     ].find(canTakeFocusBack) || null
   );
@@ -61,8 +62,9 @@ function focusAfterClose(state, fallbackFocus) {
  * @param {HTMLElement} [options.returnFocus] - Where focus returns on close
  *   (defaults to what had focus): a menu's button, when a menu item that
  *   closes with the menu opened the dialog
- * @param {HTMLElement} [options.fallbackFocus] - Where focus goes if that is
- *   gone or hidden by the time the dialog closes
+ * @param {HTMLElement|(() => HTMLElement|null)} [options.fallbackFocus] -
+ *   Where focus goes if that is gone or hidden by the time the dialog
+ *   closes; a function is asked then, for a control drawn after opening
  * @param {Function} [options.onClose] - Callback when modal is closed
  * @returns {void}
  */

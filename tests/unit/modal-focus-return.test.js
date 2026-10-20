@@ -108,6 +108,21 @@ describe('a dialog closing', () => {
     expect(document.activeElement).toBe(help)
   })
 
+  it('asks a fallback given as a function when the dialog closes', () => {
+    // A dialog a game controller opens on connecting finds nothing focused,
+    // and the control to land on may be drawn only after it opened.
+    const main = document.createElement('main')
+    main.id = 'main-content'
+    main.tabIndex = -1
+    document.body.appendChild(main)
+    let first = null
+    const modal = dialogWithButton()
+    openModal(modal, { fallbackFocus: () => first })
+    first = button('Width', main)
+    closeModal(modal)
+    expect(document.activeElement).toBe(first)
+  })
+
   it('does not return to a control that is not drawn', () => {
     // An input in a folded group is in the page but cannot take focus.
     const folded = button('Width')

@@ -1959,8 +1959,19 @@ async function initApp() {
     },
   });
 
+  // Somewhere to act, not the main region a screen reader reads whole: the
+  // open project's first parameter, its Generate button where the
+  // Customizer is closed, or on the Main Page the file upload.
+  const somewhereToAct = () =>
+    [
+      firstParameterControl(document.getElementById('parametersContainer')),
+      document.getElementById('primaryActionBtn'),
+      document.getElementById('fileInput'),
+    ].find((el) => el?.checkVisibility?.()) ?? null;
+
   // The first time one Joy-Con, or the two, connect: how is it held, or how
   // are the two used. Closing without a choice asks again the next time.
+  // A pad connecting finds nothing focused, so focus goes somewhere to act.
   const joyConModals = {
     hold: document.getElementById('joyConHoldModal'),
     pair: document.getElementById('joyConPairModal'),
@@ -1980,7 +1991,9 @@ async function initApp() {
     if (!kind) return;
     const part = kind === 'pair' ? 'pair' : 'hold';
     if (joyConChoice[part] || isAnyModalOpen()) return;
-    if (joyConModals[part]) openModal(joyConModals[part]);
+    if (joyConModals[part]) {
+      openModal(joyConModals[part], { fallbackFocus: somewhereToAct });
+    }
   };
   if (gamepadController) {
     gamepadController.on('connected', askJoyCon);
@@ -3136,16 +3149,7 @@ async function initApp() {
         updateStatus('Draft restored');
       } else {
         stateManager.clearLocalStorage();
-        // Somewhere to act, not the main region a screen reader reads whole:
-        // the open project's first parameter, its Generate button where the
-        // Customizer is closed, or on the Main Page the file upload.
-        [
-          firstParameterControl(document.getElementById('parametersContainer')),
-          document.getElementById('primaryActionBtn'),
-          document.getElementById('fileInput'),
-        ]
-          .find((el) => el?.checkVisibility?.())
-          ?.focus();
+        somewhereToAct()?.focus();
       }
     } finally {
       settleDraftQuestion();
