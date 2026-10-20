@@ -745,8 +745,11 @@ body[data-mobile-toolbar='relocated']
   transform: scale(1.02);
 }
 
-.upload-zone:focus,
+/* The file input inside is the area's Tab stop and is clipped to a pixel, so
+   the area wears the ring every focused control wears. */
 .upload-zone:focus-within {
+  outline: var(--focus-ring-width, 3px) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset, 2px);
   border-color: var(--color-focus);
   box-shadow: var(--focus-ring);
 }
@@ -12936,9 +12939,15 @@ body.tutorial-body-locked {
   }
 
   .upload-zone:hover,
-  .upload-zone:focus {
+  .upload-zone:focus-within {
     border-color: Highlight !important;
     background: Canvas;
+  }
+
+  /* The focused input is clipped to a pixel, so its outline is drawn here. */
+  .upload-zone:focus-within {
+    outline: 3px solid Highlight;
+    outline-offset: 2px;
   }
 
   /* Tooltips */

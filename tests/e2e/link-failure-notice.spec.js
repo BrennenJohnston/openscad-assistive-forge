@@ -117,7 +117,7 @@ test.describe('A shared link that fails says so on the Main Page', () => {
     )
     await page.keyboard.press('Enter')
     await expect(page.locator('#linkFailureNotice')).toBeHidden()
-    expect(await focusedId()).toBe('uploadZone')
+    expect(await focusedId()).toBe('fileInput')
   })
 
   test('axe finds nothing on the Main Page with the notice up', async ({ page }) => {

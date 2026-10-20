@@ -87,3 +87,35 @@ test("a return to a preview drawn before brings back that preview's messages", a
   await expect(state).toHaveText(/Preview \(cached\)/, { timeout: 120_000 })
   await expect(drawer).toHaveText(shown)
 })
+
+// A library draws nothing on its own by design: nothing failed, so the badge
+// is the plain one a preview has before anything is drawn, not the red one.
+test('a library file gets a plain badge, not a failed preview', async ({ page }) => {
+  test.setTimeout(240_000)
+  await page.goto('/')
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: 120_000,
+  })
+  await page.setInputFiles('#fileInput', {
+    name: 'turtle.scad',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(
+      [
+        'function turtle(x, y, angle) = [[x, y], angle];',
+        'function turn(t, angle) = [t[0], t[1] + angle];',
+        'module mark(size = 2) { cube(size); }',
+        '',
+      ].join('\n')
+    ),
+  })
+  await expect(page.locator('#previewStatusText')).toContainText(
+    'draws nothing on its own',
+    { timeout: 120_000 }
+  )
+  const state = page.locator('.preview-state-indicator')
+  await expect(state).toHaveText('No preview: a library file')
+  await expect(state).toHaveClass(/state-idle/)
+  await expect(state).not.toHaveClass(/state-error/)
+  await expect(page.locator('#previewContainer')).not.toHaveClass(/preview-error/)
+})

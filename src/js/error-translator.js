@@ -9,6 +9,7 @@ import { createFocusTrap } from './focus-trap.js';
 import {
   MODEL_NOT_2D_SUGGESTION,
   MODEL_NOT_2D_EXPLANATION,
+  ENGINE_CRASH_WORDS,
 } from '../worker/error-translations.js';
 import { libraryManager, LIBRARY_DEFINITIONS } from './library-manager.js';
 
@@ -254,39 +255,21 @@ const ERROR_PATTERNS = [
       'This file might be from an external library. Check the Libraries panel.',
   },
 
-  // CGAL assertion failures — fatal crashes from projection()/roof() in WASM
-  // See: openscad-wasm#6, openscad#6582, CGAL#7560
+  // CGAL assertion failures. Older builds crashed here on projection() and
+  // roof(): openscad-wasm#6, openscad#6582, CGAL#7560.
   {
     pattern: /CGAL assertion|CGAL_assertion|CGAL precondition/i,
-    title: 'Known Browser Engine Limitation',
-    explanation:
-      'This model uses a geometry feature (likely projection() or roof()) that triggers ' +
-      'a known crash in the browser-based rendering engine (CGAL + WebAssembly).',
-    suggestion:
-      'Remove or simplify projection()/roof() calls. This is a known upstream issue. ' +
-      'The same model may work in desktop OpenSCAD.',
+    ...ENGINE_CRASH_WORDS.CGAL_ASSERTION,
   },
   // Emscripten abort — unrecoverable WASM crash
   {
     pattern: /Aborted\(|abort\(|Emscripten.*abort/i,
-    title: 'Rendering Engine Crashed',
-    explanation:
-      'The browser rendering engine encountered a fatal error and stopped. ' +
-      'This often happens with projection() or roof() functions.',
-    suggestion:
-      'Try removing projection()/roof() calls, or simplify the geometry. ' +
-      'The engine will restart automatically for your next render.',
+    ...ENGINE_CRASH_WORDS.WASM_ABORT,
   },
   // WASM RuntimeError: unreachable
   {
     pattern: /RuntimeError:\s*unreachable/i,
-    title: 'Rendering Engine Error',
-    explanation:
-      'The rendering engine hit an internal error (unreachable code path). ' +
-      'This is typically caused by projection() or roof() in the browser engine.',
-    suggestion:
-      'Simplify the model or remove projection()/roof() functions. ' +
-      'Desktop OpenSCAD may handle this model better.',
+    ...ENGINE_CRASH_WORDS.WASM_UNREACHABLE,
   },
   // WASM RuntimeError: memory access out of bounds
   {
@@ -450,33 +433,7 @@ export const TRANSLATIONS_BY_CODE = {
     suggestion:
       'Try a smaller value for the setting that sets how many times it repeats. Desktop OpenSCAD can go deeper.',
   },
-  CGAL_ASSERTION: {
-    title: 'Known Browser Engine Limitation',
-    explanation:
-      'This model uses a geometry feature (likely projection() or roof()) that triggers ' +
-      'a known crash in the browser-based rendering engine (CGAL + WebAssembly).',
-    suggestion:
-      'Remove or simplify projection()/roof() calls. This is a known upstream issue. ' +
-      'The same model may work in desktop OpenSCAD.',
-  },
-  WASM_ABORT: {
-    title: 'Rendering Engine Crashed',
-    explanation:
-      'The browser rendering engine encountered a fatal error and stopped. ' +
-      'This often happens with projection() or roof() functions.',
-    suggestion:
-      'Try removing projection()/roof() calls, or simplify the geometry. ' +
-      'The engine will restart automatically for your next render.',
-  },
-  WASM_UNREACHABLE: {
-    title: 'Rendering Engine Error',
-    explanation:
-      'The rendering engine hit an internal error (unreachable code path). ' +
-      'This is typically caused by projection() or roof() in the browser engine.',
-    suggestion:
-      'Simplify the model or remove projection()/roof() functions. ' +
-      'Desktop OpenSCAD may handle this model better.',
-  },
+  ...ENGINE_CRASH_WORDS,
   ENGINE_RESTART_FAILED: {
     title: 'Engine Stopped',
     explanation: 'The OpenSCAD engine stopped and could not start again.',

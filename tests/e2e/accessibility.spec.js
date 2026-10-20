@@ -411,6 +411,98 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
   });
 });
 
+test.describe('The Main Page upload area', () => {
+  const where = (page) =>
+    page.evaluate(() => {
+      const el = document.activeElement;
+      return {
+        id: el?.id || el?.tagName,
+        inside: !!el?.closest('#uploadZone'),
+      };
+    });
+
+  test('is one Tab stop: the file input, named by the area', async ({
+    page,
+    browserName,
+  }) => {
+    await page.goto('/');
+    await waitForWasmReady(page);
+
+    // Safari on macOS moves Tab between text fields only, by its default
+    // setting; Option+Tab reaches every control, as for the app's buttons.
+    const tab =
+      browserName === 'webkit' && process.platform === 'darwin'
+        ? 'Alt+Tab'
+        : 'Tab';
+
+    // Back across the area from the control after it, then forward again.
+    await page.locator('#uploadZoneFolderBtn').focus();
+    const back = [];
+    for (let i = 0; i < 4; i++) {
+      await page.keyboard.press(`Shift+${tab}`);
+      const at = await where(page);
+      if (!at.inside) break;
+      back.push(at.id);
+    }
+    expect(back, `stops inside the area, Shift+${tab}`).toEqual(['fileInput']);
+    const ahead = [];
+    for (let i = 0; i < 4; i++) {
+      await page.keyboard.press(tab);
+      const at = await where(page);
+      ahead.push(at.id);
+      if (!at.inside) break;
+    }
+    expect(ahead, `stops from before the area, ${tab}`).toEqual([
+      'fileInput',
+      'uploadZoneFolderBtn',
+    ]);
+
+    await expect(page.locator('#fileInput')).toHaveAccessibleName(
+      /^Drop a project here or click to browse/
+    );
+    // The ring every focused control wears (the outline) and the area's own
+    // glow, both on the area while its input has focus; the area eases into
+    // them, so the reading is taken once it settles.
+    await page.locator('#fileInput').focus();
+    await expect
+      .poll(
+        () =>
+          page.locator('#uploadZone').evaluate((el) => {
+            const s = getComputedStyle(el);
+            return {
+              outline: `${s.outlineStyle} ${s.outlineWidth}`,
+              glow: s.boxShadow !== 'none',
+            };
+          }),
+        { message: 'the focus ring is drawn on the area' }
+      )
+      .toEqual({ outline: 'solid 3px', glow: true });
+    expectOnlyAllowedViolations(
+      await wcagScan(page).include('#uploadZone').analyze()
+    );
+  });
+
+  test('Enter, Space and a click each open one file picker', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await waitForWasmReady(page);
+    let pickers = 0;
+    page.on('filechooser', () => (pickers += 1));
+    for (const how of ['Enter', 'Space', 'click']) {
+      pickers = 0;
+      if (how === 'click') {
+        await page.locator('#uploadZoneText').click();
+      } else {
+        await page.locator('#fileInput').focus();
+        await page.keyboard.press(how);
+      }
+      await page.waitForTimeout(800);
+      expect(pickers, `pickers after ${how}`).toBe(1);
+    }
+  });
+});
+
 test.describe('New Accessibility Features (WCAG 2.2)', () => {
   test('should have tooltip aria-describedby relationships', async ({
     page,

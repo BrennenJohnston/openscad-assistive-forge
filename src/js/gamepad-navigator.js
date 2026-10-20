@@ -25,7 +25,7 @@ export const DEFAULT_REGIONS = [
   '.workflow-actions',
   {
     selector: '#paramPanel',
-    toggle: '#collapseParamPanelBtn, #mobileDrawerToggle, #drawerCloseBtn',
+    toggle: '#collapseParamPanelBtn, #mobileDrawerToggle',
   },
   { selector: '#previewInfoSection', toggle: '#previewDrawerToggle' },
   '#previewContainer',

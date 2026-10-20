@@ -119,6 +119,7 @@ import {
 } from './js/modal-manager.js';
 import {
   disableKeepingFocus,
+  firstParameterControl,
   getFocusableElements,
   setBusy,
   isBusy,
@@ -3084,6 +3085,16 @@ async function initApp() {
         updateStatus('Draft restored');
       } else {
         stateManager.clearLocalStorage();
+        // Somewhere to act, not the main region a screen reader reads whole:
+        // the open project's first parameter, its Generate button where the
+        // Customizer is closed, or on the Main Page the file upload.
+        [
+          firstParameterControl(document.getElementById('parametersContainer')),
+          document.getElementById('primaryActionBtn'),
+          document.getElementById('fileInput'),
+        ]
+          .find((el) => el?.checkVisibility?.())
+          ?.focus();
       }
     } finally {
       settleDraftQuestion();
@@ -6577,11 +6588,16 @@ async function initApp() {
     if (existingWarning) existingWarning.remove();
 
     // A library: it defines modules or functions and draws nothing itself.
-    // No option is missing, so no guidance to look for one.
+    // No option is missing, so no guidance to look for one, and nothing
+    // failed: the badge the preview controller set to its error state is
+    // the plain one a preview has before anything is drawn.
     if (error?.libraryFile) {
       updateStatus(
         'This file defines modules or functions and draws nothing on its own. Open a file that uses it to see a shape.'
       );
+      previewStateIndicator.className = 'preview-state-indicator state-idle';
+      previewStateIndicator.textContent = 'No preview: a library file';
+      previewContainer.classList.remove('preview-error');
       return true;
     }
 
@@ -8846,15 +8862,8 @@ async function initApp() {
     await routeUploadSelection(classifyDrop(input));
   });
 
-  // Click to upload is handled by the label wrapping the input.
-
-  // Keyboard support for upload zone
-  uploadZone.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      fileInput.click();
-    }
-  });
+  // The file input is the area's one Tab stop: its own Enter and Space open
+  // the picker, and the label wrapping it takes the click.
 
   // ========== Start new project ==========
   // A way to start a new project from scratch.
@@ -9493,7 +9502,7 @@ if (rounded) {
       const notice = document.getElementById('linkFailureNotice');
       if (notice) notice.hidden = true;
       document.getElementById('linkFailureNoticeMessage')?.replaceChildren();
-      document.getElementById('uploadZone')?.focus();
+      document.getElementById('fileInput')?.focus();
     });
 
   // =========================================

@@ -469,3 +469,55 @@ test.describe('Saved Projects', () => {
     });
   });
 });
+
+// Discard on the draft question: focus goes somewhere a person can act, not
+// to the main region, which a screen reader reads whole.
+test.describe('After "Discard draft"', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem('draft-seeded')) return;
+      sessionStorage.setItem('draft-seeded', 'true');
+      localStorage.setItem(
+        'openscad-forge-editor-draft',
+        JSON.stringify({
+          version: '1.0.0',
+          timestamp: Date.now(),
+          fileName: 'kept.scad',
+          fileContent: 'width = 20; // [10:50]\ncube(width);',
+          parameters: { width: 20 },
+          defaults: { width: 20 },
+        })
+      );
+    });
+  });
+
+  const discard = async (page) => {
+    const question = page.locator('.confirm-modal', { hasText: 'Restore a saved draft?' });
+    await expect(question).toBeVisible({ timeout: 120_000 });
+    return question;
+  };
+
+  test('with a project open, focus is on its first parameter', async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.goto('/?example=simple-box');
+    const question = await discard(page);
+    await page.waitForFunction(() => !!window.previewManager?.mesh, null, { timeout: 180_000 });
+    await question.getByRole('button', { name: 'Discard draft', exact: true }).click();
+    await expect(question).toHaveCount(0);
+    await page.waitForTimeout(500);
+    const focus = await page.evaluate(() => ({
+      main: document.activeElement === document.getElementById('main-content'),
+      inCustomizer: !!document.getElementById('parametersContainer')?.contains(document.activeElement),
+    }));
+    expect(focus).toEqual({ main: false, inCustomizer: true });
+  });
+
+  test('on the Main Page, focus is on the file upload', async ({ page }) => {
+    await page.goto('/');
+    const question = await discard(page);
+    await question.getByRole('button', { name: 'Discard draft', exact: true }).click();
+    await expect(question).toHaveCount(0);
+    await page.waitForTimeout(500);
+    await expect(page.locator('#fileInput')).toBeFocused();
+  });
+});

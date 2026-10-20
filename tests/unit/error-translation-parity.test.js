@@ -215,3 +215,40 @@ describe('T2-B1 — the MODEL_NOT_2D message names every 2D export format', () =
     expect(message.startsWith(explanation)).toBe(true);
   });
 });
+
+describe('an engine crash names no cause it cannot know', () => {
+  // projection() and roof(), once blamed here, crashed none of the engines
+  // the app offers when measured; the dialog goes on to say the fault may be
+  // the engine's, so the words before it must not blame the model.
+  const CRASHES = [
+    {
+      code: 'CGAL_ASSERTION',
+      raw: 'CGAL assertion violation! Expr: e->incident_sface() != SFace_const_handle()',
+    },
+    { code: 'WASM_ABORT', raw: 'Aborted(native code called abort())' },
+    { code: 'WASM_UNREACHABLE', raw: 'RuntimeError: unreachable' },
+  ];
+  const GUESS = /projection|roof/i;
+
+  for (const { code, raw } of CRASHES) {
+    it(`${code}: the dialog's words name no feature`, () => {
+      const { title, explanation, suggestion } = TRANSLATIONS_BY_CODE[code];
+      expect(`${title} ${explanation} ${suggestion}`).not.toMatch(GUESS);
+    });
+
+    it(`${code}: the raw text reads the same as the code`, () => {
+      const byText = translateError(raw);
+      const byCode = TRANSLATIONS_BY_CODE[code];
+      expect(byText.title).toBe(byCode.title);
+      expect(byText.explanation).toBe(byCode.explanation);
+      expect(byText.suggestion).toBe(byCode.suggestion);
+    });
+
+    it(`${code}: the worker's message is the dialog's words`, () => {
+      const { message, code: workerCode } = translateWorkerError(raw);
+      const { explanation, suggestion } = TRANSLATIONS_BY_CODE[code];
+      expect(workerCode).toBe(code);
+      expect(message).toBe(`${explanation} ${suggestion}`);
+    });
+  }
+});

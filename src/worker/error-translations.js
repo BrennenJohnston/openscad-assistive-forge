@@ -33,6 +33,39 @@ export const MODEL_NOT_2D_EXPLANATION =
   'Your model produces 3D geometry, but SVG, DXF and PDF export all require 2D output.';
 
 /**
+ * The words for an engine crash: the single source for the worker's message
+ * and both of the main thread's copies (by code and by raw text). They name
+ * no cause. projection() and roof(), once blamed here, crashed none of the
+ * engines the app offers when measured, and the dialog goes on to say the
+ * fault may be the engine's.
+ */
+export const ENGINE_CRASH_WORDS = {
+  CGAL_ASSERTION: {
+    title: 'Geometry Check Failed',
+    explanation:
+      "A check inside the engine's geometry code failed while building this model, and the engine stopped.",
+    suggestion:
+      'Change a value or simplify the shape, then try again. The same model may work in desktop OpenSCAD.',
+  },
+  WASM_ABORT: {
+    title: 'Rendering Engine Crashed',
+    explanation: 'The browser rendering engine hit a fatal error and stopped.',
+    suggestion:
+      'Change a value or simplify the shape, then try again. The engine restarts on its own for your next render.',
+  },
+  WASM_UNREACHABLE: {
+    title: 'Rendering Engine Error',
+    explanation:
+      'The rendering engine reached a part of its own code that should never run, and stopped.',
+    suggestion:
+      'Change a value or simplify the shape, then try again. Desktop OpenSCAD may handle this model better.',
+  },
+};
+
+const crashMessage = (code) =>
+  `${ENGINE_CRASH_WORDS[code].explanation} ${ENGINE_CRASH_WORDS[code].suggestion}`;
+
+/**
  * Error message translations for common OpenSCAD errors
  * Maps error patterns to user-friendly messages
  */
@@ -134,32 +167,23 @@ export const ERROR_TRANSLATIONS = [
       'most often because a module or function repeats inside itself many times.',
     code: 'ENGINE_OUT_OF_ROOM',
   },
-  // CGAL assertion failures — root cause of projection()/roof() crashes in WASM
-  // See: openscad-wasm#6, openscad#6582, CGAL#7560
+  // CGAL assertion failures. Older builds crashed here on projection() and
+  // roof(): openscad-wasm#6, openscad#6582, CGAL#7560.
   {
     pattern: /CGAL assertion|CGAL_assertion|CGAL ERROR|CGAL precondition/i,
-    message:
-      'This model uses a geometry feature (projection/roof) that has a known issue in the browser engine. ' +
-      'Try simplifying the design or removing projection()/roof() calls. ' +
-      'This is a known upstream limitation (CGAL + WebAssembly).',
+    message: crashMessage('CGAL_ASSERTION'),
     code: 'CGAL_ASSERTION',
   },
   // Emscripten abort — typically triggered by unrecoverable CGAL/C++ errors
   {
     pattern: /Aborted\(|abort\(|Emscripten.*abort/i,
-    message:
-      'The rendering engine encountered a fatal error and stopped. ' +
-      'This often happens with projection() or roof() functions. ' +
-      'Try removing these functions or simplifying your design.',
+    message: crashMessage('WASM_ABORT'),
     code: 'WASM_ABORT',
   },
   // WASM RuntimeError: unreachable — compiled trap instruction hit
   {
     pattern: /RuntimeError:\s*unreachable/i,
-    message:
-      'The rendering engine hit an internal error (unreachable code). ' +
-      'This is typically caused by projection() or roof() in the browser engine. ' +
-      'Try simplifying the model or removing these functions.',
+    message: crashMessage('WASM_UNREACHABLE'),
     code: 'WASM_UNREACHABLE',
   },
   // WASM RuntimeError: memory access out of bounds
