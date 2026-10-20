@@ -13,6 +13,7 @@ import { GamepadController } from '../../src/js/gamepad-controller.js';
 import {
   joyConKind,
   joyConLayout,
+  joyConWalkLayout,
   loadJoyConChoice,
   saveJoyConChoice,
 } from '../../src/js/joycon.js';
@@ -249,6 +250,156 @@ describe('the app reads a Joy-Con through its layout', () => {
       pad.axes = [1, 0, 0, 0];
       expect(actionFor(of(poll(), 'input')?.input)).toBe('nextGroup');
     });
+  });
+});
+
+describe('the City Walk reads one Joy-Con through its own layout', () => {
+  let pad;
+  let choice;
+  let controller;
+  let inputs;
+  let at;
+
+  const start = () => {
+    Object.defineProperty(navigator, 'getGamepads', {
+      configurable: true,
+      value: () => [pad, null, null, null],
+    });
+    controller = new GamepadController({
+      layout: (gamepad) => joyConWalkLayout(gamepad, choice),
+    });
+    inputs = [];
+    controller.on('input', ({ name }) => inputs.push(name));
+    controller.init();
+    at = 1000;
+    controller._pollGamepads(at);
+  };
+  const poll = () => {
+    inputs.length = 0;
+    at += 100;
+    controller._pollGamepads(at);
+  };
+  /** What the game reads each frame: the walk and the look, -1 to 1. */
+  const moves = () => {
+    const s = controller.state;
+    // 0 - a value, not -value: a still stick reads 0, never -0.
+    return {
+      forward: 0 - s.getShapedAxis(1, 0.15),
+      strafe: s.getShapedAxis(0, 0.15),
+      turn: s.getShapedAxis(2, 0.15),
+      pitch: 0 - s.getShapedAxis(3, 0.15),
+    };
+  };
+  const actionOf = (input) => controller.layoutInputs()?.[input];
+
+  beforeEach(() => {
+    choice = { hold: 'sideways', pair: null };
+  });
+
+  afterEach(() => {
+    controller?.destroy();
+    controller = null;
+  });
+
+  it('held sideways, the stick walks and the four buttons look: up and down look, left and right turn', () => {
+    pad = makePad(RIGHT_ID, 17, 2);
+    start();
+    pad.axes = [0, -1];
+    poll();
+    expect(moves()).toMatchObject({ forward: 1, turn: 0, pitch: 0 });
+    pad.axes = [1, 0];
+    poll();
+    expect(moves()).toMatchObject({ strafe: 1, turn: 0, pitch: 0 });
+
+    const looks = [
+      [3, { pitch: 1 }],
+      [0, { pitch: -1 }],
+      [2, { turn: -1 }],
+      [1, { turn: 1 }],
+    ];
+    for (const [index, look] of looks) {
+      pad = makePad(RIGHT_ID, 17, 2);
+      press(pad, index);
+      poll();
+      expect(moves(), `button ${index}`).toMatchObject({
+        forward: 0,
+        strafe: 0,
+        ...look,
+      });
+      // A look is not one of the game's buttons.
+      expect(inputs.map(actionOf).filter(Boolean), `button ${index}`).toEqual(
+        []
+      );
+    }
+  });
+
+  it('the trigger opens the map, the side button goes back, SL and SR step the landmarks, the stick pressed walks there, Home auto-walks, Plus is the help', () => {
+    pad = makePad(RIGHT_ID, 17, 2);
+    start();
+    const cases = [
+      [7, 'map'],
+      [8, 'back'],
+      [4, 'previousLandmark'],
+      [5, 'nextLandmark'],
+      [10, 'walkTo'],
+      [16, 'autoWalk'],
+      [9, 'help'],
+    ];
+    for (const [index, action] of cases) {
+      pad = makePad(RIGHT_ID, 17, 2);
+      poll();
+      press(pad, index);
+      poll();
+      expect(inputs.map(actionOf).filter(Boolean), `button ${index}`).toEqual([
+        action,
+      ]);
+    }
+    // The left one's trigger is ZL.
+    pad = makePad(LEFT_ID, 17, 2);
+    poll();
+    press(pad, 6);
+    poll();
+    expect(inputs.map(actionOf).filter(Boolean)).toEqual(['map']);
+  });
+
+  it('held upright, the left one walks forward on a push up and looks up on its top button', () => {
+    choice = { hold: 'upright', pair: null };
+    pad = makePad(LEFT_ID, 17, 2);
+    start();
+    pad.axes = [-0.98, -0.06];
+    poll();
+    expect(moves().forward).toBeGreaterThan(0.9);
+    pad = makePad(LEFT_ID, 17, 2);
+    press(pad, 2);
+    poll();
+    expect(moves()).toMatchObject({ forward: 0, pitch: 1 });
+  });
+
+  it('one half of the pair used alone walks and looks the same; the pair together or separately is read as it is', () => {
+    pad = makePad(PAIR_ID, 22, 4);
+    choice = { hold: null, pair: 'left' };
+    start();
+    pad.axes = [0.88, -0.01, 0, 0];
+    poll();
+    expect(moves().forward).toBeGreaterThan(0.8);
+    pad = makePad(PAIR_ID, 22, 4);
+    press(pad, 15);
+    poll();
+    expect(moves()).toMatchObject({ forward: 0, pitch: 1 });
+
+    for (const pair of ['together', 'separately']) {
+      expect(joyConWalkLayout(pad, { hold: null, pair }), pair).toBeNull();
+    }
+    expect(
+      joyConWalkLayout(
+        makePad(
+          'Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e)',
+          17,
+          4
+        ),
+        choice
+      )
+    ).toBeNull();
   });
 });
 

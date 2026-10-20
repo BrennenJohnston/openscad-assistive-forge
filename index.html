@@ -9154,23 +9154,27 @@
                 <option value="generic">Generic</option>
               </select>
             </div>
-            <div class="preferences-select-row">
-              <label for="prefsJoyConHold">One Joy-Con, held</label>
-              <select id="prefsJoyConHold">
-                <option value="sideways">Sideways</option>
-                <option value="upright">Upright</option>
-              </select>
-            </div>
-            <div class="preferences-select-row">
-              <label for="prefsJoyConPair">Two Joy-Cons</label>
-              <select id="prefsJoyConPair">
-                <option value="together">Together, as one controller</option>
-                <option value="left">Left only, held sideways</option>
-                <option value="right">Right only, held sideways</option>
-                <option value="separately">
-                  Separately: left for the Customizer, right for the camera
-                </option>
-              </select>
+            <!-- The Joy-Cons' own choices, shown while the layout is
+                 Nintendo (controller-panel.js). -->
+            <div id="prefsJoyConRows" class="joycon-rows" hidden>
+              <div class="preferences-select-row">
+                <label for="prefsJoyConHold">One Joy-Con, held</label>
+                <select id="prefsJoyConHold">
+                  <option value="sideways">Sideways</option>
+                  <option value="upright">Upright</option>
+                </select>
+              </div>
+              <div class="preferences-select-row">
+                <label for="prefsJoyConPair">Two Joy-Cons</label>
+                <select id="prefsJoyConPair">
+                  <option value="together">Together, as one controller</option>
+                  <option value="left">Left only, held sideways</option>
+                  <option value="right">Right only, held sideways</option>
+                  <option value="separately">
+                    Separately: left for the Customizer, right for the camera
+                  </option>
+                </select>
+              </div>
             </div>
             <!-- A picture of the buttons for sighted readers; the list of
                  actions below names every button in full, so the picture is

@@ -193,6 +193,14 @@ test.describe('Keys', () => {
     await expect(page.locator('#controllerReadoutPad')).toBeHidden();
     // A fresh profile has not found the game: its section stays hidden.
     await expect(page.locator('#keysWalkSection')).toBeHidden();
+    // The Joy-Cons' choices belong to the Nintendo layout alone.
+    await expect(page.locator('#prefsJoyConHold')).toBeHidden();
+    await expect(page.locator('#prefsJoyConPair')).toBeHidden();
+    await page.locator('#prefsGamepadFamily').selectOption('nintendo');
+    await expect(page.locator('#prefsJoyConHold')).toBeVisible();
+    await expect(page.locator('#prefsJoyConPair')).toBeVisible();
+    await page.locator('#prefsGamepadFamily').selectOption('playstation');
+    await expect(page.locator('#prefsJoyConHold')).toBeHidden();
   });
 
   test('a button changed in the Controller tab is kept after a reload', async ({

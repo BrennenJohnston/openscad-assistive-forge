@@ -12136,6 +12136,7 @@ if (rounded) {
             walkMapping,
             openControllerSettings: ({ onClose }) =>
               openShortcutsDialog({ tab: 'controller', onClose }),
+            joyConChoice: () => joyConChoice,
           });
         } catch (error) {
           console.error('[CityWalk] Failed to launch:', error);

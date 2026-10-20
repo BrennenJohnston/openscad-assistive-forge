@@ -17138,6 +17138,13 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   min-width: 0;
 }
 
+/* Set in under the layout picker: they belong to the Nintendo layout. */
+.joycon-rows {
+  margin-inline-start: var(--space-sm);
+  padding-inline-start: var(--space-sm);
+  border-inline-start: var(--border-width-base, 2px) solid var(--color-border);
+}
+
 /* The picture's units are CSS pixels at its widest, so its words take the
    type scale's sizes; on a narrow screen it shrinks as a whole. */
 .gamepad-diagram {

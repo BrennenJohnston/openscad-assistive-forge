@@ -184,6 +184,8 @@ function renderGamepadPanel() {
   if (family) family.value = now.family;
   const preset = el('prefsGamepadPreset');
   if (preset) preset.value = now.preset;
+  const joyConRows = el('prefsJoyConRows');
+  if (joyConRows) joyConRows.hidden = now.family !== 'nintendo';
   // Not chosen yet reads as what the Joy-Cons do until then.
   const joyCon = handlers.joyCon?.get();
   const hold = el('prefsJoyConHold');

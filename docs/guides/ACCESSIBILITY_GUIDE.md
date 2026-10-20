@@ -416,6 +416,10 @@ Keys > Controller changes it):
   down) and groups (left and right), SL and SR step between parameters, ZL
   presses and L goes back.
 
+Keys > Controller shows **One Joy-Con, held** and **Two Joy-Cons** while its
+**Controller layout** is Nintendo, as it is when a Joy-Con connects and no
+other layout was chosen.
+
 ### Testing your controller
 
 Under the status line, **Test your controller** shows the controller as the

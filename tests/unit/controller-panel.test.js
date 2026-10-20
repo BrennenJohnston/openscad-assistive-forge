@@ -307,6 +307,38 @@ describe('the Controller tab', () => {
     expect(buttonOf('back')).toBe('Circle');
   });
 
+  it('shows the Joy-Con choices only while the layout is Nintendo', () => {
+    const rows = document.getElementById('prefsJoyConRows');
+    expect(rows.contains(document.getElementById('prefsJoyConHold'))).toBe(true);
+    expect(rows.contains(document.getElementById('prefsJoyConPair'))).toBe(true);
+    expect(rows.hidden).toBe(true);
+
+    const family = document.getElementById('prefsGamepadFamily');
+    family.value = 'nintendo';
+    family.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(rows.hidden).toBe(false);
+    family.value = 'xbox';
+    family.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(rows.hidden).toBe(true);
+
+    // Not chosen, the layout follows the pad: a Joy-Con shows them.
+    localStorage.clear();
+    initControllerPanel({
+      gamepad: {
+        mapping: createGamepadMapping({
+          getPadId: () =>
+            'Joy-Con (R) (STANDARD GAMEPAD Vendor: 057e Product: 2007)',
+        }),
+        capture,
+        cancelCapture,
+        announce,
+      },
+    });
+    syncControllerPanel();
+    expect(family.value).toBe('nintendo');
+    expect(rows.hidden).toBe(false);
+  });
+
   it('the readout follows the pad on every frame, and says nothing outside a test', () => {
     expect(text('controllerReadoutPad')).toBe('');
     pads[0] = stubPad();
