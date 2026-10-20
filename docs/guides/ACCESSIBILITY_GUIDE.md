@@ -392,6 +392,30 @@ controller you connect until you choose one. On a Nintendo controller the
 button printed A presses and the one printed B goes back. Anything you
 unlock later that has controller buttons of its own adds its table here.
 
+### Joy-Cons
+
+A single Joy-Con works held sideways, with SL and SR on top, or upright. The
+first time one connects, the app asks which; **One Joy-Con, held** in
+Keys > Controller changes it. Its stick turns the view, its four round
+buttons pan, SR zooms in and SL zooms out. The trigger (ZR or ZL) presses the
+control that has focus, the side button (R or L) goes back, Plus or Minus is
+Full Screen, Home or Capture opens Keys, and pressing the stick resets the
+view.
+
+With both Joy-Cons connected, the browser joins them into one controller, and
+the app asks once how you want to use them (**Two Joy-Cons** in
+Keys > Controller changes it):
+
+- **Together, as one controller**: held upright, like any full controller,
+  with the three presets.
+- **Left only** or **Right only**: that Joy-Con held sideways, as on its own;
+  the other one does nothing.
+- **Separately**: one in each hand. The right Joy-Con moves the view as a
+  single one does. The left one works the Customizer: its four buttons step a
+  slider or choose in a list, its stick moves between parameters (up and
+  down) and groups (left and right), SL and SR step between parameters, ZL
+  presses and L goes back.
+
 ### Testing your controller
 
 Under the status line, **Test your controller** shows the controller as the
