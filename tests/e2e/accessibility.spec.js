@@ -423,28 +423,36 @@ test.describe('The Main Page upload area', () => {
 
   test('is one Tab stop: the file input, named by the area', async ({
     page,
+    browserName,
   }) => {
     await page.goto('/');
     await waitForWasmReady(page);
+
+    // Safari on macOS moves Tab between text fields only, by its default
+    // setting; Option+Tab reaches every control, as for the app's buttons.
+    const tab =
+      browserName === 'webkit' && process.platform === 'darwin'
+        ? 'Alt+Tab'
+        : 'Tab';
 
     // Back across the area from the control after it, then forward again.
     await page.locator('#uploadZoneFolderBtn').focus();
     const back = [];
     for (let i = 0; i < 4; i++) {
-      await page.keyboard.press('Shift+Tab');
+      await page.keyboard.press(`Shift+${tab}`);
       const at = await where(page);
       if (!at.inside) break;
       back.push(at.id);
     }
-    expect(back, 'stops inside the area, Shift+Tab').toEqual(['fileInput']);
+    expect(back, `stops inside the area, Shift+${tab}`).toEqual(['fileInput']);
     const ahead = [];
     for (let i = 0; i < 4; i++) {
-      await page.keyboard.press('Tab');
+      await page.keyboard.press(tab);
       const at = await where(page);
       ahead.push(at.id);
       if (!at.inside) break;
     }
-    expect(ahead, 'stops from before the area, Tab').toEqual([
+    expect(ahead, `stops from before the area, ${tab}`).toEqual([
       'fileInput',
       'uploadZoneFolderBtn',
     ]);
