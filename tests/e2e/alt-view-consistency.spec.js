@@ -729,6 +729,35 @@ test.describe('The Alt View at a phone width', () => {
     await page.waitForTimeout(800);
     expectInTheLook(await audit(page, null), 'the camera drawer at a phone width');
   });
+
+  test("a list opens in the page, in the look's colors", async ({ page }) => {
+    test.setTimeout(300_000);
+    await openProject(page);
+    const [coarse, pageList] = await page.evaluate(() => [
+      matchMedia('(pointer: coarse)').matches,
+      CSS.supports('appearance', 'base-select'),
+    ]);
+    test.skip(!coarse, 'this browser does not emulate a finger for a pointer');
+    test.skip(!pageList, 'this browser draws every list itself');
+    await altViewOn(page);
+    await page.locator('#mobileDrawerToggle').tap();
+    const list = page.locator('#paramDetailLevel');
+    await expect(list).toBeVisible();
+    expect(await list.evaluate((el) => getComputedStyle(el).appearance)).toBe(
+      'base-select'
+    );
+    await list.tap();
+    await expect.poll(() => list.evaluate((el) => el.matches(':open'))).toBe(true);
+    const option = list.locator('option').first();
+    await expect(option).toBeVisible();
+    expect(
+      (await option.boundingBox()).height,
+      'an option is a touch target high'
+    ).toBeGreaterThanOrEqual(44);
+    expect(await offGreenInk(option), 'pixels off the green').toBe(0);
+    await page.keyboard.press('Escape');
+    await expect.poll(() => list.evaluate((el) => el.matches(':open'))).toBe(false);
+  });
 });
 
 /** The range inputs on the screen, and those shorter than the touch target. */
@@ -977,6 +1006,58 @@ test.describe('The Alt View with the system settings', () => {
       0.8
     );
     await page.keyboard.press('Escape');
+  });
+});
+
+/**
+ * An element's pixels as the page shows it, read back in the page: those
+ * more red or more blue than green, which the green look has none of.
+ */
+async function offGreenInk(locator) {
+  const shot = await locator.screenshot();
+  return locator.page().evaluate(async (data) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const { data: px } = ctx.getImageData(0, 0, img.width, img.height);
+    let off = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      const [r, g, b] = [px[i], px[i + 1], px[i + 2]];
+      if (r > g + 48 || b > g + 48) off += 1;
+    }
+    return off;
+  }, shot.toString('base64'));
+}
+
+test.describe("The Alt View's Generate row", () => {
+  test.beforeEach(async ({ page }) => {
+    await seed(page, { unlock: true, theme: 'dark' });
+  });
+
+  test('draws the download icon as text, not as a picture in color', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await openProject(page);
+    await altViewOn(page);
+    const button = page.locator('#primaryActionBtn');
+    await button.click();
+    await expect(button).toHaveAttribute('data-action', 'download', {
+      timeout: 120_000,
+    });
+    await page.mouse.move(2, 2);
+    expect(await offGreenInk(button), 'pixels off the green').toBe(0);
+    await expect(button).toHaveAccessibleName(/^Download generated STL file/);
+    const icon = button.locator('.btn-emoji');
+    await expect(icon).toHaveAttribute('aria-hidden', 'true');
+    expect(
+      await icon.evaluate((el) => getComputedStyle(el, '::before').content)
+    ).toBe('"[DL]"');
   });
 });
 

@@ -125,6 +125,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In Classic, the Alt View's sliders have a place: the 3D view toolbar's
   Lens settings button opens them in Viewport-Control, or at the foot of the
   Customizer in the Simplified view.
+- In the Alt View the Generate button's Download and Generating icons are the
+  look's text, not emoji in color, and on a touch screen a list opens in the
+  look's colors instead of the phone's own sheet; Escape closes the list
+  alone.
 
 ## [5.6.0] - 2026-10-15
 

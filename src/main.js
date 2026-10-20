@@ -544,6 +544,45 @@ function hasFullQualitySTLFor(parameters) {
   );
 }
 
+const BUTTON_ICONS = { download: '📥', wait: '⏳' };
+
+/**
+ * A button's words after an icon in a span of its own, hidden from assistive
+ * tech: the alternative look draws the icon as text (variant.css).
+ * @param {HTMLElement} button
+ * @param {keyof typeof BUTTON_ICONS} icon
+ * @param {string} text
+ */
+function setButtonTextWithIcon(button, icon, text) {
+  const glyph = document.createElement('span');
+  glyph.className = 'btn-emoji';
+  glyph.dataset.icon = icon;
+  glyph.setAttribute('aria-hidden', 'true');
+  glyph.textContent = BUTTON_ICONS[icon];
+  button.replaceChildren(glyph, ` ${text}`);
+}
+
+/**
+ * Escape in an open list closes the list alone. A list the page draws (the
+ * alternative look's on a touch screen, variant.css) is inside the page, so
+ * its Escape would otherwise reach the sheet's and the dialogs' own Escape
+ * first and close them around it. Left uncancelled, the browser still
+ * closes the list.
+ */
+function keepEscapeForOpenLists() {
+  if (!CSS.supports('selector(:open)')) return;
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.key !== 'Escape') return;
+      if (event.target?.closest?.('select')?.matches(':open')) {
+        event.stopPropagation();
+      }
+    },
+    true
+  );
+}
+
 /* ── Error Log: reaching it by keyboard and by menu ───────────────────────────
  *
  * The Error-Log lives in two different places depending on the host, so every
@@ -1062,6 +1101,9 @@ async function initApp() {
 
   // CSP Reporter: Monitor Content-Security-Policy violations
   initCSPReporter();
+
+  // Before any Escape handler of the page's own.
+  keepEscapeForOpenLists();
 
   // Storage key migration: One-time migration of localStorage keys to standardized naming
   // Must run before any localStorage reads to ensure consistent key access
@@ -5985,7 +6027,11 @@ async function initApp() {
             `Generate ${formatName} file from current parameters`
           );
         } else {
-          primaryActionBtn.textContent = `📥 Download ${formatName}`;
+          setButtonTextWithIcon(
+            primaryActionBtn,
+            'download',
+            `Download ${formatName}`
+          );
           primaryActionBtn.setAttribute(
             'aria-label',
             `Download generated ${formatName} file`
@@ -8111,7 +8157,7 @@ async function initApp() {
       !paramsChanged;
 
     if (isStlFormat && hasFullQualityStl) {
-      primaryActionBtn.textContent = '📥 Download';
+      setButtonTextWithIcon(primaryActionBtn, 'download', 'Download');
       primaryActionBtn.dataset.action = 'download';
       primaryActionBtn.classList.remove('btn-primary');
       primaryActionBtn.classList.add('btn-success');
@@ -8121,7 +8167,7 @@ async function initApp() {
       );
       downloadFallbackLink.classList.add('hidden');
     } else if (hasMatchingOutput) {
-      primaryActionBtn.textContent = '📥 Download';
+      setButtonTextWithIcon(primaryActionBtn, 'download', 'Download');
       primaryActionBtn.dataset.action = 'download';
       primaryActionBtn.classList.remove('btn-primary');
       primaryActionBtn.classList.add('btn-success');
@@ -12450,7 +12496,11 @@ if (rounded) {
       generateCanceled = false;
       cancelRenderBtn.classList.remove('hidden');
       disableKeepingFocus(primaryActionBtn, cancelRenderBtn);
-      primaryActionBtn.textContent = `⏳ Generating ${formatName}...`;
+      setButtonTextWithIcon(
+        primaryActionBtn,
+        'wait',
+        `Generating ${formatName}...`
+      );
 
       // Disable undo/redo during rendering to prevent state mismatches
       stateManager.setHistoryEnabled(false);
