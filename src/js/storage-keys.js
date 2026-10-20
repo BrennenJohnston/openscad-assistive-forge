@@ -315,6 +315,9 @@ export const STORAGE_KEY_GAMEPAD_WALK_MAPPING = getAppPrefKey(
 // How a person holds one Joy-Con, and uses the two together (Keys >
 // Controller, asked once when they first connect).
 export const STORAGE_KEY_JOYCON = getAppPrefKey('joycon');
+// A person's own named controller presets (Keys > Controller), each a
+// copy of the app's table.
+export const STORAGE_KEY_GAMEPAD_PRESETS = getAppPrefKey('gamepad-presets');
 
 // --- Preview settings (preview.js) ---
 export const STORAGE_KEY_MEASUREMENTS = getAppPrefKey('measurements');

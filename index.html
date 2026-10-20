@@ -9304,6 +9304,73 @@
                 Reset to preset
               </button>
             </div>
+            <!-- A person's own presets (gamepad-presets.js): written into the
+                 Preset list by controller-panel.js. Each result is spoken once
+                 through the announcer and stays on the message line to read
+                 again; the line is neither a live region nor the name field's
+                 description, which NVDA reads a second time with the field. -->
+            <fieldset
+              id="prefsGamepadMine"
+              class="preferences-fieldset gamepad-presets"
+            >
+              <legend class="preferences-legend">Your presets</legend>
+              <p class="preferences-field-note">
+                Save the buttons above under a name of your own. Your presets
+                join the Preset list, and Next preset steps through them with
+                the others. Export keeps them in a file, to import in another
+                browser or after this one is cleared.
+              </p>
+              <div class="preferences-select-row">
+                <label for="prefsGamepadPresetName">Name</label>
+                <input
+                  type="text"
+                  id="prefsGamepadPresetName"
+                  maxlength="60"
+                  autocomplete="off"
+                />
+                <button
+                  type="button"
+                  id="prefsGamepadPresetSave"
+                  class="btn btn-sm btn-outline"
+                >
+                  Save preset
+                </button>
+              </div>
+              <p
+                id="prefsGamepadPresetMessage"
+                class="preferences-field-note"
+              ></p>
+              <div class="preferences-check-row gamepad-preset-actions">
+                <button
+                  type="button"
+                  id="prefsGamepadPresetDelete"
+                  class="btn btn-sm btn-outline"
+                  hidden
+                >
+                  Delete this preset
+                </button>
+                <button
+                  type="button"
+                  id="prefsGamepadPresetExport"
+                  class="btn btn-sm btn-outline"
+                >
+                  Export presets
+                </button>
+                <button
+                  type="button"
+                  id="prefsGamepadPresetImport"
+                  class="btn btn-sm btn-outline"
+                >
+                  Import presets
+                </button>
+                <input
+                  type="file"
+                  id="prefsGamepadPresetFile"
+                  accept=".json,application/json"
+                  hidden
+                />
+              </div>
+            </fieldset>
             <fieldset
               id="keysWalkSection"
               class="preferences-fieldset keys-walk-section"

@@ -392,6 +392,20 @@ controller you connect until you choose one. On a Nintendo controller the
 button printed A presses and the one printed B goes back. Anything you
 unlock later that has controller buttons of its own adds its table here.
 
+### Your own presets
+
+Below Reset to preset, **Your presets** keeps the buttons you have set under
+a name of your own: type a name and press **Save preset** or Enter. Your
+presets join the Preset list after the three built-in ones, and the View
+button steps through them after Menus. Saving under a name you already used
+replaces that preset. **Delete this preset** shows while one of yours is
+chosen; its buttons stay in use until you choose another preset.
+**Export presets** saves all of yours in one file, `controller-presets.json`,
+and **Import presets** adds the presets from such a file, replacing any of
+yours with the same name. The file keeps your presets through a cleared
+browser or carries them to another one. A file from an earlier version still
+loads; an action added since then starts with no button.
+
 ### Joy-Cons
 
 A single Joy-Con works held sideways, with SL and SR on top, or upright. The

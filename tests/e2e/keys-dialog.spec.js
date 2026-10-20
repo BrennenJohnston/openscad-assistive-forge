@@ -1,10 +1,12 @@
+import { readFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { skipWithoutWebGL } from './helpers/webgl.js';
 
 // Keys holds the keyboard shortcuts and the controller in two tabs and
 // scrolls in one place. The Controller tab's table and Change work as they
-// did in Preferences, and its readout names the pad and what is pressed.
+// did in Preferences, and its readout names the pad and what is pressed. A
+// person's own presets are saved, stepped to, deleted and kept in a file.
 // The pad is a stand-in the page reads through navigator.getGamepads().
 
 const WASM_READY_TIMEOUT = 180_000;
@@ -240,6 +242,112 @@ test.describe('Keys', () => {
 
     await page.locator('#prefsGamepadReset').click();
     expect(await buttonOf('activate')).toBe('A');
+  });
+
+  test('a preset of your own is saved, stepped to with View, deleted, exported and imported', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await openApp(page);
+    await openKeys(page);
+    await controllerTab(page).click();
+    const name = page.locator('#prefsGamepadPresetName');
+    const message = page.locator('#prefsGamepadPresetMessage');
+    const preset = page.locator('#prefsGamepadPreset');
+    const mine = preset.locator('optgroup[label="Your presets"] option');
+    const remove = page.locator('#prefsGamepadPresetDelete');
+    const file = page.locator('#prefsGamepadPresetFile');
+    const pressView = async () => {
+      await hold(page, 8, true);
+      await page.waitForTimeout(150);
+      await hold(page, 8, false);
+      await page.waitForTimeout(150);
+    };
+
+    await expect(remove).toBeHidden();
+    await name.fill('Camera');
+    await page.locator('#prefsGamepadPresetSave').click();
+    await expect(message).toHaveText(
+      'That name belongs to a built-in preset. Choose another.'
+    );
+    await expect(name).toBeFocused();
+
+    await name.fill('Desk');
+    await name.press('Enter');
+    await expect(message).toHaveText('Preset Desk saved.');
+    await expect.poll(() => said(page)).toContain('Preset Desk saved.');
+    await expect(preset).toHaveValue('mine:Desk');
+    await expect(mine).toHaveText(['Desk']);
+    await expect(remove).toBeVisible();
+
+    // View steps through the built-in presets, then the person's own.
+    await page.locator('#shortcutsModalDone').click();
+    await expect(page.locator('#shortcutsModal')).toHaveClass(/hidden/);
+    await pressView();
+    await expect.poll(() => said(page)).toContain('Camera controls');
+    await pressView();
+    await pressView();
+    await expect.poll(() => said(page)).toContain('Menu controls');
+    await pressView();
+    await expect.poll(() => said(page)).toContain('Desk');
+
+    await openKeys(page);
+    await controllerTab(page).click();
+    await expect(preset).toHaveValue('mine:Desk');
+    await remove.click();
+    const confirm = page.locator('.confirm-modal');
+    await expect(confirm.locator('#confirmDialogTitle')).toHaveText(
+      'Delete Controller Preset'
+    );
+    await confirm.locator('button[data-action="confirm"]').click();
+    await expect(message).toHaveText('Preset Desk deleted.');
+    await expect(preset).toBeFocused();
+    await expect(preset).toHaveValue('camera');
+    await expect(preset.locator('optgroup')).toHaveCount(0);
+    await expect(remove).toBeHidden();
+    await expect(page.locator('#prefsGamepadInput-activate')).toHaveText('A');
+
+    await page.locator('#prefsGamepadPresetExport').click();
+    await expect(message).toHaveText(
+      'You have no presets of your own to export yet.'
+    );
+
+    await file.setInputFiles({
+      name: 'notes.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from('{"hello": 1}'),
+    });
+    await expect(message).toHaveText(
+      'That file is not a controller presets file.'
+    );
+
+    await file.setInputFiles({
+      name: 'controller-presets.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(
+        JSON.stringify({
+          type: 'openscad-forge-controller-presets',
+          version: 1,
+          presets: [
+            { name: 'Couch', assignments: { activate: 'b', back: 'a' } },
+          ],
+        })
+      ),
+    });
+    await expect(message).toHaveText('1 preset imported.');
+    await expect(mine).toHaveText(['Couch']);
+
+    const download = page.waitForEvent('download');
+    await page.locator('#prefsGamepadPresetExport').click();
+    const saved = await download;
+    expect(saved.suggestedFilename()).toBe('controller-presets.json');
+    const written = JSON.parse(await readFile(await saved.path(), 'utf8'));
+    expect(written.type).toBe('openscad-forge-controller-presets');
+    expect(written.presets.map((p) => p.name)).toEqual(['Couch']);
+    expect(written.presets[0].assignments.activate).toBe('b');
+    await expect(message).toHaveText(
+      '1 preset exported to controller-presets.json.'
+    );
   });
 
   test('the readout names the pad and a press; during a test B is only shown and spoken', async ({

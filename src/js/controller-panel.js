@@ -21,6 +21,9 @@ import {
   gamepadInputLabel,
   preferredPad,
 } from './gamepad-controller.js';
+import { USER_PRESET_PREFIX } from './gamepad-presets.js';
+import { downloadFile } from './download.js';
+import { showConfirmDialog } from './dialogs.js';
 
 /**
  * @typedef {Object} ControllerPanelHandlers
@@ -36,7 +39,12 @@ import {
  *   for one press on the controller, which nothing else is told about
  * @property {() => void} cancelCapture
  * @property {(text: string) => void} announce
+ * @property {ReturnType<typeof import('./gamepad-presets.js').createGamepadPresetStore>} [presets]
+ *   the person's own presets
  */
+
+/** The file Export presets writes. */
+export const PRESETS_FILE_NAME = 'controller-presets.json';
 
 /** How long Change waits for a press, in milliseconds. */
 const GAMEPAD_CAPTURE_MS = 5000;
@@ -183,7 +191,12 @@ function renderGamepadPanel() {
   const family = el('prefsGamepadFamily');
   if (family) family.value = now.family;
   const preset = el('prefsGamepadPreset');
-  if (preset) preset.value = now.preset;
+  if (preset) {
+    renderMinePresets(preset);
+    preset.value = now.preset;
+  }
+  const remove = el('prefsGamepadPresetDelete');
+  if (remove) remove.hidden = !now.preset.startsWith(USER_PRESET_PREFIX);
   const joyConRows = el('prefsJoyConRows');
   if (joyConRows) joyConRows.hidden = now.family !== 'nintendo';
   // Not chosen yet reads as what the Joy-Cons do until then.
@@ -200,6 +213,130 @@ function renderGamepadPanel() {
   }
 
   for (const table of TABLES) renderTable(table, now.family);
+}
+
+/**
+ * The person's presets in the Preset list, after the built-in ones, in a
+ * group of their own while there are any.
+ * @param {HTMLSelectElement} select
+ */
+function renderMinePresets(select) {
+  select.querySelector('optgroup[data-mine]')?.remove();
+  const mine = handlers.gamepad?.presets?.list() ?? [];
+  if (!mine.length) return;
+  const group = document.createElement('optgroup');
+  group.dataset.mine = '';
+  group.label = 'Your presets';
+  for (const preset of mine) {
+    const option = document.createElement('option');
+    option.value = preset.id;
+    option.textContent = preset.name;
+    group.append(option);
+  }
+  select.append(group);
+}
+
+/**
+ * Write a result where it can be read again and say it once.
+ * @param {string} text
+ */
+function presetMessage(text) {
+  const line = el('prefsGamepadPresetMessage');
+  if (line) line.textContent = text;
+  handlers.gamepad?.announce?.(text);
+}
+
+/** Save the buttons in use under the name typed. */
+function saveMinePreset() {
+  const gamepad = handlers.gamepad;
+  const input = el('prefsGamepadPresetName');
+  if (!gamepad?.presets || !input) return;
+  const result = gamepad.presets.save(
+    input.value,
+    gamepad.mapping.get().assignments
+  );
+  if (!result.saved) {
+    presetMessage(result.error);
+    input.focus();
+    return;
+  }
+  const { name } = gamepad.presets.get(result.id);
+  gamepad.mapping.setPreset(result.id);
+  input.value = '';
+  renderGamepadPanel();
+  presetMessage(
+    result.replaced ? `Preset ${name} updated.` : `Preset ${name} saved.`
+  );
+}
+
+/** Delete the person's preset in use, once they confirm. */
+async function deleteMinePreset() {
+  const gamepad = handlers.gamepad;
+  const mine = gamepad?.presets?.get(gamepad.mapping.get().preset);
+  if (!mine) return;
+  const confirmed = await showConfirmDialog(
+    `Delete the controller preset ${mine.name}? Its buttons stay in use until you choose another preset.`,
+    'Delete Controller Preset',
+    'Delete',
+    'Cancel',
+    {
+      destructive: true,
+      // The Delete button hides with the preset: a yes puts focus on the
+      // Preset list in one move, not back on Delete first.
+      returnFocus: (yes) =>
+        yes ? el('prefsGamepadPreset') : el('prefsGamepadPresetDelete'),
+    }
+  );
+  if (!confirmed) return;
+  gamepad.mapping.keepButtons();
+  gamepad.presets.remove(mine.id);
+  renderGamepadPanel();
+  presetMessage(`Preset ${mine.name} deleted.`);
+}
+
+/** Write the person's presets to a file. */
+function exportMinePresets() {
+  const store = handlers.gamepad?.presets;
+  if (!store) return;
+  const count = store.list().length;
+  if (!count) {
+    presetMessage('You have no presets of your own to export yet.');
+    return;
+  }
+  downloadFile(store.toFile(), PRESETS_FILE_NAME, 'json');
+  presetMessage(
+    count === 1
+      ? `1 preset exported to ${PRESETS_FILE_NAME}.`
+      : `${count} presets exported to ${PRESETS_FILE_NAME}.`
+  );
+}
+
+/**
+ * Add the presets a chosen file holds.
+ * @param {File} file
+ */
+async function importMinePresets(file) {
+  const store = handlers.gamepad?.presets;
+  if (!store || !file) return;
+  let text;
+  try {
+    text = await file.text();
+  } catch (error) {
+    console.error('[Gamepad] The presets file could not be read:', error);
+    presetMessage('That file could not be read.');
+    return;
+  }
+  const result = store.fromFile(text);
+  if (result.error) {
+    presetMessage(result.error);
+    return;
+  }
+  renderGamepadPanel();
+  presetMessage(
+    result.count === 1
+      ? '1 preset imported.'
+      : `${result.count} presets imported.`
+  );
 }
 
 /**
@@ -458,7 +595,10 @@ async function runReadoutTest() {
   readout.quiet = false;
 }
 
-/** The tab's controls: the pickers, Reset to preset, the test button. */
+/**
+ * The tab's controls: the pickers, Reset to preset, the person's presets,
+ * the test button.
+ */
 function wireControllerTab() {
   el('prefsGamepadFamily')?.addEventListener('change', (event) => {
     handlers.gamepad?.mapping.setFamily(event.target.value);
@@ -483,10 +623,30 @@ function wireControllerTab() {
       if (!mapping) return;
       mapping.reset();
       renderGamepadPanel();
-      const preset = table.presets[mapping.get().preset];
-      handlers.gamepad?.announce?.(`${preset.name} restored.`);
+      const { preset } = mapping.get();
+      const name = mapping.presetName?.(preset) ?? table.presets[preset].name;
+      handlers.gamepad?.announce?.(`${name} restored.`);
     });
   }
+
+  el('prefsGamepadPresetSave')?.addEventListener('click', saveMinePreset);
+  el('prefsGamepadPresetName')?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    saveMinePreset();
+  });
+  el('prefsGamepadPresetDelete')?.addEventListener('click', deleteMinePreset);
+  el('prefsGamepadPresetExport')?.addEventListener('click', exportMinePresets);
+  const file = el('prefsGamepadPresetFile');
+  el('prefsGamepadPresetImport')?.addEventListener('click', () =>
+    file?.click()
+  );
+  file?.addEventListener('change', async () => {
+    const [chosen] = file.files ?? [];
+    // Cleared, so the same file chosen again is read again.
+    file.value = '';
+    await importMinePresets(chosen);
+  });
 
   el('controllerReadoutTest')?.addEventListener('click', () => {
     if (readout.testing) handlers.gamepad?.cancelCapture();
@@ -515,6 +675,8 @@ export function initControllerPanel(panelHandlers = {}) {
  * readout. Called when Keys opens and when a tab is chosen.
  */
 export function syncControllerPanel() {
+  const message = el('prefsGamepadPresetMessage');
+  if (message) message.textContent = '';
   renderGamepadStatus();
   renderGamepadPanel();
   renderTestButton();

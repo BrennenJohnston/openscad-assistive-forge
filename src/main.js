@@ -124,6 +124,7 @@ import {
   loadJoyConChoice,
   saveJoyConChoice,
 } from './js/joycon.js';
+import { createGamepadPresetStore } from './js/gamepad-presets.js';
 import {
   disableKeepingFocus,
   firstParameterControl,
@@ -1966,9 +1967,12 @@ async function initApp() {
     console.log('[Input] Gamepad controller initialized');
   }
   // The person's controller assignments (Preferences > Controller); the
-  // layout follows the plugged-in pad until one is chosen.
+  // layout follows the plugged-in pad until one is chosen. Their own named
+  // presets follow the built-in ones.
+  const gamepadPresets = createGamepadPresetStore();
   const gamepadMapping = createGamepadMapping({
     getPadId: () => gamepadController?.getGamepadInfo()?.id ?? '',
+    userPresets: gamepadPresets,
   });
   // The game's own buttons, named by the layout the app's table follows.
   const walkMapping = createWalkMapping({
@@ -1994,6 +1998,7 @@ async function initApp() {
       cancelCapture: () => gamepadController?.cancelCapture(),
       announce: (text) => announceImmediate(text),
       pad: () => gamepadController?.activePad() ?? null,
+      presets: gamepadPresets,
     },
     joyCon: {
       get: () => joyConChoice,
@@ -16821,7 +16826,9 @@ if (rounded) {
       nextPreset: () => {
         playPadKey();
         const preset = gamepadMapping.nextPreset();
-        announceImmediate(PRESET_SPOKEN[preset]);
+        announceImmediate(
+          PRESET_SPOKEN[preset] ?? gamepadMapping.presetName(preset)
+        );
       },
     };
     const repeatingActions = new Set(

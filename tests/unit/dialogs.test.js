@@ -76,6 +76,27 @@ describe('showConfirmDialog', () => {
     document.activeElement.click()
     await expect(answer).resolves.toBe(true)
   })
+
+  it('gives focus where the caller names for the answer', async () => {
+    const asker = opener('Delete this preset')
+    const list = document.createElement('select')
+    document.body.appendChild(list)
+    const where = (confirmed) => (confirmed ? list : asker)
+
+    let answer = showConfirmDialog('Delete it?', 'Delete', 'Delete', 'Cancel', {
+      returnFocus: where,
+    })
+    document.querySelector('[data-action="cancel"]').click()
+    await expect(answer).resolves.toBe(false)
+    expect(document.activeElement).toBe(asker)
+
+    answer = showConfirmDialog('Delete it?', 'Delete', 'Delete', 'Cancel', {
+      returnFocus: where,
+    })
+    document.querySelector('[data-action="confirm"]').click()
+    await expect(answer).resolves.toBe(true)
+    expect(document.activeElement).toBe(list)
+  })
 })
 
 describe('showPromptDialog', () => {
