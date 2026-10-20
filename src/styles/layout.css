@@ -2290,6 +2290,18 @@ body[data-app-surface='welcome'] #uiModeToggle {
   display: flex;
 }
 
+/* Open, the drawer leaves the flow to lie over the preview; on a desktop the
+   preview keeps the room its closed row held, so it does not move up as the
+   drawer opens. Full Screen and Classic hide the row and keep no room. */
+@media (min-width: 768px) {
+  body:not([data-ui-mode='classic'])
+    .main-interface:not(.focus-mode)
+    .preview-info-section.preview-drawer-expanded
+    + .preview-canvas-section {
+    margin-top: calc(var(--drawer-header-height) + var(--space-xs, 4px));
+  }
+}
+
 /* The Alt View's Lens drawer on a desktop: risen from the actions bar's
    row, over the bottom of the preview, as tall as its four sliders, each
    on a row of its own as in the phone's Lens drawer. Closed, nothing of it

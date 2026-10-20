@@ -88,6 +88,35 @@ describe('toolbar menus after several openings', () => {
   });
 });
 
+// The menu a key opens is the focused button's, however focus got there: a
+// person who used Help and then went back to File opens File.
+describe('the menu bar opens the focused button', () => {
+  let ctx;
+  const shown = (id) =>
+    !document.getElementById(`${id}MenuModal`).classList.contains('hidden');
+  beforeEach(() => {
+    ctx = setUp();
+    document.getElementById('helpMenuBtn').click();
+    expect(shown('help')).toBe(true);
+    press('Escape');
+    document.getElementById('fileMenuBtn').focus();
+  });
+
+  it.each(['Enter', ' ', 'ArrowDown'])('%s opens File, not Help, the last one used', (key) => {
+    press(key);
+    expect(shown('file')).toBe(true);
+    expect(shown('help')).toBe(false);
+  });
+
+  it('the arrows step from the focused button', () => {
+    press('ArrowRight');
+    expect(document.activeElement).toBe(document.getElementById('editMenuBtn'));
+    press('ArrowLeft');
+    press('ArrowLeft');
+    expect(document.activeElement).toBe(document.getElementById('helpMenuBtn'));
+  });
+});
+
 describe('where focus goes when a menu closes', () => {
   let ctx;
   beforeEach(() => {

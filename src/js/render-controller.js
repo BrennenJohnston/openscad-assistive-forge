@@ -31,6 +31,7 @@ export {
 import { RENDER_QUALITY } from './quality-tiers.js';
 import { filterFilesForMount } from './mount-filter.js';
 import { DEFAULT_ENGINE_PATH, startupEnginePath } from './engine-choice.js';
+import { ENGINE_CRASH_WORDS } from '../worker/error-translations.js';
 
 /**
  * Estimate render time based on SCAD content complexity
@@ -381,11 +382,8 @@ export class RenderController {
           // If a render is in progress, reject it immediately so the UI
           // doesn't hang waiting for a watchdog timeout.
           if (this.currentRequest) {
-            const renderError = new Error(
-              'The rendering engine crashed unexpectedly. ' +
-                'This may be caused by projection() or roof() in your model. ' +
-                'The engine will restart automatically for the next render.'
-            );
+            const { explanation, suggestion } = ENGINE_CRASH_WORDS.WASM_ABORT;
+            const renderError = new Error(`${explanation} ${suggestion}`);
             renderError.code = 'WASM_ABORT';
             renderError.needsRestart = true;
             this._moduleUsed = true;

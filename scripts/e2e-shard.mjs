@@ -80,7 +80,9 @@ export const MEASURED_SECONDS = {
   // 39179291729 (2026-10-18). One run is not enough for the heaviest files:
   // the same cases of ui-schema.spec.js took 909 s in one and 1,474 s in the
   // other, as the files sharing its runner changed. Re-measure the same way.
-  'accessibility.spec.js': 243.3,
+  // 243.3 by the two runs above, plus two cases since (the upload area's one
+  // Tab stop and its file picker: 5.8 s locally), booked at four times that.
+  'accessibility.spec.js': 266.5,
   // 127.3 by the two runs above, plus eleven cases since (the key that
   // stays, the crack and the break-through, on the Main Page and the box:
   // 51 s locally), booked at about four times that.
@@ -103,7 +105,9 @@ export const MEASURED_SECONDS = {
   'braille-card.spec.js': 31.7,
   'camera-face-view-orbit.spec.js': 185.0,
   'classic-mobile-gate.spec.js': 46.2,
-  'classic-mode.spec.js': 454.5,
+  // 454.5 by the two runs above, plus one case since (the 3D view toolbar
+  // wraps at two window sizes: 2.0 s locally), booked at four times that.
+  'classic-mode.spec.js': 462.5,
   'classic-names.spec.js': 36.8,
   'classic-pane-focus.spec.js': 21.0,
   'classic-panels.spec.js': 403.4,
@@ -179,7 +183,9 @@ export const MEASURED_SECONDS = {
   'parity-regression.spec.js': 38.7,
   'potrace-engine.spec.js': 2.4,
   'preference-matrix.spec.js': 40.7,
-  'preview-stats.spec.js': 24.3,
+  // 24.3 by the two runs above, plus one case since (a library file's plain
+  // badge: 1.7 s locally), booked at four times that.
+  'preview-stats.spec.js': 31.1,
   'project-link-lane.spec.js': 3.9,
   'project-share.spec.js': 31.7,
   'project-switch.spec.js': 73.4,
@@ -189,7 +195,7 @@ export const MEASURED_SECONDS = {
   'responsive-audit.spec.js': 99.3,
   'saved-projects-dialogs.spec.js': 36.2,
   'saved-projects-focus.spec.js': 22.5,
-  'saved-projects.spec.js': 98.1,
+  'saved-projects.spec.js': 118.5,
   'self-disabling-controls-focus.spec.js': 74.7,
   'settings-follow-the-person.spec.js': 15.4,
   'share-settings.spec.js': 58.5,
@@ -209,8 +215,11 @@ export const MEASURED_SECONDS = {
   'typed-preset.spec.js': 10.3,
   // 1474.1 by the two runs above, plus four cases since (the open phone
   // Customizer closed by its own arrow, in four looks: 28 s locally), booked
-  // at about four times that.
-  'ui-schema.spec.js': 1623.1,
+  // at about four times that. Then eight more (Preview Settings opened over
+  // the preview without moving it, two desktop sizes in four looks), booked
+  // at 45.4 s from CI's own pace in Test Suite 39315966307: two presses of a
+  // toggle each, at the 2.2 to 3.3 s a press its S1 case took there.
+  'ui-schema.spec.js': 1668.5,
   'wasm-smoke.spec.js': 35.6,
   'welcome-spotlight.spec.js': 37.4,
   'welcome-surface.spec.js': 18.6,

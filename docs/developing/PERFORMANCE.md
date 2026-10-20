@@ -4,28 +4,33 @@ Notes on keeping the app fast.
 
 ## Bundle size
 
-Measured 2026-08-16 with `npm run build && npm run check-bundle`, all figures
-gzipped:
+Measured 2026-10-19 with `npm run build && npm run check-bundle`, all figures
+gzipped, 1 KB = 1,024 bytes. The rows without a budget are not checked; they
+were measured from the same build.
 
 | Chunk | Size | Budget |
 |---|---|---|
-| Core app (`index-*.js`) | 475 KB | 500 KB |
-| Main CSS | 58 KB | 150 KB |
-| Three.js chunk | 122 KB | -- |
-| `index.html` | 58 KB | -- |
-| ajv | 37 KB | -- |
-| jszip | 29 KB | -- |
-| **All assets together** | **844 KB** | 1 MB |
+| Core app (`index-*.js`) | 501.7 KB | 585.9 KB |
+| Main CSS | 68.5 KB | 150.0 KB |
+| WebAssembly (`potrace.wasm`) | 18.1 KB | 29.3 KB |
+| Braille engine (`liblouis.wasm` and its loader) | 77.8 KB | 97.7 KB |
+| Three.js chunk | 130.4 KB | -- |
+| `index.html` | 63.7 KB | -- |
+| JSZip chunk | 29.3 KB | -- |
+| **All assets together** | **1,186.4 KB** | 1,220.7 KB |
 
-**The core app is at 95% of its budget.** Adding a dependency is a real
-decision, not a formality -- `npm run check-bundle` fails the required Unit
-Tests job when a budget is exceeded.
+**All assets together are at 97% of their budget.** Adding a dependency is a
+real decision, not a formality -- `npm run check-bundle` fails the required
+Unit Tests job when a budget is exceeded.
 
 `index.html` is large because the entire UI markup lives in it.
 
-The OpenSCAD WASM binary is separate from all of this: about 10 MB, vendored in
-`public/wasm/openscad-official/`, fetched on first render and then cached by the
-service worker.
+The OpenSCAD engines are separate from all of this, and the budget check leaves
+them out by folder name (`wasm/openscad-official` and `wasm/engines` in
+`scripts/check-bundle-budget.js`). The Forge engine's `openscad.wasm` is about
+9.3 MB, vendored in `public/wasm/openscad-official/`, fetched on first render
+and then cached by the service worker. The official OpenSCAD engines are
+downloaded only when someone chooses one.
 
 To look at what is in the bundle:
 

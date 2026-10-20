@@ -897,6 +897,16 @@ body[data-ui-mode='classic'] .classic-editor-toolbar .classic-tb-group {
   flex-wrap: nowrap;
 }
 
+/* The 3D view toolbar's one row is narrower than its buttons until about
+   1920px, which kept some out of sight at common window sizes. From 1056px
+   a second row holds them all, at about 22px of 3D view; narrower windows
+   would need a third row, so there the row scrolls as above. */
+@media (min-width: 1056px) {
+  body[data-ui-mode='classic'] .classic-camera-bar {
+    flex-wrap: wrap;
+  }
+}
+
 /* Same reason: the toolbars' reason spans are siblings of their buttons,
    inside a group. */
 body[data-ui-mode='classic'] .classic-tb-group {
