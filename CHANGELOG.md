@@ -80,6 +80,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The app listens to the controller you press. Software for a 3D mouse can
+  add a virtual joystick that browsers list before a real gamepad, and the
+  app listened to that one instead, so a PS5 pad did nothing; and one
+  device disconnecting no longer drops the controller in use.
 - A focused Customizer group header shows its focus ring again.
 - On a phone, and on a desktop in high contrast, Preferences scrolls only its
   settings; its tabs and Done stay in view.
