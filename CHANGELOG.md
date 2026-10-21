@@ -7,130 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.7.0] - 2026-10-21
+
 ### Added
 
-- Preferences > 3D View sets how solid the Customizer is when it opens over
-  the preview on a phone.
-- A game controller drives the app in three presets, and its View button
-  steps from one to the next, saying which is on: Camera (the D-pad turns
-  and tilts the view, the bumpers walk the standard views, the triggers
-  zoom), Customizer (the bumpers step through the parameters, the triggers
-  through the groups, X puts a parameter back, Y generates) and Menus (the
-  bumpers step from control to control as Tab does, the triggers jump
-  between the parts of the window, landing past a part's own toggle, and
-  the D-pad sends the arrow keys, or steps between controls where arrow keys
-  do nothing). In each, A presses and B goes back.
-- Keys > Controller names the controller, shows its buttons for Xbox,
-  PlayStation, Nintendo or generic layouts, offers the three presets, lets
-  each action take the button you press, and tests the controller: what the
-  browser reads from it, each press shown and said once. Preferences >
-  Controller, in place of the Axes and Buttons tabs, opens it.
-- A Nintendo Joy-Con works on its own, held sideways or upright: its stick
-  turns the view, its four buttons pan, SL and SR zoom. With the two
-  connected, the app asks once how to use them: together as one controller,
-  the left or the right only, or separately, the left for the Customizer and
-  the right for the camera. Keys > Controller changes either answer.
-- Keys > Controller keeps controller presets of your own: save the buttons
-  under a name, step to them with the View button, delete them, and export
-  or import them as a file that keeps them through a cleared browser or
-  carries them to another.
-- Under 40% Focus, the Alt View draws the model as lines, bold at 35%
-  and the thinnest at 0%: its creases, its outline, and its rounded parts
-  as a dimmer wireframe, with a Surfaces slider for how solid the faces
-  under them are; Focus goes up to 170%, where the characters stop
-  growing, and a phone starts at 45%. The Characters slider is Focus now, and
-  the ASCII drawer and group are Lens, since they shape lines as well as
-  characters. On a desktop the four sliders are in a Lens drawer that rises
-  from the left of the Generate button's row; the stepper and level buttons beside the
-  status line are gone, and the camera panel holds no sliders.
-- The Alt View has a sounds button beside its key, the same setting as Play
-  sounds. In the look the 3D view ticks as it is turned, tilted, zoomed or
-  panned, by hand or by its camera buttons, a drawer unlatches, rolls and
-  meets its stop with a thump, checkboxes and switches flip like a lever,
-  scrolling ticks a line at a time like a typewriter's roller, and lists,
-  menus and typing each have theirs; a controller's buttons sound as the
-  controls they stand for would. Preferences > Advanced turns each kind
-  off on its own.
-- Preferences > Advanced > Engine chooses the engine: the Forge build or one
-  of four official OpenSCAD snapshots, downloaded only when you ask and kept
-  in the browser. When a model fails in a way that may be the engine's
-  fault, the error dialog offers the official engine, then the older
-  snapshots.
+- Preferences > Advanced > Engine chooses the Forge build or one of four
+  official OpenSCAD snapshots, downloaded when asked for and kept; a failure
+  that may be the engine's offers another.
+- A game controller drives the app in three presets, Camera, Customizer and
+  Menus. Keys > Controller shows its buttons, gives any action the button you
+  press, tests it, and keeps presets of your own, to export and import. A
+  Joy-Con works alone, held sideways or upright, and a pair is used the way
+  you choose.
+- In the Alt View, a Lens drawer draws the model as lines under 40% Focus, and
+  a sounds button sits beside its key; Preferences > Advanced turns each kind
+  of sound off.
+- Preferences > 3D View sets how solid a phone's Customizer is.
 
 ### Changed
 
-- The key that turns the Alt View on stays in the toolbar once it has been
-  found three times, the size of the theme buttons beside it.
-- The Keyboard Shortcuts dialog is Keys, with a Keyboard tab and a Controller
-  tab, and only its list scrolls; before, it had two scroll bars.
-- The engine is built with WebAssembly's own exceptions: Chrome follows a
-  model that repeats a module inside itself more than twice as deep before
-  "Model Too Deep", and every model renders 10 to 45 percent faster.
-- On a phone held upright, the header holds Main Page, twice a button wide
-  with its words, the Simplified/Standard switch, GitHub and Keys; the
-  Customizer button heads the Preview Settings row, before its arrow. The
-  Customizer comes in from the left over the preview, see-through so the model
-  shows behind it while a value changes, at a width you drag and that is
-  kept, and closes by its own arrow, as on a desktop; Preview Settings & Info
-  drops from its row.
-- On a phone, the camera controls open in a see-through drawer as tall as its
-  buttons, with a picture on each view button; one drawer is open at a time.
-- Full Screen on a phone with a drawer open gives the drawer the room its
-  controls need and the preview the rest, and keeps the button that leaves it.
-- In the Customizer, each number box is as wide as its value, and the slider
-  beside it takes the rest of the row; on a phone they share a row.
-- On a phone held sideways, the header and the menu bar each keep to one row,
-  the camera controls open as a column at the right edge, and the Customizer
-  is a column beside the preview. From 740 px wide the buttons keep their
-  words.
-- In the Alt View the drawers and Classic's panes slide open and shut like
-  desk drawers; the look comes on with them shut, then opens the ones that
-  were open. With reduced motion they open at once.
+- Keyboard Shortcuts is Keys, with a Keyboard and a Controller tab and one
+  scroll bar.
+- Models render 10 to 45 percent faster, and Chrome renders a module nested
+  more than twice as deep.
+- On a phone the Customizer comes in over the preview, see-through, at the
+  width you drag; the camera controls open in a drawer; held sideways, the
+  header and the menu bar keep to one row each.
+- A number box is as wide as its value, and its slider takes the rest.
+- In the Alt View the drawers slide like desk drawers, and the key stays in the
+  toolbar once it has been found three times.
 
 ### Fixed
 
-- The app listens to the controller you press. Software for a 3D mouse can
-  add a virtual joystick that browsers list before a real gamepad, and the
-  app listened to that one instead, so a PS5 pad did nothing; and one
-  device disconnecting no longer drops the controller in use.
-- A focused Customizer group header shows its focus ring again.
-- Closing an error message puts focus back where you were, or on Generate
-  after a failed render; before, focus was lost to the page.
-- A screen reader hears an error once, as its dialog opens; before, the page
-  said the failure again beside the dialog.
-- On a phone, and on a desktop in high contrast, Preferences scrolls only its
-  settings; its tabs and Done stay in view.
-- On a phone a slider's value sits beside the slider, not on a line above it.
-- A phone held sideways at 844 or 915 px wide opens a menu as a sheet with its
-  close button, as narrower phones do.
-- On a touch screen the menu bar's buttons are 44 px tall, and held sideways
-  the Camera and Lens toggles too.
-- In the Alt View a selected tab in Preferences and Keys is filled; every tab
-  looked the same before.
-- The desktop Lens drawer, open in the Alt View, leaves with the switch to
-  Classic (which holds the sliders in Viewport-Control) and comes back open
-  with the switch out of it; it no longer lies over Classic's 3D view with
-  no button to close it.
-- In Classic, the Alt View's DOS look has cursors of its own, in its
-  yellow; the green look's no longer follow it in.
-- In the Alt View, auto-rotate ticks as the view turns, as a drag does.
-- A game controller's right stick turns the view the way it is pushed (up
-  turned it down), at the same speed at any frame rate, and the left stick
-  pans both ways.
-- On a phone the tour's card stays beside the control it points at while the
-  Customizer is open, and on a desktop a step whose target is scrolled out of
-  the Customizer is scrolled into view instead of skipped.
-- A phone drawer's toggle no longer says its name twice to a screen reader.
-- Icon buttons keep their icons readable when hovered, pressed or focused in
-  every look (in the Alt View a hovered icon was black on a dark ground), and
-  a tap on a touch screen no longer leaves a button looking hovered.
-- In Classic, the Alt View's sliders have a place: the 3D view toolbar's
-  Lens settings button opens them in Viewport-Control, or at the foot of the
-  Customizer in the Simplified view.
-- In the Alt View the Generate button's Download and Generating icons are the
-  look's text, not emoji in color, and on a touch screen a list opens in the
-  look's colors instead of the phone's own sheet; Escape closes the list
-  alone.
+- The app follows the controller you press, not a 3D mouse's joystick listed
+  first, and the right stick turns the view the way it is pushed.
+- An error is said once, by its dialog, and closing it puts focus back where
+  you were.
+- The menu bar opens the focused button's menu, the upload area is one Tab
+  stop, the Save prompt and Discard draft put focus where you work, group
+  headers show their focus ring, and icons stay readable in every state.
+- Opening Preview Settings no longer moves the 3D view, Classic's 3D view
+  toolbar wraps instead of hiding buttons, a library file says "No preview: a
+  library file", and an engine crash no longer blames projection() or roof().
+- On a phone, Preferences scrolls only its settings, and menus held sideways,
+  touch targets, the tour and the drawer toggles work as on other screens. In
+  the Alt View, a selected tab is filled, auto-rotate ticks as a drag does,
+  and the Download icon and a phone's lists keep the look; in Classic, its
+  Lens drawer and cursors follow the look.
 
 ## [5.6.0] - 2026-10-15
 
