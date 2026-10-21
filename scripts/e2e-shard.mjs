@@ -91,7 +91,13 @@ export const MEASURED_SECONDS = {
   'alt-view-cursors.spec.js': 35.7,
   'alt-view-drawers.spec.js': 79.7,
   'alt-view-entry.spec.js': 69.5,
-  'alt-view-icon-states.spec.js': 810.0,
+  // 810.0 by the two runs above, plus the selected state since: one more
+  // picture of the screen in every case, and on the phone two more screens
+  // (the Lens drawer open in the Alt View, the Customizer open), about 80
+  // pictures where the 3D view is drawn in software; on this machine's
+  // software GL a phone case grew from 15 to 20 s, a desktop case not at
+  // all. Re-measure from the next green run.
+  'alt-view-icon-states.spec.js': 1000.0,
   'alt-view-reveal.spec.js': 85.2,
   'alt-view-sounds.spec.js': 194.3,
   'alt-view-vector.spec.js': 57.3,
