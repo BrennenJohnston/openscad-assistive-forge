@@ -13122,6 +13122,15 @@ body.tutorial-body-locked {
     stroke: currentColor !important;
   }
 
+  /* An icon drawn as lines alone says so with fill="none": it keeps its
+     open shapes here, or an arrow's head and tray fill in and the arrow
+     becomes a solid tray. Its lines still take the text color above. */
+  svg[fill='none'],
+  svg[fill='none'] *,
+  svg [fill='none'] {
+    fill: none !important;
+  }
+
   /* Color preview - show border in forced-colors */
   .color-preview,
   .color-picker {

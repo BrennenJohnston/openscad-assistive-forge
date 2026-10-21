@@ -152,6 +152,9 @@ export const MEASURED_SECONDS = {
   'folder-import.spec.js': 48.9,
   'folder-projects.spec.js': 10.7,
   'folder-write-back.spec.js': 21.0,
+  // One Main Page case under forced colors, 3 s locally, booked at four
+  // times that; re-measure from the next green run.
+  'forced-colors-icons.spec.js': 12.0,
   // 33.1 by the two runs above, plus six cases since (the parts the right
   // trigger visits, in Standard, Simplified and on a phone; the D-pad down
   // the Customizer; a group header's ring; the controller's Keys button:

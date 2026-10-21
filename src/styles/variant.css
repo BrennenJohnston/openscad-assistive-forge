@@ -1362,6 +1362,10 @@ body[data-ui-mode='classic'] {
   content: '[WAIT]';
   font-size: var(--font-size-sm, 0.875rem);
 }
+:root[data-ui-variant='mono'] .btn-emoji[data-icon='spin']::before {
+  content: '[>]';
+  font-size: var(--font-size-sm, 0.875rem);
+}
 
 /* --- Image measurement browse button (emoji → bracketed-text) --- */
 :root[data-ui-variant='mono'] .measure-upload-btn {
