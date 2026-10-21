@@ -3172,13 +3172,18 @@ async function initApp() {
 
     try {
       // Opens on Restore: the other answer deletes the draft, and Enter on
-      // the browser's own question used to restore.
+      // the browser's own question used to restore. Discard sends focus
+      // somewhere to act in one move: a screen reader reads a stop on the way.
+      const opener = document.activeElement;
       const shouldRestore = await showConfirmDialog(
         `A draft of "${draftToRestore.fileName}" from ${new Date(draftToRestore.timestamp).toLocaleString()} is kept in this browser. Restore it, or discard it?`,
         'Restore a saved draft?',
         'Restore draft',
         'Discard draft',
-        { focusConfirm: true }
+        {
+          focusConfirm: true,
+          returnFocus: (restore) => (restore ? opener : somewhereToAct()),
+        }
       );
 
       if (shouldRestore) {
@@ -3195,7 +3200,6 @@ async function initApp() {
         updateStatus('Draft restored');
       } else {
         stateManager.clearLocalStorage();
-        somewhereToAct()?.focus();
       }
     } finally {
       settleDraftQuestion();
