@@ -520,4 +520,24 @@ test.describe('After "Discard draft"', () => {
     await page.waitForTimeout(500);
     await expect(page.locator('#fileInput')).toBeFocused();
   });
+
+  // A stop on the way is read aloud too: one move, straight to the upload.
+  test('focus moves once, with no stop on the main region', async ({ page }) => {
+    await page.goto('/');
+    const question = await discard(page);
+    await page.evaluate(() => {
+      window.__moves = [];
+      document.addEventListener(
+        'focusin',
+        (e) => {
+          if (!e.target.closest('.confirm-modal')) window.__moves.push(e.target.id || e.target.tagName);
+        },
+        true
+      );
+    });
+    await question.getByRole('button', { name: 'Discard draft', exact: true }).click();
+    await expect(question).toHaveCount(0);
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => window.__moves)).toEqual(['fileInput']);
+  });
 });
