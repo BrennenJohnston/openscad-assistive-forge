@@ -179,6 +179,25 @@ async function cameraControlsOpen(page, device, look) {
   await page.waitForTimeout(400);
 }
 
+// Every slide on the page has ended: a drawer or sheet still moving would
+// be marked where it is mid-way, or not at all, on a slow runner. An
+// animation that never ends (a spinner) is not waited for.
+async function slidesDone(page) {
+  await page.waitForFunction(
+    () =>
+      !document
+        .getAnimations()
+        .some(
+          (animation) =>
+            animation.playState === 'running' &&
+            Number.isFinite(animation.effect?.getComputedTiming().endTime)
+        ),
+    null,
+    { timeout: 10_000 }
+  );
+  await page.waitForTimeout(150);
+}
+
 // The Alt View's Lens drawer: on a desktop it rises from the actions bar and
 // stays open beside the camera panel; on a phone it is one of the bar's
 // drawers, and opening it closes the camera drawer. Classic holds the Lens
@@ -191,7 +210,7 @@ async function lensDrawerOpen(page, device) {
     await toggle.click();
   }
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  await page.waitForTimeout(400);
+  await slidesDone(page);
 }
 
 /**
@@ -682,7 +701,7 @@ for (const device of DEVICES) {
             const toggle = page.locator('#mobileDrawerToggle');
             await toggle.click();
             await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-            await page.waitForTimeout(400);
+            await slidesDone(page);
             const inSheet = await page.evaluate(markIconButtons);
             expect(
               inSheet.length,

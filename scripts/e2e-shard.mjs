@@ -91,13 +91,12 @@ export const MEASURED_SECONDS = {
   'alt-view-cursors.spec.js': 35.7,
   'alt-view-drawers.spec.js': 79.7,
   'alt-view-entry.spec.js': 69.5,
-  // 810.0 by the two runs above, plus the selected state since: one more
-  // picture of the screen in every case, and on the phone two more screens
-  // (the Lens drawer open in the Alt View, the Customizer open), about 80
-  // pictures where the 3D view is drawn in software; on this machine's
-  // software GL a phone case grew from 15 to 20 s, a desktop case not at
-  // all. Re-measure from the next green run.
-  'alt-view-icon-states.spec.js': 1000.0,
+  // 1044.1 by Test Suite run 39688892017, shard 2 (2026-10-21), the first
+  // attempt of each of its 18 cases (24 to 28 s on a desktop, 35 to 40 s on
+  // a phone), after the selected state and the phone's two further screens
+  // (the Lens drawer open, the Customizer open) joined it. Re-measure from
+  // the next green run.
+  'alt-view-icon-states.spec.js': 1050.0,
   'alt-view-reveal.spec.js': 85.2,
   'alt-view-sounds.spec.js': 194.3,
   'alt-view-vector.spec.js': 57.3,
