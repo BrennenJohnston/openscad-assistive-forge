@@ -13,7 +13,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { initPreviewSettingsDrawer } from '../../src/js/preview-settings-drawer.js';
+import {
+  initPreviewSettingsDrawer,
+  loadSettingsShare,
+  SETTINGS_SHEET_CAP,
+  settingsSheetBounds,
+  settingsSheetPx,
+} from '../../src/js/preview-settings-drawer.js';
 
 // Must match the key produced by getDrawerStateKey('preview-settings')
 const STORAGE_KEY = 'openscad-drawer-preview-settings-state';
@@ -164,5 +170,150 @@ describe('Preview settings drawer resize persistence', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// On a phone held upright the settings are a sheet over the preview: its
+// height is kept as a share of the screen's height, within a floor (its
+// title row and one control) and a ceiling (the bar's top), and the grip on
+// its bottom edge moves it by keys as the Customizer's grip does.
+describe("the phone settings sheet's height", () => {
+  const HEIGHT_KEY = 'openscad-forge-phone-settings-height';
+  const rootVar = (name) =>
+    document.documentElement.style.getPropertyValue(name).trim();
+
+  function buildPhoneDOM() {
+    document.body.innerHTML = `
+      <button id="previewDrawerToggle" aria-expanded="false"></button>
+      <div id="previewInfoSection" class="preview-info-section">
+        <div class="preview-drawer-header"></div>
+        <div class="preview-info-content" id="previewInfoContent">
+          <div class="preview-settings-panel">
+            <div class="preview-settings-header">Preview Settings</div>
+          </div>
+        </div>
+        <div id="settingsHeightGrip" role="separator" tabindex="0" hidden></div>
+      </div>
+      <div class="customizer-glass" data-sheet="settings" hidden></div>`;
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    document.documentElement.removeAttribute('style');
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: 412,
+    });
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      writable: true,
+      value: 915,
+    });
+    window.matchMedia = () => ({
+      matches: false,
+      addEventListener() {},
+      removeEventListener() {},
+    });
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    document.body.innerHTML = '';
+    delete window.matchMedia;
+  });
+
+  it('stays between its floor and the bar, at most the screen', () => {
+    expect(
+      settingsSheetBounds({
+        top: 186,
+        viewportHeight: 915,
+        barReserved: 54,
+        floor: 96,
+      })
+    ).toEqual({ min: 96, max: 675 });
+    // A floor taller than the room: the room wins.
+    expect(
+      settingsSheetBounds({
+        top: 800,
+        viewportHeight: 915,
+        barReserved: 54,
+        floor: 96,
+      })
+    ).toEqual({ min: 61, max: 61 });
+  });
+
+  it('opens as tall as its controls, at most 40% of the screen, when nothing is kept', () => {
+    expect(SETTINGS_SHEET_CAP).toBe(0.4);
+    const bounds = { min: 96, max: 675 };
+    expect(settingsSheetPx(null, bounds, 915, Math.min(817, 0.4 * 915))).toBe(
+      366
+    );
+    expect(settingsSheetPx(null, bounds, 915, Math.min(200, 0.4 * 915))).toBe(
+      200
+    );
+    // A kept share wins, within the bounds.
+    expect(settingsSheetPx(0.5, bounds, 915, 366)).toBe(458);
+    expect(settingsSheetPx(0.05, bounds, 915, 366)).toBe(96);
+    expect(settingsSheetPx(1, bounds, 915, 366)).toBe(675);
+  });
+
+  it('keeps the height as a share of the screen, and ignores a bad value', () => {
+    expect(loadSettingsShare()).toBeNull();
+    localStorage.setItem(HEIGHT_KEY, '0.3');
+    expect(loadSettingsShare()).toBe(0.3);
+    localStorage.setItem(HEIGHT_KEY, 'tall');
+    expect(loadSettingsShare()).toBeNull();
+  });
+
+  it("the grip's keys move it up and down, and the height is kept", () => {
+    buildPhoneDOM();
+    // A height kept from before, so the steps below start from 30%.
+    localStorage.setItem(HEIGHT_KEY, '0.3');
+    const ctrl = initPreviewSettingsDrawer();
+    ctrl.expand();
+    expect(ctrl.isExpanded()).toBe(true);
+    const grip = document.getElementById('settingsHeightGrip');
+    expect(grip.hidden).toBe(false);
+    expect(rootVar('--phone-settings-height')).toBe('275px');
+    expect(grip.getAttribute('aria-valuenow')).toBe('30');
+    expect(grip.getAttribute('aria-valuetext')).toBe(
+      "Preview Settings 30% of the screen's height"
+    );
+
+    const press = (key, shiftKey = false) =>
+      grip.dispatchEvent(
+        new KeyboardEvent('keydown', { key, shiftKey, bubbles: true })
+      );
+    press('ArrowDown');
+    // 2% of 915 px is 18.3 px.
+    expect(rootVar('--phone-settings-height')).toBe('293px');
+    expect(Number(localStorage.getItem(HEIGHT_KEY))).toBeCloseTo(293 / 915, 3);
+    press('ArrowUp', true);
+    expect(rootVar('--phone-settings-height')).toBe('247px');
+    // jsdom lays nothing out: the floor is one touch target, the ceiling
+    // the whole screen.
+    press('Home');
+    expect(rootVar('--phone-settings-height')).toBe('44px');
+    press('End');
+    expect(rootVar('--phone-settings-height')).toBe('915px');
+    expect(grip.getAttribute('aria-valuenow')).toBe('100');
+
+    // A key the grip does not use is left alone.
+    const tab = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      bubbles: true,
+      cancelable: true,
+    });
+    grip.dispatchEvent(tab);
+    expect(tab.defaultPrevented).toBe(false);
+
+    // Escape on the grip closes the sheet and focuses its button.
+    grip.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+    expect(ctrl.isExpanded()).toBe(false);
+    expect(document.activeElement.id).toBe('previewDrawerToggle');
+    expect(grip.hidden).toBe(true);
   });
 });

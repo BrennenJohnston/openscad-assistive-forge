@@ -383,7 +383,7 @@ test.describe('The right trigger reaches every part of the window', () => {
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
 
-    test('with the Customizer open, it lands past the sheet\'s close button', async ({
+    test("with the Customizer open, it lands on the sheet's first control", async ({
       page,
     }) => {
       await openWithPad(page, { preset: 'menus' });
@@ -396,9 +396,7 @@ test.describe('The right trigger reaches every part of the window', () => {
       await press(page, BUTTON.rt);
       const landed = await where(page);
       expect(landed.inCustomizer).toBe(true);
-      expect(landed.id, 'past Close customizer panel').toBe(
-        'expertModeToggle'
-      );
+      expect(landed.id, "the sheet's first control").toBe('expertModeToggle');
     });
   });
 });

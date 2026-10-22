@@ -896,6 +896,27 @@ body[data-ui-mode='classic'] {
   color: var(--color-text-secondary);
 }
 
+/* The box with its two lines is as wide as its longer line. As a flex box
+   with the second line at a full-width basis, it was as wide as every item
+   laid end to end (637 px for lines of 330 and 300 at 740 px wide), and
+   held sideways it lay over the ready badge at the preview's other corner.
+   Laid out as lines instead, the first line's items sit inline with the
+   divider between them, the second line a block under it. */
+:root[data-ui-variant='mono'] .preview-status-bar.has-alt-adjust {
+  display: block;
+}
+
+:root[data-ui-variant='mono'] .preview-status-bar.has-alt-adjust > * {
+  vertical-align: middle;
+}
+
+:root[data-ui-variant='mono']
+  .preview-status-bar.has-alt-adjust:not(.no-stats)
+  .preview-status-divider {
+  display: inline-block;
+  margin: 0 var(--space-2xs);
+}
+
 /* ECHO drawer in mono variant */
 :root[data-ui-variant='mono'] .echo-drawer {
   background: var(--color-bg-primary);

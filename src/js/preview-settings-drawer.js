@@ -2,22 +2,91 @@
  * Preview Settings Drawer Controller
  * Overlay drawer for preview settings that sits on top of the STL preview.
  * When collapsed, only the toggle button is visible. When expanded, content overlays the preview.
- * The drawer auto-sizes to fit content and scrolls if needed.
+ * The drawer auto-sizes to fit content and scrolls if needed. On a phone
+ * held upright it is a sheet over the preview from under the status line,
+ * as tall as its controls at first and then as tall as its grip sets it,
+ * the height kept as a share of the screen's height.
  * @license GPL-3.0-or-later
  */
 
-import { getDrawerStateKey, safeGetItem, safeSetItem } from './storage-keys.js';
+import {
+  getDrawerStateKey,
+  safeGetItem,
+  safeSetItem,
+  STORAGE_KEY_PHONE_SETTINGS_HEIGHT,
+} from './storage-keys.js';
 import {
   closeOtherPhoneDrawers,
   isPhoneLayout,
   isSidewaysPhone,
-  previewKeepsPx,
   registerPhoneDrawer,
 } from './phone-drawers.js';
 import { registerLookDrawer, slideDrawer } from './drawer-motion.js';
+import { initSheetGrip } from './phone-sheet-grip.js';
 
 // Storage key using standardized naming convention
 const STORAGE_KEY_DRAWER_COLLAPSED = getDrawerStateKey('preview-settings');
+
+/**
+ * The phone sheet's first height, as a share of the screen's height: as tall
+ * as its controls, at most this.
+ */
+export const SETTINGS_SHEET_CAP = 0.4;
+
+/** One touch target, when the token cannot be read. */
+const TOUCH_TARGET_FALLBACK_PX = 44;
+
+/**
+ * The least and most the phone sheet may be, in px: its floor (the title row
+ * and one control) and the room from its top down to the bar.
+ * @param {{top: number, viewportHeight: number, barReserved: number, floor: number}} m
+ * @returns {{min: number, max: number}}
+ */
+export function settingsSheetBounds({
+  top,
+  viewportHeight,
+  barReserved,
+  floor,
+}) {
+  const max = Math.max(0, Math.floor(viewportHeight - barReserved - top));
+  return { min: Math.min(Math.max(0, Math.ceil(floor)), max), max };
+}
+
+/**
+ * The sheet's height for a saved share, within its bounds; with no share,
+ * the fallback (its controls' height, capped).
+ * @param {number|null} share - of the screen's height, 0 to 1
+ * @param {{min: number, max: number}} bounds - px
+ * @param {number} viewportHeight - px
+ * @param {number} fallbackPx
+ * @returns {number} px
+ */
+export function settingsSheetPx(
+  share,
+  { min, max },
+  viewportHeight,
+  fallbackPx
+) {
+  const wanted =
+    Number.isFinite(share) && share > 0 && share <= 1
+      ? share * viewportHeight
+      : fallbackPx;
+  return Math.round(Math.min(max, Math.max(min, wanted)));
+}
+
+/** @returns {number|null} the saved share of the screen's height, or null */
+export function loadSettingsShare() {
+  const saved = parseFloat(safeGetItem(STORAGE_KEY_PHONE_SETTINGS_HEIGHT));
+  return Number.isFinite(saved) && saved > 0 && saved <= 1 ? saved : null;
+}
+
+/** A length token on the root, in px, or the fallback when it cannot be read. */
+function rootPx(name, fallback) {
+  const value = parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue(name)
+  );
+  return Number.isFinite(value) ? value : fallback;
+}
 
 /**
  * Initialize the preview settings drawer controller
@@ -36,8 +105,8 @@ export function initPreviewSettingsDrawer(options = {}) {
   let isExpanded = false; // Start collapsed, expand() will set proper state
 
   // The settings slide down out from under the row with the toggle, keeping
-  // their open height, and the drawer's box grows with them: on a phone the
-  // preview below gives way as they come; on a desktop the box lies over it.
+  // their open height, and the drawer's box grows with them: on a desktop
+  // the box lies over the preview.
   const content = previewInfoSection.querySelector('.preview-info-content');
   const row = previewInfoSection.querySelector('.preview-drawer-header');
   const slideParts = () => {
@@ -54,6 +123,132 @@ export function initPreviewSettingsDrawer(options = {}) {
       },
     ];
   };
+
+  // ==========================================================================
+  // The phone sheet: on a phone held upright the settings lie over the
+  // preview as a fixed sheet, a tinted layer behind them and a grip across
+  // their bottom edge (layout.css reads --phone-settings-top and
+  // --phone-settings-height). Held sideways, the stylesheet's own overlay.
+  // ==========================================================================
+  const glass = document.querySelector(
+    '.customizer-glass[data-sheet="settings"]'
+  );
+  const grip = document.getElementById('settingsHeightGrip');
+  const onPhoneSheet = () => isPhoneLayout() && !isSidewaysPhone();
+  let share = loadSettingsShare();
+  let sheetTop = 0;
+  let sheetPx = 0;
+
+  /**
+   * The sheet starts a small space under the status line, which sits at the
+   * top of the preview and is spoken; with the line hidden, at the foot of
+   * its row. Read at every open: a wider font can wrap the rows above it.
+   * Nothing here reads a box of the preview, which another drawer's close
+   * may still be easing.
+   */
+  const placeSheetTop = () => {
+    const status = document.getElementById('previewStatusBar');
+    const line = status ? status.getBoundingClientRect() : null;
+    const lineShown =
+      !!line && line.height > 0 && getComputedStyle(status).display !== 'none';
+    const under = lineShown
+      ? line.bottom + rootPx('--space-xs', 4)
+      : (row?.getBoundingClientRect().bottom ?? 0);
+    sheetTop = Math.max(0, Math.round(under));
+    document.documentElement.style.setProperty(
+      '--phone-settings-top',
+      `${sheetTop}px`
+    );
+  };
+
+  /** The least the sheet may be: its title row, one control and its padding. */
+  const sheetFloor = () => {
+    const title = content?.querySelector('.preview-settings-header');
+    const cs = content ? getComputedStyle(content) : null;
+    const padding = cs
+      ? (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0)
+      : 0;
+    return (
+      (title?.offsetHeight ?? 0) +
+      rootPx('--size-touch-target', TOUCH_TARGET_FALLBACK_PX) +
+      padding
+    );
+  };
+
+  const sheetBounds = () =>
+    settingsSheetBounds({
+      top: sheetTop,
+      viewportHeight: window.innerHeight,
+      barReserved: rootPx(
+        '--actions-bar-reserved',
+        rootPx('--actions-bar-collapsed-offset', 0)
+      ),
+      floor: sheetFloor(),
+    });
+
+  let gripControl = null;
+
+  const applySheet = () => {
+    sheetPx = settingsSheetPx(
+      share,
+      sheetBounds(),
+      window.innerHeight,
+      Math.min(
+        content?.scrollHeight ?? 0,
+        SETTINGS_SHEET_CAP * window.innerHeight
+      )
+    );
+    document.documentElement.style.setProperty(
+      '--phone-settings-height',
+      `${sheetPx}px`
+    );
+    gripControl?.update();
+  };
+
+  const setSheetHeight = (px, { save = true } = {}) => {
+    const { min, max } = sheetBounds();
+    share = Math.round(Math.min(max, Math.max(min, px))) / window.innerHeight;
+    applySheet();
+    if (save) {
+      safeSetItem(STORAGE_KEY_PHONE_SETTINGS_HEIGHT, share.toFixed(4));
+    }
+  };
+
+  gripControl = initSheetGrip({
+    grip,
+    axis: 'y',
+    bounds: sheetBounds,
+    get: () => sheetPx,
+    set: setSheetHeight,
+    describe: (px) =>
+      `Preview Settings ${Math.round((px / window.innerHeight) * 100)}% of the screen's height`,
+    origin: () => sheetTop,
+  });
+
+  // The layer behind the sheet and the grip on its edge travel with it.
+  const sheetParts = () => [
+    { el: content },
+    { el: glass, role: 'rider' },
+    { el: grip, role: 'rider' },
+  ];
+
+  const showSheet = () => {
+    // Out of the flow first: in it, the content would push the status line
+    // (and the whole preview) down the page before it is read.
+    content?.classList.add('phone-sheet-open');
+    placeSheetTop();
+    if (glass) glass.hidden = false;
+    if (grip) grip.hidden = false;
+    applySheet();
+  };
+
+  const hideSheet = () => {
+    content?.classList.remove('phone-sheet-open');
+    if (glass) glass.hidden = true;
+    if (grip) grip.hidden = true;
+  };
+
+  const sheetShown = () => !!content?.classList.contains('phone-sheet-open');
 
   /**
    * Load collapsed state from localStorage
@@ -85,22 +280,14 @@ export function initPreviewSettingsDrawer(options = {}) {
     );
   };
 
-  /**
-   * On an upright phone the drawer drops from its row in the page's flow,
-   * as tall as leaves the preview below it half the screen (layout.css
-   * reads the height). Measured while it is still closed.
-   */
-  const placeOnPhone = () => {
-    const canvas = document.getElementById('previewCanvasSection');
-    if (!canvas || !isPhoneLayout() || isSidewaysPhone()) return;
-    const row = previewInfoSection.getBoundingClientRect();
-    const c = canvas.getBoundingClientRect();
-    const gap = c.top - row.bottom;
-    const height = Math.floor(c.bottom - previewKeepsPx() - gap - row.top);
-    document.documentElement.style.setProperty(
-      '--phone-settings-height',
-      `${Math.max(row.height, height)}px`
-    );
+  /** The drawer laid out closed: once its slide has ended, or at once. */
+  const layOutClosed = () => {
+    if (isExpanded) return;
+    previewInfoSection.classList.add('preview-drawer-collapsed');
+    previewInfoSection.classList.remove('preview-drawer-expanded');
+    if (previewPanel) {
+      previewPanel.classList.add('preview-drawer-collapsed');
+    }
   };
 
   /**
@@ -111,7 +298,7 @@ export function initPreviewSettingsDrawer(options = {}) {
     if (isExpanded) return;
     // On a phone one drawer is open at a time.
     closeOtherPhoneDrawers('preview-settings');
-    placeOnPhone();
+    const asSheet = onPhoneSheet();
     isExpanded = true;
     previewInfoSection.classList.remove('preview-drawer-collapsed');
     previewInfoSection.classList.add('preview-drawer-expanded');
@@ -122,6 +309,17 @@ export function initPreviewSettingsDrawer(options = {}) {
 
     updateToggle(true);
     if (remember) saveCollapsedState(false);
+
+    if (asSheet) {
+      // The preview keeps its full size behind the sheet: nothing to resize.
+      showSheet();
+      return slideDrawer(sheetParts(), {
+        from: 'top',
+        open: true,
+        instant,
+        name: 'preview-settings',
+      });
+    }
 
     // Notify preview manager
     if (options.onResize) {
@@ -141,9 +339,26 @@ export function initPreviewSettingsDrawer(options = {}) {
    */
   const collapse = ({ instant = false, remember = true } = {}) => {
     if (!isExpanded) return;
+    const asSheet = sheetShown();
     isExpanded = false;
     updateToggle(false);
     if (remember) saveCollapsedState(true);
+
+    if (asSheet) {
+      return slideDrawer(sheetParts(), {
+        from: 'top',
+        open: false,
+        instant,
+        name: 'preview-settings',
+        inert: [content],
+        whenClosed: () => {
+          if (isExpanded) return;
+          hideSheet();
+          layOutClosed();
+        },
+      });
+    }
+
     return slideDrawer(slideParts(), {
       from: 'top',
       open: false,
@@ -152,12 +367,7 @@ export function initPreviewSettingsDrawer(options = {}) {
       inert: [content],
       whenClosed: () => {
         if (isExpanded) return;
-        previewInfoSection.classList.add('preview-drawer-collapsed');
-        previewInfoSection.classList.remove('preview-drawer-expanded');
-
-        if (previewPanel) {
-          previewPanel.classList.add('preview-drawer-collapsed');
-        }
+        layOutClosed();
 
         // Notify preview manager
         if (options.onResize) {
@@ -181,8 +391,22 @@ export function initPreviewSettingsDrawer(options = {}) {
     }
   };
 
+  /**
+   * Escape in the phone sheet, or on its grip, closes it and returns focus
+   * to its button.
+   */
+  const closeSheetOnEscape = (event) => {
+    if (event.key !== 'Escape' || !isExpanded || !sheetShown()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    collapse();
+    toggleBtn.focus();
+  };
+
   // Attach click handler to toggle button
   toggleBtn.addEventListener('click', toggle);
+  content?.addEventListener('keydown', closeSheetOnEscape);
+  grip?.addEventListener('keydown', closeSheetOnEscape);
   registerPhoneDrawer('preview-settings', {
     isOpen: () => isExpanded,
     close: () => collapse(),

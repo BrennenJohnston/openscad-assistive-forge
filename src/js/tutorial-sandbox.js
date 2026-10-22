@@ -570,9 +570,9 @@ function openMobileDrawer() {
  * Used when advancing to a step that targets elements outside the param panel
  */
 function closeMobileDrawer() {
-  const arrow = document.getElementById('collapseParamPanelBtn');
-  if (arrow && isMobileViewport() && isMobileDrawerOpen()) {
-    arrow.click();
+  const toggleBtn = document.getElementById('mobileDrawerToggle');
+  if (toggleBtn && isMobileViewport() && isMobileDrawerOpen()) {
+    toggleBtn.click();
   }
 }
 
@@ -913,16 +913,18 @@ function checkIfAnyTargetInsideDrawer(step) {
  *
  * The question is whether the step can be shown at all without opening it,
  * not whether any target lives inside the panel. The step that teaches
- * opening the panel lists `@collapse-param-panel` first, which resolves in
- * the DOM while the drawer is shut; opening the drawer for it would ring
- * the closing arrow and teach the opposite of what the card says.
+ * opening the panel lists `@collapse-param-panel` first for the desktop,
+ * where it resolves in the DOM while the panel is shut; opening the panel
+ * for it would ring the collapse arrow and teach the opposite of what the
+ * card says. On a phone that arrow is hidden and the Customizer button is
+ * the target throughout: it opens the sheet and closes it again.
  *
  * If some target is inside the panel but another one outside is already on
  * screen, the step has something to point at and the panel stays as the
  * user left it. That step then arrives with the drawer shut and the ring on
- * the Customizer button, and the drawer observer moves the ring to the
- * closing arrow when the user opens it: the step follows the user through
- * both halves of what it is teaching.
+ * the Customizer button, which keeps the ring while the user opens and
+ * closes the sheet: the step follows the user through both halves of what
+ * it is teaching.
  *
  * A collapsed desktop panel still expands: there the only visible candidate
  * is inside the panel.
@@ -1090,12 +1092,12 @@ const TUTORIALS = {
         content: `
           <p><strong>Customizer</strong> is where you change the model.</p>
           <ul>
-            <li><strong>Small screens:</strong> press the highlighted <strong>Customizer</strong> button to open the panel. When it is open, the highlight moves to its <strong>arrow</strong>, which closes it again.</li>
+            <li><strong>Small screens:</strong> press the highlighted <strong>Customizer</strong> button to open the panel. When it is open, the same button closes it again: its arrow turns to point the way it closes.</li>
             <li><strong>Wide screens:</strong> the Customizer panel is on the left. Use the edge <strong>collapse</strong> button to shrink or expand it.</li>
           </ul>
         `,
         contentCompact: `
-          <p>Press the highlighted <strong>Customizer</strong> button to open the panel. The highlight then moves to its closing <strong>arrow</strong>.</p>
+          <p>Press the highlighted <strong>Customizer</strong> button to open the panel. Press it again to close it.</p>
         `,
         highlightSelector: '@collapse-param-panel, @mobile-drawer-toggle',
         position: 'right',
@@ -1266,12 +1268,12 @@ const TUTORIALS = {
           <p>On mobile, the <strong>Customizer</strong> drawer sits on top of the app.</p>
           <p class="tutorial-hint">Close it now so you can reach the top buttons like <strong>Help</strong>.</p>
         `,
-        highlightSelector: '@collapse-param-panel',
-        position: 'left',
+        highlightSelector: '@mobile-drawer-toggle',
+        position: 'right',
         showWhen: { mobile: true, desktop: false },
         completion: {
           type: 'domEvent',
-          selector: '#collapseParamPanelBtn',
+          selector: '#mobileDrawerToggle',
           event: 'click',
         },
       },

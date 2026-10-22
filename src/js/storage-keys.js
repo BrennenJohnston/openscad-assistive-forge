@@ -305,6 +305,11 @@ export const STORAGE_KEY_PHONE_CUSTOMIZER_WIDTH = getAppPrefKey(
 export const STORAGE_KEY_PHONE_CUSTOMIZER_OPACITY = getAppPrefKey(
   'phone-customizer-opacity'
 );
+// Preview Settings & Info on a phone held upright: the sheet's height as a
+// share of the screen's height.
+export const STORAGE_KEY_PHONE_SETTINGS_HEIGHT = getAppPrefKey(
+  'phone-settings-height'
+);
 // The game controller's preset, its family and a person's own assignments
 // (Keys > Controller); one device, so one copy for every interface.
 export const STORAGE_KEY_GAMEPAD_MAPPING = getAppPrefKey('gamepad-mapping');

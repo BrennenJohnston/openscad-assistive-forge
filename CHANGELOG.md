@@ -15,8 +15,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no glow and the Glow slider steps aside until Focus reaches 40%.
 - A reset button after each Lens slider puts it back where its look starts.
 
+### Changed
+
+- On a phone, one button opens and closes the Customizer: the Customizer
+  button in the Preview Settings row keeps its name, its arrow turns to point
+  the way the sheet closes, and the sheet shows no arrow of its own.
+- On a phone held upright, Preview Settings & Info opens over the preview as a
+  see-through sheet from under the status line, as tall as its controls at
+  first and never more than 40 percent of the screen; a grip across its bottom
+  edge sets its height, which is kept, and the preview keeps its full size
+  behind it. The Preferences setting for how solid the Customizer is covers
+  this sheet too.
+
 ### Fixed
 
+- On a phone in the Alt View, a drawer opened over another no longer waits
+  while the preview is drawn again on every frame of its slide: the preview
+  keeps its size while the drawer's room slides and fits once when the slide
+  ends.
+- The Full Screen button's icon stands off its word, as Help's does, wherever
+  the word shows.
+- On a phone held sideways in the Alt View, the settings row's buttons no
+  longer lie over one another: the row's gaps close up, and on the
+  narrowest phones the HC button's word gives way to its mark.
+- In the Alt View the status line's box is as wide as its longer line, so
+  held sideways it no longer covers the ready badge beside it.
 - On a phone, the open Customizer's own arrow is drawn in the accent, so it
   reads in every look; it was dark on dark in all but the light theme.
 - Under Windows High Contrast, icons drawn as lines stay lines; the Main
