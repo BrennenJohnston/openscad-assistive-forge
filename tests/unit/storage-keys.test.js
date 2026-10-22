@@ -94,7 +94,10 @@ const EXPECTED_KEYS = {
   STORAGE_KEY_WASM_INIT_STARTED: 'openscad-forge-wasm-init-started',
   STORAGE_KEY_WASM_INIT_COMPLETED: 'openscad-forge-wasm-init-completed',
 
-  // HFM (Alt View) persistent settings
+  // HFM (Alt View) persistent settings: a Lens record a look, and the four
+  // keys of the versions before, kept for their migration
+  STORAGE_KEY_HFM_LENS_PHOSPHOR: 'openscad-forge-hfm-lens-phosphor',
+  STORAGE_KEY_HFM_LENS_DOS: 'openscad-forge-hfm-lens-dos',
   STORAGE_KEY_HFM_CONTRAST_SCALE: 'openscad-forge-hfm-contrast-scale',
   STORAGE_KEY_HFM_FONT_SCALE: 'openscad-forge-hfm-font-scale',
   STORAGE_KEY_HFM_PERSIST_FADE: 'openscad-forge-hfm-persist-fade',

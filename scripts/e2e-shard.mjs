@@ -98,8 +98,8 @@ export const MEASURED_SECONDS = {
   // the next green run.
   'alt-view-icon-states.spec.js': 1050.0,
   'alt-view-reveal.spec.js': 85.2,
-  'alt-view-sounds.spec.js': 194.3,
-  'alt-view-vector.spec.js': 57.3,
+  'alt-view-sounds.spec.js': 268.3,
+  'alt-view-vector.spec.js': 139.3,
   'alt-view-without-webgl.spec.js': 4.7,
   'auto-preview.spec.js': 55.4,
   'axis-depth-truth.spec.js': 25.4,

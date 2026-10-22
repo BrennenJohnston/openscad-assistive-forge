@@ -1,6 +1,7 @@
 /**
- * The Features Guide's Alt View tab says where Edges, Focus and Glow
- * start. Those numbers live in the controller too, and must stay the same.
+ * The Features Guide's Alt View tab says where Edges, Focus and Glow start
+ * in each look. Those numbers live in the controller too, and must stay the
+ * same.
  *
  * @license GPL-3.0-or-later
  */
@@ -20,13 +21,30 @@ function rangeField(name, field) {
   return Math.round(Number(m[1]) * 100);
 }
 
+/** Where a look's Edges, Focus and Glow start in the controller's table, as whole percentages. */
+function lookStarts(set) {
+  const table = /const _HFM_LOOK_DEFAULTS = \{([\s\S]*?)\n\};/.exec(controller);
+  if (!table) throw new Error('No look table in the controller');
+  const m = new RegExp(`\\b${set}: \\{ edges: ([0-9.]+), focus: ([0-9.]+), glow: ([0-9.]+)`).exec(table[1]);
+  if (!m) throw new Error(`No ${set} row in the look table`);
+  return m.slice(1).map((n) => Math.round(Number(n) * 100));
+}
+
 const RANGES = ['_HFM_CONTRAST_RANGE', '_HFM_FONT_SCALE_RANGE', '_HFM_PERSIST_FADE_RANGE'];
 
 describe("the Features Guide's Alt View tab", () => {
-  it('says where Edges, Focus and Glow start, as the controller does', () => {
-    const said = /They start at Edges (\d+)%, Focus (\d+)% and Glow (\d+)%/.exec(html);
-    expect(said, 'the sentence that says where they start').not.toBeNull();
-    expect(said.slice(1).map(Number)).toEqual(RANGES.map((name) => rangeField(name, 'default')));
+  it('says where Edges, Focus and Glow start in the green and amber looks, as the controller does', () => {
+    const said = /In the green and amber looks they start at Edges (\d+)%, Focus (\d+)% and Glow (\d+)%/.exec(
+      html
+    );
+    expect(said, 'the sentence that says where the phosphor looks start').not.toBeNull();
+    expect(said.slice(1).map(Number)).toEqual(lookStarts('p'));
+  });
+
+  it("says where they start in Classic's look, as the controller does", () => {
+    const said = /in Classic's look at Edges (\d+)%, Focus (\d+)% and Glow (\d+)%/.exec(html);
+    expect(said, "the sentence that says where Classic's look starts").not.toBeNull();
+    expect(said.slice(1).map(Number)).toEqual(lookStarts('d'));
   });
 
   it("says a phone's starting characters, as the controller does", () => {

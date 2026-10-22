@@ -980,7 +980,8 @@ test.describe('The Alt View and pan adjust speak plainly', () => {
     mark = await announcementMark(page);
     await page.locator('#cameraPanUp').click();
     await page.waitForTimeout(600);
-    expect(await spoken(page, mark)).toEqual(['Edges 105%']);
+    // One step up from where the green look starts, Edges 90%.
+    expect(await spoken(page, mark)).toEqual(['Edges 95%']);
 
     mark = await announcementMark(page);
     await adjust.click();
@@ -1061,7 +1062,7 @@ test.describe('The Alt View controls in the phone Lens drawer', () => {
   // No isMobile: Firefox rejects it when the browser context is created.
   test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
 
-  test('the four sliders only, the size the strip shows, and the keys still step it', async ({
+  test('the four sliders and their reset buttons only, the size the strip shows, and the keys still step it', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -1090,7 +1091,8 @@ test.describe('The Alt View controls in the phone Lens drawer', () => {
     const section = page.locator('#asciiDrawerBody');
     await expect(section).toBeVisible();
     await expect(section.locator('input[type="range"]')).toHaveCount(4);
-    await expect(section.locator('button')).toHaveCount(0);
+    await expect(section.locator('button')).toHaveCount(4);
+    await expect(section.locator('button.hfm-reset-btn')).toHaveCount(4);
     await expect(section.locator('.alt-view-stepper')).toHaveCount(0);
 
     const slider = page.locator('#_hfmFontScaleMobile');
@@ -1194,9 +1196,9 @@ test.describe('The Alt View starts with finer characters', () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#previewStatusAltAdjust')).toContainText(
-      'FOCUS 60%'
+      'FOCUS 65%'
     );
-    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.6');
+    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.65');
   });
 
   test('on a phone shows 45% characters when nothing is saved', async ({

@@ -177,17 +177,39 @@ describe('the character size the Alt View starts with', () => {
     return initAltView.mock.results.at(-1).value
   }
 
-  it('draws finer characters when nothing is saved, and a saved size wins', async () => {
+  // Each look's Lens is one record: the phosphor looks' and the DOS look's.
+  const PHOSPHOR_KEY = 'openscad-forge-hfm-lens-phosphor'
+  const DOS_KEY = 'openscad-forge-hfm-lens-dos'
+  const OLD_KEYS = {
+    edges: 'openscad-forge-hfm-contrast-scale',
+    focus: 'openscad-forge-hfm-font-scale',
+    glow: 'openscad-forge-hfm-persist-fade',
+    surfaces: 'openscad-forge-hfm-surfaces',
+  }
+  const STATUS = () => document.getElementById('previewStatusAltAdjust').textContent
+  const record = (key) => JSON.parse(localStorage.getItem(key))
+  const slide = (id, value) => {
+    const input = document.getElementById(id)
+    input.value = String(value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  const switchMode = (mode) => {
+    document.body.dataset.uiMode = mode
+    document.dispatchEvent(new CustomEvent('ui-mode-changed', { detail: { mode } }))
+  }
+
+  it('starts the green look at 65% when nothing is saved, and a saved size wins', async () => {
     const pm = previewManagerStub()
     const controller = await freshController(pm)
     const toggle = document.createElement('button')
 
     await controller.enableAltViewWithPreview(toggle)
     const altView = await lastAltView()
-    expect(altView.setFontScale).toHaveBeenLastCalledWith(0.6)
+    expect(altView.setFontScale).toHaveBeenLastCalledWith(0.65)
+    expect(altView.setContrastScale).toHaveBeenLastCalledWith(0.9)
     controller.disableAltViewWithPreview(toggle)
 
-    localStorage.setItem('openscad-forge-hfm-font-scale', '1.2')
+    localStorage.setItem(PHOSPHOR_KEY, JSON.stringify({ focus: 1.2 }))
     const pm2 = previewManagerStub()
     const controller2 = await freshController(pm2)
     await controller2.enableAltViewWithPreview(toggle)
@@ -196,7 +218,7 @@ describe('the character size the Alt View starts with', () => {
     controller2.disableAltViewWithPreview(toggle)
   })
 
-  it('on a phone starts at 45% when nothing is saved, and a saved size still wins', async () => {
+  it('on a phone starts the green look at 45% when nothing is saved, and a saved size still wins', async () => {
     const width = Object.getOwnPropertyDescriptor(window, 'innerWidth')
     Object.defineProperty(window, 'innerWidth', { value: 412, configurable: true })
     try {
@@ -206,7 +228,7 @@ describe('the character size the Alt View starts with', () => {
       expect((await lastAltView()).setFontScale).toHaveBeenLastCalledWith(0.45)
       controller.disableAltViewWithPreview(toggle)
 
-      localStorage.setItem('openscad-forge-hfm-font-scale', '1.2')
+      localStorage.setItem(PHOSPHOR_KEY, JSON.stringify({ focus: 1.2 }))
       const controller2 = await freshController(previewManagerStub())
       await controller2.enableAltViewWithPreview(toggle)
       expect((await lastAltView()).setFontScale).toHaveBeenLastCalledWith(1.2)
@@ -214,6 +236,177 @@ describe('the character size the Alt View starts with', () => {
     } finally {
       if (width) Object.defineProperty(window, 'innerWidth', width)
       else delete window.innerWidth
+    }
+  })
+
+  it('reads the keys of the versions before into the green record once, keeps what was saved, and removes them', async () => {
+    localStorage.setItem(OLD_KEYS.focus, '1.2')
+    localStorage.setItem(OLD_KEYS.edges, '2')
+    localStorage.setItem(OLD_KEYS.glow, '0')
+    // Out of its range: not carried over, so the look starts there.
+    localStorage.setItem(OLD_KEYS.surfaces, '9')
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    const altView = await lastAltView()
+    expect(altView.setFontScale).toHaveBeenLastCalledWith(1.2)
+    expect(altView.setContrastScale).toHaveBeenLastCalledWith(2)
+    expect(altView.setPersistFade).toHaveBeenLastCalledWith(0)
+    expect(record(PHOSPHOR_KEY)).toEqual({ edges: 2, focus: 1.2, glow: 0 })
+    for (const key of Object.values(OLD_KEYS)) expect(localStorage.getItem(key)).toBeNull()
+    expect(localStorage.getItem(DOS_KEY)).toBeNull()
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('a damaged record, or a value outside its range, starts the look where it starts', async () => {
+    const toggle = document.createElement('button')
+    localStorage.setItem(PHOSPHOR_KEY, 'not a record')
+    const controller = await freshController(previewManagerStub())
+    await controller.enableAltViewWithPreview(toggle)
+    expect((await lastAltView()).setFontScale).toHaveBeenLastCalledWith(0.65)
+    expect((await lastAltView()).setContrastScale).toHaveBeenLastCalledWith(0.9)
+    controller.disableAltViewWithPreview(toggle)
+
+    localStorage.setItem(PHOSPHOR_KEY, JSON.stringify({ focus: 9, edges: 1.5 }))
+    const controller2 = await freshController(previewManagerStub())
+    await controller2.enableAltViewWithPreview(toggle)
+    expect((await lastAltView()).setFontScale).toHaveBeenLastCalledWith(0.65)
+    expect((await lastAltView()).setContrastScale).toHaveBeenLastCalledWith(1.5)
+    controller2.disableAltViewWithPreview(toggle)
+  })
+
+  it("Classic's look keeps a Lens of its own: a switch saves the leaving look's values and brings the arriving look's; the DOS lines have no Glow row", async () => {
+    pageWithHeaderAndDpad()
+    document.body.dataset.uiMode = 'standard'
+    document.documentElement.setAttribute('data-ui-variant', 'mono')
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    try {
+      await controller.enableAltViewWithPreview(toggle)
+      const altView = await lastAltView()
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(STATUS()).toBe('[ALT VIEW] EDGE 90% \u00B7 FOCUS 65% \u00B7 GLOW 50%')
+      const glowSection = document.querySelector('._hfmPersistFade-section')
+      expect(glowSection.style.display).toBe('')
+
+      slide('_hfmContrast', 1.2)
+      await vi.advanceTimersByTimeAsync(300)
+      expect(record(PHOSPHOR_KEY)).toEqual({ edges: 1.2, focus: 0.65, glow: 0.5, surfaces: 0.01 })
+
+      switchMode('classic')
+      expect(altView.setContrastScale).toHaveBeenLastCalledWith(1.4)
+      // The characters stay at 40% under the edge: the lines take over.
+      expect(altView.setFontScale).toHaveBeenLastCalledWith(0.4)
+      expect(altView.setPersistFade).toHaveBeenLastCalledWith(0.1)
+      expect(Number(document.getElementById('_hfmFontScale').value)).toBe(0.1)
+      expect(glowSection.style.display).toBe('none')
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(STATUS()).toBe('[ALT VIEW] EDGE 140% \u00B7 LINES 10% \u00B7 GLOW 10%')
+      // Nothing changed in the DOS look yet: nothing written for it.
+      expect(localStorage.getItem(DOS_KEY)).toBeNull()
+
+      slide('_hfmContrast', 2)
+      await vi.advanceTimersByTimeAsync(300)
+      expect(record(DOS_KEY)).toEqual({ edges: 2, focus: 0.1, glow: 0.1, surfaces: 0.01 })
+      expect(record(PHOSPHOR_KEY).edges).toBe(1.2)
+
+      switchMode('standard')
+      expect(altView.setContrastScale).toHaveBeenLastCalledWith(1.2)
+      expect(altView.setFontScale).toHaveBeenLastCalledWith(0.65)
+      expect(altView.setPersistFade).toHaveBeenLastCalledWith(0.5)
+      expect(glowSection.style.display).toBe('')
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(STATUS()).toBe('[ALT VIEW] EDGE 120% \u00B7 FOCUS 65% \u00B7 GLOW 50%')
+      expect(record(DOS_KEY).edges).toBe(2)
+    } finally {
+      controller.disableAltViewWithPreview(toggle)
+      delete document.body.dataset.uiMode
+      // The page built for this case goes, or the next case's fresh
+      // controller finds these sliders and builds none of its own.
+      document.body.innerHTML = ''
+    }
+  })
+
+  it("in the DOS look the Glow row comes back with the characters, at 40% Focus and over", async () => {
+    pageWithHeaderAndDpad()
+    document.body.dataset.uiMode = 'classic'
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    try {
+      await controller.enableAltViewWithPreview(toggle)
+      const glowSection = document.querySelector('._hfmPersistFade-section')
+      expect(glowSection.style.display).toBe('none')
+      slide('_hfmFontScale', 0.4)
+      expect(glowSection.style.display).toBe('')
+      slide('_hfmFontScale', 0.35)
+      expect(glowSection.style.display).toBe('none')
+    } finally {
+      controller.disableAltViewWithPreview(toggle)
+      delete document.body.dataset.uiMode
+      // The page built for this case goes, or the next case's fresh
+      // controller finds these sliders and builds none of its own.
+      document.body.innerHTML = ''
+    }
+  })
+
+  it('a reset puts the current look back where it starts and writes its record, leaving the other look alone', async () => {
+    // The pan adjust button, whose double-click is the reset, lives in the
+    // camera panel, which Classic has not: the look goes on in Standard and
+    // crosses into Classic with the button already on the page.
+    pageWithHeaderAndDpad()
+    document.body.dataset.uiMode = 'standard'
+    // A key that stays puts the key and the pan adjust button on the page at start.
+    localStorage.setItem(
+      'openscad-forge-alt-unlock',
+      JSON.stringify({ entries: 3, permanent: true, pendingBreak: false })
+    )
+    localStorage.setItem(PHOSPHOR_KEY, JSON.stringify({ edges: 1.2 }))
+    localStorage.setItem(DOS_KEY, JSON.stringify({ edges: 2, focus: 0.6 }))
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    try {
+      await controller.enableAltViewWithPreview(toggle)
+      const altView = await lastAltView()
+      expect(altView.setContrastScale).toHaveBeenLastCalledWith(1.2)
+      switchMode('classic')
+      expect(altView.setContrastScale).toHaveBeenLastCalledWith(2)
+      expect(altView.setFontScale).toHaveBeenLastCalledWith(0.6)
+      document
+        .getElementById('_hfmPanAdjust')
+        .dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+      expect(altView.setContrastScale).toHaveBeenLastCalledWith(1.4)
+      expect(altView.setFontScale).toHaveBeenLastCalledWith(0.4)
+      expect(altView.setPersistFade).toHaveBeenLastCalledWith(0.1)
+      expect(record(DOS_KEY)).toEqual({ edges: 1.4, focus: 0.1, glow: 0.1, surfaces: 0.01 })
+      expect(record(PHOSPHOR_KEY)).toEqual({ edges: 1.2 })
+    } finally {
+      controller.disableAltViewWithPreview(toggle)
+      delete document.body.dataset.uiMode
+      // The page built for this case goes, or the next case's fresh
+      // controller finds these sliders and builds none of its own.
+      document.body.innerHTML = ''
+    }
+  })
+
+  it('saves a look as one record, once per burst of changes', async () => {
+    pageWithHeaderAndDpad()
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    const writes = vi.spyOn(localStorage, 'setItem')
+    try {
+      await controller.enableAltViewWithPreview(toggle)
+      writes.mockClear()
+      slide('_hfmContrast', 1.1)
+      slide('_hfmFontScale', 0.7)
+      slide('_hfmPersistFade', 0.3)
+      await vi.advanceTimersByTimeAsync(300)
+      const lensWrites = writes.mock.calls.filter(([key]) => key === PHOSPHOR_KEY)
+      expect(lensWrites).toHaveLength(1)
+      expect(JSON.parse(lensWrites[0][1])).toEqual({ edges: 1.1, focus: 0.7, glow: 0.3, surfaces: 0.01 })
+    } finally {
+      writes.mockRestore()
+      controller.disableAltViewWithPreview(toggle)
+      document.body.innerHTML = ''
     }
   })
 
@@ -234,10 +427,11 @@ describe('the character size the Alt View starts with', () => {
     const size = document.getElementById('_hfmFontScale')
 
     set('_hfmFontScale', 0.35)
+    // The green look starts at Edges 90%, a crease of 20 degrees.
     expect(altView.setVectorLook).toHaveBeenLastCalledWith({
       widthPx: 4,
       surfaceOpacity: 0.01,
-      creaseDeg: 15,
+      creaseDeg: 20,
       crisp: false,
     })
     expect(size.getAttribute('aria-valuetext')).toBe('Vector lines, 35%')
@@ -287,8 +481,200 @@ describe('the character size the Alt View starts with', () => {
   })
 })
 
+describe("the reset button on each Lens slider's row", () => {
+  const PHOSPHOR_KEY = 'openscad-forge-hfm-lens-phosphor'
+  const DOS_KEY = 'openscad-forge-hfm-lens-dos'
+  // Each home's input ids carry a suffix; the Lens drawer's none.
+  const HOMES = {
+    lensDrawerBody: '',
+    asciiDrawerBody: 'Mobile',
+    vpAsciiGroup: 'Classic',
+    classicAsciiSimplified: 'Simplified',
+  }
+  const SLIDERS = [
+    ['_hfmContrast', 'Edges'],
+    ['_hfmFontScale', 'Focus'],
+    ['_hfmPersistFade', 'Glow'],
+    ['_hfmSurfaces', 'Surfaces'],
+  ]
+
+  beforeEach(() => {
+    // The live region is written a frame after a message: the frame is faked too.
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'],
+    })
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+  })
+
+  // The case's controller and its toggle, switched off after the case even
+  // when it failed: a look left on keeps listening to the page.
+  let active = null
+
+  afterEach(() => {
+    try {
+      active?.controller.disableAltViewWithPreview(active.toggle)
+    } catch {
+      // Already off.
+    }
+    active = null
+    vi.useRealTimers()
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+    document.body.innerHTML = ''
+    delete document.body.dataset.uiMode
+  })
+
+  // The live region is written a moment after the click (cleared, then
+  // set, so a repeated sentence is read again) and observed: read it after.
+  const pressReset = async (id) => {
+    document.getElementById(id).click()
+    await vi.advanceTimersByTimeAsync(100)
+  }
+
+  // The page with every home the sliders are built into.
+  function pageWithEveryHome() {
+    const written = pageWithHeaderAndDpad()
+    for (const id of ['asciiDrawerBody', 'vpAsciiGroup', 'classicAsciiSimplified']) {
+      const home = document.createElement('div')
+      home.id = id
+      document.body.appendChild(home)
+    }
+    return written
+  }
+
+  async function lastAltView() {
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    return initAltView.mock.results.at(-1).value
+  }
+
+  const record = (key) => JSON.parse(localStorage.getItem(key))
+  const slide = (id, value) => {
+    const input = document.getElementById(id)
+    input.value = String(value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  const switchMode = (mode) => {
+    document.body.dataset.uiMode = mode
+    document.dispatchEvent(new CustomEvent('ui-mode-changed', { detail: { mode } }))
+  }
+
+  it("sits after each slider's value in every home, named for its slider and controlling it, the Customizer's own reset glyph", async () => {
+    pageWithEveryHome()
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    active = { controller, toggle }
+    for (const [home, suffix] of Object.entries(HOMES)) {
+      for (const [base, name] of SLIDERS) {
+        const input = document.querySelector(`#${home} #${base}${suffix}`)
+        expect(input, `${name} in ${home}`).not.toBeNull()
+        const button = document.getElementById(`${base}${suffix}-reset`)
+        expect(button, `the reset of ${name} in ${home}`).not.toBeNull()
+        expect(button.tagName).toBe('BUTTON')
+        expect(button.type).toBe('button')
+        expect(button.previousElementSibling?.classList.contains('slider-value'), 'after the value').toBe(true)
+        expect(button.parentElement).toBe(input.parentElement)
+        expect(button.getAttribute('aria-label')).toBe(`Reset ${name} to its starting value`)
+        expect(button.getAttribute('aria-controls')).toBe(input.id)
+        expect(button.textContent).toBe('\u21A9')
+        expect(button.classList.contains('param-reset-btn')).toBe(true)
+        expect(button.classList.contains('hfm-reset-btn')).toBe(true)
+      }
+    }
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('a press puts the slider back where its look starts, says so, and the record follows; in the DOS lines Focus is said as lines', async () => {
+    const written = pageWithEveryHome()
+    document.body.dataset.uiMode = 'standard'
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    active = { controller, toggle }
+    const altView = await lastAltView()
+    await vi.advanceTimersByTimeAsync(3_000)
+
+    slide('_hfmContrast', 1.3)
+    slide('_hfmFontScale', 0.3)
+    slide('_hfmPersistFadeMobile', 0.8)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(record(PHOSPHOR_KEY)).toEqual({ edges: 1.3, focus: 0.3, glow: 0.8, surfaces: 0.01 })
+
+    // Any home's button resets the one value every home shows.
+    await pressReset('_hfmContrastMobile-reset')
+    expect(altView.setContrastScale).toHaveBeenLastCalledWith(0.9)
+    expect(Number(document.getElementById('_hfmContrast').value)).toBe(0.9)
+    expect(Number(document.getElementById('_hfmContrastClassic').value)).toBe(0.9)
+    expect(written.at(-1)).toBe('Edges 90%')
+    await pressReset('_hfmFontScale-reset')
+    expect(altView.setFontScale).toHaveBeenLastCalledWith(0.65)
+    expect(written.at(-1)).toBe('Focus 65%')
+    await pressReset('_hfmPersistFadeSimplified-reset')
+    expect(altView.setPersistFade).toHaveBeenLastCalledWith(0.5)
+    expect(written.at(-1)).toBe('Glow 50%')
+    await vi.advanceTimersByTimeAsync(300)
+    expect(record(PHOSPHOR_KEY)).toEqual({ edges: 0.9, focus: 0.65, glow: 0.5, surfaces: 0.01 })
+
+    // The DOS look resets to its own start, and its Focus is lines.
+    switchMode('classic')
+    await vi.advanceTimersByTimeAsync(3_000)
+    slide('_hfmFontScale', 0.3)
+    slide('_hfmContrast', 2)
+    await pressReset('_hfmFontScaleClassic-reset')
+    expect(altView.setFontScale).toHaveBeenLastCalledWith(0.4)
+    expect(Number(document.getElementById('_hfmFontScale').value)).toBe(0.1)
+    expect(written.at(-1)).toBe('Vector lines, 10%')
+    await pressReset('_hfmContrastClassic-reset')
+    expect(altView.setContrastScale).toHaveBeenLastCalledWith(1.4)
+    expect(written.at(-1)).toBe('Edges 140%')
+    await vi.advanceTimersByTimeAsync(300)
+    expect(record(DOS_KEY)).toEqual({ edges: 1.4, focus: 0.1, glow: 0.1, surfaces: 0.01 })
+    expect(record(PHOSPHOR_KEY).edges).toBe(0.9)
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('goes with its row while pan adjust is on, disabled there, and comes back after', async () => {
+    pageWithEveryHome()
+    localStorage.setItem(
+      'openscad-forge-alt-unlock',
+      JSON.stringify({ entries: 3, permanent: true, pendingBreak: false })
+    )
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    active = { controller, toggle }
+    const reset = document.getElementById('_hfmContrast-reset')
+    const section = reset.closest('.hfm-slider-section')
+    expect(section.style.display).toBe('')
+    expect(reset.disabled).toBe(false)
+    document.getElementById('_hfmPanAdjust').click()
+    expect(section.style.display).toBe('none')
+    expect(reset.disabled).toBe(true)
+    document.getElementById('_hfmPanAdjust').click()
+    expect(section.style.display).toBe('')
+    expect(reset.disabled).toBe(false)
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('a press is a key by its size, as every button in the look is', async () => {
+    pageWithEveryHome()
+    const controller = await freshController(previewManagerStub())
+    const { playKeySound } = await import('../../src/js/crt-sounds.js')
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    active = { controller, toggle }
+    playKeySound.mockClear()
+    const reset = document.getElementById('_hfmContrast-reset')
+    reset.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }))
+    reset.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, cancelable: true }))
+    expect(playKeySound.mock.calls.map((c) => c.join(' '))).toEqual(['p 1 down', 'p 1 up'])
+    controller.disableAltViewWithPreview(toggle)
+  })
+})
+
 describe('the glow the Alt View starts with', () => {
-  const GLOW_KEY = 'openscad-forge-hfm-persist-fade'
+  const PHOSPHOR_KEY = 'openscad-forge-hfm-lens-phosphor'
   let matchMedia
 
   beforeEach(() => {
@@ -318,18 +704,18 @@ describe('the glow the Alt View starts with', () => {
     return initAltView.mock.results.at(-1).value
   }
 
-  it('is a gentle 15% when nothing is saved, and a saved 0 stays 0', async () => {
-    // Fake timers: turning the Alt View on queues a delayed save of the glow,
-    // and a real one would fire into the next case's storage.
+  it('starts at 50% in the green look when nothing is saved, and a saved 0 stays 0', async () => {
+    // Fake timers: the look's moments run on timers that would otherwise
+    // fire into the next case.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     pageWithHeaderAndDpad()
     const controller = await freshController(previewManagerStub())
     const toggle = document.createElement('button')
     await controller.enableAltViewWithPreview(toggle)
-    expect((await lastAltView()).setPersistFade).toHaveBeenLastCalledWith(0.15)
+    expect((await lastAltView()).setPersistFade).toHaveBeenLastCalledWith(0.5)
     controller.disableAltViewWithPreview(toggle)
 
-    localStorage.setItem(GLOW_KEY, '0')
+    localStorage.setItem(PHOSPHOR_KEY, JSON.stringify({ glow: 0 }))
     const controller2 = await freshController(previewManagerStub())
     await controller2.enableAltViewWithPreview(toggle)
     expect((await lastAltView()).setPersistFade).toHaveBeenLastCalledWith(0)
@@ -340,7 +726,7 @@ describe('the glow the Alt View starts with', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     reduceMotion()
     pageWithHeaderAndDpad()
-    localStorage.setItem(GLOW_KEY, '0.4')
+    localStorage.setItem(PHOSPHOR_KEY, JSON.stringify({ glow: 0.4 }))
     const controller = await freshController(previewManagerStub())
     const toggle = document.createElement('button')
     document.documentElement.setAttribute('data-ui-variant', 'mono')
@@ -348,7 +734,7 @@ describe('the glow the Alt View starts with', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     expect((await lastAltView()).setPersistFade).toHaveBeenLastCalledWith(0)
     expect(document.getElementById('previewStatusAltAdjust').textContent).toContain('GLOW 0%')
-    expect(localStorage.getItem(GLOW_KEY)).toBe('0.4')
+    expect(JSON.parse(localStorage.getItem(PHOSPHOR_KEY))).toEqual({ glow: 0.4 })
     controller.disableAltViewWithPreview(toggle)
   })
 })
@@ -2624,15 +3010,15 @@ describe('the Alt View and pan adjust speak plainly', () => {
       'Pan arrows now adjust the Alt View: up and down for edges, left and right for focus, Shift with up and down for glow.',
     ])
 
+    // One step from where the green look starts: Edges 90%, Focus 65%, Glow 50%.
     expect(controller.onPanControl({ direction: 'up', shiftKey: false })).toBe(
-      'Edges 105%'
+      'Edges 95%'
     )
     expect(controller.onPanControl({ direction: 'left', shiftKey: false })).toBe(
-      'Focus 55%'
+      'Focus 60%'
     )
-    // One step up from the 15% the glow starts at.
     expect(controller.onPanControl({ direction: 'up', shiftKey: true })).toBe(
-      'Glow 20%'
+      'Glow 55%'
     )
 
     adjust.click()
