@@ -288,20 +288,12 @@ export const DEFAULT_WEIGHT_S = 60;
  * what it will actually run (a file ignored by the config but charged by the
  * planner books time nobody spends).
  *
- * drawing-editor.spec.js runs on Chromium only. Measured before it was
- * written: the two-shard lanes (Edge, Firefox) projected to 34.8 of their 35
- * minutes with nothing added, so no honest weight for a new file fits; 35 s,
- * its measured cost scaled the way the other editor files are, put the lane
- * at 35.1. Edge cannot be re-split without changing the repository ruleset's
- * required checks. The editor's walk is DOM and keyboard behavior the
- * Chromium lane covers on three shards; the door's cases still run
- * everywhere. Reverse: delete the two entries once the lanes are re-split.
- *
- * potrace-engine.spec.js is out of Edge and Firefox for the same arithmetic
- * and runs on Chromium and WebKit instead. WebKit is the lane that matters
- * for it: a module worker importing a module under COEP is the exact shape
- * of two earlier WebKit worker failures. It passes there in 3.6 s. Reverse
- * with the others.
+ * drawing-editor.spec.js and potrace-engine.spec.js were Chromium only
+ * (and the potrace engine on WebKit) while Edge and Firefox had two shards
+ * projected at 34.8 of their 35 minutes. With four shards those lanes run
+ * 11 to 24 minutes, and the planner's longest shard grows 5 % with the two
+ * back (2577 to 2703 booked seconds, Chromium's), so they run in every lane
+ * again.
  *
  * real-start.spec.js was Chromium only while Edge and Firefox had three
  * shards (booked at the default, it put the Edge lane at 35.2 of its 35
@@ -319,17 +311,10 @@ export const DEFAULT_WEIGHT_S = 60;
  */
 export const PROJECT_IGNORES = Object.freeze({
   chromium: [],
-  msedge: [
-    'drawing-editor.spec.js',
-    'trace-start-cancel.spec.js',
-    'potrace-engine.spec.js',
-    'alt-view-icon-states.spec.js',
-  ],
+  msedge: ['trace-start-cancel.spec.js', 'alt-view-icon-states.spec.js'],
   firefox: [
     'wasm-smoke.spec.js',
-    'drawing-editor.spec.js',
     'trace-start-cancel.spec.js',
-    'potrace-engine.spec.js',
     'alt-view-icon-states.spec.js',
   ],
 });

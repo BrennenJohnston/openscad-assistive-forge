@@ -105,9 +105,10 @@ describe('e2e shard planner', () => {
     // Each lane is booked for what it runs at the shard count it actually
     // has: four each (at two, Firefox would project to 49.4 of these 35
     // minutes; at three both lanes reached 34.9 and the next new spec file
-    // crossed the ceiling). Firefox leaves out wasm-smoke, and both leave
-    // out the drawing editor's own walk - that ignore is re-visited only
-    // from a green CI board, never from a projection.
+    // crossed the ceiling). Firefox leaves out wasm-smoke; the drawing
+    // editor's walk and the potrace engine's spec came back to both lanes
+    // from a green CI board (the lanes at 11 to 24 minutes with four shards),
+    // never from a projection.
     for (const [project, laneShards] of [
       ['msedge', 4],
       ['firefox', 4],
