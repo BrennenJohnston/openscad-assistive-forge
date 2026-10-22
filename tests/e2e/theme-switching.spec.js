@@ -1062,7 +1062,7 @@ test.describe('The Alt View controls in the phone Lens drawer', () => {
   // No isMobile: Firefox rejects it when the browser context is created.
   test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
 
-  test('the four sliders only, the size the strip shows, and the keys still step it', async ({
+  test('the four sliders and their reset buttons only, the size the strip shows, and the keys still step it', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -1091,7 +1091,8 @@ test.describe('The Alt View controls in the phone Lens drawer', () => {
     const section = page.locator('#asciiDrawerBody');
     await expect(section).toBeVisible();
     await expect(section.locator('input[type="range"]')).toHaveCount(4);
-    await expect(section.locator('button')).toHaveCount(0);
+    await expect(section.locator('button')).toHaveCount(4);
+    await expect(section.locator('button.hfm-reset-btn')).toHaveCount(4);
     await expect(section.locator('.alt-view-stepper')).toHaveCount(0);
 
     const slider = page.locator('#_hfmFontScaleMobile');

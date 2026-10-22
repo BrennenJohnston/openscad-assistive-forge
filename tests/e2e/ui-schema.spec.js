@@ -1078,7 +1078,7 @@ for (const height of [915, 810]) {
       });
 
       if (look.altView) {
-        test('S5: the Lens drawer holds the four sliders only', async ({
+        test('S5: the Lens drawer holds the four sliders and their reset buttons only', async ({
           page,
         }) => {
           expectRule('S5-ascii');
@@ -1097,8 +1097,12 @@ for (const height of [915, 810]) {
               sliders: [...body.querySelectorAll('input[type="range"]')]
                 .filter(shown)
                 .map((s) => s.id),
+              resets: [...body.querySelectorAll('button.hfm-reset-btn')]
+                .filter(shown)
+                .map((b) => b.getAttribute('aria-controls')),
               others: [...body.querySelectorAll('button, fieldset')]
                 .filter(shown)
+                .filter((el) => !el.classList.contains('hfm-reset-btn'))
                 .map(
                   (el) =>
                     el.id ||
@@ -1113,7 +1117,12 @@ for (const height of [915, 810]) {
               `Edges, Focus, Glow and Surfaces (${m.sliders})`
             )
             .toBe(4);
-          expect.soft(m.others, 'nothing but the sliders').toEqual([]);
+          expect
+            .soft(m.resets, 'a reset button for each slider')
+            .toEqual(m.sliders);
+          expect
+            .soft(m.others, 'nothing but the sliders and their resets')
+            .toEqual([]);
         });
       }
     });
