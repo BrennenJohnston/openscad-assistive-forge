@@ -49,15 +49,21 @@ function shownDrawers(list) {
   });
 }
 
-/** Whether no finite animation or transition runs any more, read in the page. */
+/**
+ * Whether no finite animation or transition runs any more, read in the page.
+ * Firefox keeps a visibility transition on an element under a hidden ancestor
+ * running at time 0 for ever (the Customizer's library items behind its
+ * sheet), so transitions of visibility and animations on elements that are
+ * not rendered do not count.
+ */
 function nothingMoving() {
-  return !document
-    .getAnimations()
-    .some(
-      (a) =>
-        a.playState === 'running' &&
-        a.effect?.getTiming?.().iterations !== Infinity
-    );
+  return !document.getAnimations().some((a) => {
+    if (a.playState !== 'running') return false;
+    if (a.effect?.getTiming?.().iterations === Infinity) return false;
+    if (a.transitionProperty === 'visibility') return false;
+    const target = a.effect?.target;
+    return !target || target.checkVisibility();
+  });
 }
 
 /** A drawer body's resting box, rounded, read in the page. */
