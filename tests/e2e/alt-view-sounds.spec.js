@@ -673,18 +673,63 @@ test.describe('The sounds button', () => {
       expect(zoom, `zoom in: ${zoom}`).toEqual(['/sounds/camera/d-zoom.wav']);
     });
 
-    test("a drawer's parts are the DOS look's own", async ({ page }) => {
-      test.fail(true, "the DOS look's drawer is not in yet; it plays the phosphor files");
+    test("a drawer's parts are the DOS look's own, in order, the stop at the glide's end", async ({
+      page,
+    }) => {
       await inClassic(page);
+      // Timed from the press as the page has it, which the slide starts from.
+      const timed = async (press) => {
+        await page.waitForTimeout(600);
+        await page.evaluate(() => {
+          window.__sounds = [];
+          document.addEventListener(
+            'click',
+            () => {
+              window.__pressAt = performance.now();
+            },
+            { capture: true, once: true }
+          );
+        });
+        await press();
+        await page.waitForTimeout(1_400);
+        return page.evaluate(() =>
+          window.__sounds
+            .filter((s) => s.url?.includes('/sounds/drawers/'))
+            .map((s) => ({
+              part: s.url.replace(/^.*\/d-/, '').replace(/\.wav$/, ''),
+              dos: s.url.includes('/d-'),
+              plays: s.at - window.__pressAt + s.delay * 1000,
+            }))
+        );
+      };
       // Classic opens with its Customizer pane out; the toolbar's button
-      // slides it shut (the pane's parts; the button's own key is not the
-      // drawer's).
+      // slides it shut, then out again.
       const button = page.locator('#classicTbCustomizerBtn');
-      const parts = (await heard(page, () => button.click())).filter((url) =>
-        url?.includes('/sounds/drawers/')
-      );
-      expect(parts.length, `the drawer's parts: ${parts}`).toBeGreaterThanOrEqual(3);
-      expect(parts.every((url) => DOS('drawers').test(url)), `${parts}`).toBe(true);
+      const shut = await timed(() => button.click());
+      expect(shut.map((s) => s.part), `shut: ${JSON.stringify(shut)}`).toEqual([
+        'grip-close',
+        'slide-close',
+        'stop-close',
+        'latch-close',
+      ]);
+      expect(shut.every((s) => s.dos), 'the DOS files').toBe(true);
+      const [grip, roll, thump, latch] = shut.map((s) => s.plays);
+      expect(Math.abs(roll - grip), 'the grip and the glide together, ms').toBeLessThan(15);
+      expect(thump - grip, 'the thump as the glide ends, ms').toBeGreaterThan(300);
+      expect(thump - grip, 'the thump as the glide ends, ms').toBeLessThan(700);
+      expect(latch - thump, 'the latch released after the thump, ms').toBeGreaterThan(105);
+      expect(latch - thump, 'the latch released after the thump, ms').toBeLessThan(135);
+      const open = await timed(() => button.click());
+      expect(open.map((s) => s.part), `open: ${JSON.stringify(open)}`).toEqual([
+        'latch-open',
+        'slide-open',
+        'stop-open',
+      ]);
+      expect(open.every((s) => s.dos), 'the DOS files').toBe(true);
+      const [letGo, rollOut, stop] = open.map((s) => s.plays);
+      expect(Math.abs(rollOut - letGo), 'the latch and the glide together, ms').toBeLessThan(15);
+      expect(stop - letGo, 'the stop as the glide ends, ms').toBeGreaterThan(300);
+      expect(stop - letGo, 'the stop as the glide ends, ms').toBeLessThan(700);
     });
 
     test("a switch flips the DOS look's own lever", async ({ page }) => {

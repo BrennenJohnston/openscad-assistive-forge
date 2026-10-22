@@ -652,6 +652,18 @@ click and its ring (0.75 s) from "TV_Switch_Off_2" by SignatureSoundsOrg
 
 - **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
 
+### Tapedeck open and closing (CC0-1.0)
+
+The drawer's seven parts under `public/sounds/drawers/` (`d-latch-open.wav`,
+`d-slide-open.wav`, `d-stop-open.wav`; `d-grip-close.wav`,
+`d-slide-close.wav`, `d-stop-close.wav`, `d-latch-close.wav`) are cut from
+a plastic cassette deck's tape bay, released by its eject lever with a soft
+stop and pushed closed by hand, in "Tapedeck open and closing" by stecman:
+https://freesound.org/s/376059/ (the glides 400 and 450 ms, the closed stop
+low-passed at 700 Hz).
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+
 ### digital camera consumer on,off beep take picture (CC0-1.0)
 
 The zoom's tick, `camera/d-zoom.wav`, is one step of a camera's zoom servo

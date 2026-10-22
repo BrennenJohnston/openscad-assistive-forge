@@ -237,14 +237,15 @@ const DRAWER_SETS = {
     'stop-close.wav': [0.1, 0.4],
     'latch-close.wav': [0.05, 0.4],
   },
+  // The DOS look's cassette door, cut to the same lengths.
   d: {
-    'latch-open.wav': [0.05, 0.4],
-    'slide-open.wav': [0.4, 0.4],
-    'stop-open.wav': [0.1, 0.4],
-    'grip-close.wav': [0.05, 0.4],
-    'slide-close.wav': [0.45, 0.45],
-    'stop-close.wav': [0.1, 0.4],
-    'latch-close.wav': [0.05, 0.4],
+    'd-latch-open.wav': [0.05, 0.4],
+    'd-slide-open.wav': [0.4, 0.4],
+    'd-stop-open.wav': [0.1, 0.4],
+    'd-grip-close.wav': [0.05, 0.4],
+    'd-slide-close.wav': [0.45, 0.45],
+    'd-stop-close.wav': [0.1, 0.4],
+    'd-latch-close.wav': [0.05, 0.4],
   },
 };
 const DRAWER_PARTS = { ...DRAWER_SETS.p, ...DRAWER_SETS.d };
@@ -266,7 +267,7 @@ describe('the drawer sound files', () => {
     }
   );
 
-  it('both sets weigh under 500 KB together', () => {
+  it('both sets weigh under 500 KB together (the phosphor seven 203 KB, the DOS seven 183 KB)', () => {
     const total = Object.keys(DRAWER_PARTS).reduce(
       (n, f) => n + statSync(join(DRAWERS_DIR, f)).size,
       0
@@ -1117,10 +1118,21 @@ describe('playing a switch sound', () => {
     );
     await playDrawerSound('a drawer', 'open', { stopAt: 0.4, whole: true });
     expect(urls().slice(-3)).toEqual([
-      '/sounds/drawers/latch-open.wav',
-      '/sounds/drawers/slide-open.wav',
-      '/sounds/drawers/stop-open.wav',
+      '/sounds/drawers/d-latch-open.wav',
+      '/sounds/drawers/d-slide-open.wav',
+      '/sounds/drawers/d-stop-open.wav',
     ]);
+    await playDrawerSound('a drawer', 'close', { stopAt: 0.45, whole: true });
+    expect(urls().slice(-4)).toEqual([
+      '/sounds/drawers/d-grip-close.wav',
+      '/sounds/drawers/d-slide-close.wav',
+      '/sounds/drawers/d-stop-close.wav',
+      '/sounds/drawers/d-latch-close.wav',
+    ]);
+    expect(sources.at(-1).connectedTo.gain.value, 'the latch released at -4.4 dB').toBeCloseTo(
+      db(-4.4),
+      6
+    );
     await playControlSound('snap-on');
     await playControlSound('lever-on');
     expect(urls().slice(-2)).toEqual([
@@ -1152,8 +1164,8 @@ describe('playing a switch sound', () => {
     preloadLookSounds();
     expect(
       distinct(),
-      'the phosphor set adds its 3 switch sounds, 28 keys, 7 dials and 6 camera files to the 39'
-    ).toBe(83);
+      'the phosphor set adds its 3 switch sounds, 28 keys, 7 dials, 6 camera and 7 drawer files to the 39'
+    ).toBe(90);
   });
 
   it('mutes through the master: silent within 20 ms, before or after the first sound', async () => {

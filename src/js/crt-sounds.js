@@ -167,13 +167,13 @@ const DRAWER_FILES = {
     'latch-close': '/sounds/drawers/latch-close.wav',
   },
   d: {
-    'latch-open': '/sounds/drawers/latch-open.wav',
-    'slide-open': '/sounds/drawers/slide-open.wav',
-    'stop-open': '/sounds/drawers/stop-open.wav',
-    'grip-close': '/sounds/drawers/grip-close.wav',
-    'slide-close': '/sounds/drawers/slide-close.wav',
-    'stop-close': '/sounds/drawers/stop-close.wav',
-    'latch-close': '/sounds/drawers/latch-close.wav',
+    'latch-open': '/sounds/drawers/d-latch-open.wav',
+    'slide-open': '/sounds/drawers/d-slide-open.wav',
+    'stop-open': '/sounds/drawers/d-stop-open.wav',
+    'grip-close': '/sounds/drawers/d-grip-close.wav',
+    'slide-close': '/sounds/drawers/d-slide-close.wav',
+    'stop-close': '/sounds/drawers/d-stop-close.wav',
+    'latch-close': '/sounds/drawers/d-latch-close.wav',
   },
 };
 const DRAWER_LEVELS_DB = {
@@ -186,6 +186,8 @@ const DRAWER_LEVELS_DB = {
     'stop-close': -15,
     'latch-close': -7,
   },
+  // The cassette door's parts at the phosphor parts' heard levels; the
+  // latch released sits 2.6 dB under in its file.
   d: {
     'latch-open': -3,
     'slide-open': -5,
@@ -193,7 +195,7 @@ const DRAWER_LEVELS_DB = {
     'grip-close': -7,
     'slide-close': -8,
     'stop-close': -15,
-    'latch-close': -7,
+    'latch-close': -4.4,
   },
 };
 // Shutting, the latch is released this long after the stop. A drawer that
