@@ -1,6 +1,8 @@
 /**
  * The Alt View's switch sounds: three recordings played whole, each fetched
- * and decoded once, one at a time, the newest asked for winning.
+ * and decoded once, one at a time, the newest asked for winning. Every
+ * family comes in two sets, p for the phosphor looks and d for the DOS
+ * look; the files both sets name are checked here, and the set door.
  *
  * @license GPL-3.0-or-later
  */
@@ -10,7 +12,15 @@ import { readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const SOUNDS_DIR = resolve(__dirname, '../../public/sounds');
-const FILES = ['crt-on.wav', 'crt-look.wav', 'crt-off.wav'];
+// The files each set names, as crt-sounds.js's tables do. The DOS look's
+// own recordings replace the d entries one family at a time; until a
+// family has its own, its d table names the p files.
+const both = (p, d) => [...new Set([...p, ...d])];
+const SWITCH_SETS = {
+  p: ['crt-on.wav', 'crt-look.wav', 'crt-off.wav'],
+  d: ['crt-on.wav', 'crt-look.wav', 'crt-off.wav'],
+};
+const FILES = both(SWITCH_SETS.p, SWITCH_SETS.d);
 const DURATIONS = {
   '/sounds/camera/pan.wav': 0.12,
   '/sounds/camera/pan-run.wav': 0.7,
@@ -59,10 +69,10 @@ describe('the switch sound files', () => {
     expect(header.dataBytes / 2 / 32000).toBeLessThan(3);
   });
 
-  it('the three weigh under 340 KB together', () => {
+  it('both sets weigh under 680 KB together', () => {
     const total = FILES.reduce((n, file) => n + statSync(join(SOUNDS_DIR, file)).size, 0);
     expect(total).toBeGreaterThan(0);
-    expect(total).toBeLessThan(340_000);
+    expect(total).toBeLessThan(680_000);
   });
 });
 
@@ -154,14 +164,25 @@ function fakeParam(value) {
 const CAMERA_DIR = join(SOUNDS_DIR, 'camera');
 // The ticks, each under 0.3 s; the pan's run (a loop) and its run-down are
 // longer, as a motor's run and its coasting to a stop are.
-const CAMERA_FILES = {
-  'zoom.wav': 0.3,
-  'turn.wav': 0.3,
-  'tilt.wav': 0.3,
-  'pan.wav': 0.3,
-  'pan-run.wav': 0.8,
-  'pan-stop.wav': 0.5,
+const CAMERA_SETS = {
+  p: {
+    'zoom.wav': 0.3,
+    'turn.wav': 0.3,
+    'tilt.wav': 0.3,
+    'pan.wav': 0.3,
+    'pan-run.wav': 0.8,
+    'pan-stop.wav': 0.5,
+  },
+  d: {
+    'zoom.wav': 0.3,
+    'turn.wav': 0.3,
+    'tilt.wav': 0.3,
+    'pan.wav': 0.3,
+    'pan-run.wav': 0.8,
+    'pan-stop.wav': 0.5,
+  },
 };
+const CAMERA_FILES = { ...CAMERA_SETS.p, ...CAMERA_SETS.d };
 
 describe('the camera tick files', () => {
   it.each(Object.entries(CAMERA_FILES))(
@@ -181,10 +202,10 @@ describe('the camera tick files', () => {
     }
   );
 
-  it('the six weigh under 120 KB together', () => {
+  it('both sets weigh under 240 KB together', () => {
     const total = Object.keys(CAMERA_FILES).reduce((n, f) => n + statSync(join(CAMERA_DIR, f)).size, 0);
     expect(total).toBeGreaterThan(0);
-    expect(total).toBeLessThan(120_000);
+    expect(total).toBeLessThan(240_000);
   });
 });
 
@@ -201,15 +222,27 @@ function peakOf(bytes) {
 // 400 ms), the stop; the latch gripped, the glide shut (as long as the way
 // shut, 450 ms), the muffled stop, the latch released.
 const DRAWERS_DIR = join(SOUNDS_DIR, 'drawers');
-const DRAWER_PARTS = {
-  'latch-open.wav': [0.05, 0.4],
-  'slide-open.wav': [0.4, 0.4],
-  'stop-open.wav': [0.1, 0.4],
-  'grip-close.wav': [0.05, 0.4],
-  'slide-close.wav': [0.45, 0.45],
-  'stop-close.wav': [0.1, 0.4],
-  'latch-close.wav': [0.05, 0.4],
+const DRAWER_SETS = {
+  p: {
+    'latch-open.wav': [0.05, 0.4],
+    'slide-open.wav': [0.4, 0.4],
+    'stop-open.wav': [0.1, 0.4],
+    'grip-close.wav': [0.05, 0.4],
+    'slide-close.wav': [0.45, 0.45],
+    'stop-close.wav': [0.1, 0.4],
+    'latch-close.wav': [0.05, 0.4],
+  },
+  d: {
+    'latch-open.wav': [0.05, 0.4],
+    'slide-open.wav': [0.4, 0.4],
+    'stop-open.wav': [0.1, 0.4],
+    'grip-close.wav': [0.05, 0.4],
+    'slide-close.wav': [0.45, 0.45],
+    'stop-close.wav': [0.1, 0.4],
+    'latch-close.wav': [0.05, 0.4],
+  },
 };
+const DRAWER_PARTS = { ...DRAWER_SETS.p, ...DRAWER_SETS.d };
 
 describe('the drawer sound files', () => {
   it.each(Object.entries(DRAWER_PARTS))(
@@ -228,32 +261,38 @@ describe('the drawer sound files', () => {
     }
   );
 
-  it('the seven weigh under 250 KB together', () => {
+  it('both sets weigh under 500 KB together', () => {
     const total = Object.keys(DRAWER_PARTS).reduce(
       (n, f) => n + statSync(join(DRAWERS_DIR, f)).size,
       0
     );
     expect(total).toBeGreaterThan(0);
-    expect(total).toBeLessThan(250_000);
+    expect(total).toBeLessThan(500_000);
   });
 });
 
 // A switch's snaps, a selector's clicks and a latch's.
 const SWITCHES_DIR = join(SOUNDS_DIR, 'switches');
-const SWITCH_FILES = [
-  'snap-on.wav',
-  'select-open.wav',
-  'select-choose.wav',
-  'latch-open.wav',
-  'latch-close.wav',
-];
+const CONTROL_SETS = {
+  p: ['snap-on.wav', 'select-open.wav', 'select-choose.wav', 'latch-open.wav', 'latch-close.wav'],
+  d: ['snap-on.wav', 'select-open.wav', 'select-choose.wav', 'latch-open.wav', 'latch-close.wav'],
+};
+const SWITCH_FILES = both(CONTROL_SETS.p, CONTROL_SETS.d);
 
 // The lever a checkbox or a switch flips, two takes each way, and the
 // typewriter platen's ticks a scroll makes, four takes and the end of the
 // list: 48 kHz, as cut from the recordings.
-const LEVER_FILES = ['lever-on-1.wav', 'lever-on-2.wav', 'lever-off-1.wav', 'lever-off-2.wav'];
+const LEVER_SETS = {
+  p: ['lever-on-1.wav', 'lever-on-2.wav', 'lever-off-1.wav', 'lever-off-2.wav'],
+  d: ['lever-on-1.wav', 'lever-on-2.wav', 'lever-off-1.wav', 'lever-off-2.wav'],
+};
+const LEVER_FILES = both(LEVER_SETS.p, LEVER_SETS.d);
 const SCROLL_DIR = join(SOUNDS_DIR, 'scroll');
-const SCROLL_FILES = ['platen-1.wav', 'platen-2.wav', 'platen-3.wav', 'platen-4.wav', 'platen-end.wav'];
+const SCROLL_SETS = {
+  p: ['platen-1.wav', 'platen-2.wav', 'platen-3.wav', 'platen-4.wav', 'platen-end.wav'],
+  d: ['platen-1.wav', 'platen-2.wav', 'platen-3.wav', 'platen-4.wav', 'platen-end.wav'],
+};
+const SCROLL_FILES = both(SCROLL_SETS.p, SCROLL_SETS.d);
 
 describe('the lever and scroll files', () => {
   it.each([
@@ -286,10 +325,10 @@ describe('the switch, selector and latch files', () => {
     }
   );
 
-  it('the five weigh under 40 KB together', () => {
+  it('both sets weigh under 80 KB together', () => {
     const total = SWITCH_FILES.reduce((n, f) => n + statSync(join(SWITCHES_DIR, f)).size, 0);
     expect(total).toBeGreaterThan(0);
-    expect(total).toBeLessThan(40_000);
+    expect(total).toBeLessThan(80_000);
   });
 });
 
@@ -1011,6 +1050,82 @@ describe('playing a switch sound', () => {
     preloadScrollSounds();
     expect(globalThis.fetch, 'all five fetched already').not.toHaveBeenCalled();
     vi.restoreAllMocks();
+  });
+
+  it('one sound set is chosen for every family that takes none as an argument: p to start, d for the DOS look, nothing else', async () => {
+    const { setSoundSet, soundSet } = await load();
+    expect(soundSet(), 'the phosphor looks to start').toBe('p');
+    setSoundSet('d');
+    expect(soundSet()).toBe('d');
+    setSoundSet('p');
+    expect(soundSet()).toBe('p');
+    expect(() => setSoundSet('x')).toThrow('No such sound set: x');
+    expect(() => setSoundSet(undefined)).toThrow('No such sound set: undefined');
+    expect(soundSet(), 'a refused set changes nothing').toBe('p');
+  });
+
+  it("with the DOS set chosen, every player asks for the DOS table's file: the switch sounds, the ticks and the pan, the drawer, the controls and the scroll", async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const {
+      setSoundSet,
+      playCrtSound,
+      playCameraSound,
+      startPanMotion,
+      playDrawerSound,
+      playControlSound,
+      playScrollSound,
+    } = await load();
+    const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
+    setSoundSet('d');
+    // The DOS tables' files, as crt-sounds.js names them today: the DOS
+    // look's own recordings replace them one family at a time.
+    await playCrtSound('on');
+    expect(urls()).toEqual(['/sounds/crt-on.wav']);
+    await playCameraSound('turn');
+    expect(urls().at(-1)).toBe('/sounds/camera/turn.wav');
+    const motion = await startPanMotion();
+    motion.stop();
+    expect(urls().slice(-3)).toEqual([
+      '/sounds/camera/pan.wav',
+      '/sounds/camera/pan-run.wav',
+      '/sounds/camera/pan-stop.wav',
+    ]);
+    await playDrawerSound('a drawer', 'open', { stopAt: 0.4, whole: true });
+    expect(urls().slice(-3)).toEqual([
+      '/sounds/drawers/latch-open.wav',
+      '/sounds/drawers/slide-open.wav',
+      '/sounds/drawers/stop-open.wav',
+    ]);
+    await playControlSound('snap-on');
+    await playControlSound('lever-on');
+    expect(urls().slice(-2)).toEqual([
+      '/sounds/switches/snap-on.wav',
+      '/sounds/switches/lever-on-1.wav',
+    ]);
+    await playScrollSound();
+    await playScrollSound({ end: true });
+    expect(urls().slice(-2)).toEqual([
+      '/sounds/scroll/platen-1.wav',
+      '/sounds/scroll/platen-end.wav',
+    ]);
+    // The keys and the dials take their set as an argument, as before.
+    setSoundSet('p');
+    await playCrtSound('look');
+    expect(urls().at(-1), 'back to the phosphor set').toBe('/sounds/crt-look.wav');
+    vi.restoreAllMocks();
+  });
+
+  it('fetches every sound of the look ahead for the set chosen, each file once: 39 for the DOS look, 65 for a phosphor look', async () => {
+    const { setSoundSet, preloadLookSounds } = await load();
+    const distinct = () => new Set(globalThis.fetch.mock.calls.map(([url]) => url)).size;
+    setSoundSet('d');
+    preloadLookSounds();
+    expect(distinct(), 'the DOS set: 3 switch, 2 keys, 7 dials, 6 camera, 7 drawer, 9 control, 5 scroll').toBe(39);
+    preloadLookSounds();
+    expect(globalThis.fetch, 'asked again, nothing fetched twice').toHaveBeenCalledTimes(39);
+    setSoundSet('p');
+    preloadLookSounds();
+    expect(distinct(), 'the phosphor set adds its 28 keys and 7 dials to the 39').toBe(74);
   });
 
   it('mutes through the master: silent within 20 ms, before or after the first sound', async () => {

@@ -36,16 +36,12 @@ import {
   playDrawerSound,
   playKeySound,
   playTypingSound,
-  preloadCameraSounds,
-  preloadControlSounds,
   playScrollSound,
-  preloadScrollSounds,
   preloadCrtSounds,
-  preloadDialSounds,
-  preloadDrawerSounds,
-  preloadKeySounds,
+  preloadLookSounds,
   preloadMomentSounds,
   setMuted,
+  setSoundSet,
   stopCrtSound,
 } from './crt-sounds.js';
 import { closePhoneDrawer } from './phone-drawers.js';
@@ -1393,9 +1389,16 @@ function _stopAltViewStart() {
 
 // The switch sounds follow Preferences > Play sounds, as the unlock tune
 // does; reduced motion leaves them alone, since sound is not motion.
-// Classic is the blue DOS look and has its own keys.
+// Classic is the blue DOS look and has sounds of its own: one set for every
+// family, chosen here. The keys and the dials take it as an argument; the
+// rest read it from the module, told at the look's start and at each
+// change of mode while the look is on.
 function _hfmKeySet() {
   return document.body?.dataset.uiMode === 'classic' ? 'd' : 'p';
+}
+
+function _syncSoundSet() {
+  setSoundSet(_hfmKeySet());
 }
 
 function _hfmKeyBand(el) {
@@ -1604,14 +1607,9 @@ function _playDialSound(variant) {
 }
 
 function _preloadLookSounds() {
+  _syncSoundSet();
   if (!_soundsOn()) return;
-  const set = _hfmKeySet();
-  preloadKeySounds(set);
-  preloadDialSounds(set);
-  preloadCameraSounds();
-  preloadDrawerSounds();
-  preloadControlSounds();
-  preloadScrollSounds();
+  preloadLookSounds();
 }
 
 // Where the camera is, seen from what it looks at: its turn and tilt in
@@ -2384,8 +2382,9 @@ async function _enableAltViewWithPreview(toggleBtn) {
     const classicCrossed = mode === 'classic' || lastMode === 'classic';
     lastMode = mode;
     if (_hfmEnabled && classicCrossed) {
-      _playAltViewMoment({ greeting: true, sound: 'look' });
+      // The set and its sounds first: the screen sound is the new look's.
       _preloadLookSounds();
+      _playAltViewMoment({ greeting: true, sound: 'look' });
     }
   };
   document.addEventListener('ui-mode-changed', _hfmModeListener);
@@ -2436,6 +2435,8 @@ async function _enableAltViewWithPreview(toggleBtn) {
   toggleBtn?.setAttribute('aria-pressed', 'true');
   _hfmEnabled = true;
   _hfmPendingEnable = false;
+  // The look's set first: the screen coming on is the look's own sound.
+  _syncSoundSet();
   _playAltViewMoment({ greeting: true, sound: 'on' });
   _installKeySounds();
   _installCameraTicks(previewManager);
@@ -2903,6 +2904,7 @@ function _injectAltToggle() {
       if (!isCurrentlyEnabled) {
         _setAssetsForVariant(true);
         // No picture and no status line yet: the draw-in alone.
+        _syncSoundSet();
         _playAltViewMoment({ greeting: false, sound: 'on' });
         _installKeySounds();
         root.setAttribute('data-ui-variant', 'mono');

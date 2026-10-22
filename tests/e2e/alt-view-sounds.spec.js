@@ -20,40 +20,30 @@ import { drawersBack } from './helpers/alt-view.js';
 test.describe.configure({ timeout: 240_000 });
 
 const WASM_READY_TIMEOUT = 180_000;
-// The 3D view's four ticks, in seconds, as public/sounds/camera/ holds
-// them. The browser decodes at its own rate, so a played tick is known by
-// its length to a few milliseconds (a key is 160 ms).
-const TURN_SECONDS = 0.102;
-const TILT_SECONDS = 0.03;
-const ZOOM_SECONDS = 0.018;
+// A sound played is known by the file it came from (the helper rides the
+// URL from the fetch to the decoded buffer), never by its length: two files
+// can share a length. The 3D view's ticks and the pan's parts, the drawer's
+// parts, the lever's flips and the scroll's ticks, as public/sounds/ holds
+// them for the phosphor looks.
+const TURN = '/sounds/camera/turn.wav';
+const TILT = '/sounds/camera/tilt.wav';
+const ZOOM = '/sounds/camera/zoom.wav';
 // The pan is a motion of the stage: a run-up, a run while the view moves
 // (a loop, scheduled with the run-up and called off for a press that is
 // over before the run-up ends), and the wind-down once it rests.
-const PAN_START_SECONDS = 0.12;
-const PAN_RUN_SECONDS = 0.7;
-const PAN_STOP_SECONDS = 0.42;
-const oneTick = (heard, seconds) =>
-  heard.length === 1 && Math.abs(heard[0] - seconds) < 0.005;
-// The drawer's parts, in seconds, as public/sounds/drawers/ holds them.
-const DRAWER_PARTS = {
-  'latch-open': 0.172,
-  'slide-open': 0.4,
-  'stop-open': 0.26,
-  'grip-close': 0.285,
-  'slide-close': 0.45,
-  'stop-close': 0.24,
-  'latch-close': 0.3,
-};
-// The lever's flips and the scroll's ticks, in seconds, as
-// public/sounds/switches/ and public/sounds/scroll/ hold them.
-const LEVER_ON_SECONDS = 0.13;
-const LEVER_OFF_SECONDS = 0.12;
-const PLATEN_SECONDS = 0.055;
-const PLATEN_END_SECONDS = 0.0824;
-const near = (seconds, target) => Math.abs(seconds - target) < 0.005;
-const partOf = (seconds) =>
-  Object.keys(DRAWER_PARTS).find((name) => Math.abs(DRAWER_PARTS[name] - seconds) < 0.005) ??
-  `${seconds} s`;
+const PAN_START = '/sounds/camera/pan.wav';
+const PAN_RUN = '/sounds/camera/pan-run.wav';
+const PAN_STOP = '/sounds/camera/pan-stop.wav';
+const oneTick = (heard, url) => heard.length === 1 && heard[0] === url;
+const isKey = (url) => typeof url === 'string' && url.startsWith('/sounds/keys/');
+const isTick = (url) => [TURN, TILT, ZOOM].includes(url);
+const LEVER_ON = /^\/sounds\/switches\/lever-on-\d\.wav$/;
+const LEVER_OFF = /^\/sounds\/switches\/lever-off-\d\.wav$/;
+const PLATEN = /^\/sounds\/scroll\/platen-\d\.wav$/;
+const PLATEN_END = '/sounds/scroll/platen-end.wav';
+// A drawer's part by its file name: latch-open, slide-open and so on.
+const partOf = (url) =>
+  typeof url === 'string' ? url.replace(/^.*\//, '').replace(/\.wav$/, '') : `${url}`;
 
 /** The standard mapping's indexes for the controller's buttons. */
 const PAD = { x: 2, y: 3, rb: 5, select: 8 };
@@ -296,7 +286,7 @@ test.describe('The sounds button', () => {
       const before = await page.evaluate(() => window.__sounds.length);
       await act();
       await page.waitForTimeout(700);
-      return page.evaluate((from) => window.__sounds.slice(from).map((s) => s.seconds), before);
+      return page.evaluate((from) => window.__sounds.slice(from).map((s) => s.url), before);
     };
     // The Focus slider is in the Lens drawer; its drawer sound, still on,
     // is let finish before the count starts.
@@ -402,26 +392,27 @@ test.describe('The sounds button', () => {
     );
 
     // Each camera button pressed: the view's own tick for its move and no
-    // key, by the tick's length; a pan button the lead screw's step.
-    const lengths = () => page.evaluate(() => window.__sounds.map((s) => s.seconds));
+    // key, by the tick's file; a pan button the lead screw's step.
+    const files = () => page.evaluate(() => window.__sounds.map((s) => s.url));
     const heard = async (id) => {
       await page.waitForTimeout(500);
-      const before = (await lengths()).length;
+      const before = (await files()).length;
       await page.locator(`#${id}`).click();
       await page.waitForTimeout(800);
-      return (await lengths()).slice(before);
+      return (await files()).slice(before);
     };
     const left = await heard('cameraRotateLeft');
-    expect(oneTick(left, TURN_SECONDS), `rotate left, the turn: ${left}`).toBe(true);
+    expect(oneTick(left, TURN), `rotate left, the turn: ${left}`).toBe(true);
     const down = await heard('cameraRotateDown');
-    expect(oneTick(down, TILT_SECONDS), `rotate down, the tilt: ${down}`).toBe(true);
+    expect(oneTick(down, TILT), `rotate down, the tilt: ${down}`).toBe(true);
     const zoom = await heard('cameraZoomIn');
-    expect(oneTick(zoom, ZOOM_SECONDS), `zoom in, the zoom: ${zoom}`).toBe(true);
+    expect(oneTick(zoom, ZOOM), `zoom in, the zoom: ${zoom}`).toBe(true);
     const pan = await heard('cameraPanLeft');
-    expect(pan, `pan left: the stage's run-up, its run, then its wind-down: ${pan}`).toHaveLength(3);
-    expect(Math.abs(pan[0] - PAN_START_SECONDS)).toBeLessThan(0.005);
-    expect(Math.abs(pan[1] - PAN_RUN_SECONDS)).toBeLessThan(0.005);
-    expect(Math.abs(pan[2] - PAN_STOP_SECONDS)).toBeLessThan(0.005);
+    expect(pan, `pan left: the stage's run-up, its run, then its wind-down: ${pan}`).toEqual([
+      PAN_START,
+      PAN_RUN,
+      PAN_STOP,
+    ]);
   });
 
   test("in Classic the 3D view toolbar's zoom buttons tick as the view's zoom", async ({
@@ -443,10 +434,10 @@ test.describe('The sounds button', () => {
       await page.locator(`#${id}`).click();
       await page.waitForTimeout(800);
       const heard = await page.evaluate(
-        (from) => window.__sounds.slice(from).map((s) => s.seconds),
+        (from) => window.__sounds.slice(from).map((s) => s.url),
         before
       );
-      expect(oneTick(heard, ZOOM_SECONDS), `${id}: ${heard}`).toBe(true);
+      expect(oneTick(heard, ZOOM), `${id}: ${heard}`).toBe(true);
     }
   });
 
@@ -483,7 +474,7 @@ test.describe('The sounds button', () => {
       return page.evaluate(() =>
         window.__sounds.map((s) => ({
           plays: s.at - window.__pressAt + s.delay * 1000,
-          seconds: s.seconds,
+          url: s.url,
         }))
       );
     };
@@ -493,7 +484,7 @@ test.describe('The sounds button', () => {
     // Shut: no key; the latch gripped and the glide with the press, the
     // thump as the 450 ms slide ends, the latch released 120 ms after it.
     const closing = await heard(() => button.click());
-    expect(closing.map((s) => partOf(s.seconds))).toEqual([
+    expect(closing.map((s) => partOf(s.url))).toEqual([
       'grip-close',
       'slide-close',
       'stop-close',
@@ -509,7 +500,7 @@ test.describe('The sounds button', () => {
     // Open: the latch and the roll with the press, the thump as the drawer
     // meets its stop, four fifths into its 500 ms slide.
     const opening = await heard(() => button.click());
-    expect(opening.map((s) => partOf(s.seconds))).toEqual([
+    expect(opening.map((s) => partOf(s.url))).toEqual([
       'latch-open',
       'slide-open',
       'stop-open',
@@ -521,10 +512,13 @@ test.describe('The sounds button', () => {
     expect(stop, 'the thump at the stop, 400 ms in, ms').toBeLessThan(430);
 
     const menu = await heard(() => page.locator('#editMenuBtn').click());
-    expect(menu.length, 'the key, down and up, and the latch').toBe(3);
+    expect(menu.map((s) => partOf(s.url)), 'the key, down and up, and the latch').toEqual([
+      expect.stringMatching(/^p\d[a-c]-down$/),
+      expect.stringMatching(/^p\d[a-c]-up$/),
+      'latch-open',
+    ]);
     const shut = await heard(() => page.keyboard.press('Escape'));
-    expect(shut, 'the latch shut').toHaveLength(1);
-    expect(shut[0].seconds).toBeLessThan(0.25);
+    expect(shut.map((s) => partOf(s.url)), 'the latch shut').toEqual(['latch-close']);
   });
 
   test("a switch in the Customizer flips a lever, down for off and up for on; the wheel over it ticks a line at a time and the end of the list once", async ({
@@ -547,7 +541,7 @@ test.describe('The sounds button', () => {
       await act();
       await page.waitForTimeout(800);
       return page.evaluate(
-        (from) => window.__sounds.slice(from).map((s) => s.seconds),
+        (from) => window.__sounds.slice(from).map((s) => s.url),
         before
       );
     };
@@ -556,9 +550,9 @@ test.describe('The sounds button', () => {
     const lid = page.locator('label[for="param-include_lid"]');
     await lid.scrollIntoViewIfNeeded();
     const off = await heard(() => lid.click());
-    expect(off.length === 1 && near(off[0], LEVER_OFF_SECONDS), `off: ${off}`).toBe(true);
+    expect(off.length === 1 && LEVER_OFF.test(off[0]), `off: ${off}`).toBe(true);
     const on = await heard(() => lid.click());
-    expect(on.length === 1 && near(on[0], LEVER_ON_SECONDS), `on: ${on}`).toBe(true);
+    expect(on.length === 1 && LEVER_ON.test(on[0]), `on: ${on}`).toBe(true);
 
     // The Customizer scrolled back to its top by the page: silent.
     const scroller = await page.evaluateHandle(() => {
@@ -584,10 +578,10 @@ test.describe('The sounds button', () => {
       }
     });
     expect(ticks.length, `a tick a line: ${ticks}`).toBeGreaterThanOrEqual(3);
-    expect(ticks.every((s) => near(s, PLATEN_SECONDS)), `the platen: ${ticks}`).toBe(true);
+    expect(ticks.every((url) => PLATEN.test(url)), `the platen: ${ticks}`).toBe(true);
     // A long turn of the wheel to the bottom: the end of the list, last.
     const end = await heard(() => page.mouse.wheel(0, 5000));
-    expect(near(end.at(-1) ?? 0, PLATEN_END_SECONDS), `the end: ${end}`).toBe(true);
+    expect(end.at(-1), `the end: ${end}`).toBe(PLATEN_END);
   });
 
   test("a controller's buttons sound as the controls they stand for would: Reset View and a standard view are keys, the zoom buttons tick the lens, a step of focus is silent", async ({
@@ -604,15 +598,13 @@ test.describe('The sounds button', () => {
     );
     await connectPad(page);
     await page.waitForTimeout(500);
-    const lengths = () => page.evaluate(() => window.__sounds.map((s) => s.seconds));
+    const files = () => page.evaluate(() => window.__sounds.map((s) => s.url));
     const heardFromPad = async (index, holdMs = 120) => {
-      const before = (await lengths()).length;
+      const before = (await files()).length;
       await padPress(page, index, holdMs);
       await page.waitForTimeout(600);
-      return (await lengths()).slice(before);
+      return (await files()).slice(before);
     };
-    const isKey = (s) => s > 0.1 && s < 0.3;
-    const isTick = (s) => near(s, TURN_SECONDS) || near(s, TILT_SECONDS) || near(s, ZOOM_SECONDS);
 
     // X is Reset View in the Camera preset: a key's press and release, no tick.
     const reset = await heardFromPad(PAD.x);
@@ -629,11 +621,118 @@ test.describe('The sounds button', () => {
     await page.waitForTimeout(600);
     const zoom = await heardFromPad(PAD.y, 350);
     expect(
-      zoom.filter((s) => near(s, ZOOM_SECONDS)).length,
+      zoom.filter((url) => url === ZOOM).length,
       `Y held zooms, the lens detent: ${zoom}`
     ).toBeGreaterThanOrEqual(1);
     const step = await heardFromPad(PAD.rb);
     expect(step, `a step of focus, silent: ${step}`).toHaveLength(0);
+  });
+
+  test.describe("in Classic, the look's own sounds", () => {
+    // Classic is the DOS look and has a sound set of its own, one file per
+    // family under public/sounds/<family>/d-<name>.wav. Each family's files
+    // land one by one; until a family has its own, the set names the
+    // phosphor files and its case here is expected to fail.
+    const DOS = (family) => new RegExp(`^/sounds/${family}/d-[\\w-]+\\.wav$`);
+    const files = (page) => page.evaluate(() => window.__sounds.map((s) => s.url));
+    const heard = async (page, act) => {
+      await page.waitForTimeout(500);
+      const before = (await files(page)).length;
+      await act();
+      await page.waitForTimeout(800);
+      return (await files(page)).slice(before);
+    };
+    const inClassic = async (page) => {
+      await listenForSound(page);
+      await openBox(page, 'classic');
+      await probeSound(page);
+      await setLook(page, true);
+      test.skip(
+        !(await canSound(page)),
+        'this machine has no sound device, so no sound can start'
+      );
+      await drawersBack(page);
+    };
+
+    test('the screen coming on is the DOS look\'s own', async ({ page }) => {
+      test.fail(true, "the DOS look's power sounds are not in yet; it plays the phosphor files");
+      await listenForSound(page);
+      await openBox(page, 'classic');
+      await probeSound(page);
+      await setLook(page, true);
+      test.skip(
+        !(await canSound(page)),
+        'this machine has no sound device, so no sound can start'
+      );
+      const first = (await files(page)).find((url) => url && !url.includes('/keys/'));
+      expect(first, 'the first sound after the key').toBe('/sounds/d-on.wav');
+    });
+
+    test("a camera button ticks with the DOS look's own tick", async ({ page }) => {
+      test.fail(true, "the DOS look's camera ticks are not in yet; it plays the phosphor files");
+      await inClassic(page);
+      const zoom = await heard(page, () => page.locator('#classicZoomInBtn').click());
+      expect(zoom, `zoom in: ${zoom}`).toEqual(['/sounds/camera/d-zoom.wav']);
+    });
+
+    test("a drawer's parts are the DOS look's own", async ({ page }) => {
+      test.fail(true, "the DOS look's drawer is not in yet; it plays the phosphor files");
+      await inClassic(page);
+      // Classic opens with its Customizer pane out; the toolbar's button
+      // slides it shut (the pane's parts; the button's own key is not the
+      // drawer's).
+      const button = page.locator('#classicTbCustomizerBtn');
+      const parts = (await heard(page, () => button.click())).filter((url) =>
+        url?.includes('/sounds/drawers/')
+      );
+      expect(parts.length, `the drawer's parts: ${parts}`).toBeGreaterThanOrEqual(3);
+      expect(parts.every((url) => DOS('drawers').test(url)), `${parts}`).toBe(true);
+    });
+
+    test("a switch flips the DOS look's own lever", async ({ page }) => {
+      test.fail(true, "the DOS look's lever is not in yet; it plays the phosphor files");
+      await inClassic(page);
+      // Classic's Customizer pane is out on entry, every group collapsed:
+      // the lid's group is opened first (a key, before the count).
+      const lid = page.locator('label[for="param-include_lid"]');
+      const group = page.locator('#parametersContainer details.param-group', { has: lid });
+      if (!(await group.getAttribute('open'))) await group.locator('summary').first().click();
+      await lid.scrollIntoViewIfNeeded();
+      const flip = await heard(page, () => lid.click());
+      expect(flip, `the lever: ${flip}`).toEqual([
+        expect.stringMatching(/^\/sounds\/switches\/d-lever-(on|off)-\d\.wav$/),
+      ]);
+    });
+
+    test("a scroll ticks the DOS look's own jog", async ({ page }) => {
+      test.fail(true, "the DOS look's scroll is not in yet; it plays the phosphor files");
+      await inClassic(page);
+      // Classic's Customizer pane is out on entry, every group collapsed:
+      // every group opened so the list is long enough to scroll.
+      const summaries = page.locator('#parametersContainer details.param-group:not([open]) > summary');
+      for (let n = (await summaries.count()) - 1; n >= 0; n--) await summaries.nth(n).click();
+      await page.waitForTimeout(600);
+      const scroller = await page.evaluateHandle(() => {
+        let el = document.getElementById('parametersContainer');
+        while (
+          el &&
+          !(el.scrollHeight > el.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(el).overflowY))
+        ) {
+          el = el.parentElement;
+        }
+        return el;
+      });
+      const box = await scroller.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      const ticks = await heard(page, async () => {
+        for (let n = 0; n < 4; n++) {
+          await page.mouse.wheel(0, 60);
+          await page.waitForTimeout(150);
+        }
+      });
+      expect(ticks.length, `a tick a line: ${ticks}`).toBeGreaterThanOrEqual(1);
+      expect(ticks.every((url) => DOS('scroll').test(url)), `${ticks}`).toBe(true);
+    });
   });
 
   test.describe('on a phone', () => {
