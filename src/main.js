@@ -543,11 +543,12 @@ function hasFullQualitySTLFor(parameters) {
   );
 }
 
-const BUTTON_ICONS = { download: '📥', wait: '⏳' };
+const BUTTON_ICONS = { download: '📥', wait: '⏳', spin: '⟳' };
 
 /**
  * A button's words after an icon in a span of its own, hidden from assistive
- * tech: the alternative look draws the icon as text (variant.css).
+ * tech: the alternative look draws the icon as text (variant.css). The
+ * preview badge takes its hourglass and spinner the same way.
  * @param {HTMLElement} button
  * @param {keyof typeof BUTTON_ICONS} icon
  * @param {string} text
@@ -7787,12 +7788,28 @@ async function initApp() {
       [PREVIEW_STATE.CURRENT]: extra.cached
         ? '✓ Preview (cached)'
         : '✓ Preview ready',
-      [PREVIEW_STATE.PENDING]: '⏳ Changes pending...',
-      [PREVIEW_STATE.RENDERING]: '⟳ Generating...',
+      [PREVIEW_STATE.PENDING]: 'Changes pending...',
+      [PREVIEW_STATE.RENDERING]: 'Generating...',
       [PREVIEW_STATE.STALE]: '⚠ Preview outdated',
       [PREVIEW_STATE.ERROR]: '✗ Preview failed',
     };
-    previewStateIndicator.textContent = stateMessages[state] || state;
+    // The hourglass and the spinner are emoji where the system draws them in
+    // color, so they ride in a span of their own, hidden from assistive
+    // tech, that the alternative look draws as text (variant.css); the
+    // words are the badge's text.
+    const glyphs = {
+      [PREVIEW_STATE.PENDING]: 'wait',
+      [PREVIEW_STATE.RENDERING]: 'spin',
+    };
+    if (glyphs[state]) {
+      setButtonTextWithIcon(
+        previewStateIndicator,
+        glyphs[state],
+        stateMessages[state]
+      );
+    } else {
+      previewStateIndicator.textContent = stateMessages[state] || state;
+    }
     // A failed preview leaves no model, so the size and count of the last
     // one go with it.
     if (state === PREVIEW_STATE.ERROR) {
@@ -12503,6 +12520,12 @@ if (rounded) {
         primaryActionBtn,
         'wait',
         `Generating ${formatName}...`
+      );
+      // The name follows the words while it generates; the state function
+      // sets it back with the words when the render ends.
+      primaryActionBtn.setAttribute(
+        'aria-label',
+        `Generating ${formatName} file from current parameters`
       );
 
       // Disable undo/redo during rendering to prevent state mismatches

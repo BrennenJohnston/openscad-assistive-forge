@@ -1,9 +1,10 @@
 /**
  * Icon buttons, measured as they are drawn. Every state an icon button shows
- * (at rest, under a mouse, pressed, with keyboard focus, and just after a
- * finger lifts) is an icon on a ground, and the icon has to stand out from
- * its ground at 3:1 or more in each Alt View look and in the standard
- * themes, with and without high contrast, on a desktop and on a phone.
+ * (at rest, under a mouse, pressed, with keyboard focus, open or selected,
+ * and just after a finger lifts) is an icon on a ground, and the icon has to
+ * stand out from its ground at 3:1 or more in each Alt View look and in the
+ * standard themes, with and without high contrast, on a desktop and on a
+ * phone.
  *
  * A tap leaves the browser's hover state on the button until the next tap,
  * so a hover color on a phone is a highlight that outlives the press: it
@@ -11,6 +12,16 @@
  * kind (a pad arrow, a pad's center, a zoom button, a view) is tapped and
  * must be back at rest once the finger lifts; the buttons of a kind share
  * their rules.
+ *
+ * The open or selected state is the one a toggle wears while its drawer,
+ * menu or mode is on. The stylesheets draw it from aria-expanded or
+ * aria-pressed being "true", so that attribute is set in the page for the
+ * picture and put back exactly afterwards: nothing opens, no handler runs.
+ * In the Alt View the Lens drawer is opened too, so its toggle and the
+ * controls inside it are on the screen; on a phone that closes the camera
+ * drawer (one drawer at a time), so the phone measures the screen again,
+ * and once more with the Customizer sheet open over the preview, for the
+ * sheet's own arrow and controls.
  *
  * Colors are read from a picture of each button, not from computed styles:
  * an icon may be a stroke, a fill, a background image or a text glyph, and
@@ -21,6 +32,8 @@
  * @license GPL-3.0-or-later
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { skipWithoutWebGL } from './helpers/webgl.js';
@@ -102,7 +115,10 @@ async function openProject(page) {
     state: 'attached',
     timeout: WASM_READY_TIMEOUT,
   });
-  await skipWithoutWebGL(page, 'no WebGL: the camera controls need the 3D view');
+  await skipWithoutWebGL(
+    page,
+    'no WebGL: the camera controls need the 3D view'
+  );
   await page.waitForFunction(() => window.previewManager?.mesh, null, {
     timeout: WASM_READY_TIMEOUT,
   });
@@ -122,7 +138,10 @@ async function lookOn(page, look) {
   if ((await key.getAttribute('aria-pressed')) !== 'true') await key.click();
   await expect(page.locator('html')).toHaveAttribute('data-ui-variant', 'mono');
   if (look.classic) {
-    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
   }
   await drawersBack(page);
   await page.evaluate(() =>
@@ -160,6 +179,40 @@ async function cameraControlsOpen(page, device, look) {
   await page.waitForTimeout(400);
 }
 
+// Every slide on the page has ended: a drawer or sheet still moving would
+// be marked where it is mid-way, or not at all, on a slow runner. An
+// animation that never ends (a spinner) is not waited for.
+async function slidesDone(page) {
+  await page.waitForFunction(
+    () =>
+      !document
+        .getAnimations()
+        .some(
+          (animation) =>
+            animation.playState === 'running' &&
+            Number.isFinite(animation.effect?.getComputedTiming().endTime)
+        ),
+    null,
+    { timeout: 10_000 }
+  );
+  await page.waitForTimeout(150);
+}
+
+// The Alt View's Lens drawer: on a desktop it rises from the actions bar and
+// stays open beside the camera panel; on a phone it is one of the bar's
+// drawers, and opening it closes the camera drawer. Classic holds the Lens
+// sliders in its own panel and has no drawer to open.
+async function lensDrawerOpen(page, device) {
+  const toggle = page.locator(
+    device.name === 'phone' ? '#asciiDrawerToggle' : '#lensDrawerToggle'
+  );
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click();
+  }
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await slidesDone(page);
+}
+
 /**
  * In the page: every icon button a person can see and reach, marked with a
  * number for the protocol to find. An icon button shows a picture (an svg,
@@ -169,19 +222,31 @@ async function cameraControlsOpen(page, device, look) {
  */
 function markIconButtons() {
   const found = [];
+  for (const el of document.querySelectorAll('[data-icon-audit]')) {
+    delete el.dataset.iconAudit;
+  }
   for (const el of document.querySelectorAll('button')) {
-    if (!el.checkVisibility({ visibilityProperty: true, opacityProperty: true })) {
+    if (
+      !el.checkVisibility({ visibilityProperty: true, opacityProperty: true })
+    ) {
       continue;
     }
     if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
     const words = el.cloneNode(true);
-    words.querySelectorAll('.sr-only, .visually-hidden').forEach((n) => n.remove());
+    words
+      .querySelectorAll('.sr-only, .visually-hidden')
+      .forEach((n) => n.remove());
     const text = words.textContent.replace(/\s+/g, '');
     if (text.length > 2) continue;
     if (!el.querySelector('svg, .classic-icon') && text.length === 0) continue;
     const r = el.getBoundingClientRect();
     if (r.width < 16 || r.height < 16) continue;
-    if (r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight) {
+    if (
+      r.left < 0 ||
+      r.top < 0 ||
+      r.right > innerWidth ||
+      r.bottom > innerHeight
+    ) {
       continue;
     }
     const hit = document.elementFromPoint(
@@ -193,8 +258,12 @@ function markIconButtons() {
     el.dataset.iconAudit = key;
     found.push({
       key,
-      name: (el.getAttribute('aria-label') || el.title || el.id || text).slice(0, 40),
-      toggle: el.hasAttribute('aria-pressed') || el.hasAttribute('aria-expanded'),
+      name: (el.getAttribute('aria-label') || el.title || el.id || text).slice(
+        0,
+        40
+      ),
+      toggle:
+        el.hasAttribute('aria-pressed') || el.hasAttribute('aria-expanded'),
       inCameraDrawer: !!el.closest('.camera-drawer'),
       kind: el.matches('.camera-view-btn')
         ? 'view'
@@ -207,6 +276,18 @@ function markIconButtons() {
     });
   }
   return found;
+}
+
+/** In the page: each toggle's state attributes as they are, null where absent. */
+function toggleStates(keys) {
+  return keys.map((key) => {
+    const el = document.querySelector(`[data-icon-audit="${key}"]`);
+    return {
+      key,
+      pressed: el.getAttribute('aria-pressed'),
+      expanded: el.getAttribute('aria-expanded'),
+    };
+  });
 }
 
 /**
@@ -228,12 +309,18 @@ async function readPictures(page, png, boxes) {
       const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       ctx.drawImage(bitmap, 0, 0);
-      const { data, width } = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+      const { data, width } = ctx.getImageData(
+        0,
+        0,
+        bitmap.width,
+        bitmap.height
+      );
       const lin = (v) => {
         const s = v / 255;
         return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
       };
-      const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+      const lum = ([r, g, b]) =>
+        0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
       const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
       const mostCommon = (list) => {
         const buckets = new Map();
@@ -321,7 +408,7 @@ async function settled(page) {
   );
 }
 
-/** Each button as drawn now, from one picture of the screen. */
+/** Each button as drawn now, from one picture of the screen, with the picture. */
 async function picturesOf(page, buttons, scale) {
   const boxes = await page.evaluate(
     ({ list, scale }) =>
@@ -343,15 +430,124 @@ async function picturesOf(page, buttons, scale) {
     { list: buttons.map(({ key, border }) => ({ key, border })), scale }
   );
   const png = await page.screenshot();
-  return readPictures(page, png, boxes);
+  const seen = await readPictures(page, png, boxes);
+  return { seen, png, boxes };
 }
+
+const boxOf = (boxes, key) => {
+  const { left, top, right, bottom } = boxes.find((box) => box.key === key);
+  return { left, top, right, bottom };
+};
 
 const sameColor = (a, b) =>
   [1, 3, 5].every(
     (i) =>
-      Math.abs(parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16)) <=
-      24
+      Math.abs(
+        parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16)
+      ) <= 24
   );
+
+/**
+ * Every marked button through its states, one picture of the screen per
+ * state: the four forced through the protocol, then the selected state set
+ * on the toggles alone and put back exactly. `where` names the screen when
+ * a case measures more than one; `picture` is the file the selected state's
+ * picture is kept under, for looking.
+ */
+async function measureStates(
+  page,
+  cdp,
+  buttons,
+  scale,
+  { where = '', picture },
+  testInfo
+) {
+  const { root } = await cdp.send('DOM.getDocument', { depth: 0 });
+  const nodes = [];
+  for (const button of buttons) {
+    const { nodeId } = await cdp.send('DOM.querySelector', {
+      nodeId: root.nodeId,
+      selector: `[data-icon-audit="${button.key}"]`,
+    });
+    nodes.push(nodeId);
+  }
+  const forceAll = async (forced) => {
+    for (const nodeId of nodes) {
+      await cdp.send('CSS.forcePseudoState', {
+        nodeId,
+        forcedPseudoClasses: forced,
+      });
+    }
+    await settled(page);
+  };
+
+  const measured = [];
+  const failures = [];
+  const rest = new Map();
+  const tag = where ? ` (${where})` : '';
+  const record = (button, state, seen, box) => {
+    measured.push({ button: button.name, state, where, picture, ...seen, box });
+    if (seen.contrast < MIN_CONTRAST) {
+      failures.push(
+        `${button.name} ${state}${tag}: ${seen.contrast}:1 (icon ${seen.icon} on ${seen.ground})`
+      );
+    }
+  };
+
+  // Every button in one state at once, then one picture of them all.
+  for (const state of STATES) {
+    await forceAll(state.forced);
+    const { seen, boxes } = await picturesOf(page, buttons, scale);
+    for (const button of buttons) {
+      if (state.forced.length === 0) rest.set(button.key, seen[button.key]);
+      record(button, state.name, seen[button.key], boxOf(boxes, button.key));
+    }
+  }
+  await forceAll([]);
+
+  const toggles = buttons.filter((button) => button.toggle);
+  if (toggles.length > 0) {
+    const keys = toggles.map((button) => button.key);
+    const before = await page.evaluate(toggleStates, keys);
+    await page.evaluate((keys) => {
+      for (const key of keys) {
+        const el = document.querySelector(`[data-icon-audit="${key}"]`);
+        if (el.hasAttribute('aria-pressed'))
+          el.setAttribute('aria-pressed', 'true');
+        if (el.hasAttribute('aria-expanded')) {
+          el.setAttribute('aria-expanded', 'true');
+        }
+      }
+    }, keys);
+    await settled(page);
+    const { seen, png, boxes } = await picturesOf(page, toggles, scale);
+    await page.evaluate((before) => {
+      for (const { key, pressed, expanded } of before) {
+        const el = document.querySelector(`[data-icon-audit="${key}"]`);
+        if (pressed === null) el.removeAttribute('aria-pressed');
+        else el.setAttribute('aria-pressed', pressed);
+        if (expanded === null) el.removeAttribute('aria-expanded');
+        else el.setAttribute('aria-expanded', expanded);
+      }
+    }, before);
+    await settled(page);
+    expect(
+      await page.evaluate(toggleStates, keys),
+      `the toggles put back as they were${tag}`
+    ).toEqual(before);
+    const file = testInfo.outputPath(picture);
+    fs.writeFileSync(file, png);
+    await testInfo.attach(path.basename(file), {
+      path: file,
+      contentType: 'image/png',
+    });
+    for (const button of toggles) {
+      record(button, 'selected', seen[button.key], boxOf(boxes, button.key));
+    }
+  }
+
+  return { measured, failures, rest };
+}
 
 for (const device of DEVICES) {
   test.describe(`Icon buttons on a ${device.name}`, () => {
@@ -368,12 +564,18 @@ for (const device of DEVICES) {
           } catch {
             // No DevTools protocol in this browser.
           }
-          test.skip(!cdp, 'forcing :hover and :active needs the DevTools protocol');
+          test.skip(
+            !cdp,
+            'forcing :hover and :active needs the DevTools protocol'
+          );
 
           await seed(page, { ...look, highContrast });
           await openProject(page);
           if (look.alt) await lookOn(page, look);
           await cameraControlsOpen(page, device, look);
+          const lens = look.alt && !look.classic;
+          if (lens && device.name === 'desktop')
+            await lensDrawerOpen(page, device);
           if (highContrast) {
             await expect(page.locator('html')).toHaveAttribute(
               'data-high-contrast',
@@ -409,55 +611,32 @@ for (const device of DEVICES) {
 
           const scale = await page.evaluate(() => devicePixelRatio);
           const buttons = await page.evaluate(markIconButtons);
-          expect(buttons.length, 'icon buttons on the screen').toBeGreaterThan(1);
+          expect(buttons.length, 'icon buttons on the screen').toBeGreaterThan(
+            1
+          );
 
           await cdp.send('DOM.enable');
           await cdp.send('CSS.enable');
-          const { root } = await cdp.send('DOM.getDocument', { depth: 0 });
 
-          const nodes = [];
-          for (const button of buttons) {
-            const { nodeId } = await cdp.send('DOM.querySelector', {
-              nodeId: root.nodeId,
-              selector: `[data-icon-audit="${button.key}"]`,
-            });
-            nodes.push(nodeId);
-          }
-          const forceAll = async (forced) => {
-            for (const nodeId of nodes) {
-              await cdp.send('CSS.forcePseudoState', {
-                nodeId,
-                forcedPseudoClasses: forced,
-              });
-            }
-            await settled(page);
-          };
-
-          const measured = [];
-          const failures = [];
-          const rest = new Map();
-          // Every button in one state at once, then one picture of them all.
-          for (const state of STATES) {
-            await forceAll(state.forced);
-            const pictures = await picturesOf(page, buttons, scale);
-            for (const button of buttons) {
-              const seen = pictures[button.key];
-              if (state.forced.length === 0) rest.set(button.key, seen);
-              measured.push({ button: button.name, state: state.name, ...seen });
-              if (seen.contrast < MIN_CONTRAST) {
-                failures.push(
-                  `${button.name} ${state.name}: ${seen.contrast}:1 (icon ${seen.icon} on ${seen.ground})`
-                );
-              }
-            }
-          }
-          await forceAll([]);
+          const first = await measureStates(
+            page,
+            cdp,
+            buttons,
+            scale,
+            { picture: 'selected.png' },
+            testInfo
+          );
+          const measured = [...first.measured];
+          const failures = [...first.failures];
+          const { rest } = first;
 
           if (device.name === 'phone') {
             const tapped = ['pad', 'center', 'zoom', 'view'].map((kind) =>
               buttons.find(
                 (button) =>
-                  button.inCameraDrawer && !button.toggle && button.kind === kind
+                  button.inCameraDrawer &&
+                  !button.toggle &&
+                  button.kind === kind
               )
             );
             expect(
@@ -468,9 +647,15 @@ for (const device of DEVICES) {
               await page.locator(`[data-icon-audit="${button.key}"]`).tap();
               await page.waitForTimeout(150);
               await settled(page);
-              const seen = (await picturesOf(page, [button], scale))[button.key];
+              const seen = (await picturesOf(page, [button], scale)).seen[
+                button.key
+              ];
               const before = rest.get(button.key);
-              measured.push({ button: button.name, state: 'after a tap', ...seen });
+              measured.push({
+                button: button.name,
+                state: 'after a tap',
+                ...seen,
+              });
               if (seen.contrast < MIN_CONTRAST) {
                 failures.push(
                   `${button.name} after a tap: ${seen.contrast}:1 (icon ${seen.icon} on ${seen.ground})`
@@ -488,8 +673,73 @@ for (const device of DEVICES) {
             }
           }
 
+          // On a phone the Lens drawer takes the camera drawer's place, so
+          // the screen with it open is marked and measured as a second one.
+          if (lens && device.name === 'phone') {
+            await lensDrawerOpen(page, device);
+            const again = await page.evaluate(markIconButtons);
+            expect(
+              again.length,
+              'icon buttons with the Lens drawer open'
+            ).toBeGreaterThan(1);
+            const second = await measureStates(
+              page,
+              cdp,
+              again,
+              scale,
+              { where: 'the Lens drawer open', picture: 'selected-lens.png' },
+              testInfo
+            );
+            measured.push(...second.measured);
+            failures.push(...second.failures);
+          }
+
+          // On a phone the Customizer is a sheet over the preview with its
+          // own controls, its arrow among them: a third screen, marked and
+          // measured with the sheet open (it closes the other drawers).
+          if (device.name === 'phone') {
+            const toggle = page.locator('#mobileDrawerToggle');
+            await toggle.click();
+            await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+            await slidesDone(page);
+            const inSheet = await page.evaluate(markIconButtons);
+            expect(
+              inSheet.length,
+              'icon buttons with the Customizer open'
+            ).toBeGreaterThan(1);
+            const third = await measureStates(
+              page,
+              cdp,
+              inSheet,
+              scale,
+              {
+                where: 'the Customizer open',
+                picture: 'selected-customizer.png',
+              },
+              testInfo
+            );
+            measured.push(...third.measured);
+            failures.push(...third.failures);
+          }
+
+          const file = testInfo.outputPath('measured.json');
+          fs.writeFileSync(
+            file,
+            JSON.stringify(
+              {
+                title: testInfo.title,
+                device: device.name,
+                look: look.name,
+                highContrast,
+                scale,
+                entries: measured,
+              },
+              null,
+              1
+            )
+          );
           await testInfo.attach('measured.json', {
-            body: JSON.stringify(measured, null, 1),
+            path: file,
             contentType: 'application/json',
           });
           expect(

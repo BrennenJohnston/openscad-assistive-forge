@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- On a phone, the open Customizer's own arrow is drawn in the accent, so it
+  reads in every look; it was dark on dark in all but the light theme.
+- Under Windows High Contrast, icons drawn as lines stay lines; the Main
+  Page's upload arrow had filled in to a solid tray.
+- The preview badge's hourglass and spinner follow the alternative look as
+  text, the way the Generate button's icons do.
+- While it generates, the Generate button's name says so, as its words do.
+
 ## [5.7.0] - 2026-10-21
 
 ### Added

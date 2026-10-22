@@ -136,3 +136,32 @@ test('Export Changed Settings names the project in its file', async ({
   });
   expect(JSON.parse(text).modelName).toBe('simple_box.scad');
 });
+
+test('while it generates, the Generate button says so in its name too', async ({
+  page,
+}) => {
+  // The engine's work is held back four seconds, so the generating state
+  // lasts long enough to be read.
+  await page.addInitScript(() => {
+    const post = Worker.prototype.postMessage;
+    Worker.prototype.postMessage = function (message, ...rest) {
+      if (message?.type === 'RENDER') {
+        setTimeout(() => post.call(this, message, ...rest), 4_000);
+        return undefined;
+      }
+      return post.call(this, message, ...rest);
+    };
+  });
+  await openBox(page);
+  const button = page.locator('#primaryActionBtn');
+  await expect(button).toHaveAccessibleName(/^Generate STL file/);
+  await button.click();
+  await expect(button).toHaveText(/Generating STL/);
+  await expect(button).toHaveAccessibleName(
+    'Generating STL file from current parameters'
+  );
+  await expect(button).toHaveAttribute('data-action', 'download', {
+    timeout: 120_000,
+  });
+  await expect(button).toHaveAccessibleName(/^Download generated STL file/);
+});

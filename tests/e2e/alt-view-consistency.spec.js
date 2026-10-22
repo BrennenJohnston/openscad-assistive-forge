@@ -37,7 +37,8 @@ async function seed(page, { unlock, theme }) {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
       localStorage.setItem('openscad-forge-theme', theme);
-      if (unlock) localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+      if (unlock)
+        localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
     },
     { unlock, theme }
   );
@@ -120,223 +121,239 @@ async function settle(page) {
  */
 async function audit(page, rootSelector, contentColors = null) {
   await settle(page);
-  return page.evaluate(({ rootSelector, contentColors }) => {
-    const mono =
-      document.documentElement.getAttribute('data-ui-variant') === 'mono';
-    // The standard look is read on the body, where Classic keeps its tokens
-    // and the body inherits the root's. The Alt View's palette is what its
-    // own rules declare: the root's values, and for the rules scoped to
-    // Classic's body, the values those resolve to there.
-    const cs = getComputedStyle(document.body);
-    const rootCs = getComputedStyle(document.documentElement);
-    const probe = document.createElement('div');
-    document.body.appendChild(probe);
-    const toRgb = (value) => {
-      probe.style.color = '';
-      probe.style.color = value;
-      return getComputedStyle(probe).color;
-    };
-    const rules = [];
-    const walk = (list) => {
-      for (const rule of list) {
-        rules.push(rule);
-        if (rule.cssRules) walk([...rule.cssRules]);
+  return page.evaluate(
+    ({ rootSelector, contentColors }) => {
+      const mono =
+        document.documentElement.getAttribute('data-ui-variant') === 'mono';
+      // The standard look is read on the body, where Classic keeps its tokens
+      // and the body inherits the root's. The Alt View's palette is what its
+      // own rules declare: the root's values, and for the rules scoped to
+      // Classic's body, the values those resolve to there.
+      const cs = getComputedStyle(document.body);
+      const rootCs = getComputedStyle(document.documentElement);
+      const probe = document.createElement('div');
+      document.body.appendChild(probe);
+      const toRgb = (value) => {
+        probe.style.color = '';
+        probe.style.color = value;
+        return getComputedStyle(probe).color;
+      };
+      const rules = [];
+      const walk = (list) => {
+        for (const rule of list) {
+          rules.push(rule);
+          if (rule.cssRules) walk([...rule.cssRules]);
+        }
+      };
+      for (const sheet of document.styleSheets) {
+        try {
+          walk([...sheet.cssRules]);
+        } catch {
+          // A sheet from another origin cannot be read; none of ours is.
+        }
       }
-    };
-    for (const sheet of document.styleSheets) {
-      try {
-        walk([...sheet.cssRules]);
-      } catch {
-        // A sheet from another origin cannot be read; none of ours is.
-      }
-    }
-    // A translucent color as the same color, opaque: rgba(r, g, b, a) and
-    // color(srgb r g b / a) both read as rgb(r, g, b); anything else, null.
-    const opaque = (value) => {
-      const rgba = /^rgba\((\d+), (\d+), (\d+), [\d.]+\)$/.exec(value);
-      if (rgba) return `rgb(${rgba[1]}, ${rgba[2]}, ${rgba[3]})`;
-      const srgb = /^color\(srgb ([\d.]+) ([\d.]+) ([\d.]+) \/ [\d.]+\)$/.exec(
-        value
-      );
-      if (!srgb) return null;
-      const [r, g, b] = srgb.slice(1, 4).map((n) => Math.round(Number(n) * 255));
-      return `rgb(${r}, ${g}, ${b})`;
-    };
-    const palette = new Set([
-      'rgba(0, 0, 0, 0)',
-      'rgb(0, 0, 0)',
-      'rgb(255, 255, 255)',
-    ]);
-    let fontOk;
-    if (mono) {
-      const monoRule = (rule) =>
-        rule.selectorText &&
-        /data-ui-variant=['"]mono['"]/.test(rule.selectorText);
-      for (const rule of rules.filter(monoRule)) {
-        const scope = /data-ui-mode=['"]classic['"]/.test(rule.selectorText)
-          ? cs
-          : rootCs;
-        for (const prop of [...rule.style]) {
-          if (prop.startsWith('--color')) {
-            const value = scope.getPropertyValue(prop).trim();
-            if (value) palette.add(toRgb(value));
+      // A translucent color as the same color, opaque: rgba(r, g, b, a) and
+      // color(srgb r g b / a) both read as rgb(r, g, b); anything else, null.
+      const opaque = (value) => {
+        const rgba = /^rgba\((\d+), (\d+), (\d+), [\d.]+\)$/.exec(value);
+        if (rgba) return `rgb(${rgba[1]}, ${rgba[2]}, ${rgba[3]})`;
+        const srgb =
+          /^color\(srgb ([\d.]+) ([\d.]+) ([\d.]+) \/ [\d.]+\)$/.exec(value);
+        if (!srgb) return null;
+        const [r, g, b] = srgb
+          .slice(1, 4)
+          .map((n) => Math.round(Number(n) * 255));
+        return `rgb(${r}, ${g}, ${b})`;
+      };
+      const palette = new Set([
+        'rgba(0, 0, 0, 0)',
+        'rgb(0, 0, 0)',
+        'rgb(255, 255, 255)',
+      ]);
+      let fontOk;
+      if (mono) {
+        const monoRule = (rule) =>
+          rule.selectorText &&
+          /data-ui-variant=['"]mono['"]/.test(rule.selectorText);
+        for (const rule of rules.filter(monoRule)) {
+          const scope = /data-ui-mode=['"]classic['"]/.test(rule.selectorText)
+            ? cs
+            : rootCs;
+          for (const prop of [...rule.style]) {
+            if (prop.startsWith('--color')) {
+              const value = scope.getPropertyValue(prop).trim();
+              if (value) palette.add(toRgb(value));
+            }
+          }
+          for (const prop of [
+            'color',
+            'background-color',
+            'border-color',
+            'outline-color',
+          ]) {
+            const value = rule.style.getPropertyValue(prop);
+            if (value && !/var\(/.test(value)) palette.add(toRgb(value));
           }
         }
-        for (const prop of [
-          'color',
-          'background-color',
-          'border-color',
-          'outline-color',
-        ]) {
-          const value = rule.style.getPropertyValue(prop);
-          if (value && !/var\(/.test(value)) palette.add(toRgb(value));
+        fontOk = (family) =>
+          /iosevka|monospace|courier|consolas|menlo/i.test(family);
+      } else {
+        const names = new Set();
+        for (const rule of rules) {
+          if (!rule.style) continue;
+          for (const prop of [...rule.style]) {
+            if (prop.startsWith('--')) names.add(prop);
+          }
         }
-      }
-      fontOk = (family) => /iosevka|monospace|courier|consolas|menlo/i.test(family);
-    } else {
-      const names = new Set();
-      for (const rule of rules) {
-        if (!rule.style) continue;
-        for (const prop of [...rule.style]) {
-          if (prop.startsWith('--')) names.add(prop);
+        for (const name of names) {
+          const value = cs.getPropertyValue(name).trim();
+          if (value && !/^var\(/.test(value) && CSS.supports('color', value)) {
+            palette.add(toRgb(value));
+          }
         }
+        const norm = (family) =>
+          family
+            .toLowerCase()
+            .replace(/["']/g, '')
+            .replace(/\s*,\s*/g, ',')
+            .trim();
+        const fonts = new Set(
+          [...names]
+            .filter((name) => name.startsWith('--font-family'))
+            .map((name) => norm(cs.getPropertyValue(name)))
+            .filter(Boolean)
+        );
+        fontOk = (family) => fonts.has(norm(family));
       }
-      for (const name of names) {
-        const value = cs.getPropertyValue(name).trim();
-        if (value && !/^var\(/.test(value) && CSS.supports('color', value)) {
-          palette.add(toRgb(value));
-        }
-      }
-      const norm = (family) =>
-        family.toLowerCase().replace(/["']/g, '').replace(/\s*,\s*/g, ',').trim();
-      const fonts = new Set(
-        [...names]
-          .filter((name) => name.startsWith('--font-family'))
-          .map((name) => norm(cs.getPropertyValue(name)))
-          .filter(Boolean)
-      );
-      fontOk = (family) => fonts.has(norm(family));
-    }
-    probe.remove();
+      probe.remove();
 
-    const root = rootSelector
-      ? [...document.querySelectorAll(rootSelector)].find(
-          (el) => el.offsetParent !== null || el.getClientRects().length
-        ) || document.querySelector(rootSelector)
-      : document.body;
-    if (!root) return { missingRoot: rootSelector };
-    const describe = (el) => {
-      const parts = [];
-      let node = el;
-      for (let i = 0; node && node !== document.body && i < 4; i++) {
-        parts.unshift(
-          node.tagName.toLowerCase() +
-            (node.id ? `#${node.id}` : '') +
-            (node.classList.length
-              ? `.${[...node.classList].slice(0, 2).join('.')}`
-              : '')
+      const root = rootSelector
+        ? [...document.querySelectorAll(rootSelector)].find(
+            (el) => el.offsetParent !== null || el.getClientRects().length
+          ) || document.querySelector(rootSelector)
+        : document.body;
+      if (!root) return { missingRoot: rootSelector };
+      const describe = (el) => {
+        const parts = [];
+        let node = el;
+        for (let i = 0; node && node !== document.body && i < 4; i++) {
+          parts.unshift(
+            node.tagName.toLowerCase() +
+              (node.id ? `#${node.id}` : '') +
+              (node.classList.length
+                ? `.${[...node.classList].slice(0, 2).join('.')}`
+                : '')
+          );
+          node = node.parentElement;
+        }
+        return parts.join(' > ');
+      };
+      const visible = (el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width < 2 || r.height < 2) return false;
+        const s = getComputedStyle(el);
+        return (
+          s.visibility !== 'hidden' &&
+          s.display !== 'none' &&
+          parseFloat(s.opacity) > 0.05 &&
+          r.bottom > 0 &&
+          r.right > 0 &&
+          r.top < innerHeight &&
+          r.left < innerWidth
         );
-        node = node.parentElement;
-      }
-      return parts.join(' > ');
-    };
-    const visible = (el) => {
-      const r = el.getBoundingClientRect();
-      if (r.width < 2 || r.height < 2) return false;
-      const s = getComputedStyle(el);
-      return (
-        s.visibility !== 'hidden' &&
-        s.display !== 'none' &&
-        parseFloat(s.opacity) > 0.05 &&
-        r.bottom > 0 &&
-        r.right > 0 &&
-        r.top < innerHeight &&
-        r.left < innerWidth
-      );
-    };
-    // A shadow is decoration when it is cast (offset and not inset) or blurs
-    // in a color off the palette. An inset line with no blur (a divider, a
-    // selection bar) and a ring made by spread alone draw lines, as borders
-    // and outlines do; a glow in the look's own colors is its phosphor bloom.
-    const decorative = (value) =>
-      value !== 'none' &&
-      value.split(/,(?![^(]*\))/).some((layer) => {
-        const [x = 0, y = 0, blur = 0] = (layer.match(/-?[\d.]+px/g) || []).map(
-          parseFloat
-        );
-        const color = layer.replace(/-?[\d.]+px|inset/g, '').trim();
-        const cast = !/inset/.test(layer) && (x !== 0 || y !== 0);
-        return cast || (blur > 0 && !palette.has(color));
-      });
-    const offenders = { color: [], font: [], radius: [], gradient: [], shadow: [] };
-    let seen = 0;
-    for (const el of root.querySelectorAll('*')) {
-      if (
-        ['CANVAS', 'SCRIPT', 'STYLE', 'SVG'].includes(el.tagName) ||
-        el.closest('svg')
-      ) {
-        continue;
-      }
-      if (!visible(el)) continue;
-      seen++;
-      const s = getComputedStyle(el);
-      const hasText = [...el.childNodes].some(
-        (n) => n.nodeType === 3 && n.textContent.trim()
-      );
-      const checks = [
-        ['color', s.color, hasText],
-        ['background-color', s.backgroundColor, true],
-        [
-          'border-color',
-          s.borderTopColor,
-          parseFloat(s.borderTopWidth) > 0 && s.borderTopStyle !== 'none',
-        ],
-        [
-          'outline-color',
-          s.outlineColor,
-          parseFloat(s.outlineWidth) > 0 && s.outlineStyle !== 'none',
-        ],
-      ];
-      const isContent = Boolean(contentColors && el.matches(contentColors));
-      for (const [prop, value, applies] of checks) {
-        if (isContent || !applies || !value || value === 'rgba(0, 0, 0, 0)') {
+      };
+      // A shadow is decoration when it is cast (offset and not inset) or blurs
+      // in a color off the palette. An inset line with no blur (a divider, a
+      // selection bar) and a ring made by spread alone draw lines, as borders
+      // and outlines do; a glow in the look's own colors is its phosphor bloom.
+      const decorative = (value) =>
+        value !== 'none' &&
+        value.split(/,(?![^(]*\))/).some((layer) => {
+          const [x = 0, y = 0, blur = 0] = (
+            layer.match(/-?[\d.]+px/g) || []
+          ).map(parseFloat);
+          const color = layer.replace(/-?[\d.]+px|inset/g, '').trim();
+          const cast = !/inset/.test(layer) && (x !== 0 || y !== 0);
+          return cast || (blur > 0 && !palette.has(color));
+        });
+      const offenders = {
+        color: [],
+        font: [],
+        radius: [],
+        gradient: [],
+        shadow: [],
+      };
+      let seen = 0;
+      for (const el of root.querySelectorAll('*')) {
+        if (
+          ['CANVAS', 'SCRIPT', 'STYLE', 'SVG'].includes(el.tagName) ||
+          el.closest('svg')
+        ) {
           continue;
         }
-        // A see-through surface is the look's own color, let partly through.
-        const seeThrough = prop === 'background-color' && opaque(value);
-        if (!palette.has(value) && !(seeThrough && palette.has(seeThrough))) {
-          offenders.color.push(`${describe(el)} ${prop} ${value}`);
+        if (!visible(el)) continue;
+        seen++;
+        const s = getComputedStyle(el);
+        const hasText = [...el.childNodes].some(
+          (n) => n.nodeType === 3 && n.textContent.trim()
+        );
+        const checks = [
+          ['color', s.color, hasText],
+          ['background-color', s.backgroundColor, true],
+          [
+            'border-color',
+            s.borderTopColor,
+            parseFloat(s.borderTopWidth) > 0 && s.borderTopStyle !== 'none',
+          ],
+          [
+            'outline-color',
+            s.outlineColor,
+            parseFloat(s.outlineWidth) > 0 && s.outlineStyle !== 'none',
+          ],
+        ];
+        const isContent = Boolean(contentColors && el.matches(contentColors));
+        for (const [prop, value, applies] of checks) {
+          if (isContent || !applies || !value || value === 'rgba(0, 0, 0, 0)') {
+            continue;
+          }
+          // A see-through surface is the look's own color, let partly through.
+          const seeThrough = prop === 'background-color' && opaque(value);
+          if (!palette.has(value) && !(seeThrough && palette.has(seeThrough))) {
+            offenders.color.push(`${describe(el)} ${prop} ${value}`);
+          }
+        }
+        if (hasText && !fontOk(s.fontFamily)) {
+          offenders.font.push(`${describe(el)} ${s.fontFamily.slice(0, 40)}`);
+        }
+        if (
+          parseFloat(s.borderTopLeftRadius) > 0 &&
+          el.tagName !== 'INPUT' &&
+          !/circle|dot|badge|switch/i.test(el.className)
+        ) {
+          offenders.radius.push(`${describe(el)} ${s.borderTopLeftRadius}`);
+        }
+        if (/gradient\(/.test(s.backgroundImage))
+          offenders.gradient.push(describe(el));
+        if (s.boxShadow && decorative(s.boxShadow)) {
+          offenders.shadow.push(`${describe(el)} ${s.boxShadow}`);
         }
       }
-      if (hasText && !fontOk(s.fontFamily)) {
-        offenders.font.push(`${describe(el)} ${s.fontFamily.slice(0, 40)}`);
-      }
-      if (
-        parseFloat(s.borderTopLeftRadius) > 0 &&
-        el.tagName !== 'INPUT' &&
-        !/circle|dot|badge|switch/i.test(el.className)
-      ) {
-        offenders.radius.push(`${describe(el)} ${s.borderTopLeftRadius}`);
-      }
-      if (/gradient\(/.test(s.backgroundImage)) offenders.gradient.push(describe(el));
-      if (s.boxShadow && decorative(s.boxShadow)) {
-        offenders.shadow.push(`${describe(el)} ${s.boxShadow}`);
-      }
-    }
-    return {
-      seen,
-      mono,
-      counts: Object.fromEntries(
-        Object.entries(offenders).map(([k, v]) => [k, v.length])
-      ),
-      samples: {
-        color: offenders.color.slice(0, 8),
-        font: offenders.font.slice(0, 4),
-        radius: offenders.radius.slice(0, 8),
-        shadow: offenders.shadow.slice(0, 8),
-      },
-    };
-  }, { rootSelector, contentColors });
+      return {
+        seen,
+        mono,
+        counts: Object.fromEntries(
+          Object.entries(offenders).map(([k, v]) => [k, v.length])
+        ),
+        samples: {
+          color: offenders.color.slice(0, 8),
+          font: offenders.font.slice(0, 4),
+          radius: offenders.radius.slice(0, 8),
+          shadow: offenders.shadow.slice(0, 8),
+        },
+      };
+    },
+    { rootSelector, contentColors }
+  );
 }
 
 /**
@@ -401,7 +418,11 @@ function backdropOf(page, overlayId) {
     const color = style.backgroundColor.startsWith('color(')
       ? n.slice(0, 3)
       : n.slice(0, 3).map((v) => v / 255);
-    return { color, alpha: n.length > 3 ? n[3] : 1, blur: style.backdropFilter };
+    return {
+      color,
+      alpha: n.length > 3 ? n[3] : 1,
+      blur: style.backdropFilter,
+    };
   }, overlayId);
 }
 
@@ -442,7 +463,9 @@ async function paneInk(page) {
 function expectInTheLook(result, name) {
   expect.soft(result.missingRoot, `${name}: found`).toBeUndefined();
   expect.soft(result.mono, `${name}: the Alt View on`).toBe(true);
-  expect.soft(result.samples.color, `${name}: colors off the palette`).toEqual([]);
+  expect
+    .soft(result.samples.color, `${name}: colors off the palette`)
+    .toEqual([]);
   expect.soft(result.samples.font, `${name}: fonts off the stack`).toEqual([]);
   expect.soft(result.samples.radius, `${name}: rounded corners`).toEqual([]);
   expect.soft(result.samples.shadow, `${name}: shadows`).toEqual([]);
@@ -515,7 +538,10 @@ function surfaces(page) {
       root: DIALOG,
       act: async () => {
         await page.locator('#editMenuBtn').click();
-        await page.getByRole('menuitem', { name: /Preferences/ }).first().click();
+        await page
+          .getByRole('menuitem', { name: /Preferences/ })
+          .first()
+          .click();
         await expect(page.locator(DIALOG_VISIBLE).first()).toBeVisible();
         await page.waitForTimeout(600);
       },
@@ -619,7 +645,10 @@ test.describe('The Alt View keeps to its tokens', () => {
     // black. (Classic's Preferences opens as a window with no backdrop;
     // About keeps one.)
     await page.locator('#helpMenuBtn').click();
-    await page.getByRole('menuitem', { name: /^About/ }).first().click();
+    await page
+      .getByRole('menuitem', { name: /^About/ })
+      .first()
+      .click();
     await expect(page.locator('#aboutModalOverlay')).toBeVisible();
     expectFlatBlackBackdrop(
       await backdropOf(page, 'aboutModalOverlay'),
@@ -641,7 +670,9 @@ test.describe('The Alt View keeps to its tokens', () => {
     test.setTimeout(300_000);
     await openProject(page, 'q-charm');
     await page.evaluate(() => {
-      let group = document.querySelector('#param-design_file')?.closest('details');
+      let group = document
+        .querySelector('#param-design_file')
+        ?.closest('details');
       while (group) {
         group.open = true;
         group = group.parentElement?.closest('details');
@@ -659,11 +690,13 @@ test.describe('The Alt View keeps to its tokens', () => {
     // The chooser's drawings take the look's own color, not white, and keep
     // their details.
     const ink = await iconInk(page, firstDesign);
-    expect(ordinary.details, 'the first design has details').toBeGreaterThan(20);
-    expect.soft(ink.white, 'white pixels in the first design').toBe(0);
-    expect.soft(ink.green, 'green pixels in the first design').toBeGreaterThan(
-      ordinary.white / 2
+    expect(ordinary.details, 'the first design has details').toBeGreaterThan(
+      20
     );
+    expect.soft(ink.white, 'white pixels in the first design').toBe(0);
+    expect
+      .soft(ink.green, 'green pixels in the first design')
+      .toBeGreaterThan(ordinary.white / 2);
     expect
       .soft(ink.details, 'the first design keeps its details')
       .toBeGreaterThan(ordinary.details / 2);
@@ -679,9 +712,11 @@ test.describe('The Alt View keeps to its tokens', () => {
       .getByRole('button', { name: 'Open the drawing editor' })
       .first()
       .click();
-    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible({
-      timeout: 90_000,
-    });
+    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible(
+      {
+        timeout: 90_000,
+      }
+    );
     await expect(page.locator('.hfm-overlay-canvas')).toBeHidden();
     const editor = await audit(page, null, DRAWING_COLORS);
     expectInTheLook(editor, 'the page with the drawing editor open');
@@ -727,7 +762,10 @@ test.describe('The Alt View at a phone width', () => {
     expectInTheLook(await audit(page, null), 'a project at a phone width');
     await page.locator('#cameraDrawerToggle').click();
     await page.waitForTimeout(800);
-    expectInTheLook(await audit(page, null), 'the camera drawer at a phone width');
+    expectInTheLook(
+      await audit(page, null),
+      'the camera drawer at a phone width'
+    );
   });
 
   test("a list opens in the page, in the look's colors", async ({ page }) => {
@@ -747,7 +785,9 @@ test.describe('The Alt View at a phone width', () => {
       'base-select'
     );
     await list.tap();
-    await expect.poll(() => list.evaluate((el) => el.matches(':open'))).toBe(true);
+    await expect
+      .poll(() => list.evaluate((el) => el.matches(':open')))
+      .toBe(true);
     const option = list.locator('option').first();
     await expect(option).toBeVisible();
     expect(
@@ -756,7 +796,9 @@ test.describe('The Alt View at a phone width', () => {
     ).toBeGreaterThanOrEqual(44);
     expect(await offGreenInk(option), 'pixels off the green').toBe(0);
     await page.keyboard.press('Escape');
-    await expect.poll(() => list.evaluate((el) => el.matches(':open'))).toBe(false);
+    await expect
+      .poll(() => list.evaluate((el) => el.matches(':open')))
+      .toBe(false);
   });
 });
 
@@ -873,11 +915,15 @@ function echoAndStatus() {
   const t = toggle.getBoundingClientRect();
   const hit = document.elementFromPoint(t.x + t.width / 2, t.y + t.height / 2);
   const drawer = document.getElementById('echoDrawer').getBoundingClientRect();
-  const bar = document.getElementById('previewStatusBar').getBoundingClientRect();
+  const bar = document
+    .getElementById('previewStatusBar')
+    .getBoundingClientRect();
   return {
     shown: toggle.checkVisibility(),
     toggleReachable: !!hit && toggle.contains(hit),
-    atCenter: hit ? `${hit.tagName.toLowerCase()}${hit.id ? '#' + hit.id : ''}` : null,
+    atCenter: hit
+      ? `${hit.tagName.toLowerCase()}${hit.id ? '#' + hit.id : ''}`
+      : null,
     overlap: Math.max(0, Math.round(bar.bottom - drawer.top)),
   };
 }
@@ -897,8 +943,7 @@ test.describe('The echo drawer stays clear of the status line', () => {
     await settle(page);
     // The line moves when the drawer's new height reaches it, a frame after
     // the drawer's own layout: wait for it rather than read between the two.
-    const overlap = () =>
-      page.evaluate(echoAndStatus).then((m) => m.overlap);
+    const overlap = () => page.evaluate(echoAndStatus).then((m) => m.overlap);
     await expect
       .poll(overlap, {
         message: 'closed, the status line over the drawer',
@@ -938,7 +983,9 @@ test.describe('The Alt View with reduced motion', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await openProject(page);
     expect(
-      await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches),
+      await page.evaluate(
+        () => matchMedia('(prefers-reduced-motion: reduce)').matches
+      ),
       'the setting is on'
     ).toBe(true);
     await altViewOn(page);
@@ -959,17 +1006,19 @@ test.describe('The Alt View with the system settings', () => {
     });
     await openProject(page);
     await altViewOn(page);
-    await expect(page.locator('html')).toHaveAttribute('data-high-contrast', 'true');
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    );
     const colors = await page.evaluate(() => {
       const root = getComputedStyle(document.documentElement);
       return ['--color-accent', '--color-text-primary'].map((name) =>
         root.getPropertyValue(name).trim()
       );
     });
-    expect.soft(colors, "the accent and the text in the look's green").toEqual([
-      '#00ff00',
-      '#00ff00',
-    ]);
+    expect
+      .soft(colors, "the accent and the text in the look's green")
+      .toEqual(['#00ff00', '#00ff00']);
     expectInTheLook(await audit(page, null), 'a project with high contrast');
   });
 
@@ -989,22 +1038,30 @@ test.describe('The Alt View with the system settings', () => {
     await openProject(page);
     await altViewOn(page);
     await page.locator('#editMenuBtn').click();
-    await page.getByRole('menuitem', { name: /Preferences/ }).first().click();
+    await page
+      .getByRole('menuitem', { name: /Preferences/ })
+      .first()
+      .click();
     await expect(page.locator('#preferencesModalOverlay')).toBeVisible();
     const backdrop = await page.evaluate(() => {
-      const style = getComputedStyle(document.getElementById('preferencesModalOverlay'));
+      const style = getComputedStyle(
+        document.getElementById('preferencesModalOverlay')
+      );
       const alpha = style.backgroundColor.match(/[\d.]+(?=\)$)/);
       return {
         reduce: matchMedia('(prefers-reduced-transparency: reduce)').matches,
-        alpha: style.backgroundColor.startsWith('rgb(') ? 1 : Number(alpha?.[0] ?? 0),
+        alpha: style.backgroundColor.startsWith('rgb(')
+          ? 1
+          : Number(alpha?.[0] ?? 0),
         blur: style.backdropFilter,
       };
     });
     expect(backdrop.reduce, 'the setting is on').toBe(true);
     expect(backdrop.blur, 'no blur behind the dialog').toBe('none');
-    expect(backdrop.alpha, 'a backdrop solid enough to read past').toBeGreaterThanOrEqual(
-      0.8
-    );
+    expect(
+      backdrop.alpha,
+      'a backdrop solid enough to read past'
+    ).toBeGreaterThanOrEqual(0.8);
     await page.keyboard.press('Escape');
   });
 });
@@ -1014,7 +1071,9 @@ test.describe('The Alt View with the system settings', () => {
  * more red or more blue than green, which the green look has none of.
  */
 async function offGreenInk(locator) {
-  const shot = await locator.screenshot();
+  // A pulsing element is never still: its animations are run to their end
+  // for the picture.
+  const shot = await locator.screenshot({ animations: 'disabled' });
   return locator.page().evaluate(async (data) => {
     const img = new Image();
     img.src = `data:image/png;base64,${data}`;
@@ -1059,6 +1118,40 @@ test.describe("The Alt View's Generate row", () => {
       await icon.evaluate((el) => getComputedStyle(el, '::before').content)
     ).toBe('"[DL]"');
   });
+
+  test('keeps the pending badge in the look, its hourglass drawn as text', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    // The pending state lasts only the preview's debounce: a paused clock
+    // holds it for the picture.
+    await page.clock.install();
+    await openProject(page);
+    await altViewOn(page);
+    await page.evaluate(() => {
+      const g = document.querySelector(
+        '.param-group[data-group-id="Dimensions"]'
+      );
+      if (g) g.open = true;
+    });
+    // A second ahead of the page's clock, which keeps moving while this
+    // call is on its way; nothing of the preview is waiting yet.
+    await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1_000);
+    const field = page.locator('#param-width-spinbox');
+    await field.fill('57');
+    await field.press('Enter');
+    const badge = page.locator('.preview-state-indicator');
+    await expect(badge).toHaveClass(/state-pending/);
+    await page.mouse.move(2, 2);
+    expect(await offGreenInk(badge), 'pixels off the green').toBe(0);
+    await expect(badge).toHaveText(/Changes pending/);
+    const icon = badge.locator('.btn-emoji');
+    await expect(icon).toHaveAttribute('aria-hidden', 'true');
+    expect(
+      await icon.evaluate((el) => getComputedStyle(el, '::before').content)
+    ).toBe('"[WAIT]"');
+    await page.clock.resume();
+  });
 });
 
 test.describe('The standard look is untouched', () => {
@@ -1074,8 +1167,12 @@ test.describe('The standard look is untouched', () => {
     });
     const main = await audit(page, null);
     expect(main.mono).toBe(false);
-    expect(main.counts.color).toBeLessThanOrEqual(STANDARD_BASELINE['main page'][0]);
-    expect(main.counts.font).toBeLessThanOrEqual(STANDARD_BASELINE['main page'][1]);
+    expect(main.counts.color).toBeLessThanOrEqual(
+      STANDARD_BASELINE['main page'][0]
+    );
+    expect(main.counts.font).toBeLessThanOrEqual(
+      STANDARD_BASELINE['main page'][1]
+    );
 
     await openProject(page);
     for (const surface of surfaces(page)) {
@@ -1083,7 +1180,11 @@ test.describe('The standard look is untouched', () => {
       await surface.act();
       if (baseline) {
         const result = await audit(page, surface.root ?? null);
-        console.log(surface.name, JSON.stringify(result.counts), JSON.stringify(result.samples));
+        console.log(
+          surface.name,
+          JSON.stringify(result.counts),
+          JSON.stringify(result.samples)
+        );
         expect(result.mono, `${surface.name}: the Alt View off`).toBe(false);
         expect(
           result.counts.color,

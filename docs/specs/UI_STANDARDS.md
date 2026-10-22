@@ -754,6 +754,14 @@ A drawer's toggle tells a person two things before they press it: which way the 
 </div>
 ```
 
+### Looking before shipping
+
+Before a change to a control ships, I look at it in every look and every layout it reaches, in every state it can be in, from pictures at twice the size, and read each icon's contrast from the pixels; `tests/e2e/alt-view-icon-states.spec.js` holds every icon button to 3:1 in every state, the open and pressed ones included.
+
+- Looks: Forge dark, Forge light, high contrast (dark and light), Classic; and with the Alt View on: green (dark), amber (light), high contrast, and the DOS look (Classic).
+- Layouts: a desktop window (1280 x 720; 1910 x 935 where the schema checks it), a phone upright (412 x 915 and 412 x 810), a phone sideways (844 x 390; 667 x 375 where the schema checks it).
+- States: at rest, under a mouse, pressed, with keyboard focus, open or selected (`aria-expanded` or `aria-pressed` true), just after a tap on a touch screen, and disabled where it can be.
+
 ---
 
 ## Shared UI Contracts

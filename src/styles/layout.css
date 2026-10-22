@@ -1466,8 +1466,11 @@ body[data-app-surface='welcome'] #uiModeToggle {
 /* On a phone the Customizer's own arrow closes the open sheet, at the right
    end of its sticky title row, as the desktop's collapses the column; S1
    turns it to point left while the sheet is open. Closed, the sheet and the
-   arrow are out of sight together. Its desktop look lives in the 768 px
-   rules below, so the phone gives it the same look here. */
+   arrow are out of sight together. This block only places it: open is the
+   one state it has here, and the open-state rule (S3) draws it in the
+   accent pair. A ground set here outranked that rule's by the id selector
+   while its text color still landed, which drew the arrow dark on dark in
+   every look but the light theme. */
 @media (max-width: 767px) {
   .param-panel .panel-header-title-row #collapseParamPanelBtn {
     display: none;
@@ -1479,8 +1482,6 @@ body[data-app-surface='welcome'] #uiModeToggle {
     justify-content: center;
     margin-left: auto;
     flex-shrink: 0;
-    background: var(--color-bg-tertiary);
-    border: 1px solid var(--color-border);
     border-radius: var(--border-radius-md);
   }
 }

@@ -91,7 +91,12 @@ export const MEASURED_SECONDS = {
   'alt-view-cursors.spec.js': 35.7,
   'alt-view-drawers.spec.js': 79.7,
   'alt-view-entry.spec.js': 69.5,
-  'alt-view-icon-states.spec.js': 810.0,
+  // 1044.1 by Test Suite run 39688892017, shard 2 (2026-10-21), the first
+  // attempt of each of its 18 cases (24 to 28 s on a desktop, 35 to 40 s on
+  // a phone), after the selected state and the phone's two further screens
+  // (the Lens drawer open, the Customizer open) joined it. Re-measure from
+  // the next green run.
+  'alt-view-icon-states.spec.js': 1050.0,
   'alt-view-reveal.spec.js': 85.2,
   'alt-view-sounds.spec.js': 194.3,
   'alt-view-vector.spec.js': 57.3,
@@ -147,6 +152,9 @@ export const MEASURED_SECONDS = {
   'folder-import.spec.js': 48.9,
   'folder-projects.spec.js': 10.7,
   'folder-write-back.spec.js': 21.0,
+  // One Main Page case under forced colors, 3 s locally, booked at four
+  // times that; re-measure from the next green run.
+  'forced-colors-icons.spec.js': 12.0,
   // 33.1 by the two runs above, plus six cases since (the parts the right
   // trigger visits, in Standard, Simplified and on a phone; the D-pad down
   // the Customizer; a group header's ring; the controller's Keys button:
