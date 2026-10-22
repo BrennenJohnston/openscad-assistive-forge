@@ -980,7 +980,8 @@ test.describe('The Alt View and pan adjust speak plainly', () => {
     mark = await announcementMark(page);
     await page.locator('#cameraPanUp').click();
     await page.waitForTimeout(600);
-    expect(await spoken(page, mark)).toEqual(['Edges 105%']);
+    // One step up from where the green look starts, Edges 90%.
+    expect(await spoken(page, mark)).toEqual(['Edges 95%']);
 
     mark = await announcementMark(page);
     await adjust.click();
