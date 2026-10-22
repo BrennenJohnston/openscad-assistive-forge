@@ -1925,6 +1925,155 @@ for (const size of SIDEWAYS_SIZES.filter((s) => s.width < 768)) {
   });
 }
 
+// Held sideways in the Alt View the settings row is at its fullest: the menu
+// bar, the settings arrow and the look's own controls share it, with their
+// words from 740 px. At 640 px (the shortest phone held sideways) and at
+// 844 nothing in it lies over a neighbour or leaves the screen, and the row
+// stays one line.
+for (const size of [
+  { width: 640, height: 360 },
+  { width: 844, height: 390 },
+]) {
+  test.describe(`A phone held sideways at ${size.width} x ${size.height}, Alt View`, () => {
+    test.use({ viewport: size, hasTouch: true });
+
+    test("the settings row's controls stay apart", async ({ page }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+      await openPhoneProject(page, LOOKS[3]);
+      test.skip(
+        !(await page.evaluate((q) => matchMedia(q).matches, SIDEWAYS_QUERY)),
+        'this browser does not report a touch screen held sideways'
+      );
+      await page.waitForTimeout(600);
+      const row = await page.evaluate(
+        readRowCrowding,
+        '.preview-drawer-header'
+      );
+      expect.soft(row.overlaps, 'nothing overlaps').toEqual([]);
+      expect.soft(row.offscreen, 'nothing off screen').toEqual([]);
+      expect.soft(row.spread, 'one line').toBeLessThanOrEqual(4);
+    });
+  });
+}
+
+/** A row's controls that lie over a neighbour, off the screen, or off the line. Read in the page. */
+function readRowCrowding(selector) {
+  const row = document.querySelector(selector);
+  const boxes = [...row.querySelectorAll('button, a[href], [role="switch"]')]
+    .filter(
+      (el) =>
+        !el.closest('[role="menu"]') &&
+        el.checkVisibility({ visibilityProperty: true }) &&
+        el.getBoundingClientRect().width > 0
+    )
+    .map((el) => ({ id: el.id, r: el.getBoundingClientRect() }));
+  const overlaps = [];
+  for (let a = 0; a < boxes.length; a++) {
+    for (let b = a + 1; b < boxes.length; b++) {
+      const p = boxes[a].r;
+      const q = boxes[b].r;
+      const inside = (o, i) =>
+        o.left <= i.left &&
+        o.right >= i.right &&
+        o.top <= i.top &&
+        o.bottom >= i.bottom;
+      if (inside(p, q) || inside(q, p)) continue;
+      const ox = Math.min(p.right, q.right) - Math.max(p.left, q.left);
+      const oy = Math.min(p.bottom, q.bottom) - Math.max(p.top, q.top);
+      if (ox > 0.5 && oy > 0.5) {
+        overlaps.push(`${boxes[a].id} x ${boxes[b].id} = ${Math.round(ox)}px`);
+      }
+    }
+  }
+  const middles = boxes.map((x) => x.r.top + x.r.height / 2);
+  return {
+    overlaps,
+    spread: Math.round(Math.max(...middles) - Math.min(...middles)),
+    offscreen: boxes
+      .filter((x) => x.r.right > innerWidth + 0.5 || x.r.left < -0.5)
+      .map((x) => x.id),
+  };
+}
+
+// Held sideways in the Alt View the status line is two lines tall and the
+// ready badge sits at the preview's other corner: the line keeps clear of
+// the badge, even at its longest, with the engine's memory figure in it.
+for (const size of [
+  { width: 740, height: 360 },
+  { width: 844, height: 390 },
+]) {
+  test.describe(`The ready badge held sideways, ${size.width} x ${size.height}, Alt View`, () => {
+    test.use({ viewport: size, hasTouch: true });
+
+    test('the status line stays clear of the ready badge', async ({ page }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+      await openPhoneProject(page, LOOKS[3]);
+      test.skip(
+        !(await page.evaluate((q) => matchMedia(q).matches, SIDEWAYS_QUERY)),
+        'this browser does not report a touch screen held sideways'
+      );
+      await page.waitForFunction(() => window.previewManager?.mesh, null, {
+        timeout: WASM_READY_TIMEOUT,
+      });
+      // The look's own line under the status, once it carries the sliders'
+      // readings (it says less while the look settles).
+      await page.waitForFunction(
+        () =>
+          /EDGE/.test(
+            document.querySelector('.preview-status-alt-adjust')?.textContent ||
+              ''
+          ),
+        null,
+        { timeout: 15_000 }
+      );
+      // The memory figure the engine's monitor writes into the line, shown
+      // as it is once the monitor has reported: the line at its longest.
+      await page.evaluate(() => {
+        document.getElementById('memoryIndicator')?.classList.remove('hidden');
+        const text = document.getElementById('memoryText');
+        if (text) text.textContent = '0 MB';
+      });
+      await page.waitForTimeout(400);
+      const m = await page.evaluate(readBadgeAndLine);
+      expect.soft(m.badge, 'the ready badge shown').not.toBeNull();
+      if (!m.badge) return;
+      expect.soft(m.badge.inside, 'the badge inside the screen').toBe(true);
+      expect
+        .soft(
+          m.overlap,
+          `the status line keeps clear of the badge (the line ends at x ${Math.round(m.lineRight)}, the badge starts at ${Math.round(m.badge.left)})`
+        )
+        .toBeLessThanOrEqual(0);
+    });
+  });
+}
+
+/** The ready badge's box and how far the status line reaches into it. Read in the page. */
+function readBadgeAndLine() {
+  const badge = document.querySelector('.preview-state-indicator');
+  const line = document.getElementById('previewStatusBar');
+  if (!badge || !badge.checkVisibility() || !line) {
+    return { badge: null, lineRight: 0, overlap: 0 };
+  }
+  const b = badge.getBoundingClientRect();
+  const l = line.getBoundingClientRect();
+  const sharesRows = b.top < l.bottom && b.bottom > l.top;
+  return {
+    badge: {
+      left: b.left,
+      inside:
+        b.left >= 0 &&
+        b.top >= 0 &&
+        b.right <= innerWidth + 0.5 &&
+        b.bottom <= innerHeight + 0.5,
+    },
+    lineRight: l.right,
+    overlap: sharesRows
+      ? Math.min(l.right, b.right) - Math.max(l.left, b.left)
+      : 0,
+  };
+}
+
 // On a phone one drawer is open at a time: opening the Customizer, Preview
 // Settings & Info or the camera drawer first closes whichever is open. On a
 // desktop window the panels sit side by side and stay open together.

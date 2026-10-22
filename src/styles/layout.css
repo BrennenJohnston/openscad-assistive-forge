@@ -5024,6 +5024,23 @@ body[data-mobile-toolbar='relocated']
   }
 }
 
+/* Phones held sideways in the Alt View: the settings row holds the menu
+   bar, the arrow and the look's own controls, 657 px of them at 640 and,
+   with the words shown, 2 px from full at 844, so the row's gaps close up
+   (8 to 4 px, the menu bar's 4 to 2) and nothing lies over its neighbour. */
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
+  :root[data-ui-variant='mono']
+    body[data-menu-bar='settings-row']
+    .preview-drawer-header {
+    gap: var(--space-xs);
+    padding: 0 var(--space-xs);
+  }
+
+  :root[data-ui-variant='mono'] .preview-drawer-header > #toolbarMenuBar {
+    gap: var(--space-2xs);
+  }
+}
+
 @media (max-width: 767px) and (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
   /* The bottom bar on one row: the drawers' toggles, then Generate. */
   :root .preview-panel .actions-bar {

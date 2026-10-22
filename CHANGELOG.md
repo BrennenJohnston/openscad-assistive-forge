@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   while the preview is drawn again on every frame of its slide: the preview
   keeps its size while the drawer's room slides and fits once when the slide
   ends.
+- The Full Screen button's icon stands off its word, as Help's does, wherever
+  the word shows.
+- On a phone held sideways in the Alt View, the settings row's buttons no
+  longer lie over one another: the row's gaps close up instead.
+- In the Alt View the status line's box is as wide as its longer line, so
+  held sideways it no longer covers the ready badge beside it.
 - On a phone, the open Customizer's own arrow is drawn in the accent, so it
   reads in every look; it was dark on dark in all but the light theme.
 - Under Windows High Contrast, icons drawn as lines stay lines; the Main
