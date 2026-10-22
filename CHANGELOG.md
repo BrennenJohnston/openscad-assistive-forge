@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- On a phone, one button opens and closes the Customizer: the Customizer
+  button in the Preview Settings row keeps its name, its arrow turns to point
+  the way the sheet closes, and the sheet shows no arrow of its own.
+
 ### Fixed
 
 - On a phone, the open Customizer's own arrow is drawn in the accent, so it

@@ -15,7 +15,7 @@ import { initDrawerController } from '../../src/js/drawer-controller.js';
 
 function mountDrawer() {
   document.body.innerHTML = `
-    <button id="mobileDrawerToggle" aria-expanded="false" aria-label="Open customizer panel">Customizer</button>
+    <button id="mobileDrawerToggle" aria-expanded="false" aria-label="Customizer panel">Customizer</button>
     <aside id="paramPanel" role="region" aria-label="Customizer">
       <h2 id="parameters-heading">Customizer</h2>
       <button id="collapseParamPanelBtn" aria-expanded="true" aria-label="Collapse customizer panel" title="Collapse panel">Arrow</button>
@@ -87,8 +87,12 @@ describe('the customizer drawer stands aside for the drawing editor', () => {
     toggle().click();
     vi.advanceTimersByTime(300);
     expect(isOpen()).toBe(true);
-    document.getElementById('collapseParamPanelBtn').click();
+    // One button: the name holds while it is open, and it closes the sheet.
+    expect(toggle().getAttribute('aria-label')).toBe('Customizer panel');
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    toggle().click();
     expect(isOpen()).toBe(false);
+    expect(toggle().getAttribute('aria-label')).toBe('Customizer panel');
     window.dispatchEvent(new CustomEvent('drawing-editor:close'));
     expect(isOpen()).toBe(false);
   });

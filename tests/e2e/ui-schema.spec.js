@@ -1447,33 +1447,41 @@ for (const height of [915, 810]) {
       // No isMobile: Firefox rejects it when the browser context is created.
       test.use({ viewport: { width: 412, height }, hasTouch: true });
 
-      // The open sheet closes by its own arrow, as the desktop's Customizer
-      // does, at the right end of its title row; there is no X. Open, the
-      // arrow points left, the way the sheet's edge travels to close (S1).
+      // One button: the row's Customizer button opens the sheet and, while
+      // it is open, closes it again, its arrow turned to point the way the
+      // sheet's edge travels to close (S1); its name stays the same and its
+      // state says the rest. The sheet shows no arrow of its own on a phone
+      // and there is no X, so no two controls are named for the same act.
       if (height === 915) {
-        test('S1: the open Customizer closes by its own arrow, pointing left, where the X was', async ({
+        test('S1: the open Customizer closes by the same button, its arrow turned to point left', async ({
           page,
         }) => {
           test.setTimeout(WASM_READY_TIMEOUT + 60_000);
           await openPhoneProject(page, look);
           await page.waitForTimeout(500);
           const toggle = page.locator('#mobileDrawerToggle');
+          await expect(toggle).toHaveAccessibleName('Customizer panel');
           await toggle.click();
           await expect(toggle).toHaveAttribute('aria-expanded', 'true');
           await page.waitForTimeout(700);
           expect(await page.locator('#drawerCloseBtn').count(), 'no X').toBe(0);
-
-          const arrow = page.locator('#paramPanel #collapseParamPanelBtn');
-          await expect(arrow).toBeVisible();
-          await expect(arrow).toHaveAccessibleName('Close customizer panel');
           expect(
-            await arrow.getAttribute('title'),
-            'no tooltip to say the name twice'
-          ).toBeNull();
-          const state = await page.evaluate(
-            readToggle,
-            '#collapseParamPanelBtn'
-          );
+            await page.locator('#collapseParamPanelBtn').evaluate((el) =>
+              el.checkVisibility({
+                visibilityProperty: true,
+                opacityProperty: true,
+              })
+            ),
+            "the sheet's own arrow is not shown on a phone"
+          ).toBe(false);
+          expect(
+            await page
+              .getByRole('button', { name: 'Close customizer panel' })
+              .count(),
+            'nothing named for closing beside the button'
+          ).toBe(0);
+          await expect(toggle).toHaveAccessibleName('Customizer panel');
+          const state = await page.evaluate(readToggle, '#mobileDrawerToggle');
           expect.soft(state.expanded, 'S1: open').toBe(true);
           expect
             .soft(
@@ -1481,26 +1489,18 @@ for (const height of [915, 810]) {
               `S1: the open arrow points at ${Math.round(state.arrow)} degrees`
             )
             .toBeLessThanOrEqual(1);
-          const place = await page.evaluate(() => {
-            const b = document
-              .getElementById('collapseParamPanelBtn')
-              .getBoundingClientRect();
-            const row = document
-              .querySelector('#paramPanel .panel-header-title-row')
-              .getBoundingClientRect();
-            return { gap: row.right - b.right, w: b.width, h: b.height };
-          });
-          expect
-            .soft(place.w, 'a touch target wide')
-            .toBeGreaterThanOrEqual(44);
-          expect
-            .soft(place.h, 'a touch target high')
-            .toBeGreaterThanOrEqual(44);
-          expect
-            .soft(place.gap, 'at the right end of the title row')
-            .toBeLessThanOrEqual(24);
 
-          await arrow.click();
+          // Escape closes it and puts focus back on the button.
+          await page.keyboard.press('Escape');
+          await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+          await expect(toggle).toBeFocused();
+          await expect(toggle).toHaveAccessibleName('Customizer panel');
+
+          // And the button itself closes it.
+          await toggle.click();
+          await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+          await page.waitForTimeout(700);
+          await toggle.click();
           await expect(toggle).toHaveAttribute('aria-expanded', 'false');
           await expect(toggle).toBeFocused();
         });
