@@ -13,6 +13,7 @@ import {
   STORAGE_KEY_PHONE_CUSTOMIZER_OPACITY,
   STORAGE_KEY_PHONE_CUSTOMIZER_WIDTH,
 } from './storage-keys.js';
+import { initSheetGrip } from './phone-sheet-grip.js';
 
 /** Its width when nothing is saved, as a share of the screen's width. */
 export const CUSTOMIZER_DEFAULT_SHARE = 0.75;
@@ -25,10 +26,6 @@ export const CUSTOMIZER_OPACITY_DEFAULT = 90;
 export const CUSTOMIZER_OPACITY_MIN = 65;
 export const CUSTOMIZER_OPACITY_MAX = 100;
 const OPACITY_STEP = 5;
-
-/** The grip's arrow-key steps, in percent of the screen's width. */
-const STEP = 2;
-const BIG_STEP = 5;
 
 /**
  * The narrowest and widest the Customizer may be on a screen this wide.
@@ -120,6 +117,7 @@ function initOpacitySetting() {
 export function initPhoneCustomizer({ panel, grip }) {
   initOpacitySetting();
   let share = loadCustomizerShare();
+  let gripControl = null;
 
   function apply() {
     const vw = window.innerWidth;
@@ -135,15 +133,7 @@ export function initPhoneCustomizer({ panel, grip }) {
         `${Math.round(box.top + box.height / 2)}px`
       );
     }
-    const { min, max } = customizerWidthBounds(vw);
-    const percent = (n) => Math.round((n / vw) * 100);
-    grip.setAttribute('aria-valuemin', String(percent(min)));
-    grip.setAttribute('aria-valuemax', String(percent(max)));
-    grip.setAttribute('aria-valuenow', String(percent(px)));
-    grip.setAttribute(
-      'aria-valuetext',
-      `Customizer ${percent(px)}% of the screen's width`
-    );
+    gripControl?.update();
   }
 
   function setWidth(px, { save = true } = {}) {
@@ -156,45 +146,17 @@ export function initPhoneCustomizer({ panel, grip }) {
     }
   }
 
-  if (grip) {
-    grip.addEventListener('keydown', (event) => {
-      const vw = window.innerWidth;
-      const now = customizerWidthPx(share, vw);
-      const { min, max } = customizerWidthBounds(vw);
-      const step = ((event.shiftKey ? BIG_STEP : STEP) / 100) * vw;
-      const next = {
-        ArrowLeft: now - step,
-        ArrowRight: now + step,
-        Home: min,
-        End: max,
-      }[event.key];
-      if (next === undefined) return;
-      event.preventDefault();
-      setWidth(next);
-    });
-
-    let dragging = false;
-    grip.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0) return;
-      dragging = true;
-      grip.setPointerCapture?.(event.pointerId);
-      event.preventDefault();
-    });
-    grip.addEventListener('pointermove', (event) => {
-      if (!dragging) return;
-      // The panel starts at the screen's left edge: its width is the
-      // pointer's distance from that edge.
-      setWidth(event.clientX, { save: false });
-    });
-    const endDrag = (event) => {
-      if (!dragging) return;
-      dragging = false;
-      grip.releasePointerCapture?.(event.pointerId);
-      safeSetItem(STORAGE_KEY_PHONE_CUSTOMIZER_WIDTH, share.toFixed(4));
-    };
-    grip.addEventListener('pointerup', endDrag);
-    grip.addEventListener('pointercancel', endDrag);
-  }
+  // The panel starts at the screen's left edge: its width is the pointer's
+  // distance from that edge.
+  gripControl = initSheetGrip({
+    grip,
+    axis: 'x',
+    bounds: () => customizerWidthBounds(window.innerWidth),
+    get: () => customizerWidthPx(share, window.innerWidth),
+    set: setWidth,
+    describe: (px) =>
+      `Customizer ${Math.round((px / window.innerWidth) * 100)}% of the screen's width`,
+  });
 
   apply();
   return { apply };

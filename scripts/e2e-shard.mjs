@@ -193,6 +193,12 @@ export const MEASURED_SECONDS = {
   'param-links.spec.js': 95.6,
   'parameter-filter.spec.js': 5.1,
   'parity-regression.spec.js': 38.7,
+  // The phone's Preview Settings sheet, its grip's keys and drag, a reload,
+  // in four looks at two heights: 121 s locally, booked from CI's pace for
+  // ui-schema's phone cases (23.5 s there against 17 s here for the
+  // Customizer sheet case, Test Suite 39709840987). Its own file: the
+  // planner's shard spread could not hold it inside ui-schema.
+  'phone-settings-sheet.spec.js': 175.0,
   'potrace-engine.spec.js': 2.4,
   'preference-matrix.spec.js': 40.7,
   // 24.3 by the two runs above, plus one case since (a library file's plain

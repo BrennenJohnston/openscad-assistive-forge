@@ -364,10 +364,12 @@ test.describe('Drawers in the Alt View', () => {
     }) => {
       await openBox(page);
 
+      // The sheet shows no arrow of its own on a phone: a header button
+      // rides in it instead.
       const popOut = {
         press: '#mobileDrawerToggle',
         box: '#paramPanel',
-        inside: '#collapseParamPanelBtn',
+        inside: '#expertModeToggle',
       };
       const camera = {
         press: '#cameraDrawerToggle',

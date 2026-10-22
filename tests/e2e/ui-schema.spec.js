@@ -1,5 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { hasWebGL } from './helpers/webgl.js';
+import {
+  alphaOf,
+  LOOKS,
+  openPhoneProject,
+  readPreviewBox,
+  reloadPhoneProject,
+  WASM_READY_TIMEOUT,
+} from './helpers/phone-sheets.js';
 
 // The drawer and menu rules in docs/specs/UI_STANDARDS.md ("Drawers, sheets
 // and menus: the schema"), measured on the page as a person meets it: the
@@ -13,18 +21,9 @@ import { hasWebGL } from './helpers/webgl.js';
 // the direction a glyph points on screen is computed from its drawing's base
 // direction pushed through the transform, rotate and scale it renders with.
 
-const WASM_READY_TIMEOUT = 180_000;
-
 const SIZES = [
   { width: 1280, height: 720 },
   { width: 1910, height: 935 },
-];
-
-const LOOKS = [
-  { name: 'dark', theme: 'dark' },
-  { name: 'light', theme: 'light' },
-  { name: 'high contrast', theme: 'dark', highContrast: true },
-  { name: 'Alt View', theme: 'dark', altView: true },
 ];
 
 // Which way each drawer's leading edge moves when it opens.
@@ -758,55 +757,6 @@ for (const look of LOOKS.filter((l) => !l.altView)) {
   });
 }
 
-/** The simple box open in Standard at a phone's size, in a look. */
-async function openPhoneProject(page, look) {
-  await page.addInitScript((l) => {
-    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
-    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
-    localStorage.setItem('openscad-forge-theme', l.theme);
-    if (l.highContrast) {
-      localStorage.setItem('openscad-forge-high-contrast', 'true');
-    }
-    if (l.altView) {
-      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
-    }
-    localStorage.setItem(
-      'openscad-forge-ui-mode',
-      JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
-    );
-  }, look);
-  await page.goto('/?example=simple-box', { timeout: 60_000 });
-  if (look.altView) {
-    test.skip(
-      !(await hasWebGL(page)),
-      'The Alt View draws from the 3D picture; this browser has no WebGL'
-    );
-  }
-  await page.waitForSelector('body[data-wasm-ready="true"]', {
-    state: 'attached',
-    timeout: WASM_READY_TIMEOUT,
-  });
-  await page
-    .locator('.param-control')
-    .first()
-    .waitFor({ state: 'attached', timeout: 60_000 });
-  const notNow = page.locator('#saveProjectNotNow');
-  if (
-    await notNow.waitFor({ state: 'visible', timeout: 3_000 }).then(
-      () => true,
-      () => false
-    )
-  ) {
-    await notNow.click();
-  }
-  if (look.altView) {
-    await page.locator('#_hfmToggle').click();
-    await page.waitForFunction(
-      () => document.documentElement.getAttribute('data-ui-variant') === 'mono'
-    );
-  }
-}
-
 /**
  * The simple box open in Standard at a phone's size, in a look, with the
  * camera drawer opened by its toggle.
@@ -820,15 +770,6 @@ async function openPhoneCameraDrawer(page, look) {
   }
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await page.waitForTimeout(500);
-}
-
-/** A computed background color's alpha: rgb(), rgba() or color(... / a). */
-function alphaOf(color) {
-  const slash = /\/\s*([\d.]+)\s*\)$/.exec(color);
-  if (slash) return Number(slash[1]);
-  const rgba = /rgba\(([^)]+)\)/.exec(color);
-  if (rgba) return Number(rgba[1].split(/[ ,]+/).filter(Boolean)[3]);
-  return 1;
 }
 
 /** The open phone drawer's layout, read in the page. */
@@ -1234,26 +1175,6 @@ for (const size of [
   });
 }
 
-/** The share of the screen's height, down its middle, where the preview shows. */
-function previewHeightShare() {
-  const x = innerWidth / 2;
-  let seen = 0;
-  let total = 0;
-  for (let y = 1; y < innerHeight; y += 2) {
-    total++;
-    if (document.elementFromPoint(x, y)?.closest('#previewContainer')) seen++;
-  }
-  return seen / total;
-}
-
-/** The preview canvas's box, rounded. */
-function readPreviewBox() {
-  const r = document
-    .getElementById('previewCanvasSection')
-    .getBoundingClientRect();
-  return { width: Math.round(r.width), height: Math.round(r.height) };
-}
-
 /**
  * The phone Customizer pop-out's box and surfaces, read in the page. Its
  * see-through tint and blur are drawn by a layer behind it when one shows
@@ -1305,46 +1226,6 @@ function readGrip() {
     height: r.height,
     centerX: r.left + r.width / 2,
   };
-}
-
-/**
- * The same project opened again in the same browser, the look as it was: a
- * new start of the page that keeps what was saved. (The page drops the
- * example from its address once it opens it, so a plain reload would land
- * on the Main Page.)
- */
-async function reloadPhoneProject(page, look) {
-  await page.goto('/?example=simple-box', { timeout: 60_000 });
-  await page.waitForSelector('body[data-wasm-ready="true"]', {
-    state: 'attached',
-    timeout: WASM_READY_TIMEOUT,
-  });
-  await page
-    .locator('.param-control')
-    .first()
-    .waitFor({ state: 'attached', timeout: 60_000 });
-  const notNow = page.locator('#saveProjectNotNow');
-  if (
-    await notNow.waitFor({ state: 'visible', timeout: 3_000 }).then(
-      () => true,
-      () => false
-    )
-  ) {
-    await notNow.click();
-  }
-  if (look.altView) {
-    const on = await page.evaluate(
-      () => document.documentElement.getAttribute('data-ui-variant') === 'mono'
-    );
-    if (!on) {
-      await page.locator('#_hfmToggle').click();
-      await page.waitForFunction(
-        () =>
-          document.documentElement.getAttribute('data-ui-variant') === 'mono'
-      );
-    }
-  }
-  await page.waitForTimeout(500);
 }
 
 /** The open Customizer sheet and what is around it, read in the page. */
@@ -1733,32 +1614,6 @@ for (const height of [915, 810]) {
             .toBeLessThanOrEqual(1);
         }
         await closeCustomizer();
-
-        const settings = page.locator('#previewDrawerToggle');
-        await settings.focus();
-        await page.keyboard.press('Enter');
-        await expect(settings).toHaveAttribute('aria-expanded', 'true');
-        await page.waitForTimeout(600);
-        const p = await page.evaluate(() => {
-          const box = (el) => el.getBoundingClientRect();
-          return {
-            sectionBottom: box(document.getElementById('previewInfoSection'))
-              .bottom,
-            canvasTop: box(document.getElementById('previewCanvasSection')).top,
-          };
-        });
-        expect
-          .soft(
-            await page.evaluate(previewHeightShare),
-            'S6: the preview with Preview Settings open'
-          )
-          .toBeGreaterThanOrEqual(0.5);
-        expect
-          .soft(
-            p.canvasTop,
-            'Preview Settings drops from its row, the preview below it'
-          )
-          .toBeGreaterThanOrEqual(p.sectionBottom - 1);
       });
     });
   }

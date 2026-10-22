@@ -1521,14 +1521,14 @@ body[data-app-surface='welcome'] #uiModeToggle {
       visibility 0s;
   }
 
-  /* Preview Settings & Info drops from its row in the page's flow, as tall
-     as leaves the preview below it half the screen
-     (preview-settings-drawer.js sets the height). :root outweighs the
-     overlay rule further down. */
+  /* Preview Settings & Info held upright is a sheet over the preview (the
+     block below, after the Customizer's); its row keeps its place in the
+     flow. :root outweighs the overlay rule further down; held sideways the
+     overlay rule at the end of this file wins, being later. */
   :root .preview-info-section.preview-drawer-expanded {
     position: relative;
-    height: var(--phone-settings-height, auto);
-    max-height: var(--phone-settings-height, none);
+    height: auto;
+    max-height: none;
   }
 
   /* Respect reduced motion */
@@ -1582,7 +1582,8 @@ body[data-app-surface='welcome'] #uiModeToggle {
   }
 }
 
-/* Shown only for a phone held upright (below). */
+/* Shown only for a phone held upright (below): one layer behind the
+   Customizer, one behind Preview Settings & Info. */
 .customizer-glass {
   display: none;
 }
@@ -1613,7 +1614,9 @@ body[data-app-surface='welcome'] #uiModeToggle {
     background-color: transparent;
   }
 
-  :root body:not([data-ui-mode='classic']) .customizer-glass {
+  :root
+    body:not([data-ui-mode='classic'])
+    .customizer-glass[data-sheet='customizer'] {
     display: block;
     position: fixed;
     top: var(--phone-drawer-top, 0px);
@@ -1639,7 +1642,7 @@ body[data-app-surface='welcome'] #uiModeToggle {
   :root
     body:not([data-ui-mode='classic'])
     .param-panel.drawer-open
-    ~ .customizer-glass {
+    ~ .customizer-glass[data-sheet='customizer'] {
     transform: none;
     visibility: visible;
     transition:
@@ -1705,6 +1708,133 @@ body[data-app-surface='welcome'] #uiModeToggle {
     background-color: var(--color-text-primary);
   }
 
+  /* Preview Settings & Info on a phone held upright: a sheet over the
+     preview from under the status line (preview-settings-drawer.js sets
+     --phone-settings-top and --phone-settings-height), see-through through
+     the same kind of layer as the Customizer's at the same setting, with a
+     grip across its bottom edge that sets its height. Its row keeps its
+     place in the flow above; the preview keeps its full size behind it. */
+  :root
+    body:not([data-ui-mode='classic'])
+    .preview-info-section.preview-drawer-expanded {
+    box-shadow: none;
+    border: none;
+    border-radius: 0;
+    /* A blur on the row would make it the sheet's containing block (the
+       keyboard-visible rule): the sheet and its layer are fixed to the
+       screen, never to the row. */
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background-color: transparent;
+  }
+
+  :root
+    body:not([data-ui-mode='classic'])
+    #previewInfoContent.phone-sheet-open {
+    position: fixed;
+    top: var(--phone-settings-top, 0px);
+    left: 0;
+    right: 0;
+    height: var(--phone-settings-height, 40vh);
+    max-height: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    z-index: var(--z-index-modal-backdrop);
+    background-color: transparent;
+    border-bottom: 1px solid var(--color-border);
+    box-shadow: var(--shadow-lg);
+    /* Room under the last control for the grip's upper half. */
+    padding-bottom: calc(var(--size-touch-target) / 2 + var(--space-sm));
+  }
+
+  :root
+    body:not([data-ui-mode='classic'])
+    #previewInfoContent.phone-sheet-open
+    .preview-settings-panel {
+    background-color: transparent;
+  }
+
+  :root
+    body:not([data-ui-mode='classic'])
+    .customizer-glass[data-sheet='settings']:not([hidden]) {
+    display: block;
+    position: fixed;
+    top: var(--phone-settings-top, 0px);
+    left: 0;
+    right: 0;
+    height: var(--phone-settings-height, 40vh);
+    z-index: calc(var(--z-index-modal-backdrop) - 1);
+    background-color: color-mix(
+      in srgb,
+      var(--color-bg-primary) var(--customizer-opacity, 90%),
+      transparent
+    );
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    pointer-events: none;
+  }
+
+  :root body:not([data-ui-mode='classic']) .settings-height-grip:not([hidden]) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: calc(
+      var(--phone-settings-top, 0px) + var(--phone-settings-height, 40vh) -
+        var(--size-touch-target) / 2
+    );
+    height: var(--size-touch-target);
+    z-index: calc(var(--z-index-modal-backdrop) + 1);
+    cursor: row-resize;
+    touch-action: none;
+  }
+
+  /* The grip's mark: a short bar along the edge, the width grip's turned. */
+  :root body:not([data-ui-mode='classic']) .settings-height-grip::before {
+    content: '';
+    height: var(--space-xs);
+    width: calc(var(--size-touch-target) * 0.75);
+    border-radius: var(--border-radius-sm);
+    background-color: var(--color-text-secondary);
+  }
+
+  :root body:not([data-ui-mode='classic']) .settings-height-grip:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  :root[data-high-contrast='true']
+    body:not([data-ui-mode='classic'])
+    .customizer-glass[data-sheet='settings']:not([hidden]) {
+    background-color: var(--color-bg-primary);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  :root[data-high-contrast='true']
+    body:not([data-ui-mode='classic'])
+    #previewInfoContent.phone-sheet-open {
+    border: 2px solid var(--color-border);
+  }
+
+  :root[data-high-contrast='true']
+    body:not([data-ui-mode='classic'])
+    .settings-height-grip::before {
+    background-color: var(--color-text-primary);
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    :root
+      body:not([data-ui-mode='classic'])
+      .customizer-glass[data-sheet='settings']:not([hidden]) {
+      background-color: var(--color-bg-primary);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+
   @media (prefers-reduced-transparency: reduce) {
     :root body:not([data-ui-mode='classic']) .param-panel,
     :root body:not([data-ui-mode='classic']) .customizer-glass {
@@ -1715,11 +1845,13 @@ body[data-app-surface='welcome'] #uiModeToggle {
   }
 
   @media (prefers-reduced-motion: reduce) {
-    :root body:not([data-ui-mode='classic']) .customizer-glass,
+    :root
+      body:not([data-ui-mode='classic'])
+      .customizer-glass[data-sheet='customizer'],
     :root
       body:not([data-ui-mode='classic'])
       .param-panel.drawer-open
-      ~ .customizer-glass {
+      ~ .customizer-glass[data-sheet='customizer'] {
       transition: none;
     }
   }

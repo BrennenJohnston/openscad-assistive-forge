@@ -63,7 +63,10 @@ export function initDrawerController() {
   // The tint behind the panel and the grip on its edge travel with it.
   const sheetParts = () => [
     { el: drawer },
-    { el: document.querySelector('.customizer-glass'), role: 'rider' },
+    {
+      el: document.querySelector('.customizer-glass[data-sheet="customizer"]'),
+      role: 'rider',
+    },
     { el: grip, role: 'rider' },
   ];
 
