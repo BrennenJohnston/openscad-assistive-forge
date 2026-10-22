@@ -1928,8 +1928,9 @@ for (const size of SIDEWAYS_SIZES.filter((s) => s.width < 768)) {
 // Held sideways in the Alt View the settings row is at its fullest: the menu
 // bar, the settings arrow and the look's own controls share it, with their
 // words from 740 px. At 640 px (the shortest phone held sideways) and at
-// 844 nothing in it lies over a neighbour or leaves the screen, and the row
-// stays one line.
+// 844 nothing in it lies over or touches a neighbour (a box left 0.3 px
+// from the next passed here and met it on another machine's fonts) or
+// leaves the screen, and the row stays one line.
 for (const size of [
   { width: 640, height: 360 },
   { width: 844, height: 390 },
@@ -1950,13 +1951,14 @@ for (const size of [
         '.preview-drawer-header'
       );
       expect.soft(row.overlaps, 'nothing overlaps').toEqual([]);
+      expect.soft(row.close, 'nothing touches').toEqual([]);
       expect.soft(row.offscreen, 'nothing off screen').toEqual([]);
       expect.soft(row.spread, 'one line').toBeLessThanOrEqual(4);
     });
   });
 }
 
-/** A row's controls that lie over a neighbour, off the screen, or off the line. Read in the page. */
+/** A row's controls that lie over a neighbour, touch one (under 1.5 px apart), off the screen, or off the line. Read in the page. */
 function readRowCrowding(selector) {
   const row = document.querySelector(selector);
   const boxes = [...row.querySelectorAll('button, a[href], [role="switch"]')]
@@ -1968,6 +1970,7 @@ function readRowCrowding(selector) {
     )
     .map((el) => ({ id: el.id, r: el.getBoundingClientRect() }));
   const overlaps = [];
+  const close = [];
   for (let a = 0; a < boxes.length; a++) {
     for (let b = a + 1; b < boxes.length; b++) {
       const p = boxes[a].r;
@@ -1980,14 +1983,18 @@ function readRowCrowding(selector) {
       if (inside(p, q) || inside(q, p)) continue;
       const ox = Math.min(p.right, q.right) - Math.max(p.left, q.left);
       const oy = Math.min(p.bottom, q.bottom) - Math.max(p.top, q.top);
-      if (ox > 0.5 && oy > 0.5) {
+      if (oy <= 0.5) continue;
+      if (ox > 0.5) {
         overlaps.push(`${boxes[a].id} x ${boxes[b].id} = ${Math.round(ox)}px`);
+      } else if (ox > -1.5) {
+        close.push(`${boxes[a].id} x ${boxes[b].id} = ${(-ox).toFixed(1)}px apart`);
       }
     }
   }
   const middles = boxes.map((x) => x.r.top + x.r.height / 2);
   return {
     overlaps,
+    close,
     spread: Math.round(Math.max(...middles) - Math.min(...middles)),
     offscreen: boxes
       .filter((x) => x.r.right > innerWidth + 0.5 || x.r.left < -0.5)

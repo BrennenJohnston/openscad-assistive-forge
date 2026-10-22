@@ -5027,7 +5027,12 @@ body[data-mobile-toolbar='relocated']
 /* Phones held sideways in the Alt View: the settings row holds the menu
    bar, the arrow and the look's own controls, 657 px of them at 640 and,
    with the words shown, 2 px from full at 844, so the row's gaps close up
-   (8 to 4 px, the menu bar's 4 to 2) and nothing lies over its neighbour. */
+   (8 to 4 px, the menu bar's 4 to 2). At 640 the row is still 4 px short
+   with the menu bar's buttons at their least (612 px for 616), and the
+   arrow's box gave them up by shrinking under its button, which then met
+   the HC toggle: the box keeps its button's width (a short row shows it at
+   its end instead), and below 740 the toggle's word goes the way the other
+   words do, its "[HC]" already saying it. */
 @media (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
   :root[data-ui-variant='mono']
     body[data-menu-bar='settings-row']
@@ -5038,6 +5043,16 @@ body[data-mobile-toolbar='relocated']
 
   :root[data-ui-variant='mono'] .preview-drawer-header > #toolbarMenuBar {
     gap: var(--space-2xs);
+  }
+
+  :root body[data-menu-bar='settings-row'] .preview-drawer-header-left {
+    flex-shrink: 0;
+  }
+}
+
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 500px) and (max-width: 739px) {
+  :root[data-ui-variant='mono'] .contrast-label {
+    display: none;
   }
 }
 

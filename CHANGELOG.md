@@ -28,7 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Full Screen button's icon stands off its word, as Help's does, wherever
   the word shows.
 - On a phone held sideways in the Alt View, the settings row's buttons no
-  longer lie over one another: the row's gaps close up instead.
+  longer lie over one another: the row's gaps close up, and on the
+  narrowest phones the HC button's word gives way to its mark.
 - In the Alt View the status line's box is as wide as its longer line, so
   held sideways it no longer covers the ready badge beside it.
 - On a phone, the open Customizer's own arrow is drawn in the accent, so it
