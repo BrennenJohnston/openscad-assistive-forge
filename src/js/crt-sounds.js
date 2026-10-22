@@ -23,7 +23,9 @@
 // The sound sets: p, the phosphor looks' recordings; d, the DOS look's.
 // Each family below holds one table per set. The DOS look's own recordings
 // arrive one family at a time; until a family has its own, its d table
-// names the p files, so nothing is silent.
+// names the p files, so nothing is silent. Each DOS file is placed at its
+// phosphor counterpart's heard level; where a recording could not carry the
+// whole of that gain in its file, the rest is its own level here.
 const SOUND_SETS = ['p', 'd'];
 let _set = 'p';
 const FILES = {
@@ -33,10 +35,16 @@ const FILES = {
     off: '/sounds/crt-off.wav',
   },
   d: {
-    on: '/sounds/crt-on.wav',
-    look: '/sounds/crt-look.wav',
-    off: '/sounds/crt-off.wav',
+    on: '/sounds/d-on.wav',
+    look: '/sounds/d-look.wav',
+    off: '/sounds/d-off.wav',
   },
+};
+// A switch sound's own level in the switch group, where it has one: the DOS
+// look's knob click sits 2.5 dB under its counterpart in its file.
+const FILE_LEVELS_DB = {
+  p: { on: 0, look: 0, off: 0 },
+  d: { on: 0, look: 2.5, off: 0 },
 };
 // The key sets, by the look: p (the phosphor looks) holds a press and a
 // release per key, up to three keys per size band; d (the DOS look) one
@@ -86,10 +94,10 @@ const CAMERA_FILES = {
     pan: '/sounds/camera/pan.wav',
   },
   d: {
-    zoom: '/sounds/camera/zoom.wav',
-    turn: '/sounds/camera/turn.wav',
-    tilt: '/sounds/camera/tilt.wav',
-    pan: '/sounds/camera/pan.wav',
+    zoom: '/sounds/camera/d-zoom.wav',
+    turn: '/sounds/camera/d-turn.wav',
+    tilt: '/sounds/camera/d-tilt.wav',
+    pan: '/sounds/camera/d-pan.wav',
   },
 };
 // Each tick's level in the camera group, set so the ear hears the lens
@@ -100,7 +108,7 @@ const CAMERA_FILES = {
 // weighs it, 10 dB under the ratchet's number.
 const CAMERA_LEVELS_DB = {
   p: { zoom: 0, turn: -12, tilt: -7, pan: -17 },
-  d: { zoom: 0, turn: -12, tilt: -7, pan: -17 },
+  d: { zoom: 0, turn: -12, tilt: -5.6, pan: -16.3 },
 };
 // A pan is one motion of the stage under the lens, in parts: the motor's
 // run-up (the pan tick above), its run looping while the view keeps moving,
@@ -117,12 +125,12 @@ const PAN_PARTS = {
     stop: '/sounds/camera/pan-stop.wav',
   },
   d: {
-    run: '/sounds/camera/pan-run.wav',
-    stop: '/sounds/camera/pan-stop.wav',
+    run: '/sounds/camera/d-pan-run.wav',
+    stop: '/sounds/camera/d-pan-stop.wav',
   },
 };
-const PAN_RUN_DB = { p: -30, d: -30 };
-const PAN_STOP_DB = { p: -23, d: -23 };
+const PAN_RUN_DB = { p: -30, d: -24.9 };
+const PAN_STOP_DB = { p: -23, d: -19.2 };
 const PAN_RUN_LEAD_S = 0.03;
 const PAN_RUN_FADE_S = 0.04;
 // Each tick tells its way, left, down and out a little lower and right, up
@@ -766,13 +774,20 @@ export function stopCrtSound() {
 export async function playCrtSound(name) {
   const files = FILES[_set];
   if (!files[name]) throw new Error(`No such sound: ${name}`);
+  const levelDb = FILE_LEVELS_DB[_set][name];
   const context = _audioContext();
   const running = context.resume();
   const asked = ++_asked;
   const buffer = await _bufferFor(files[name], context);
   if (asked !== _asked) return 0;
   // Checked again past the wait for the context: a newer ask may have come.
-  const source = await _start(context, running, buffer, 'switch');
+  const source = await _start(
+    context,
+    running,
+    buffer,
+    'switch',
+    levelDb ? { own: true, levelDb } : {}
+  );
   if (asked !== _asked) {
     source.stop();
     return 0;

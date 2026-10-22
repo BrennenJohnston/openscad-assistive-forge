@@ -415,7 +415,7 @@ test.describe('The sounds button', () => {
     ]);
   });
 
-  test("in Classic the 3D view toolbar's zoom buttons tick as the view's zoom", async ({
+  test("in Classic the 3D view toolbar's zoom buttons tick as the view's zoom, the DOS look's own", async ({
     page,
   }) => {
     await listenForSound(page);
@@ -437,7 +437,7 @@ test.describe('The sounds button', () => {
         (from) => window.__sounds.slice(from).map((s) => s.url),
         before
       );
-      expect(oneTick(heard, ZOOM), `${id}: ${heard}`).toBe(true);
+      expect(oneTick(heard, '/sounds/camera/d-zoom.wav'), `${id}: ${heard}`).toBe(true);
     }
   });
 
@@ -655,7 +655,6 @@ test.describe('The sounds button', () => {
     };
 
     test('the screen coming on is the DOS look\'s own', async ({ page }) => {
-      test.fail(true, "the DOS look's power sounds are not in yet; it plays the phosphor files");
       await listenForSound(page);
       await openBox(page, 'classic');
       await probeSound(page);
@@ -669,7 +668,6 @@ test.describe('The sounds button', () => {
     });
 
     test("a camera button ticks with the DOS look's own tick", async ({ page }) => {
-      test.fail(true, "the DOS look's camera ticks are not in yet; it plays the phosphor files");
       await inClassic(page);
       const zoom = await heard(page, () => page.locator('#classicZoomInBtn').click());
       expect(zoom, `zoom in: ${zoom}`).toEqual(['/sounds/camera/d-zoom.wav']);

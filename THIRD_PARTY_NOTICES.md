@@ -603,6 +603,86 @@ magedu: https://freesound.org/s/277300/
 
 ---
 
+## Classic Look Sounds (CC0-1.0, CC-BY-3.0)
+
+In Classic, the Alt View plays recordings of its own in place of the ones
+above: tape machines, a television and the switches and doors around them.
+Each is cut from a recording on Freesound, high-passed, its top end softened,
+levelled, at 48 kHz mono. The files sit beside their counterparts, named
+with a `d-` in front.
+
+### S-VHS VTR tape insert & eject (CC0-1.0)
+
+The screen coming on, `d-on.wav`, begins with a cassette taken in and loaded
+by a JVC BR-S622E recorder, from "S-VHS VTR tape insert & eject" by
+LukaCafuka (https://freesound.org/s/845461/): 1.15 s from the insert,
+with a short fade.
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Computer CRT monitor turn on/off/degauss (CC0-1.0)
+
+The thump that ends `d-on.wav` is a CRT monitor's degauss, from "Computer
+CRT monitor turn on/off/degauss" by Sanderboah
+(https://freesound.org/s/838728/): 0.9 s cut at the thump, its ring made to
+die away over about a quarter of a second, laid over the end of the loading.
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Clicky Knob Turning (CC-BY-3.0)
+
+The look changing, `d-look.wav`, is one click of a detented knob on old
+science-class equipment, from "Clicky Knob Turning.wav" by shewbox:
+https://freesound.org/s/30827/
+
+- **Author**: shewbox
+- **License**: Creative Commons Attribution 3.0 Unported,
+  https://creativecommons.org/licenses/by/3.0/
+- **Changes**: one click cut out (250 ms, with short fades), its upper part
+  made to die away sooner and its top end softened, levelled, at 48 kHz
+  mono.
+
+### VHS_Eject and TV_Switch_Off_2 (CC0-1.0)
+
+The screen going off, `d-off.wav`, is a VHS deck's eject (the latch and the
+motor, 1.08 s) from "VHS_Eject" by telescapes
+(https://freesound.org/s/837697/), followed by a television's switch-off
+click and its ring (0.75 s) from "TV_Switch_Off_2" by SignatureSoundsOrg
+(https://freesound.org/s/872648/), each released under Creative Commons 0.
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+
+### digital camera consumer on,off beep take picture (CC0-1.0)
+
+The zoom's tick, `camera/d-zoom.wav`, is one step of a camera's zoom servo
+(123 ms), from "digital camera consumer on,off beep take picture" by kyles:
+https://freesound.org/s/453950/
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Cassette Tape Machine Fast Forward and Reverse (CC0-1.0)
+
+The turn's tick, `camera/d-turn.wav` (one tick of the hub on the reel's run,
+103 ms), and the pan's three parts, `camera/d-pan.wav` (the motor starting
+under the reel's first ticks, 303 ms), `camera/d-pan-run.wav` (700 ms of
+the run, its end crossfaded into its start so it loops) and
+`camera/d-pan-stop.wav` (the stop, the ticks slowing and the motor dying,
+423 ms), are cut from a JVC FS-V30's fast wind in "Cassette Tape Machine
+Fast Forward and Reverse" by Robo9418: https://freesound.org/s/858323/
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+
+### tripod mechanical sound 04 (CC0-1.0)
+
+The tilt's tick, `camera/d-tilt.wav`, is one click of a tripod head (83 ms),
+from "tripod mechanical sound 04" by rubberduck9999:
+https://freesound.org/s/678458/
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+- **Note**: CC0 asks for no credit; it is given with thanks.
+
+---
+
 ## Crack and Shatter Sounds (CC0-1.0)
 
 Two short sounds the Alt View's key makes, under `public/sounds/moments/`,
