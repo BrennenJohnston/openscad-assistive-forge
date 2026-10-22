@@ -288,12 +288,44 @@ test('an example that cannot be loaded is said by its error dialog alone', async
   await page.waitForTimeout(SETTLE_MS);
 
   const said = await announcementsSince(page, 0);
+  // Nothing of the failure is said beside the dialog, and nothing says the
+  // example loaded, since it did not.
   expect(
     said.filter((a) =>
-      /Error loading example|Example Load Failed/.test(a.text)
+      /Error loading example|Example Load Failed|loaded from URL link/.test(a.text)
     ),
     JSON.stringify(said)
   ).toEqual([]);
+});
+
+test("a flat model's preview says it is ready on the status line", async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+  });
+  await page.goto('/');
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: 180_000,
+  });
+  await page.locator('#fileInput').setInputFiles({
+    name: 'flat.scad',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(['projection(cut = true) sphere(10);', ''].join('\n')),
+  });
+  await page.locator('#saveProjectNotNow').click({ timeout: 30_000 });
+  // The flat drawing is on screen and the badge says so; the status line
+  // says the same, as it does for a solid model.
+  await expect(page.locator('.preview-state-indicator')).toHaveClass(
+    /state-current/,
+    { timeout: 120_000 }
+  );
+  await expect(page.locator('#statusArea')).toHaveText('Preview ready', {
+    timeout: 10_000,
+  });
 });
 
 test('an SVG export with no 2D shape is said by its error dialog alone', async ({

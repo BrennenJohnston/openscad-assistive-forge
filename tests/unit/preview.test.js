@@ -127,6 +127,23 @@ describe('PreviewManager', () => {
     })
   })
 
+  describe('a camera held by a typed pose', () => {
+    it('is not fitted when a later render lands, until it is released', () => {
+      const pm = new PreviewManager(container)
+      pm.fitCameraToModel = vi.fn()
+      pm._fitAfterLoad(false)
+      expect(pm.fitCameraToModel, 'a first render fits the camera').toHaveBeenCalledTimes(1)
+      pm.holdCamera()
+      pm._fitAfterLoad(false)
+      expect(pm.fitCameraToModel, 'a render after a typed pose keeps it').toHaveBeenCalledTimes(1)
+      pm._fitAfterLoad(true)
+      expect(pm.fitCameraToModel, 'a preserved camera is never fitted').toHaveBeenCalledTimes(1)
+      pm.releaseCamera()
+      pm._fitAfterLoad(false)
+      expect(pm.fitCameraToModel, 'a new file fits again').toHaveBeenCalledTimes(2)
+    })
+  })
+
   describe('Measurement Preferences', () => {
     it('loads and saves measurement preference', () => {
       localStorage.setItem('openscad-forge-measurements', 'true')

@@ -84,6 +84,19 @@ function isKnownLibraryOff(libraryId) {
  * which classifies this failure by its symptom (an unknown module) rather
  * than its cause.
  */
+// An experimental builtin module the browser engine does not switch on
+// (roof() and its kin). The engine leaves the top level empty and the worker
+// says only that the module is unknown; the raw output names it.
+const EXPERIMENTAL_MODULE_PATTERN =
+  /Experimental builtin module '([^']+)' is not enabled/i;
+const EXPERIMENTAL_MODULE_TRANSLATION = {
+  pattern: EXPERIMENTAL_MODULE_PATTERN,
+  title: 'Module Not Available',
+  explanation: (match) =>
+    `This model uses a module the browser engine does not switch on (an experimental one, such as ${match[1]}()).`,
+  suggestion: 'It may work in desktop OpenSCAD.',
+};
+
 const MISSING_LIBRARY_TRANSLATION = {
   pattern: MISSING_LIBRARY_PATTERN,
   title: 'Missing Library',
@@ -529,6 +542,15 @@ export function translateError(technicalError, { code, details } = {}) {
       return applyPattern(
         MISSING_LIBRARY_TRANSLATION,
         libraryMatch,
+        technicalError
+      );
+    }
+    // The same for a module the engine knows but does not switch on.
+    const experimentalMatch = EXPERIMENTAL_MODULE_PATTERN.exec(candidate);
+    if (experimentalMatch) {
+      return applyPattern(
+        EXPERIMENTAL_MODULE_TRANSLATION,
+        experimentalMatch,
         technicalError
       );
     }

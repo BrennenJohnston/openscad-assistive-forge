@@ -339,7 +339,10 @@ export class AutoPreviewController {
     this.pendingParameters = null;
     this.pendingParamHash = null;
     // A new file needs the camera fitted; a reload of the same one keeps it.
-    if (!keepCamera) this.initialPreviewDone = false;
+    if (!keepCamera) {
+      this.initialPreviewDone = false;
+      this.previewManager?.releaseCamera?.();
+    }
 
     // Reset auto-color override so previous project's colors don't leak
     if (
@@ -1626,6 +1629,17 @@ export class AutoPreviewController {
           code: 'DRAFT_2D',
           stats: result.stats,
         });
+        // The drawing is on screen: the page is told as for any preview, so
+        // its status line says the preview is ready instead of still
+        // rendering.
+        this.onPreviewReady(
+          svgText,
+          result.stats,
+          false,
+          0,
+          null,
+          result.consoleOutput || ''
+        );
         return true;
       }
     } catch (svgError) {
@@ -1670,6 +1684,14 @@ export class AutoPreviewController {
             code: 'DRAFT_2D_FALLBACK',
             stats: fallbackResult.stats,
           });
+          this.onPreviewReady(
+            svgText,
+            fallbackResult.stats,
+            false,
+            0,
+            null,
+            fallbackResult.consoleOutput || ''
+          );
           return true;
         } catch {
           /* fall through */

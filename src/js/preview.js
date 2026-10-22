@@ -1689,10 +1689,7 @@ export class PreviewManager {
         // Reset rotation centering state (new mesh needs fresh application)
         this.rotationCenteringEnabled = false;
 
-        // Auto-fit camera to model (unless preserveCamera is set)
-        if (!preserveCamera) {
-          this.fitCameraToModel();
-        }
+        this._fitAfterLoad(preserveCamera);
         this._followModelCenter(preserveCamera);
 
         // Call post-load hook (e.g., for re-applying rotation centering)
@@ -1957,9 +1954,7 @@ export class PreviewManager {
       }
 
       this.rotationCenteringEnabled = false;
-      if (!preserveCamera) {
-        this.fitCameraToModel();
-      }
+      this._fitAfterLoad(preserveCamera);
       this._followModelCenter(preserveCamera);
       if (this._postLoadHook) {
         this._postLoadHook();
@@ -2217,6 +2212,26 @@ export class PreviewManager {
    * Works correctly in both perspective and orthographic projection modes.
    * Also re-asserts Z-up, so a camera that somehow lost it comes back sane.
    */
+  /**
+   * A pose typed into the Viewport-Control panel holds the camera: a render
+   * that lands after it (the first preview, slow on a software renderer)
+   * keeps the held pose instead of fitting the camera over it. A new file
+   * releases the hold.
+   */
+  holdCamera() {
+    this._cameraHeld = true;
+  }
+
+  releaseCamera() {
+    this._cameraHeld = false;
+  }
+
+  // The fit a loaded model gets, unless the camera is to be kept or is held.
+  _fitAfterLoad(preserveCamera) {
+    if (preserveCamera || this._cameraHeld) return;
+    this.fitCameraToModel();
+  }
+
   fitCameraToModel() {
     if (!this.mesh) return;
 

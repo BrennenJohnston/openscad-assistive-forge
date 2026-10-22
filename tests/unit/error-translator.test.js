@@ -101,6 +101,32 @@ describe('Error Translator', () => {
     });
   });
 
+  describe('a module the browser engine does not switch on', () => {
+    test('gets its own dialog, named for the module, where the worker only said the module was unknown', () => {
+      const result = translateError(
+        'Your model uses a module that could not be found. Check include/use statements and ensure library files are loaded.',
+        {
+          code: 'UNKNOWN_MODULE',
+          details:
+            "WARNING: Experimental builtin module 'roof' is not enabled, in file roof.scad, line 1\nERROR: Ignoring unknown module 'roof' in file roof.scad, line 1",
+        }
+      );
+      expect(result.title).toBe('Module Not Available');
+      expect(result.explanation).toBe(
+        'This model uses a module the browser engine does not switch on (an experimental one, such as roof()).'
+      );
+      expect(result.suggestion).toBe('It may work in desktop OpenSCAD.');
+    });
+
+    test('a module that is simply unknown keeps the missing-module dialog', () => {
+      const result = translateError('Your model uses a module that could not be found.', {
+        code: 'UNKNOWN_MODULE',
+        details: "ERROR: Ignoring unknown module 'cubee' in file box.scad, line 3",
+      });
+      expect(result.title).toBe('Missing Module');
+    });
+  });
+
   describe('createFriendlyErrorDisplay', () => {
     test('should create accessible error element', () => {
       const element = createFriendlyErrorDisplay('syntax error');

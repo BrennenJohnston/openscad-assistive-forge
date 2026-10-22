@@ -6676,6 +6676,11 @@ async function initApp() {
       return true;
     }
 
+    // A module the engine does not know (or does not switch on) leaves the
+    // top level empty too, but the advice to look for a required option
+    // would point at the wrong cause: the error dialog names the module.
+    if (code === 'UNKNOWN_MODULE') return false;
+
     const hasDependencyHint =
       /'[^']+?'\s+is set to\s+'(no|off)'/i.test(detailsStr) ||
       /Current top[ -]?level object is empty|top-level object is empty/i.test(
@@ -9235,6 +9240,7 @@ if (rounded) {
       // Load the example after a short delay to ensure UI is ready
       setTimeout(async () => {
         try {
+          const loadedBefore = stateManager.getState().uploadedFile;
           await fileHandler.loadExampleByKey(exampleParam);
 
           // Clean up URL to avoid reloading on refresh
@@ -9242,6 +9248,15 @@ if (rounded) {
           initUrlParams.delete('load'); // Also remove ?load= alias
           const cleanUrl = cleanUrlKeepingFragment();
           history.replaceState(null, '', cleanUrl);
+
+          // loadExampleByKey reports its own failure (the "Example Load
+          // Failed" dialog and the status "Error loading example") and
+          // returns without loading anything. Only a project that changed
+          // is a success worth announcing.
+          if (stateManager.getState().uploadedFile === loadedBefore) {
+            console.warn(`[DeepLink] Example not loaded: ${exampleParam}`);
+            return;
+          }
 
           console.log(`[DeepLink] Successfully loaded: ${exampleParam}`);
           announceImmediate(

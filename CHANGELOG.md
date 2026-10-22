@@ -33,6 +33,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A rotation typed into Classic's Viewport-Control stays when a preview
+  finishes after it; the first preview's camera fit could put the view back.
+- After a flat model's drawing comes on screen, the status line says the
+  preview is ready; it stayed on "Rendering preview..." beside the ready
+  badge.
+- A model that uses a module the browser engine does not switch on (an
+  experimental one, such as roof()) gets a dialog that says so; it got the
+  advice meant for a selection that draws nothing.
+- An example link whose file cannot be loaded says nothing after its error
+  dialog; it went on to say the example had loaded.
 - On a phone in the Alt View, a drawer opened over another no longer waits
   while the preview is drawn again on every frame of its slide: the preview
   keeps its size while the drawer's room slides and fits once when the slide
