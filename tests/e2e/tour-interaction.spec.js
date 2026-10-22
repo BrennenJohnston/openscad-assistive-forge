@@ -1033,6 +1033,86 @@ test.describe('A tour that follows the user', () => {
       ).toHaveClass(/tutorial-target-highlight/);
     });
 
+    test('Next pressed while the sheet watcher waits keeps the new step on its own target', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await introTourAtStep3(page);
+      await page.locator('#tutorialNextBtn').click();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Expand a parameter group',
+        { timeout: 15_000 }
+      );
+      await page.waitForTimeout(1500);
+
+      // A class change on the sheet wakes the tour's watcher of it, which
+      // waits for the sheet's slide before it looks again, for up to 350 ms
+      // after its 100 ms pause. A step's own arrival wakes it the same way.
+      // The group opened and Next pressed inside that wait once let the
+      // watcher resume on the new step with the old step's target: the ring
+      // went back to the group's header and the card docked over the width
+      // field the new step asks for.
+      await page.evaluate(() => {
+        const sheet = document.getElementById('paramPanel');
+        sheet.classList.add('tour-guard-poke');
+        sheet.classList.remove('tour-guard-poke');
+        window.__rings = [];
+        new MutationObserver((mutations) => {
+          for (const m of mutations) {
+            const el = m.target;
+            if (
+              el.classList.contains('tutorial-target-highlight') &&
+              !(m.oldValue || '').includes('tutorial-target-highlight')
+            ) {
+              window.__rings.push(
+                `${el.tagName.toLowerCase()}#${el.id || ''}`
+              );
+            }
+          }
+        }).observe(document.body, {
+          subtree: true,
+          attributes: true,
+          attributeOldValue: true,
+          attributeFilter: ['class'],
+        });
+      });
+      await page.waitForTimeout(120);
+      await page
+        .locator('.param-group[data-group-id="Dimensions"] summary')
+        .click();
+      await expect(page.locator('#tutorialNextBtn')).toBeEnabled({
+        timeout: 20_000,
+      });
+      await page.locator('#tutorialNextBtn').click();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Adjust a parameter',
+        { timeout: 15_000 }
+      );
+      await page.waitForTimeout(1200);
+
+      const rings = await page.evaluate(() => window.__rings);
+      const first = rings.indexOf('input#param-width');
+      expect(first, `the rings: ${rings.join(', ')}`).toBeGreaterThan(-1);
+      expect(
+        rings.slice(first + 1).filter((r) => r.startsWith('summary#')),
+        `the rings: ${rings.join(', ')}`
+      ).toEqual([]);
+
+      await expect(page.locator('#param-width')).toHaveClass(
+        /tutorial-target-highlight/
+      );
+      const widthIsOnTop = await page.evaluate(() => {
+        const el = document.getElementById('param-width');
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          r.left + r.width / 2,
+          r.top + r.height / 2
+        );
+        return !!hit && (hit === el || el.contains(hit));
+      });
+      expect(widthIsOnTop).toBe(true);
+    });
+
     test('A target half under the bar is scrolled up into the sheet, not away', async ({
       page,
     }) => {
