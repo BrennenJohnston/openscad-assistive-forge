@@ -694,12 +694,23 @@ test.describe('Held sideways (740x360)', () => {
               .map((x) => x.id),
           };
         };
+        // The space between a button's icon and its word.
+        const gapOf = (selector) => {
+          const el = document.querySelector(selector);
+          const icon = el.querySelector('svg').getBoundingClientRect();
+          const word = el.querySelector('.btn-text').getBoundingClientRect();
+          return Math.round((word.left - icon.right) * 10) / 10;
+        };
         return {
           words: {
             customizer: shown('#mobileDrawerToggle .btn-label'),
             mainPage: shown('#clearFileBtn .clear-file-label'),
             fullScreen: shown('#focusModeBtn .btn-text'),
             help: shown('#featuresGuideBtn .btn-text'),
+          },
+          gaps: {
+            fullScreen: gapOf('#focusModeBtn'),
+            help: gapOf('#featuresGuideBtn'),
           },
           header: crowding(document.querySelector('.app-header')),
           row: crowding(document.querySelector('.preview-drawer-header')),
@@ -711,6 +722,13 @@ test.describe('Held sideways (740x360)', () => {
         fullScreen: true,
         help: true,
       });
+      // With the words shown, each icon stands off its word as Help's does.
+      for (const [name, gap] of Object.entries(facts.gaps)) {
+        expect(
+          gap,
+          `${name}: the icon and the word at least 4 px apart (${gap})`
+        ).toBeGreaterThanOrEqual(4);
+      }
       for (const part of ['header', 'row']) {
         expect(facts[part].overlaps, `${part}: nothing overlaps`).toEqual([]);
         expect(facts[part].offscreen, `${part}: nothing off screen`).toEqual(

@@ -917,29 +917,43 @@ test.describe('A tour that follows the user', () => {
       );
     });
 
-    test('Opening the panel keeps the card up and walks the ring to its closing arrow', async ({
+    test('Opening the panel keeps the card up and the ring on the button that closes it', async ({
       page,
     }) => {
       test.setTimeout(240_000);
       await introTourAtStep3(page);
 
       await page.locator('#mobileDrawerToggle').click();
-      await expect(page.locator('#collapseParamPanelBtn')).toHaveClass(
-        /tutorial-target-highlight/,
-        { timeout: 10_000 }
+      await expect(page.locator('#mobileDrawerToggle')).toHaveAttribute(
+        'aria-expanded',
+        'true'
       );
+      await page.waitForTimeout(800);
 
       expect(await drawerOpen(page)).toBe(true);
       await expect(page.locator('.tutorial-panel')).toBeVisible();
       await expect(page.locator('.tutorial-minimized')).toBeHidden();
-      await expect(page.locator('#mobileDrawerToggle')).not.toHaveClass(
-        /tutorial-target-highlight/
+      // One button: the ring stays on it, open as shut; the sheet shows no
+      // arrow of its own on a phone.
+      await expect(page.locator('#mobileDrawerToggle')).toHaveClass(
+        /tutorial-target-highlight/,
+        { timeout: 10_000 }
       );
+      expect(
+        await page
+          .locator('#collapseParamPanelBtn')
+          .evaluate((el) =>
+            el.checkVisibility({
+              visibilityProperty: true,
+              opacityProperty: true,
+            })
+          )
+      ).toBe(false);
 
       // The card must not be sitting on the drawer's only way out: a top dock
-      // starting at y 8 would cover its arrow.
+      // starting at y 8 would cover the button.
       const closeIsPressable = await page.evaluate(() => {
-        const btn = document.getElementById('collapseParamPanelBtn');
+        const btn = document.getElementById('mobileDrawerToggle');
         const r = btn.getBoundingClientRect();
         const hit = document.elementFromPoint(
           Math.round(r.left + r.width / 2),
@@ -992,7 +1006,7 @@ test.describe('A tour that follows the user', () => {
       );
       expect(await drawerOpen(page)).toBe(true);
 
-      await page.locator('#collapseParamPanelBtn').click();
+      await page.locator('#mobileDrawerToggle').click();
       await expect(page.locator('#tutorialRequirement')).toHaveText(
         'Open the Customizer to continue.',
         { timeout: 10_000 }
@@ -1445,7 +1459,7 @@ test.describe('Cards that stay readable', () => {
       ).toBeNull();
 
       // Closing the drawer hands the card its own modality back.
-      await page.locator('#collapseParamPanelBtn').click();
+      await page.locator('#mobileDrawerToggle').click();
       await page.waitForTimeout(800);
       await expect(page.locator('.tutorial-panel')).toHaveAttribute(
         'aria-modal',
@@ -1465,13 +1479,17 @@ test.describe('Cards that stay readable', () => {
 
       // Backwards is the short way round: the card's controls sit at the end of
       // the document, so one Shift+Tab from the drawer's first control reaches
-      // them.
-      await page.locator('#collapseParamPanelBtn').focus();
+      // them. (The sheet shows no arrow of its own on a phone.)
+      const firstInDrawer = page
+        .locator('#paramPanel')
+        .locator('button:visible, input:visible, select:visible')
+        .first();
+      await firstInDrawer.focus();
       await page.keyboard.press('Shift+Tab');
       expect(await inTour()).toBe(true);
 
       // and forwards arrives too, rather than cycling the drawer forever
-      await page.locator('#collapseParamPanelBtn').focus();
+      await firstInDrawer.focus();
       let reached = 0;
       for (let i = 1; i <= 60; i++) {
         await page.keyboard.press('Tab');
