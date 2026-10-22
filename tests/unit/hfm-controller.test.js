@@ -69,6 +69,9 @@ vi.mock('../../src/js/crt-sounds.js', () => ({
   playTypingSound: vi.fn(async () => 0.1),
   playMomentSound: vi.fn(async () => 0.6),
   preloadMomentSounds: vi.fn(),
+  setSoundSet: vi.fn(),
+  soundSet: vi.fn(() => 'p'),
+  preloadLookSounds: vi.fn(),
 }))
 
 // The tunes, each resolving with the seconds until it ends.
@@ -956,14 +959,15 @@ describe('the Alt View is heard', () => {
     const menuItem = sizedButton('menuBtn', 240, 31)
     const key = sizedButton('_hfmToggle', 44, 44)
     const controller = await freshController(previewManagerStub())
-    const { preloadKeySounds } = await import('../../src/js/crt-sounds.js')
+    const { preloadLookSounds, setSoundSet } = await import('../../src/js/crt-sounds.js')
     const toggle = document.createElement('button')
 
     press(icon, 'pointerdown')
     expect(await keysAsked(), 'nothing while the look is off').toEqual([])
 
     await controller.enableAltViewWithPreview(toggle)
-    expect(preloadKeySounds, 'the phosphor keys fetched at switch-on').toHaveBeenCalledWith('p')
+    expect(setSoundSet, 'the phosphor set chosen at switch-on').toHaveBeenLastCalledWith('p')
+    expect(preloadLookSounds, "the look's sounds fetched at switch-on").toHaveBeenCalled()
     press(icon, 'pointerdown')
     press(icon, 'pointerup')
     press(menuItem, 'pointerdown')
@@ -1024,6 +1028,33 @@ describe('the Alt View is heard', () => {
     return playDialSound.mock.calls.map(([set, tone]) => `${set} ${tone}`)
   }
 
+  it("the look turned on in Classic chooses the DOS set before its screen sound; turned on in a phosphor look, the phosphor set", async () => {
+    pageWithHeaderAndDpad()
+    const controller = await freshController(previewManagerStub())
+    const { setSoundSet, playCrtSound } = await import('../../src/js/crt-sounds.js')
+    const toggle = document.createElement('button')
+    document.body.dataset.uiMode = 'classic'
+    await controller.enableAltViewWithPreview(toggle)
+    expect(playCrtSound, 'the screen coming on').toHaveBeenLastCalledWith('on')
+    expect(setSoundSet, 'the DOS set at switch-on').toHaveBeenCalledWith('d')
+    expect(
+      setSoundSet.mock.invocationCallOrder[0],
+      'the set chosen before the screen sound plays'
+    ).toBeLessThan(playCrtSound.mock.invocationCallOrder.at(-1))
+    controller.disableAltViewWithPreview(toggle)
+    delete document.body.dataset.uiMode
+
+    setSoundSet.mockClear()
+    playCrtSound.mockClear()
+    await controller.enableAltViewWithPreview(toggle)
+    expect(setSoundSet, 'the phosphor set at switch-on').toHaveBeenCalledWith('p')
+    expect(
+      setSoundSet.mock.invocationCallOrder[0],
+      'the set before the screen sound'
+    ).toBeLessThan(playCrtSound.mock.invocationCallOrder.at(-1))
+    controller.disableAltViewWithPreview(toggle)
+  })
+
   it('while on, a slider clicks as a dial does, one click file per slider by its steps, fifteen a second at most, until it is let go', async () => {
     pageWithHeaderAndDpad()
     clock = 0
@@ -1032,7 +1063,7 @@ describe('the Alt View is heard', () => {
     const coarse = slider('coarse', 1, 3, 0.5)
     const wide = slider('wide', -180, 180, 1)
     const controller = await freshController(previewManagerStub())
-    const { preloadDialSounds } = await import('../../src/js/crt-sounds.js')
+    const { preloadLookSounds, setSoundSet } = await import('../../src/js/crt-sounds.js')
     const toggle = document.createElement('button')
 
     press(fine, 'pointerdown')
@@ -1040,7 +1071,8 @@ describe('the Alt View is heard', () => {
     expect(await clicksAsked(), 'nothing while the look is off').toEqual([])
 
     await controller.enableAltViewWithPreview(toggle)
-    expect(preloadDialSounds, 'the phosphor clicks fetched at switch-on').toHaveBeenCalledWith('p')
+    expect(setSoundSet, 'the phosphor set chosen at switch-on').toHaveBeenLastCalledWith('p')
+    expect(preloadLookSounds, 'the phosphor clicks fetched at switch-on').toHaveBeenCalledTimes(1)
     // 30 steps of 0.1: the fourth tone; one click per step, the same file each time.
     press(fine, 'pointerdown')
     slide(fine, 0.2)
@@ -1077,10 +1109,17 @@ describe('the Alt View is heard', () => {
     slide(fine, 0.9)
     expect((await clicksAsked()).slice(7)).toEqual(['p 4'])
 
-    // Classic is the DOS look; its clicks are fetched when it is entered.
+    // Classic is the DOS look; its set is chosen and its sounds are fetched
+    // when it is entered, the set before the screen sound plays.
     document.body.dataset.uiMode = 'classic'
     document.dispatchEvent(new CustomEvent('ui-mode-changed', { detail: { mode: 'classic' } }))
-    expect(preloadDialSounds).toHaveBeenCalledWith('d')
+    expect(setSoundSet).toHaveBeenLastCalledWith('d')
+    expect(preloadLookSounds).toHaveBeenCalledTimes(2)
+    const { playCrtSound } = await import('../../src/js/crt-sounds.js')
+    expect(
+      setSoundSet.mock.invocationCallOrder.at(-1),
+      'the set before the look sound'
+    ).toBeLessThan(playCrtSound.mock.invocationCallOrder.at(-1))
     press(coarse, 'pointerdown')
     slide(coarse, 2.5)
     press(coarse, 'pointerup')
@@ -1199,7 +1238,7 @@ describe('the Alt View is heard', () => {
     const pm = previewManagerStub()
     const { controls, place } = viewWithControls(pm)
     const controller = await freshController(pm)
-    const { preloadCameraSounds } = await import('../../src/js/crt-sounds.js')
+    const { preloadLookSounds } = await import('../../src/js/crt-sounds.js')
     const toggle = document.createElement('button')
     place(0, 20)
 
@@ -1209,7 +1248,7 @@ describe('the Alt View is heard', () => {
     expect(await cameraAsked(), 'nothing while the look is off').toEqual([])
 
     await controller.enableAltViewWithPreview(toggle)
-    expect(preloadCameraSounds, 'the camera ticks fetched at switch-on').toHaveBeenCalled()
+    expect(preloadLookSounds, 'the camera ticks fetched at switch-on').toHaveBeenCalled()
     place(0, 20)
     // A drag of 45 degrees, a degree a frame: three bearing ticks.
     controls.fire('start')
@@ -1638,7 +1677,7 @@ describe('the Alt View is heard', () => {
       return playScrollSound.mock.calls.map(([how]) => (how.end ? 'end' : how.way))
     }
     const controller = await freshController(previewManagerStub())
-    const { preloadScrollSounds } = await import('../../src/js/crt-sounds.js')
+    const { preloadLookSounds } = await import('../../src/js/crt-sounds.js')
     const toggle = document.createElement('button')
 
     wheel(100)
@@ -1646,7 +1685,7 @@ describe('the Alt View is heard', () => {
     expect(await scrollsAsked(), 'nothing while the look is off').toEqual([])
 
     await controller.enableAltViewWithPreview(toggle)
-    expect(preloadScrollSounds, 'the platen fetched at switch-on').toHaveBeenCalled()
+    expect(preloadLookSounds, 'the platen fetched at switch-on').toHaveBeenCalled()
     // The page's own scroll (a field brought into view): silent.
     clock += 2000
     scrollTo(150)
@@ -1811,7 +1850,7 @@ describe('the Alt View is heard', () => {
     const panel = drawerPanel()
     const controller = await freshController(previewManagerStub())
     const { slideDrawer } = await import('../../src/js/drawer-motion.js')
-    const { preloadDrawerSounds } = await import('../../src/js/crt-sounds.js')
+    const { preloadLookSounds } = await import('../../src/js/crt-sounds.js')
     const toggle = document.createElement('button')
     // No pace here, as with reduced motion: the drawers change at once.
     const move = (name, open, how = {}) =>
@@ -1821,7 +1860,7 @@ describe('the Alt View is heard', () => {
     expect(await drawersAsked(), 'nothing while the look is off').toEqual([])
 
     await controller.enableAltViewWithPreview(toggle)
-    expect(preloadDrawerSounds, 'the drawer fetched at switch-on').toHaveBeenCalled()
+    expect(preloadLookSounds, 'the drawer fetched at switch-on').toHaveBeenCalled()
     move('customizer', true)
     move('customizer', false)
     move('preview-settings', true)
@@ -1909,14 +1948,14 @@ describe('the Alt View is heard', () => {
     modeSwitch.setAttribute('role', 'switch')
     modeSwitch.setAttribute('aria-checked', 'false')
     const controller = await freshController(previewManagerStub())
-    const { preloadControlSounds } = await import('../../src/js/crt-sounds.js')
+    const { preloadLookSounds } = await import('../../src/js/crt-sounds.js')
     const toggle = document.createElement('button')
 
     box.click()
     expect(await controlsAsked(), 'nothing while the look is off').toEqual([])
 
     await controller.enableAltViewWithPreview(toggle)
-    expect(preloadControlSounds).toHaveBeenCalled()
+    expect(preloadLookSounds).toHaveBeenCalled()
     box.click()
     box.click()
     radioA.click()

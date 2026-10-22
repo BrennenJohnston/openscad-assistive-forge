@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- In Classic the alternative look has sounds of its own: a cassette deck's
+  door and keys, a camcorder's zoom, a tape transport for the pan and the
+  scroll, and plastic switches, each placed at the level its counterpart
+  plays at.
 - In the Alt View, each look keeps its own Lens settings, starting where they
   read best: the green and amber looks at Edges 90%, Focus 65% and Glow 50%,
   Classic's look at Edges 140%, Focus 10% and Glow 10%, where its lines draw
