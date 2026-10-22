@@ -828,6 +828,8 @@ function handleDrawerStateChange(isNowOpen) {
 
     const step = activeTutorial.steps[currentStepIndex];
     if (!step.highlightSelector && !step.targetKey) return;
+    const stepAtStart = currentStepIndex;
+    const watcher = drawerObserver;
 
     // For steps with completion requirements, block updates after completion to prevent loops
     // This prevents unnecessary re-resolution when the user has already completed the action
@@ -839,6 +841,13 @@ function handleDrawerStateChange(isNowOpen) {
     const paramPanel = document.getElementById('paramPanel');
     if (paramPanel) {
       await waitForTransition(paramPanel, 350);
+    }
+
+    // The wait can outlast the step. Next pressed inside it brings a new
+    // step, which has resolved its own target by now; this callback would
+    // hand it the old step's and dock the card over the control it asks for.
+    if (currentStepIndex !== stepAtStart || drawerObserver !== watcher) {
+      return;
     }
 
     // Re-resolve the step target - it will pick the first visible target
