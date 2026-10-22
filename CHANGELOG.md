@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- After a flat model's drawing comes on screen, the status line says the
+  preview is ready; it stayed on "Rendering preview..." beside the ready
+  badge.
+- A model that uses a module the browser engine does not switch on (an
+  experimental one, such as roof()) gets a dialog that says so; it got the
+  advice meant for a selection that draws nothing.
+- An example link whose file cannot be loaded says nothing after its error
+  dialog; it went on to say the example had loaded.
 - On a phone, the open Customizer's own arrow is drawn in the accent, so it
   reads in every look; it was dark on dark in all but the light theme.
 - Under Windows High Contrast, icons drawn as lines stay lines; the Main

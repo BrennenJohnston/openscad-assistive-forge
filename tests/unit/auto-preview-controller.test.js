@@ -564,6 +564,30 @@ describe('AutoPreviewController', () => {
   // has just started. A second request landing while the worker restarts,
   // when isBusy() is false, would render the same values twice: 22 s
   // becoming 45 s for the Plug Puller's first picture.
+  describe("a flat model's preview", () => {
+    it('says it is ready as any other once its drawing is on screen', async () => {
+      const flat = Object.assign(new Error('MODEL_IS_2D'), { code: 'MODEL_IS_2D' })
+      renderController.renderPreview.mockImplementation((content, params, options) =>
+        options?.outputFormat === 'svg'
+          ? Promise.resolve({ stl: '<svg xmlns="http://www.w3.org/2000/svg"></svg>', stats: { triangles: 0 } })
+          : Promise.reject(flat)
+      )
+      const onPreviewReady = vi.fn()
+      controller = new AutoPreviewController(renderController, previewManager, {
+        debounceMs: 10,
+        onPreviewReady,
+      })
+      controller.setScadContent('projection(cut = true) sphere(10);')
+
+      await controller.forcePreview({ width: 20 })
+
+      expect(controller.state).toBe(PREVIEW_STATE.CURRENT)
+      expect(previewManager.show2DPreview).toHaveBeenCalledTimes(1)
+      expect(onPreviewReady, 'the page told the preview is ready').toHaveBeenCalledTimes(1)
+      expect(onPreviewReady.mock.calls[0][2], 'not from the cache').toBe(false)
+    })
+  })
+
   describe('One render per set of values', () => {
     let underway
     const finishRender = () =>

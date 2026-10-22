@@ -380,6 +380,20 @@ export const downloadFailure = (error) => ({
  *   and do again what failed
  * @returns {Promise<{extra: string, actions: Object[]}|null>}
  */
+/**
+ * The sentence that offers the other official snapshots: their number in
+ * words up to three, one snapshot as one.
+ * @param {number} count
+ * @returns {string}
+ */
+export function othersSentence(count) {
+  if (count === 1) {
+    return 'The other official snapshot is here to try, or you can go back to the Forge engine.';
+  }
+  const words = { 2: 'two', 3: 'three' };
+  return `The other ${words[count] ?? count} official snapshots are here to try, or you can go back to the Forge engine.`;
+}
+
 export async function offerEngineAfterFault({ code, handlers, run }) {
   if (!isEngineFault(code) || offerDeclined) return null;
   const manifest = await handlers.manifest();
@@ -433,7 +447,7 @@ export async function offerEngineAfterFault({ code, handlers, run }) {
     others.map((entry) => handlers.isDownloaded(entry.id))
   );
   return {
-    extra: `The official engine failed on this model too. The other ${others.length === 3 ? 'three' : others.length} official snapshots are here to try, or you can go back to the Forge engine.`,
+    extra: `The official engine failed on this model too. ${othersSentence(others.length)}`,
     actions: [
       ...others.map((entry, i) => ({
         label: `${entry.name} (official), ${kept[i] ? 'kept' : `${megabytes(entry.zip.size)} MB`}`,

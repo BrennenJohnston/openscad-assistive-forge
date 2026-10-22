@@ -19,6 +19,7 @@ import {
   enginePathFor,
   getChosenEngineId,
   isDownloaded,
+  othersSentence,
   remove,
   setChosenEngineId,
   startupEnginePath,
@@ -307,5 +308,22 @@ describe('the render controller passes the engine folder to the worker', () => {
     expect(last.payload.enginePath).toBe('/wasm/openscad-official');
     expect(last.payload.cachedCapabilities).toBeUndefined();
     controller.terminate();
+  });
+});
+
+describe('the sentence that offers the other official snapshots', () => {
+  it('counts them in words up to three, and says one snapshot as one', () => {
+    expect(othersSentence(1)).toBe(
+      'The other official snapshot is here to try, or you can go back to the Forge engine.'
+    );
+    expect(othersSentence(2)).toBe(
+      'The other two official snapshots are here to try, or you can go back to the Forge engine.'
+    );
+    expect(othersSentence(3)).toBe(
+      'The other three official snapshots are here to try, or you can go back to the Forge engine.'
+    );
+    expect(othersSentence(5)).toBe(
+      'The other 5 official snapshots are here to try, or you can go back to the Forge engine.'
+    );
   });
 });
