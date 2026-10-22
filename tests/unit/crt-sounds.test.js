@@ -281,7 +281,7 @@ describe('the drawer sound files', () => {
 const SWITCHES_DIR = join(SOUNDS_DIR, 'switches');
 const CONTROL_SETS = {
   p: ['snap-on.wav', 'select-open.wav', 'select-choose.wav', 'latch-open.wav', 'latch-close.wav'],
-  d: ['snap-on.wav', 'select-open.wav', 'select-choose.wav', 'latch-open.wav', 'latch-close.wav'],
+  d: ['d-snap-on.wav', 'd-select-open.wav', 'd-select-choose.wav', 'd-latch-open.wav', 'd-latch-close.wav'],
 };
 const SWITCH_FILES = both(CONTROL_SETS.p, CONTROL_SETS.d);
 
@@ -290,13 +290,13 @@ const SWITCH_FILES = both(CONTROL_SETS.p, CONTROL_SETS.d);
 // list: 48 kHz, as cut from the recordings.
 const LEVER_SETS = {
   p: ['lever-on-1.wav', 'lever-on-2.wav', 'lever-off-1.wav', 'lever-off-2.wav'],
-  d: ['lever-on-1.wav', 'lever-on-2.wav', 'lever-off-1.wav', 'lever-off-2.wav'],
+  d: ['d-lever-on-1.wav', 'd-lever-on-2.wav', 'd-lever-off-1.wav', 'd-lever-off-2.wav'],
 };
 const LEVER_FILES = both(LEVER_SETS.p, LEVER_SETS.d);
 const SCROLL_DIR = join(SOUNDS_DIR, 'scroll');
 const SCROLL_SETS = {
   p: ['platen-1.wav', 'platen-2.wav', 'platen-3.wav', 'platen-4.wav', 'platen-end.wav'],
-  d: ['platen-1.wav', 'platen-2.wav', 'platen-3.wav', 'platen-4.wav', 'platen-end.wav'],
+  d: ['d-platen-1.wav', 'd-platen-2.wav', 'd-platen-3.wav', 'd-platen-4.wav', 'd-platen-end.wav'],
 };
 const SCROLL_FILES = both(SCROLL_SETS.p, SCROLL_SETS.d);
 
@@ -318,23 +318,23 @@ describe('the lever and scroll files', () => {
 
 describe('the switch, selector and latch files', () => {
   it.each(SWITCH_FILES)(
-    '%s is a 32 kHz mono 16-bit WAV under 0.25 s with its peak at or under -1 dBFS',
+    "%s is a mono 16-bit WAV at its set's rate, under 0.25 s, with its peak at or under -1 dBFS",
     (file) => {
       const bytes = readFileSync(join(SWITCHES_DIR, file));
       const header = wavHeader(bytes);
       expect(header.riff).toBe('RIFF');
       expect(header.channels).toBe(1);
-      expect(header.rate).toBe(32000);
+      expect(header.rate).toBe(RATE_OF(file));
       expect(header.bits).toBe(16);
-      expect(header.dataBytes / 2 / 32000).toBeLessThan(0.25);
+      expect(header.dataBytes / 2 / header.rate).toBeLessThan(0.25);
       expect(peakOf(bytes)).toBeLessThanOrEqual(10 ** (-1 / 20));
     }
   );
 
-  it('both sets weigh under 80 KB together', () => {
+  it('both sets weigh under 120 KB together (the phosphor five 32 KB, the DOS five 60 KB)', () => {
     const total = SWITCH_FILES.reduce((n, f) => n + statSync(join(SWITCHES_DIR, f)).size, 0);
     expect(total).toBeGreaterThan(0);
-    expect(total).toBeLessThan(80_000);
+    expect(total).toBeLessThan(120_000);
   });
 });
 
@@ -1134,17 +1134,28 @@ describe('playing a switch sound', () => {
       6
     );
     await playControlSound('snap-on');
+    await playControlSound('select-open');
+    await playControlSound('latch-close');
     await playControlSound('lever-on');
-    expect(urls().slice(-2)).toEqual([
-      '/sounds/switches/snap-on.wav',
-      '/sounds/switches/lever-on-1.wav',
+    await playControlSound('lever-on');
+    await playControlSound('lever-off');
+    expect(urls().slice(-6)).toEqual([
+      '/sounds/switches/d-snap-on.wav',
+      '/sounds/switches/d-select-open.wav',
+      '/sounds/switches/d-latch-close.wav',
+      '/sounds/switches/d-lever-on-1.wav',
+      '/sounds/switches/d-lever-on-2.wav',
+      '/sounds/switches/d-lever-off-1.wav',
     ]);
     await playScrollSound();
+    await playScrollSound();
     await playScrollSound({ end: true });
-    expect(urls().slice(-2)).toEqual([
-      '/sounds/scroll/platen-1.wav',
-      '/sounds/scroll/platen-end.wav',
+    expect(urls().slice(-3)).toEqual([
+      '/sounds/scroll/d-platen-1.wav',
+      '/sounds/scroll/d-platen-2.wav',
+      '/sounds/scroll/d-platen-end.wav',
     ]);
+    expect(sources.at(-1).connectedTo.gain.value, 'the auto-stop at -2 dB').toBeCloseTo(db(-2), 6);
     // The keys and the dials take their set as an argument, as before.
     setSoundSet('p');
     await playCrtSound('look');
@@ -1164,8 +1175,8 @@ describe('playing a switch sound', () => {
     preloadLookSounds();
     expect(
       distinct(),
-      'the phosphor set adds its 3 switch sounds, 28 keys, 7 dials, 6 camera and 7 drawer files to the 39'
-    ).toBe(90);
+      'the phosphor set adds its 3 switch sounds, 28 keys, 7 dials, 6 camera, 7 drawer, 9 control and 5 scroll files to the 39'
+    ).toBe(104);
   });
 
   it('mutes through the master: silent within 20 ms, before or after the first sound', async () => {

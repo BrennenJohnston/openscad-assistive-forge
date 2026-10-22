@@ -230,19 +230,28 @@ const CONTROL_FILES = {
       -5,
     ],
   },
+  // The DOS look's: a boombox's tape switch for the lever, a cassette
+  // deck's rewind key for the snap, a microwave's selector knob, the deck's
+  // door released and closed for the latch.
   d: {
-    'snap-on': [['/sounds/switches/snap-on.wav'], 'snaps'],
-    'select-open': [['/sounds/switches/select-open.wav'], 'selectors'],
-    'select-choose': [['/sounds/switches/select-choose.wav'], 'selectors'],
-    'latch-open': [['/sounds/switches/latch-open.wav'], 'latches'],
-    'latch-close': [['/sounds/switches/latch-close.wav'], 'latches'],
+    'snap-on': [['/sounds/switches/d-snap-on.wav'], 'snaps'],
+    'select-open': [['/sounds/switches/d-select-open.wav'], 'selectors'],
+    'select-choose': [['/sounds/switches/d-select-choose.wav'], 'selectors'],
+    'latch-open': [['/sounds/switches/d-latch-open.wav'], 'latches'],
+    'latch-close': [['/sounds/switches/d-latch-close.wav'], 'latches'],
     'lever-on': [
-      ['/sounds/switches/lever-on-1.wav', '/sounds/switches/lever-on-2.wav'],
+      [
+        '/sounds/switches/d-lever-on-1.wav',
+        '/sounds/switches/d-lever-on-2.wav',
+      ],
       'snaps',
       -5,
     ],
     'lever-off': [
-      ['/sounds/switches/lever-off-1.wav', '/sounds/switches/lever-off-2.wav'],
+      [
+        '/sounds/switches/d-lever-off-1.wav',
+        '/sounds/switches/d-lever-off-2.wav',
+      ],
       'snaps',
       -5,
     ],
@@ -254,13 +263,15 @@ const LEVER_STRAY_DB = 1;
 // four takes in turn, down a little lower and up a little higher, each
 // straying a little; the end of the list a tick of its own, lower and
 // duller, at a level of its own.
+// The DOS look's scroll is a cassette's fast wind jogged, four takes, and
+// the deck's auto-stop for the end of the list.
 const SCROLL_FILES = {
   p: [1, 2, 3, 4].map((n) => `/sounds/scroll/platen-${n}.wav`),
-  d: [1, 2, 3, 4].map((n) => `/sounds/scroll/platen-${n}.wav`),
+  d: [1, 2, 3, 4].map((n) => `/sounds/scroll/d-platen-${n}.wav`),
 };
 const SCROLL_END_FILE = {
   p: '/sounds/scroll/platen-end.wav',
-  d: '/sounds/scroll/platen-end.wav',
+  d: '/sounds/scroll/d-platen-end.wav',
 };
 const SCROLL_END_DB = { p: -2, d: -2 };
 const SCROLL_WAY_CENTS = 70;

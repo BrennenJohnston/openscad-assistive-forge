@@ -675,12 +675,45 @@ https://freesound.org/s/453950/
 ### Cassette Tape Machine Fast Forward and Reverse (CC0-1.0)
 
 The turn's tick, `camera/d-turn.wav` (one tick of the hub on the reel's run,
-103 ms), and the pan's three parts, `camera/d-pan.wav` (the motor starting
+103 ms), the pan's three parts, `camera/d-pan.wav` (the motor starting
 under the reel's first ticks, 303 ms), `camera/d-pan-run.wav` (700 ms of
 the run, its end crossfaded into its start so it loops) and
 `camera/d-pan-stop.wav` (the stop, the ticks slowing and the motor dying,
-423 ms), are cut from a JVC FS-V30's fast wind in "Cassette Tape Machine
-Fast Forward and Reverse" by Robo9418: https://freesound.org/s/858323/
+423 ms), and the scroll's ticks, `scroll/d-platen-1.wav` to `d-platen-4.wav`
+(four jogs of 60 ms, each on one of the reel's ticks) with the end of a
+list, `scroll/d-platen-end.wav` (the stop, 93 ms), are cut from a JVC
+FS-V30's fast wind in "Cassette Tape Machine Fast Forward and Reverse" by
+Robo9418: https://freesound.org/s/858323/
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Boombox cassette buttons (CC0-1.0)
+
+The lever a checkbox or a switch flips, `switches/d-lever-on-1.wav`,
+`d-lever-on-2.wav`, `d-lever-off-1.wav` and `d-lever-off-2.wav`, is a
+Siemens boombox's tape player switch turned on and off, two takes each way
+(133 and 123 ms), from "Boombox cassette buttons" by DSAron:
+https://freesound.org/s/796610/
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+
+### cassette tape action 2 (CC0-1.0)
+
+A radio button's snap, `switches/d-snap-on.wav`, is a cassette deck's
+rewind key pressed (103 ms), and the latch a menu or a dialog makes,
+`switches/d-latch-open.wav` and `d-latch-close.wav`, the same deck's door
+released by its eject button (153 ms) and closed (123 ms), from "cassette
+tape action 2.wav" by cognito perceptu: https://freesound.org/s/98329/
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+
+### microwave switch knob click (CC0-1.0)
+
+A list's click as it opens and as a choice is made,
+`switches/d-select-open.wav` and `d-select-choose.wav`, are two detents of
+a microwave's selector knob (123 ms each), from "microwave switch knob click
+dial select turn satisfying mechanical control foley kitchen zoom-h5
+xy-microphone_" by dimapain: https://freesound.org/s/862193/
 
 - **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
 

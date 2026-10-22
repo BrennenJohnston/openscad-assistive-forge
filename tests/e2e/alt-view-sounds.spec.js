@@ -732,8 +732,7 @@ test.describe('The sounds button', () => {
       expect(stop - letGo, 'the stop as the glide ends, ms').toBeLessThan(700);
     });
 
-    test("a switch flips the DOS look's own lever", async ({ page }) => {
-      test.fail(true, "the DOS look's lever is not in yet; it plays the phosphor files");
+    test("a switch flips the DOS look's own lever, its two takes in turn", async ({ page }) => {
       await inClassic(page);
       // Classic's Customizer pane is out on entry, every group collapsed:
       // the lid's group is opened first (a key, before the count).
@@ -741,14 +740,18 @@ test.describe('The sounds button', () => {
       const group = page.locator('#parametersContainer details.param-group', { has: lid });
       if (!(await group.getAttribute('open'))) await group.locator('summary').first().click();
       await lid.scrollIntoViewIfNeeded();
-      const flip = await heard(page, () => lid.click());
-      expect(flip, `the lever: ${flip}`).toEqual([
-        expect.stringMatching(/^\/sounds\/switches\/d-lever-(on|off)-\d\.wav$/),
+      // The lid starts on: off, on, off, on; each way's takes alternate.
+      const flips = [];
+      for (let n = 0; n < 4; n++) flips.push(await heard(page, () => lid.click()));
+      expect(flips, `the lever: ${JSON.stringify(flips)}`).toEqual([
+        ['/sounds/switches/d-lever-off-1.wav'],
+        ['/sounds/switches/d-lever-on-1.wav'],
+        ['/sounds/switches/d-lever-off-2.wav'],
+        ['/sounds/switches/d-lever-on-2.wav'],
       ]);
     });
 
-    test("a scroll ticks the DOS look's own jog", async ({ page }) => {
-      test.fail(true, "the DOS look's scroll is not in yet; it plays the phosphor files");
+    test("a scroll ticks the DOS look's own jog, and the end of the list once", async ({ page }) => {
       await inClassic(page);
       // Classic's Customizer pane is out on entry, every group collapsed:
       // every group opened so the list is long enough to scroll.
@@ -775,6 +778,10 @@ test.describe('The sounds button', () => {
       });
       expect(ticks.length, `a tick a line: ${ticks}`).toBeGreaterThanOrEqual(1);
       expect(ticks.every((url) => DOS('scroll').test(url)), `${ticks}`).toBe(true);
+      // A long turn of the wheel to the bottom: the auto-stop once, last.
+      const end = await heard(page, () => page.mouse.wheel(0, 5000));
+      expect(end.at(-1), `the end: ${end}`).toBe('/sounds/scroll/d-platen-end.wav');
+      expect(end.filter((url) => url === '/sounds/scroll/d-platen-end.wav'), 'once').toHaveLength(1);
     });
   });
 
