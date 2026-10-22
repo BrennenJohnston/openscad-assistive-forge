@@ -59,7 +59,7 @@ git fetch origin
 git push origin origin/develop:main
 
 # Tag it and publish.
-git tag -a vX.Y.Z origin/develop -m "Release X.Y.Z"
+git tag -s vX.Y.Z origin/develop -m "Release X.Y.Z"
 git push origin vX.Y.Z
 gh release create vX.Y.Z --verify-tag --title "vX.Y.Z: a few words" --notes-file notes.md
 ```
