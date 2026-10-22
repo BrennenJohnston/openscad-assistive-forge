@@ -481,6 +481,198 @@ describe('the character size the Alt View starts with', () => {
   })
 })
 
+describe("the reset button on each Lens slider's row", () => {
+  const PHOSPHOR_KEY = 'openscad-forge-hfm-lens-phosphor'
+  const DOS_KEY = 'openscad-forge-hfm-lens-dos'
+  // Each home's input ids carry a suffix; the Lens drawer's none.
+  const HOMES = {
+    lensDrawerBody: '',
+    asciiDrawerBody: 'Mobile',
+    vpAsciiGroup: 'Classic',
+    classicAsciiSimplified: 'Simplified',
+  }
+  const SLIDERS = [
+    ['_hfmContrast', 'Edges'],
+    ['_hfmFontScale', 'Focus'],
+    ['_hfmPersistFade', 'Glow'],
+    ['_hfmSurfaces', 'Surfaces'],
+  ]
+
+  beforeEach(() => {
+    // The live region is written a frame after a message: the frame is faked too.
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'],
+    })
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+  })
+
+  // The case's controller and its toggle, switched off after the case even
+  // when it failed: a look left on keeps listening to the page.
+  let active = null
+
+  afterEach(() => {
+    try {
+      active?.controller.disableAltViewWithPreview(active.toggle)
+    } catch {
+      // Already off.
+    }
+    active = null
+    vi.useRealTimers()
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+    document.body.innerHTML = ''
+    delete document.body.dataset.uiMode
+  })
+
+  // The live region is written a moment after the click (cleared, then
+  // set, so a repeated sentence is read again) and observed: read it after.
+  const pressReset = async (id) => {
+    document.getElementById(id).click()
+    await vi.advanceTimersByTimeAsync(100)
+  }
+
+  // The page with every home the sliders are built into.
+  function pageWithEveryHome() {
+    const written = pageWithHeaderAndDpad()
+    for (const id of ['asciiDrawerBody', 'vpAsciiGroup', 'classicAsciiSimplified']) {
+      const home = document.createElement('div')
+      home.id = id
+      document.body.appendChild(home)
+    }
+    return written
+  }
+
+  async function lastAltView() {
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    return initAltView.mock.results.at(-1).value
+  }
+
+  const record = (key) => JSON.parse(localStorage.getItem(key))
+  const slide = (id, value) => {
+    const input = document.getElementById(id)
+    input.value = String(value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  const switchMode = (mode) => {
+    document.body.dataset.uiMode = mode
+    document.dispatchEvent(new CustomEvent('ui-mode-changed', { detail: { mode } }))
+  }
+
+  it("sits after each slider's value in every home, named for its slider and controlling it, the Customizer's own reset glyph", async () => {
+    pageWithEveryHome()
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    active = { controller, toggle }
+    for (const [home, suffix] of Object.entries(HOMES)) {
+      for (const [base, name] of SLIDERS) {
+        const input = document.querySelector(`#${home} #${base}${suffix}`)
+        expect(input, `${name} in ${home}`).not.toBeNull()
+        const button = document.getElementById(`${base}${suffix}-reset`)
+        expect(button, `the reset of ${name} in ${home}`).not.toBeNull()
+        expect(button.tagName).toBe('BUTTON')
+        expect(button.type).toBe('button')
+        expect(button.previousElementSibling?.classList.contains('slider-value'), 'after the value').toBe(true)
+        expect(button.parentElement).toBe(input.parentElement)
+        expect(button.getAttribute('aria-label')).toBe(`Reset ${name} to its starting value`)
+        expect(button.getAttribute('aria-controls')).toBe(input.id)
+        expect(button.textContent).toBe('\u21A9')
+        expect(button.classList.contains('param-reset-btn')).toBe(true)
+        expect(button.classList.contains('hfm-reset-btn')).toBe(true)
+      }
+    }
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('a press puts the slider back where its look starts, says so, and the record follows; in the DOS lines Focus is said as lines', async () => {
+    const written = pageWithEveryHome()
+    document.body.dataset.uiMode = 'standard'
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    active = { controller, toggle }
+    const altView = await lastAltView()
+    await vi.advanceTimersByTimeAsync(3_000)
+
+    slide('_hfmContrast', 1.3)
+    slide('_hfmFontScale', 0.3)
+    slide('_hfmPersistFadeMobile', 0.8)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(record(PHOSPHOR_KEY)).toEqual({ edges: 1.3, focus: 0.3, glow: 0.8, surfaces: 0.01 })
+
+    // Any home's button resets the one value every home shows.
+    await pressReset('_hfmContrastMobile-reset')
+    expect(altView.setContrastScale).toHaveBeenLastCalledWith(0.9)
+    expect(Number(document.getElementById('_hfmContrast').value)).toBe(0.9)
+    expect(Number(document.getElementById('_hfmContrastClassic').value)).toBe(0.9)
+    expect(written.at(-1)).toBe('Edges 90%')
+    await pressReset('_hfmFontScale-reset')
+    expect(altView.setFontScale).toHaveBeenLastCalledWith(0.65)
+    expect(written.at(-1)).toBe('Focus 65%')
+    await pressReset('_hfmPersistFadeSimplified-reset')
+    expect(altView.setPersistFade).toHaveBeenLastCalledWith(0.5)
+    expect(written.at(-1)).toBe('Glow 50%')
+    await vi.advanceTimersByTimeAsync(300)
+    expect(record(PHOSPHOR_KEY)).toEqual({ edges: 0.9, focus: 0.65, glow: 0.5, surfaces: 0.01 })
+
+    // The DOS look resets to its own start, and its Focus is lines.
+    switchMode('classic')
+    await vi.advanceTimersByTimeAsync(3_000)
+    slide('_hfmFontScale', 0.3)
+    slide('_hfmContrast', 2)
+    await pressReset('_hfmFontScaleClassic-reset')
+    expect(altView.setFontScale).toHaveBeenLastCalledWith(0.4)
+    expect(Number(document.getElementById('_hfmFontScale').value)).toBe(0.1)
+    expect(written.at(-1)).toBe('Vector lines, 10%')
+    await pressReset('_hfmContrastClassic-reset')
+    expect(altView.setContrastScale).toHaveBeenLastCalledWith(1.4)
+    expect(written.at(-1)).toBe('Edges 140%')
+    await vi.advanceTimersByTimeAsync(300)
+    expect(record(DOS_KEY)).toEqual({ edges: 1.4, focus: 0.1, glow: 0.1, surfaces: 0.01 })
+    expect(record(PHOSPHOR_KEY).edges).toBe(0.9)
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('goes with its row while pan adjust is on, disabled there, and comes back after', async () => {
+    pageWithEveryHome()
+    localStorage.setItem(
+      'openscad-forge-alt-unlock',
+      JSON.stringify({ entries: 3, permanent: true, pendingBreak: false })
+    )
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    active = { controller, toggle }
+    const reset = document.getElementById('_hfmContrast-reset')
+    const section = reset.closest('.hfm-slider-section')
+    expect(section.style.display).toBe('')
+    expect(reset.disabled).toBe(false)
+    document.getElementById('_hfmPanAdjust').click()
+    expect(section.style.display).toBe('none')
+    expect(reset.disabled).toBe(true)
+    document.getElementById('_hfmPanAdjust').click()
+    expect(section.style.display).toBe('')
+    expect(reset.disabled).toBe(false)
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('a press is a key by its size, as every button in the look is', async () => {
+    pageWithEveryHome()
+    const controller = await freshController(previewManagerStub())
+    const { playKeySound } = await import('../../src/js/crt-sounds.js')
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    active = { controller, toggle }
+    playKeySound.mockClear()
+    const reset = document.getElementById('_hfmContrast-reset')
+    reset.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }))
+    reset.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, cancelable: true }))
+    expect(playKeySound.mock.calls.map((c) => c.join(' '))).toEqual(['p 1 down', 'p 1 up'])
+    controller.disableAltViewWithPreview(toggle)
+  })
+})
+
 describe('the glow the Alt View starts with', () => {
   const PHOSPHOR_KEY = 'openscad-forge-hfm-lens-phosphor'
   let matchMedia

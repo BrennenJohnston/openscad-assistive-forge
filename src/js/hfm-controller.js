@@ -17,6 +17,7 @@ import {
   STORAGE_KEY_SOUND_KINDS_OFF,
 } from './storage-keys.js';
 import { announce, announceImmediate } from './announcer.js';
+import { RESET_GLYPH } from './reset-glyph.js';
 import {
   isPermanent,
   noteDevUnlock,
@@ -1029,6 +1030,9 @@ function _applyHfmPersistFade(value) {
  * @param {{min:number,max:number,step:number}} cfg.range
  * @param {() => number} cfg.getValue
  * @param {(value:number) => void} cfg.onInput
+ * @param {() => number} cfg.getDefault - where the slider starts in the
+ *   current look, which its reset button puts back
+ * @param {(value:number) => string} [cfg.say] - the sentence the reset says
  * @returns {{ setEnabled: Function, sync: Function }}
  */
 function _buildHfmSliderControls({
@@ -1037,11 +1041,14 @@ function _buildHfmSliderControls({
   range,
   getValue,
   onInput,
+  getDefault,
   speak = _formatPercent,
+  say = (value) => `${titleText} ${_formatPercent(value)}`,
   note = null,
 }) {
   const inputs = [];
   const valueEls = [];
+  const resets = [];
   const sections = [];
   const formatValue = _formatPercent;
 
@@ -1082,8 +1089,29 @@ function _buildHfmSliderControls({
     valueEl.id = `${inputId}-value`;
     valueEl.textContent = formatValue(getValue());
 
+    // After the value, the Customizer's own reset button: the look's start
+    // put back through the slider's own path, so the sliders, the renderer
+    // and the look's record follow as a drag would, and the result said once.
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.id = `${inputId}-reset`;
+    reset.className = 'param-reset-btn hfm-reset-btn';
+    reset.textContent = RESET_GLYPH;
+    reset.setAttribute(
+      'aria-label',
+      `Reset ${titleText} to its starting value`
+    );
+    reset.setAttribute('aria-controls', inputId);
+    reset.title = `Reset ${titleText} to its starting value`;
+    reset.addEventListener('click', () => {
+      const value = getDefault();
+      onInput(value);
+      announceImmediate(say(value));
+    });
+
     sliderContainer.appendChild(input);
     sliderContainer.appendChild(valueEl);
+    sliderContainer.appendChild(reset);
     section.appendChild(title);
     section.appendChild(sliderContainer);
     if (note) {
@@ -1103,6 +1131,7 @@ function _buildHfmSliderControls({
 
     inputs.push(input);
     valueEls.push(valueEl);
+    resets.push(reset);
     sections.push(section);
 
     input.addEventListener('input', () => {
@@ -1160,6 +1189,9 @@ function _buildHfmSliderControls({
       inputs.forEach((input) => {
         input.disabled = !show;
       });
+      resets.forEach((button) => {
+        button.disabled = !show;
+      });
     },
     sync(value) {
       const formatted = formatValue(value);
@@ -1215,6 +1247,7 @@ function _initHfmContrastControls() {
     range: _HFM_CONTRAST_RANGE,
     getValue: () => _hfmContrastScale,
     onInput: (value) => _applyHfmContrastScale(value),
+    getDefault: () => _lensDefaults(_hfmLensSet).edges,
   });
   return _hfmContrastControls;
 }
@@ -1227,10 +1260,12 @@ function _initHfmFontScaleControls() {
     range: _HFM_FONT_SCALE_RANGE,
     getValue: () => _hfmFontScale,
     onInput: (value) => _applyHfmFontScale(value),
+    getDefault: () => _lensDefaults(_hfmLensSet).focus,
     speak: (value) =>
       _hfmIsVector(value)
         ? `Vector lines, ${_formatPercent(value)}`
         : _formatPercent(value),
+    say: _hfmSizeWords,
   });
   return _hfmFontScaleControls;
 }
@@ -1243,6 +1278,7 @@ function _initHfmPersistFadeControls() {
     range: _HFM_PERSIST_FADE_RANGE,
     getValue: () => _hfmPersistFade,
     onInput: (value) => _applyHfmPersistFade(value),
+    getDefault: () => _lensDefaults(_hfmLensSet).glow,
   });
   // Afterglow is motion; hide the slider entirely under reduced-motion. In
   // the DOS look's lines it draws nothing, so it leaves the Lens there too.
@@ -1266,6 +1302,7 @@ function _initHfmSurfaceControls() {
     range: _HFM_SURFACE_RANGE,
     getValue: () => _hfmSurfaceOpacity,
     onInput: (value) => _applyHfmSurfaceOpacity(value),
+    getDefault: () => _lensDefaults(_hfmLensSet).surfaces,
     note: 'Below 40% Focus: how solid the faces under the lines are.',
   });
   return _hfmSurfaceControls;
