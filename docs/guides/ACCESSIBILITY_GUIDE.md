@@ -36,7 +36,7 @@ The OpenSCAD Assistive Forge is designed with screen reader users in mind and pr
 2. **Parameters Panel** (desktop left): All model parameters with their controls  
    **Mobile**: Use the "Params" button at the top of the preview panel to open the drawer
 3. **Preview Settings & Info** (top of preview): Status, stats, and settings  
-   **Mobile**: Use the "Preview Settings & Info" toggle button
+   **Mobile**: Use the "Preview Settings & Info" toggle button; held upright, the settings drop over the preview as a see-through sheet, and the grip across its bottom edge sets its height (Up and Down arrows, Shift for larger steps, Home and End), which is kept
    - **Auto-rotate**: a switch under Automatic preview; View > Auto-rotate does the same
    - **Auto-rotate speed**: the slider under it, from 0.6 to 18 degrees per second
 4. **Camera Controls** (desktop right panel) or **Camera** drawer in the bar at the foot of the screen (mobile)

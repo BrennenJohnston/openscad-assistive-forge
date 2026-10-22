@@ -193,6 +193,16 @@ export const MEASURED_SECONDS = {
   'param-links.spec.js': 95.6,
   'parameter-filter.spec.js': 5.1,
   'parity-regression.spec.js': 38.7,
+  // The phone's Preview Settings sheet, its grip's keys and drag, a reload,
+  // in four looks at two heights: 121 s locally, booked from CI's pace for
+  // ui-schema's phone cases (23.5 s there against 17 s here for the
+  // Customizer sheet case, Test Suite 39709840987). Its own file: the
+  // planner's shard spread could not hold it inside ui-schema.
+  // Every ordered pair of the phone drawers at two heights and sideways, in
+  // four looks, with the preview laid out once per slide in the look: 216 s
+  // locally, booked at CI's pace for the phone sheets (about 1.4 times).
+  'phone-drawer-pairs.spec.js': 300.0,
+  'phone-settings-sheet.spec.js': 175.0,
   'potrace-engine.spec.js': 2.4,
   'preference-matrix.spec.js': 40.7,
   // 24.3 by the two runs above, plus one case since (a library file's plain
@@ -233,8 +243,12 @@ export const MEASURED_SECONDS = {
   // at about four times that. Then eight more (Preview Settings opened over
   // the preview without moving it, two desktop sizes in four looks), booked
   // at 45.4 s from CI's own pace in Test Suite 39315966307: two presses of a
-  // toggle each, at the 2.2 to 3.3 s a press its S1 case took there.
-  'ui-schema.spec.js': 1668.5,
+  // toggle each, at the 2.2 to 3.3 s a press its S1 case took there. Then
+  // four sideways cases in the Alt View (the settings row at 640 and 844
+  // px, the ready badge against the status line at 740 and 844): 30 s
+  // locally, booked at CI's pace for the file's phone cases (about 1.4
+  // times).
+  'ui-schema.spec.js': 1710.5,
   'wasm-smoke.spec.js': 35.6,
   'welcome-spotlight.spec.js': 37.4,
   'welcome-surface.spec.js': 18.6,

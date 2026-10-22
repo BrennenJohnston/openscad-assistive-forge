@@ -360,6 +360,16 @@ settings.
 | The test ends after 10 seconds without a press, or with Escape or Stop the test, says "Test stopped." and leaves the dialog open | ☐ | |
 | Open the controller settings closes Preferences and lands on "Controller, tab, selected, 2 of 2" in Keys; Escape then goes back to where Preferences was opened from | ☐ | |
 
+## 20. The phone's sheets
+
+On a phone held upright (or a window under 768 px wide), open the simple box
+in Standard.
+
+| What should happen | Heard it? | What NVDA actually said |
+|---|---|---|
+| The Customizer button at the head of the Preview Settings row reads "Customizer panel, button, collapsed"; Enter says "expanded" and lands at the parameters; Escape in the panel comes back to the same button and says "collapsed"; no control named "Close customizer panel" is met | ☐ | |
+| With Preview Settings & Info open, the grip on the sheet's bottom edge reads "Resize the Preview Settings" with its value, "Preview Settings 40% of the screen's height"; Down Arrow says the new value (42%), Shift+Down 5% more; Escape on it closes the sheet and comes back to the settings arrow | ☐ | |
+
 ## The last run
 
 2026-10-12, on the release candidate for 5.4.0, a scripted run: NVDA 2026.2
