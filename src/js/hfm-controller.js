@@ -11,6 +11,8 @@ import {
   STORAGE_KEY_HFM_FONT_SCALE,
   STORAGE_KEY_HFM_PERSIST_FADE,
   STORAGE_KEY_HFM_SURFACES,
+  STORAGE_KEY_HFM_LENS_PHOSPHOR,
+  STORAGE_KEY_HFM_LENS_DOS,
   STORAGE_KEY_SOUNDS,
   STORAGE_KEY_SOUND_KINDS_OFF,
 } from './storage-keys.js';
@@ -64,19 +66,28 @@ let _hfmAltView = null;
 let _hfmInitPromise = null;
 let _hfmEnabled = false;
 let _hfmPendingEnable = false;
-let _hfmSettingsLoaded = false;
-
-const _HFM_CONTRAST_RANGE = { min: 0.5, max: 4.0, step: 0.05, default: 1 };
-let _hfmContrastScale = _HFM_CONTRAST_RANGE.default;
+const _HFM_CONTRAST_RANGE = { min: 0.5, max: 4.0, step: 0.05 };
+// Where the Lens starts in each look: the phosphor looks ('p', the green and
+// the amber) and Classic's DOS look ('d'). A phone's phosphor Focus starts
+// finer (_HFM_FONT_SCALE_PHONE_DEFAULT). Each look keeps its own four values
+// in a record of its own, and a saved value wins over these.
+const _HFM_LOOK_DEFAULTS = {
+  p: { edges: 0.9, focus: 0.65, glow: 0.5, surfaces: 0.01 },
+  d: { edges: 1.4, focus: 0.1, glow: 0.1, surfaces: 0.01 },
+};
+// The set the four values below belong to, and whether the keys of the
+// versions before were read into the phosphor record on this page.
+let _hfmLensSet = 'p';
+let _hfmLensMigrated = false;
+let _hfmContrastScale = _HFM_LOOK_DEFAULTS.p.edges;
 let _hfmContrastControls = null;
 
-// The default is finer than the renderer's own 1: at full size the first
-// frame drew the model as a blob with no faces. A saved size wins. The top
-// is where the characters stop growing: the renderer caps its font at
-// 24 px, met at 170% of the 14 px base a preview gets. Under 40% the
-// characters give way to the vector look: that is where an eye on a phone
-// stops telling them apart.
-const _HFM_FONT_SCALE_RANGE = { min: 0, max: 1.7, step: 0.05, default: 0.6 };
+// The looks start finer than the renderer's own 1: at full size the first
+// frame drew the model as a blob with no faces. The top is where the
+// characters stop growing: the renderer caps its font at 24 px, met at 170%
+// of the 14 px base a preview gets. Under 40% the characters give way to
+// the vector look: that is where an eye on a phone stops telling them apart.
+const _HFM_FONT_SCALE_RANGE = { min: 0, max: 1.7, step: 0.05 };
 // Under 40% the model is drawn as its edges, the way a vector monitor's beam
 // drew lines. The line's width follows the size: 1 px at 0% and 4 px at the
 // first step under the edge, 35%, straight between (CSS px, the same on
@@ -97,23 +108,23 @@ const _HFM_VECTOR_CREASE = [
   [1.6, 5],
   [4, 1],
 ];
-// How solid the vector look draws the model's surfaces: faint by default, so
-// the lines read as a wireframe.
-const _HFM_SURFACE_RANGE = { min: 0.01, max: 1, step: 0.01, default: 0.01 };
-let _hfmSurfaceOpacity = _HFM_SURFACE_RANGE.default;
+// How solid the vector look draws the model's surfaces: faint to begin with,
+// so the lines read as a wireframe.
+const _HFM_SURFACE_RANGE = { min: 0.01, max: 1, step: 0.01 };
+let _hfmSurfaceOpacity = _HFM_LOOK_DEFAULTS.p.surfaces;
 let _hfmSurfaceControls = null;
-// A phone starts finer: 45% is one step above the edge where the characters
-// give way to lines, the most detail that still reads on a phone's screen.
-// A saved size wins on every device.
+// A phone's phosphor look starts finer: 45% is one step above the edge where
+// the characters give way to lines, the most detail that still reads on a
+// phone's screen. The DOS look's numbers hold on every device, and a saved
+// size wins on every device.
 const _HFM_FONT_SCALE_PHONE_DEFAULT = 0.45;
 const _HFM_PHONE_MAX_WIDTH_PX = 768;
-let _hfmFontScale = _HFM_FONT_SCALE_RANGE.default;
+let _hfmFontScale = _HFM_LOOK_DEFAULTS.p.focus;
 let _hfmFontScaleControls = null;
 
-// A gentle afterglow to begin with; a saved 0 stays 0, and reduced motion
-// holds it at 0.
-const _HFM_PERSIST_FADE_RANGE = { min: 0, max: 1, step: 0.05, default: 0.15 };
-let _hfmPersistFade = _HFM_PERSIST_FADE_RANGE.default;
+// The afterglow; a saved 0 stays 0, and reduced motion holds it at 0.
+const _HFM_PERSIST_FADE_RANGE = { min: 0, max: 1, step: 0.05 };
+let _hfmPersistFade = _HFM_LOOK_DEFAULTS.p.glow;
 let _hfmPersistFadeControls = null;
 
 let _hfmPanAdjustEnabled = false;
@@ -597,24 +608,167 @@ function _formatPercent(value) {
   return `${Math.round(value * 100)}%`;
 }
 
-// Debounced localStorage writes so pan-adjust taps don't write per press.
+// One debounced write of the look's record, so pan-adjust taps don't write
+// per press; the record goes to the set the values belong to.
 const _SAVE_DEBOUNCE_MS = 200;
-const _saveTimers = new Map();
+let _lensSaveTimer = null;
+let _lensSaveSet = null;
+// True while a look's loaded values are being applied: nothing is saved on
+// the way, so a switch never writes one look's values into the other's record.
+let _hfmApplyingLens = false;
 
-function _debouncedSave(key, value) {
-  const existing = _saveTimers.get(key);
-  if (existing) clearTimeout(existing);
-  _saveTimers.set(
-    key,
-    setTimeout(() => {
-      _saveTimers.delete(key);
-      try {
-        localStorage.setItem(key, String(value));
-      } catch (error) {
-        console.warn(`[Alt View] Could not save setting (${key}):`, error);
-      }
-    }, _SAVE_DEBOUNCE_MS)
-  );
+/** The look's set: Classic's DOS look is 'd', the phosphor looks 'p'. */
+function _lensSet(mode = document.body?.dataset.uiMode) {
+  return mode === 'classic' ? 'd' : 'p';
+}
+
+function _lensKey(set) {
+  return set === 'd' ? STORAGE_KEY_HFM_LENS_DOS : STORAGE_KEY_HFM_LENS_PHOSPHOR;
+}
+
+/** Where a look's Lens starts on this device. */
+function _lensDefaults(set) {
+  const defaults = { ..._HFM_LOOK_DEFAULTS[set] };
+  if (set === 'p' && window.innerWidth < _HFM_PHONE_MAX_WIDTH_PX) {
+    defaults.focus = _HFM_FONT_SCALE_PHONE_DEFAULT;
+  }
+  return defaults;
+}
+
+const _LENS_FIELDS = {
+  edges: _HFM_CONTRAST_RANGE,
+  focus: _HFM_FONT_SCALE_RANGE,
+  glow: _HFM_PERSIST_FADE_RANGE,
+  surfaces: _HFM_SURFACE_RANGE,
+};
+
+function _inRange(value, range) {
+  return Number.isFinite(value) && value >= range.min && value <= range.max;
+}
+
+function _lensRecordNow() {
+  return {
+    edges: _hfmContrastScale,
+    focus: _hfmFontScale,
+    glow: _hfmPersistFade,
+    surfaces: _hfmSurfaceOpacity,
+  };
+}
+
+function _writeLensRecord(set, record) {
+  try {
+    localStorage.setItem(_lensKey(set), JSON.stringify(record));
+  } catch (error) {
+    console.warn(`[Alt View] Could not save the Lens (${set}):`, error);
+  }
+}
+
+function _scheduleLensSave() {
+  if (_hfmApplyingLens) return;
+  if (_lensSaveTimer) clearTimeout(_lensSaveTimer);
+  _lensSaveSet = _hfmLensSet;
+  _lensSaveTimer = setTimeout(() => {
+    _lensSaveTimer = null;
+    _writeLensRecord(_lensSaveSet, _lensRecordNow());
+  }, _SAVE_DEBOUNCE_MS);
+}
+
+/** A save still waiting is written now, to the set it was scheduled for. */
+function _flushLensSave() {
+  if (!_lensSaveTimer) return;
+  clearTimeout(_lensSaveTimer);
+  _lensSaveTimer = null;
+  _writeLensRecord(_lensSaveSet, _lensRecordNow());
+}
+
+/**
+ * A look's saved record, every field within its range and the defaults
+ * filling what is missing or out of range; null when nothing is saved.
+ */
+function _readLensRecord(set) {
+  let raw = null;
+  try {
+    raw = localStorage.getItem(_lensKey(set));
+  } catch (_) {
+    // Private browsing or storage unavailable
+  }
+  if (raw === null) return null;
+  let parsed = null;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (_) {
+    parsed = null;
+  }
+  const record = _lensDefaults(set);
+  if (parsed && typeof parsed === 'object') {
+    for (const [field, range] of Object.entries(_LENS_FIELDS)) {
+      const value = Number(parsed[field]);
+      if (_inRange(value, range)) record[field] = value;
+    }
+  }
+  return record;
+}
+
+/**
+ * Once per page: the four keys the versions before wrote are read into the
+ * phosphor record when that record is absent, a saved value staying as the
+ * person left it, and removed only after the record is written.
+ */
+function _migrateLensKeys() {
+  if (_hfmLensMigrated) return;
+  _hfmLensMigrated = true;
+  const old = {
+    edges: STORAGE_KEY_HFM_CONTRAST_SCALE,
+    focus: STORAGE_KEY_HFM_FONT_SCALE,
+    glow: STORAGE_KEY_HFM_PERSIST_FADE,
+    surfaces: STORAGE_KEY_HFM_SURFACES,
+  };
+  try {
+    if (localStorage.getItem(STORAGE_KEY_HFM_LENS_PHOSPHOR) !== null) return;
+    const record = {};
+    for (const [field, range] of Object.entries(_LENS_FIELDS)) {
+      const saved = localStorage.getItem(old[field]);
+      const value = saved === null ? NaN : parseFloat(saved);
+      if (_inRange(value, range)) record[field] = value;
+    }
+    if (Object.keys(record).length === 0) return;
+    localStorage.setItem(STORAGE_KEY_HFM_LENS_PHOSPHOR, JSON.stringify(record));
+    for (const key of Object.values(old)) localStorage.removeItem(key);
+  } catch (_) {
+    // Private browsing or storage unavailable
+  }
+}
+
+/** The four values become a look's: its record, or where it starts. */
+function _loadLensSettings(set) {
+  _migrateLensKeys();
+  const record = _readLensRecord(set) ?? _lensDefaults(set);
+  _hfmLensSet = set;
+  _hfmContrastScale = record.edges;
+  _hfmFontScale = record.focus;
+  _hfmPersistFade = record.glow;
+  _hfmSurfaceOpacity = record.surfaces;
+}
+
+/**
+ * The four values applied to the sliders, the renderer and the status line,
+ * with no save on the way (they are the look's own already); the afterglow
+ * is held at 0 under reduced motion without touching the saved value.
+ */
+function _applyLensValues() {
+  _hfmApplyingLens = true;
+  try {
+    _applyHfmContrastScale(_hfmContrastScale);
+    _applyHfmFontScale(_hfmFontScale);
+    _applyHfmSurfaceOpacity(_hfmSurfaceOpacity);
+    if (_prefersReducedMotion()) {
+      _hfmAltView?.setPersistFade?.(0);
+    } else {
+      _applyHfmPersistFade(_hfmPersistFade);
+    }
+  } finally {
+    _hfmApplyingLens = false;
+  }
 }
 
 function _updateHfmStatusBar() {
@@ -695,18 +849,12 @@ function _setHfmPanAdjustEnabled(enabled) {
 }
 
 function _resetHfmSettings() {
-  try {
-    localStorage.removeItem(STORAGE_KEY_HFM_CONTRAST_SCALE);
-    localStorage.removeItem(STORAGE_KEY_HFM_FONT_SCALE);
-    localStorage.removeItem(STORAGE_KEY_HFM_PERSIST_FADE);
-    localStorage.removeItem(STORAGE_KEY_HFM_SURFACES);
-  } catch (_) {
-    // Storage unavailable
-  }
-  _applyHfmContrastScale(_HFM_CONTRAST_RANGE.default);
-  _applyHfmFontScale(_HFM_FONT_SCALE_RANGE.default);
-  _applyHfmPersistFade(_HFM_PERSIST_FADE_RANGE.default);
-  _applyHfmSurfaceOpacity(_HFM_SURFACE_RANGE.default);
+  const defaults = _lensDefaults(_hfmLensSet);
+  _applyHfmContrastScale(defaults.edges);
+  _applyHfmFontScale(defaults.focus);
+  _applyHfmPersistFade(defaults.glow);
+  _applyHfmSurfaceOpacity(defaults.surfaces);
+  _flushLensSave();
   if (import.meta.env.DEV) {
     console.log('[Alt View] Settings reset to defaults');
   }
@@ -718,7 +866,7 @@ function _resetHfmSettings() {
 
 function _applyHfmContrastScale(scale) {
   const raw = Number(scale);
-  const next = Number.isFinite(raw) ? raw : _HFM_CONTRAST_RANGE.default;
+  const next = Number.isFinite(raw) ? raw : _lensDefaults(_hfmLensSet).edges;
   const clamped = Math.max(
     _HFM_CONTRAST_RANGE.min,
     Math.min(_HFM_CONTRAST_RANGE.max, next)
@@ -733,14 +881,14 @@ function _applyHfmContrastScale(scale) {
   _hfmContrastControls?.sync?.(clamped);
   _syncHfmVectorLook();
   _syncHfmPanToggleUi();
-  _debouncedSave(STORAGE_KEY_HFM_CONTRAST_SCALE, clamped);
+  _scheduleLensSave();
 
   return clamped;
 }
 
 function _applyHfmFontScale(scale) {
   const raw = Number(scale);
-  const next = Number.isFinite(raw) ? raw : _HFM_FONT_SCALE_RANGE.default;
+  const next = Number.isFinite(raw) ? raw : _lensDefaults(_hfmLensSet).focus;
   const clamped = Math.max(
     _HFM_FONT_SCALE_RANGE.min,
     Math.min(_HFM_FONT_SCALE_RANGE.max, next)
@@ -757,7 +905,8 @@ function _applyHfmFontScale(scale) {
   _hfmFontScaleControls?.sync?.(clamped);
   _syncHfmVectorLook();
   _syncHfmPanToggleUi();
-  _debouncedSave(STORAGE_KEY_HFM_FONT_SCALE, clamped);
+  _syncGlowControls();
+  _scheduleLensSave();
 
   return clamped;
 }
@@ -829,7 +978,7 @@ function _syncHfmVectorLook() {
 
 function _applyHfmSurfaceOpacity(value) {
   const raw = Number(value);
-  const next = Number.isFinite(raw) ? raw : _HFM_SURFACE_RANGE.default;
+  const next = Number.isFinite(raw) ? raw : _lensDefaults(_hfmLensSet).surfaces;
   const clamped = Math.max(
     _HFM_SURFACE_RANGE.min,
     Math.min(_HFM_SURFACE_RANGE.max, next)
@@ -837,13 +986,13 @@ function _applyHfmSurfaceOpacity(value) {
   _hfmSurfaceOpacity = clamped;
   _hfmSurfaceControls?.sync?.(clamped);
   _syncHfmVectorLook();
-  _debouncedSave(STORAGE_KEY_HFM_SURFACES, clamped);
+  _scheduleLensSave();
   return clamped;
 }
 
 function _applyHfmPersistFade(value) {
   const raw = Number(value);
-  const next = Number.isFinite(raw) ? raw : _HFM_PERSIST_FADE_RANGE.default;
+  const next = Number.isFinite(raw) ? raw : _lensDefaults(_hfmLensSet).glow;
   const clamped = Math.max(
     _HFM_PERSIST_FADE_RANGE.min,
     Math.min(_HFM_PERSIST_FADE_RANGE.max, next)
@@ -857,7 +1006,7 @@ function _applyHfmPersistFade(value) {
 
   _hfmPersistFadeControls?.sync?.(clamped);
   _syncHfmPanToggleUi();
-  _debouncedSave(STORAGE_KEY_HFM_PERSIST_FADE, clamped);
+  _scheduleLensSave();
 
   return clamped;
 }
@@ -1095,10 +1244,11 @@ function _initHfmPersistFadeControls() {
     getValue: () => _hfmPersistFade,
     onInput: (value) => _applyHfmPersistFade(value),
   });
-  // Afterglow is motion; hide the slider entirely under reduced-motion.
+  // Afterglow is motion; hide the slider entirely under reduced-motion. In
+  // the DOS look's lines it draws nothing, so it leaves the Lens there too.
   _hfmPersistFadeControls = {
     setEnabled(isEnabled) {
-      base.setEnabled(isEnabled && !_prefersReducedMotion());
+      base.setEnabled(isEnabled && !_prefersReducedMotion() && !_glowIdle());
     },
     sync(value) {
       base.sync(value);
@@ -1119,6 +1269,20 @@ function _initHfmSurfaceControls() {
     note: 'Below 40% Focus: how solid the faces under the lines are.',
   });
   return _hfmSurfaceControls;
+}
+
+/**
+ * True where Glow changes nothing: the DOS look under 40% Focus draws crisp
+ * lines with no afterglow (measured from the overlay's pixels).
+ */
+function _glowIdle() {
+  return _hfmLensSet === 'd' && _hfmIsVector();
+}
+
+// Only the controls already built: building them here would put the Glow
+// row ahead of the others, since a Focus change arrives before the rows do.
+function _syncGlowControls() {
+  _hfmPersistFadeControls?.setEnabled(_hfmEnabled && !_hfmPanAdjustEnabled);
 }
 
 function _setHfmSlidersEnabled(enabled) {
@@ -1188,63 +1352,6 @@ function _setAssetsForVariant(enabled) {
 // ---------------------------------------------------------------------------
 // Alt view enable / disable (requires previewManager)
 // ---------------------------------------------------------------------------
-
-function _loadSavedHfmSettings() {
-  if (_hfmSettingsLoaded) return;
-  _hfmSettingsLoaded = true;
-
-  let savedContrast = null;
-  let savedFont = null;
-  let savedPersistFade = null;
-  let savedSurfaces = null;
-  try {
-    savedContrast = localStorage.getItem(STORAGE_KEY_HFM_CONTRAST_SCALE);
-    savedFont = localStorage.getItem(STORAGE_KEY_HFM_FONT_SCALE);
-    savedPersistFade = localStorage.getItem(STORAGE_KEY_HFM_PERSIST_FADE);
-    savedSurfaces = localStorage.getItem(STORAGE_KEY_HFM_SURFACES);
-  } catch (_) {
-    // Private browsing or storage unavailable
-  }
-
-  const parsedContrast =
-    savedContrast !== null ? parseFloat(savedContrast) : NaN;
-  const parsedFont = savedFont !== null ? parseFloat(savedFont) : NaN;
-  const parsedPersistFade =
-    savedPersistFade !== null ? parseFloat(savedPersistFade) : NaN;
-
-  if (
-    Number.isFinite(parsedContrast) &&
-    parsedContrast >= _HFM_CONTRAST_RANGE.min &&
-    parsedContrast <= _HFM_CONTRAST_RANGE.max
-  ) {
-    _hfmContrastScale = parsedContrast;
-  }
-  if (
-    Number.isFinite(parsedFont) &&
-    parsedFont >= _HFM_FONT_SCALE_RANGE.min &&
-    parsedFont <= _HFM_FONT_SCALE_RANGE.max
-  ) {
-    _hfmFontScale = parsedFont;
-  } else if (window.innerWidth < _HFM_PHONE_MAX_WIDTH_PX) {
-    _hfmFontScale = _HFM_FONT_SCALE_PHONE_DEFAULT;
-  }
-  if (
-    Number.isFinite(parsedPersistFade) &&
-    parsedPersistFade >= _HFM_PERSIST_FADE_RANGE.min &&
-    parsedPersistFade <= _HFM_PERSIST_FADE_RANGE.max
-  ) {
-    _hfmPersistFade = parsedPersistFade;
-  }
-  const parsedSurfaces =
-    savedSurfaces !== null ? parseFloat(savedSurfaces) : NaN;
-  if (
-    Number.isFinite(parsedSurfaces) &&
-    parsedSurfaces >= _HFM_SURFACE_RANGE.min &&
-    parsedSurfaces <= _HFM_SURFACE_RANGE.max
-  ) {
-    _hfmSurfaceOpacity = parsedSurfaces;
-  }
-}
 
 function _onAltViewRevealEnd(event) {
   if (event.animationName === 'alt-view-reveal') _endAltViewReveal();
@@ -1395,7 +1502,7 @@ function _stopAltViewStart() {
 // does; reduced motion leaves them alone, since sound is not motion.
 // Classic is the blue DOS look and has its own keys.
 function _hfmKeySet() {
-  return document.body?.dataset.uiMode === 'classic' ? 'd' : 'p';
+  return _lensSet();
 }
 
 function _hfmKeyBand(el) {
@@ -2355,18 +2462,10 @@ async function _enableAltViewWithPreview(toggleBtn) {
       _hfmPersistFade = 0;
       _updateHfmStatusBar();
     } else {
-      let savedFade = null;
-      try {
-        savedFade = localStorage.getItem(STORAGE_KEY_HFM_PERSIST_FADE);
-      } catch (_) {
-        /* storage unavailable */
-      }
-      const parsed = savedFade !== null ? parseFloat(savedFade) : NaN;
-      const valid =
-        Number.isFinite(parsed) &&
-        parsed >= _HFM_PERSIST_FADE_RANGE.min &&
-        parsed <= _HFM_PERSIST_FADE_RANGE.max;
-      _applyHfmPersistFade(valid ? parsed : _HFM_PERSIST_FADE_RANGE.default);
+      const saved = _readLensRecord(_hfmLensSet);
+      _applyHfmPersistFade(
+        saved ? saved.glow : _lensDefaults(_hfmLensSet).glow
+      );
     }
   };
   motionMql.addEventListener('change', _hfmMotionListener);
@@ -2377,10 +2476,19 @@ async function _enableAltViewWithPreview(toggleBtn) {
   // is a screen coming on; a switch between Simplified and Standard is not.
   let lastMode = document.body?.dataset.uiMode;
   _hfmModeListener = (event) => {
+    const mode = event?.detail?.mode;
+    // Each look keeps its own Lens: the leaving look's values are saved,
+    // the arriving look's loaded and applied.
+    const arriving = _lensSet(mode);
+    if (arriving !== _hfmLensSet) {
+      _flushLensSave();
+      _loadLensSettings(arriving);
+      _applyLensValues();
+    }
     _hfmAltView?.rebuildGlyphs?.();
     _syncHfmVectorLook();
+    _syncGlowControls();
     _hfmAltView?.invalidate?.();
-    const mode = event?.detail?.mode;
     const classicCrossed = mode === 'classic' || lastMode === 'classic';
     lastMode = mode;
     if (_hfmEnabled && classicCrossed) {
@@ -2390,18 +2498,8 @@ async function _enableAltViewWithPreview(toggleBtn) {
   };
   document.addEventListener('ui-mode-changed', _hfmModeListener);
 
-  _loadSavedHfmSettings();
-
-  _applyHfmContrastScale(_hfmContrastScale);
-  _applyHfmFontScale(_hfmFontScale);
-  _applyHfmSurfaceOpacity(_hfmSurfaceOpacity);
-  if (_prefersReducedMotion()) {
-    // Afterglow is motion: held at 0 without saving, so the person's own
-    // value is there when motion is allowed again.
-    _hfmAltView.setPersistFade?.(0);
-  } else {
-    _applyHfmPersistFade(_hfmPersistFade);
-  }
+  _loadLensSettings(_lensSet());
+  _applyLensValues();
   _setHfmSlidersEnabled(true);
 
   // The model stays where the ordinary preview puts it, its bottom on the
@@ -2465,6 +2563,7 @@ function _disableAltViewWithPreview(toggleBtn) {
     document.removeEventListener('ui-mode-changed', _hfmModeListener);
     _hfmModeListener = null;
   }
+  _flushLensSave();
 
   if (_hfmAltView) {
     _hfmAltView.disable();

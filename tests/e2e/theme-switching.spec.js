@@ -1194,9 +1194,9 @@ test.describe('The Alt View starts with finer characters', () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#previewStatusAltAdjust')).toContainText(
-      'FOCUS 60%'
+      'FOCUS 65%'
     );
-    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.6');
+    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.65');
   });
 
   test('on a phone shows 45% characters when nothing is saved', async ({

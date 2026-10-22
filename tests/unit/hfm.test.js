@@ -504,7 +504,7 @@ describe('initAltView — API surface', () => {
       'utf8'
     )
     expect(src).toContain(
-      'const _HFM_FONT_SCALE_RANGE = { min: 0, max: 1.7, step: 0.05, default: 0.6 };'
+      'const _HFM_FONT_SCALE_RANGE = { min: 0, max: 1.7, step: 0.05 };'
     )
   })
 })
