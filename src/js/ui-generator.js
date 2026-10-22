@@ -4,6 +4,7 @@
  */
 
 import { formatFileSize } from './download.js';
+import { RESET_GLYPH } from './reset-glyph.js';
 import { announceChange, announceImmediate } from './announcer.js';
 import { reapplyDetailLevel } from './param-detail-controller.js';
 import { isRasterImageFile } from './file-param-resolver.js';
@@ -1558,7 +1559,7 @@ function createParameterResetButton(param, onChange) {
   const resetBtn = document.createElement('button');
   resetBtn.type = 'button';
   resetBtn.className = 'param-reset-btn';
-  resetBtn.textContent = '↩';
+  resetBtn.textContent = RESET_GLYPH;
   resetBtn.title = `Reset ${formatParamName(param)} to default`;
   resetBtn.setAttribute(
     'aria-label',

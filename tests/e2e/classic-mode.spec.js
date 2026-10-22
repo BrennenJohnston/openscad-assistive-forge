@@ -3293,7 +3293,9 @@ test.describe('Classic in the Alt View', () => {
 // of the Customizer in the Simplified view, which has no Viewport-Control.
 // The 3D view toolbar's Lens settings button takes you to them.
 test.describe('The Alt View sliders in Classic', () => {
-  const SLIDERS = ['Edges', 'Focus', 'Glow', 'Surfaces'];
+  // In the DOS look's lines (its Focus starts at 10 %) Glow draws nothing
+  // and leaves the group; it is back with the characters from 40 %.
+  const SLIDERS_IN_LINES = ['Edges', 'Focus', 'Surfaces'];
 
   async function turnOnTheLook(page) {
     await skipWithoutWebGL(
@@ -3305,7 +3307,7 @@ test.describe('The Alt View sliders in Classic', () => {
     await drawersBack(page);
   }
 
-  test('Standard: the toolbar button opens Viewport-Control on its Lens group and the four sliders; out of the look neither shows', async ({
+  test('Standard: the toolbar button opens Viewport-Control on its Lens group and its sliders, Glow back from 40 % Focus; out of the look neither shows', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -3330,18 +3332,22 @@ test.describe('The Alt View sliders in Classic', () => {
     await expect(panel).toBeVisible();
     const group = panel.getByRole('group', { name: 'Lens', exact: true });
     await expect(group).toBeVisible();
-    await expect(group.getByRole('slider')).toHaveCount(4);
-    for (const name of SLIDERS) {
+    await expect(group.getByRole('slider')).toHaveCount(3);
+    for (const name of SLIDERS_IN_LINES) {
       await expect(group.getByRole('slider', { name, exact: true })).toBeVisible();
     }
+    await expect(group.getByRole('slider', { name: 'Glow', exact: true })).toBeHidden();
     await expect(group.getByRole('slider', { name: 'Edges', exact: true })).toBeFocused();
 
-    // The same sliders as everywhere else: one value, one source.
+    // The same sliders as everywhere else: one value, one source; at 40 %
+    // the characters are back, and Glow with them.
     await group.getByRole('slider', { name: 'Focus', exact: true }).evaluate((el) => {
       el.value = '0.4';
       el.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await expect(page.locator('#_hfmFontScale')).toHaveValue('0.4');
+    await expect(group.getByRole('slider')).toHaveCount(4);
+    await expect(group.getByRole('slider', { name: 'Glow', exact: true })).toBeVisible();
 
     // A second press keeps the panel open and goes back to the first slider.
     await page.locator('#previewContainer').click();
@@ -3379,10 +3385,11 @@ test.describe('The Alt View sliders in Classic', () => {
     await expect(customizer).toBeVisible();
     const group = customizer.getByRole('group', { name: 'Lens', exact: true });
     await expect(group).toBeVisible();
-    await expect(group.getByRole('slider')).toHaveCount(4);
-    for (const name of SLIDERS) {
+    await expect(group.getByRole('slider')).toHaveCount(3);
+    for (const name of SLIDERS_IN_LINES) {
       await expect(group.getByRole('slider', { name, exact: true })).toBeVisible();
     }
+    await expect(group.getByRole('slider', { name: 'Glow', exact: true })).toBeHidden();
     await expect(group.getByRole('slider', { name: 'Edges', exact: true })).toBeFocused();
     // Viewport-Control's own group is not on the screen in Simplified.
     await expect(page.locator('#viewportControlPanel')).toBeHidden();

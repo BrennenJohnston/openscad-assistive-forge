@@ -408,4 +408,63 @@ test.describe('The vector look', () => {
       });
     }
   });
+
+  test('each look keeps its own Lens: the green look starts at 90, 65, 50 and 1 %, the DOS look at 140, 10, 10 and 1 % with no Glow row in its lines, and a change stays with its look across the switch and a reload', async ({
+    page,
+  }) => {
+    await openBox(page, 'standard');
+    const values = () =>
+      page.evaluate(() =>
+        ['_hfmContrast', '_hfmFontScale', '_hfmPersistFade', '_hfmSurfaces'].map(
+          (id) => document.getElementById(id).value
+        )
+      );
+    const glowShown = () =>
+      page.evaluate(() => {
+        const section = document.querySelector('._hfmPersistFade-section');
+        return !!section && section.style.display !== 'none';
+      });
+    const status = page.locator('#previewStatusAltAdjust');
+    const classic = page.locator('#classicModeToggle');
+
+    expect(await values(), 'the green look where it starts').toEqual(['0.9', '0.65', '0.5', '0.01']);
+    expect(await glowShown(), 'Glow shown in the green look').toBe(true);
+    await slide(page, '_hfmContrast', 1.2);
+
+    await classic.click();
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+    await expect(status).toContainText('EDGE 140%');
+    expect(await values(), 'the DOS look where it starts').toEqual(['1.4', '0.1', '0.1', '0.01']);
+    expect(await glowShown(), 'no Glow row in the DOS lines').toBe(false);
+    await slide(page, '_hfmContrast', 2);
+
+    await classic.click();
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'standard');
+    await expect(status).toContainText('EDGE 120%');
+    expect(await values(), 'the green look as it was left').toEqual(['1.2', '0.65', '0.5', '0.01']);
+    expect(await glowShown(), 'Glow back in the green look').toBe(true);
+
+    // Both kept across a reload: the record of each look. The example is
+    // asked for again (the page drops the example from its address once
+    // the project is open, so a plain reload would land on the Main Page).
+    await page.waitForTimeout(400);
+    await page.goto('/?example=simple-box');
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await page.waitForFunction(() => window.previewManager?.mesh, null, {
+      timeout: WASM_READY_TIMEOUT,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    if (await notNow.isVisible()) await notNow.click();
+    await page.locator('#_hfmToggle').click();
+    await expect(page.locator('html')).toHaveAttribute('data-ui-variant', 'mono');
+    await drawersBack(page);
+    expect(await values(), 'the green look after a reload').toEqual(['1.2', '0.65', '0.5', '0.01']);
+    await classic.click();
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+    await expect(status).toContainText('EDGE 200%');
+    expect(await values(), 'the DOS look after a reload').toEqual(['2', '0.1', '0.1', '0.01']);
+  });
 });

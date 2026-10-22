@@ -807,3 +807,52 @@ test.describe('The sounds button', () => {
     });
   });
 });
+
+test.describe("A Lens row's reset button", () => {
+  test('is a key when pressed: a press and a release in the green look, one stroke in the DOS look', async ({
+    page,
+  }) => {
+    await listenForSound(page);
+    await openBox(page);
+    await probeSound(page);
+    await setLook(page, true);
+    test.skip(
+      !(await canSound(page)),
+      'this machine has no sound device, so no sound can start'
+    );
+    // The Lens drawer opened and its own sounds over before the count starts.
+    const lens = page.locator('#lensDrawerToggle');
+    await lens.click();
+    await expect(lens).toHaveAttribute('aria-expanded', 'true');
+    const reset = page.locator('#_hfmContrast-reset');
+    await expect(reset).toBeVisible();
+    await page.waitForTimeout(2_000);
+    await page.evaluate(() => {
+      window.__sounds = [];
+    });
+    await reset.click();
+    await expect
+      .poll(() => page.evaluate(() => window.__sounds.length), { timeout: 2_000 })
+      .toBe(2);
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => window.__sounds.length), 'a press and a release').toBe(2);
+
+    // Classic's field holds the same sliders; the DOS look's key is one stroke.
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+    await page.waitForTimeout(3_000);
+    await page.locator('#classicAsciiSettingsBtn').click();
+    const dosReset = page.locator('#_hfmContrastClassic-reset');
+    await expect(dosReset).toBeVisible();
+    await page.waitForTimeout(1_000);
+    await page.evaluate(() => {
+      window.__sounds = [];
+    });
+    await dosReset.click();
+    await expect
+      .poll(() => page.evaluate(() => window.__sounds.length), { timeout: 2_000 })
+      .toBe(1);
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => window.__sounds.length), 'one stroke').toBe(1);
+  });
+});

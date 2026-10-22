@@ -2505,6 +2505,42 @@ body[data-app-surface='welcome'] #uiModeToggle {
   min-width: 0;
 }
 
+/* The reset button after each Lens slider's value, in every home (the Lens
+   drawer, the phone's drawer, Classic's two fields): the row stays one line,
+   the slider gives the button its room (a range input will not shrink below
+   the browser's own width unless told), and the button keeps the touch size,
+   set on it directly because .btn-sm's smaller token would win otherwise.
+   The Customizer fades its reset until the row is hovered; here it is a
+   control in its own right and stays whole. */
+.hfm-slider-section .slider-container {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.hfm-slider-section .slider-container input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hfm-slider-section .slider-value {
+  flex: 0 0 auto;
+}
+
+.hfm-slider-section .hfm-reset-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
+  margin-left: 0;
+  opacity: 1;
+  color: currentColor;
+}
+
 /* On a phone the bar's own Lens drawer serves. */
 @media (max-width: 767px) {
   .actions-lens,

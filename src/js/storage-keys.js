@@ -537,29 +537,24 @@ export function isDebugPrefEnabled(name) {
 // ============================================================================
 
 /**
- * localStorage key for the user's saved HFM contrast (edge) scale.
- * Value is a decimal string matching the _HFM_CONTRAST_RANGE in main.js.
+ * The Lens of each look, one record a look: the phosphor looks (green and
+ * amber) and Classic's DOS look. Each value is a JSON string
+ * `{ "edges": n, "focus": n, "glow": n, "surfaces": n }`, decimals within
+ * the ranges in hfm-controller.js; a field left out starts where the look
+ * starts.
+ */
+export const STORAGE_KEY_HFM_LENS_PHOSPHOR = 'openscad-forge-hfm-lens-phosphor';
+export const STORAGE_KEY_HFM_LENS_DOS = 'openscad-forge-hfm-lens-dos';
+
+/**
+ * The four keys the versions before 5.7.0 wrote, one a value, as decimal
+ * strings. They are read once into the phosphor record and removed, and
+ * stay here as names for that migration only.
  */
 export const STORAGE_KEY_HFM_CONTRAST_SCALE =
   'openscad-forge-hfm-contrast-scale';
-
-/**
- * localStorage key for the user's saved HFM font scale.
- * Value is a decimal string matching the _HFM_FONT_SCALE_RANGE in main.js.
- */
 export const STORAGE_KEY_HFM_FONT_SCALE = 'openscad-forge-hfm-font-scale';
-
-/**
- * localStorage key for the user's saved HFM persist-fade (afterglow intensity).
- * Value is a decimal string in [0, 1] matching _HFM_PERSIST_FADE_RANGE in main.js.
- */
 export const STORAGE_KEY_HFM_PERSIST_FADE = 'openscad-forge-hfm-persist-fade';
-
-/**
- * localStorage key for how solid the Alt View's vector look draws the model's
- * surfaces. Value is a decimal string in [0.01, 1] matching
- * _HFM_SURFACE_RANGE in hfm-controller.js.
- */
 export const STORAGE_KEY_HFM_SURFACES = 'openscad-forge-hfm-surfaces';
 
 /**
