@@ -4,7 +4,8 @@ The Alt View tries to make the interface feel like hardware: a press is a
 key, a slider is a dial, a drawer slides on rails. This note lists every
 kind of input in the page, in both of the look's styles (the phosphor
 looks, green and amber, and the blue DOS look that Classic wears), with
-the sound it plays or the reason it plays none.
+the sound it plays or the reason it plays none, and in Classic's look the
+recording of its own that stands in for it.
 
 Every sound follows Preferences > Play sounds and the look's Sounds
 button, plays only while the look is on, and passes through its group's
@@ -23,27 +24,27 @@ spoken sentence: what a control says, it still says.
 
 ## Controls
 
-| Input | Where | Sound |
-|---|---|---|
-| A button, a menu item, a tab | everywhere | A key, by the button's size: a press and a release in the phosphor looks, one stroke in the DOS look |
-| A disclosure (a `summary`) | the Customizer's groups, the guide, Preferences | A key, as a button |
-| A link | the guide, About, the welcome screen | A key, as a button |
-| A file chooser drawn as a button (a label around a file input) | the welcome screen's upload area, Browse and Upload for a reference image, Add File | A key, as a button, once a press, whether the label or its input has the focus |
-| A press with no key of its own first (a screen reader's Enter in browse mode, a controller's A button) | everywhere | A key, press and release together |
-| A checkbox, an on and off switch | the Customizer's on and off switches, Preferences, Simplified and Standard | A lever flipped: up for on, down for off (a heavy light switch), two takes each way, each flip a little different, a little under a key |
-| A radio button | Preferences, the export choices | A small snap as it is chosen |
-| A list (`select`) or a color well | the Customizer's choices, Preferences, the export format | A selector click when it opens, another when a choice is made |
-| A slider | the Customizer, the Alt View's own sliders | A dial click per step, its tone by how many steps the slider has, each click a little different in pitch, 15 a second at most, a little under a key |
-| A number box's arrows | the Customizer, Classic's Viewport-Control | A dial click per step, as a slider |
-| Typing in a field | text and number boxes, search, the code editor | A quiet key per keystroke (the look's smallest key, 12 dB under the others), 15 a second at most |
-| A grip | the Customizer's width on a phone, the desktop divider, Classic's dividers | A slide tick for every 2 % of the window it moves, 15 a second at most |
-| The 3D view, moved by hand | a drag, the wheel, a pinch, the arrow keys on the view, a controller's sticks | A bearing every 15 degrees turned, a ratchet every 10 tilted, a lens detent every 5 % zoomed, well under the keys, the lens detent first, the ratchet a shade under it and the bearing (short and soft) under both; each a little lower turning left, tilting down or zooming out than the other way, and never quite the same twice |
-| The 3D view panned, by hand or by its pan buttons | a drag with the right button, Shift and an arrow key on the view, a controller's left stick, the pan buttons in the camera panel and the phone's camera drawer | One motion of the stage under the lens: the motor's run-up once the view has moved 5 % of the camera's distance across or up, its run looping while the view keeps moving, and its wind-down once the view has rested for 100 ms, which trails the stop by up to 0.4 s (the loud part within 0.2 s), as a real stage coasts; a little higher panning right or up, a little lower left or down; the run-up and wind-down at the ratchet's level, the run under them. A pan button is one short motion: the run-up, then the wind-down from its end |
-| A camera button that turns, tilts or zooms the view | the camera panel and the phone's camera drawer (rotate and zoom), Classic's 3D view toolbar (zoom) | The view's own tick for the move instead of a key: the bearing for left and right, the ratchet for up and down, the lens detent for in and out. Reset and the views are keys |
-| A controller's button | every preset | What the control it stands for would play: the control's own sound when it presses one (A, Full Screen, Generate, a parameter's reset), a key the size of a camera panel button when it acts with no control on screen (Reset View, View All, a standard view, the next preset), and the view's own ticks when it moves the view (the D-pad's turn and tilt, the zoom buttons or triggers, the sticks, the pan's motion). A step of focus is silent, as Tab is |
-| Scrolling by hand | the Customizer, the menus, Classic's panes, the guide, dialogs | A typewriter platen's line for every 40 px the list moves, going down a little lower and up a little higher, 14 a second at most, quiet in the background; the end of the list once, a lower, duller tick. A scroll the page makes itself (a field brought into view, a jump to a group) is silent |
-| The Alt View key | the header | A screen coming on, changing look, or going off, a little over a key |
-| The Sounds button | the header | A key when it turns sounds on; nothing when it turns them off |
+| Input | Where | Sound | In Classic's look |
+|---|---|---|---|
+| A button, a menu item, a tab | everywhere | A key, by the button's size: a press and a release in the phosphor looks, one stroke in the DOS look | The DOS keys, one stroke each |
+| A disclosure (a `summary`) | the Customizer's groups, the guide, Preferences | A key, as a button | A DOS key |
+| A link | the guide, About, the welcome screen | A key, as a button | A DOS key |
+| A file chooser drawn as a button (a label around a file input) | the welcome screen's upload area, Browse and Upload for a reference image, Add File | A key, as a button, once a press, whether the label or its input has the focus | A DOS key |
+| A press with no key of its own first (a screen reader's Enter in browse mode, a controller's A button) | everywhere | A key, press and release together | A DOS key |
+| A checkbox, an on and off switch | the Customizer's on and off switches, Preferences, Simplified and Standard | A lever flipped: up for on, down for off (a heavy light switch), two takes each way, each flip a little different, a little under a key | A boombox's plastic tape switch, up and down, two takes each |
+| A radio button | Preferences, the export choices | A small snap as it is chosen | A cassette deck's rewind key |
+| A list (`select`) or a color well | the Customizer's choices, Preferences, the export format | A selector click when it opens, another when a choice is made | A microwave's selector knob, two detents |
+| A slider | the Customizer, the Alt View's own sliders | A dial click per step, its tone by how many steps the slider has, each click a little different in pitch, 15 a second at most, a little under a key | The DOS dial, seven speeds |
+| A number box's arrows | the Customizer, Classic's Viewport-Control | A dial click per step, as a slider | The DOS dial |
+| Typing in a field | text and number boxes, search, the code editor | A quiet key per keystroke (the look's smallest key, 12 dB under the others), 15 a second at most | The DOS smallest key |
+| A grip | the Customizer's width on a phone, the desktop divider, Classic's dividers | A slide tick for every 2 % of the window it moves, 15 a second at most | The DOS dial's middle tone |
+| The 3D view, moved by hand | a drag, the wheel, a pinch, the arrow keys on the view, a controller's sticks | A bearing every 15 degrees turned, a ratchet every 10 tilted, a lens detent every 5 % zoomed, well under the keys, the lens detent first, the ratchet a shade under it and the bearing (short and soft) under both; each a little lower turning left, tilting down or zooming out than the other way, and never quite the same twice | A camcorder's zoom servo for a zoom step, a cassette hub's tick for a turn, a tripod head's click for a tilt |
+| The 3D view panned, by hand or by its pan buttons | a drag with the right button, Shift and an arrow key on the view, a controller's left stick, the pan buttons in the camera panel and the phone's camera drawer | One motion of the stage under the lens: the motor's run-up once the view has moved 5 % of the camera's distance across or up, its run looping while the view keeps moving, and its wind-down once the view has rested for 100 ms, which trails the stop by up to 0.4 s (the loud part within 0.2 s), as a real stage coasts; a little higher panning right or up, a little lower left or down; the run-up and wind-down at the ratchet's level, the run under them. A pan button is one short motion: the run-up, then the wind-down from its end | A tape transport's fast wind: its start, its run looping, its stop |
+| A camera button that turns, tilts or zooms the view | the camera panel and the phone's camera drawer (rotate and zoom), Classic's 3D view toolbar (zoom) | The view's own tick for the move instead of a key: the bearing for left and right, the ratchet for up and down, the lens detent for in and out. Reset and the views are keys | The same DOS ticks |
+| A controller's button | every preset | What the control it stands for would play: the control's own sound when it presses one (A, Full Screen, Generate, a parameter's reset), a key the size of a camera panel button when it acts with no control on screen (Reset View, View All, a standard view, the next preset), and the view's own ticks when it moves the view (the D-pad's turn and tilt, the zoom buttons or triggers, the sticks, the pan's motion). A step of focus is silent, as Tab is | The DOS sounds of the controls it stands for |
+| Scrolling by hand | the Customizer, the menus, Classic's panes, the guide, dialogs | A typewriter platen's line for every 40 px the list moves, going down a little lower and up a little higher, 14 a second at most, quiet in the background; the end of the list once, a lower, duller tick. A scroll the page makes itself (a field brought into view, a jump to a group) is silent | A cassette's fast wind jogged a line at a time; the deck's auto-stop at the end |
+| The Alt View key | the header | A screen coming on, changing look, or going off, a little over a key | A VHS recorder loading a cassette with a CRT's degauss thump; a knob's click for a change of look; the deck's eject and the tube's click for going off |
+| The Sounds button | the header | A key when it turns sounds on; nothing when it turns them off | A DOS key |
 
 ## The key's moments
 
@@ -63,10 +64,10 @@ downloaded.
 
 ## Drawers, menus and dialogs
 
-| Input | Where | Sound |
-|---|---|---|
-| A drawer opening or closing | the Customizer, Preview Settings, the camera panel, the Lens drawer, the phone's camera and Lens drawers; in Classic the editor, the bottom strip and the Customizer | Opening: the latch letting go at the press and the glide out on its rollers together, then a soft thump as the drawer meets its stop on screen. Shutting: the latch gently gripped open at the press and the glide, a muffled, quieter thump as the drawer meets the closed stop, then the latch released 120 ms later, as a hand lets go. The same drawer in every look, a little under the keys, its stops under its latch and glide. The drawer's own button plays no key: the drawer is the sound. A drawer turned round in mid-slide fades its glide out and drops the parts still to come; with reduced motion there is no glide, only the latches and the thump. When the look comes on, the drawers that open again one by one each play their opening |
-| A menu or a dialog opening or closing | the menus, Preferences, the guide, every dialog, the camera's keyboard shortcuts | A latch opening, or a latch closing |
+| Input | Where | Sound | In Classic's look |
+|---|---|---|---|
+| A drawer opening or closing | the Customizer, Preview Settings, the camera panel, the Lens drawer, the phone's camera and Lens drawers; in Classic the editor, the bottom strip and the Customizer | Opening: the latch letting go at the press and the glide out on its rollers together, then a soft thump as the drawer meets its stop on screen. Shutting: the latch gently gripped open at the press and the glide, a muffled, quieter thump as the drawer meets the closed stop, then the latch released 120 ms later, as a hand lets go. The same drawer in every look, a little under the keys, its stops under its latch and glide. The drawer's own button plays no key: the drawer is the sound. A drawer turned round in mid-slide fades its glide out and drops the parts still to come; with reduced motion there is no glide, only the latches and the thump. When the look comes on, the drawers that open again one by one each play their opening | A cassette deck's door: its plastic latch let go, its damped glide, its stop; shutting, the latch gripped, the glide, the closed stop muffled, the latch released |
+| A menu or a dialog opening or closing | the menus, Preferences, the guide, every dialog, the camera's keyboard shortcuts | A latch opening, or a latch closing | The deck's door released, and closed |
 
 ## Silent, and why
 

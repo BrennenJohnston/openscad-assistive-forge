@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- In Classic the alternative look has sounds of its own: a cassette deck's
+  door and keys, a camcorder's zoom, a tape transport for the pan and the
+  scroll, and plastic switches, each placed at the level its counterpart
+  plays at.
+
 ### Fixed
 
 - On a phone, the open Customizer's own arrow is drawn in the accent, so it
