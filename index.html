@@ -585,7 +585,7 @@
             <button
               type="button"
               id="focusModeBtn"
-              class="btn btn-sm btn-outline"
+              class="btn btn-sm btn-outline btn-with-icon"
               aria-pressed="false"
               aria-label="Full Screen: the preview alone"
               title="Full Screen (the preview alone)"
@@ -4746,7 +4746,11 @@
                see-through. This layer behind it tints and blurs the model; a
                blur on the panel itself would hold its pop-up lists and
                tooltips inside it. -->
-          <div class="customizer-glass" aria-hidden="true"></div>
+          <div
+            class="customizer-glass"
+            data-sheet="customizer"
+            aria-hidden="true"
+          ></div>
           <!-- The Customizer's width on a phone held upright. A splitter has
                no native element: role="separator" with tabindex is the ARIA
                pattern for one, as on the desktop divider. -->
@@ -4837,6 +4841,16 @@
                     <!-- Empty or future controls -->
                   </div>
                 </div>
+                <!-- On a phone held upright the settings drop over the preview
+                     as a sheet; this layer behind them tints and blurs the
+                     model, as the Customizer's does. It lives beside the
+                     content so the two share one stacking order. -->
+                <div
+                  class="customizer-glass"
+                  data-sheet="settings"
+                  aria-hidden="true"
+                  hidden
+                ></div>
                 <!-- Collapsible content -->
                 <div
                   class="preview-info-content"
@@ -5297,6 +5311,19 @@
                     </dl>
                   </div>
                 </div>
+                <!-- The sheet's height on a phone held upright: a grip across
+                     its bottom edge, the splitter pattern as on the width
+                     grip above. -->
+                <div
+                  id="settingsHeightGrip"
+                  class="settings-height-grip"
+                  role="separator"
+                  tabindex="0"
+                  aria-orientation="horizontal"
+                  aria-controls="previewInfoContent"
+                  aria-label="Resize the Preview Settings"
+                  hidden
+                ></div>
               </div>
               <!-- Bottom section: 3D preview canvas -->
               <div class="preview-canvas-section" id="previewCanvasSection">
@@ -8610,7 +8637,8 @@
             </fieldset>
             <div class="preview-setting customizer-opacity-setting">
               <label for="prefsCustomizerOpacity"
-                >Customizer background on a phone</label
+                >How solid the Customizer and Preview Settings are on a
+                phone</label
               >
               <div class="slider-container">
                 <input
@@ -8628,9 +8656,8 @@
               </div>
             </div>
             <p id="prefsCustomizerOpacityHelp" class="preferences-field-note">
-              How solid the Customizer is where it opens over the preview on a
-              phone. Below 90%, its gray help text is harder to read over a very
-              bright or very dark model.
+              Both open over the preview on a phone. Below 90%, their gray help
+              text is harder to read over a very bright or very dark model.
             </p>
           </div>
           <div

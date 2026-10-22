@@ -748,6 +748,25 @@ function initMobileCameraDrawer() {
   let roomMove = null;
   const padding = () =>
     parseFloat(getComputedStyle(previewPanel).paddingBottom) || 0;
+
+  // While the room slides, the preview keeps the height it had and the
+  // panel clips it (layout.css reads --preview-held-height), so the picture
+  // is laid out and drawn again once, when the slide ends, not on every
+  // frame of the slide: in the Alt View a frame's picture costs more than
+  // the frame, and a drawer whose slide waits on it arrives late.
+  const canvasSection = document.getElementById('previewCanvasSection');
+  const holdPreview = (hold) => {
+    if (!canvasSection) return;
+    const root = document.documentElement.style;
+    if (hold) {
+      const height = Math.round(canvasSection.getBoundingClientRect().height);
+      if (height > 0) root.setProperty('--preview-held-height', `${height}px`);
+      previewPanel.classList.add('room-moving');
+    } else {
+      previewPanel.classList.remove('room-moving');
+      root.removeProperty('--preview-held-height');
+    }
+  };
   const syncPreviewPadding = ({ checkWidth = false, instant = false } = {}) => {
     if (!previewPanel) return;
     const want =
@@ -782,8 +801,11 @@ function initMobileCameraDrawer() {
       }
     );
     roomMove = move;
+    if (move) holdPreview(true);
     move?.finally(() => {
-      if (roomMove === move) roomMove = null;
+      if (roomMove !== move) return;
+      roomMove = null;
+      holdPreview(false);
     });
   };
 

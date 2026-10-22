@@ -9,6 +9,12 @@
  * preview and the bar stay usable while it is open, and closed it is out of
  * the way of Tab and of a screen reader (layout.css hides it).
  *
+ * One button opens and closes it: the Customizer button in the Preview
+ * Settings row keeps its name, its expanded state says whether the sheet is
+ * open, and its arrow turns to point the way the sheet travels to close
+ * (the schema's S1). The sheet's own arrow, the desktop's collapse button,
+ * is hidden on a phone (layout.css), so nothing else is named for the act.
+ *
  * STATE CONVENTION: Additive open — `drawer-open` class = open.
  * This is the opposite of Actions/Camera/Echo drawers which use
  * additive close (`collapsed` class = closed). See UI_STANDARDS.md.
@@ -45,9 +51,6 @@ const TYPED_INPUTS = new Set([
 export function initDrawerController() {
   const drawer = document.getElementById('paramPanel');
   const toggleBtn = document.getElementById('mobileDrawerToggle');
-  // The Customizer's own arrow, the desktop's collapse button: on a phone
-  // it closes the open sheet, where an X used to.
-  const arrowBtn = document.getElementById('collapseParamPanelBtn');
   const previewPanel = document.querySelector('.preview-panel');
   const grip = document.getElementById('customizerWidthGrip');
 
@@ -60,7 +63,10 @@ export function initDrawerController() {
   // The tint behind the panel and the grip on its edge travel with it.
   const sheetParts = () => [
     { el: drawer },
-    { el: document.querySelector('.customizer-glass'), role: 'rider' },
+    {
+      el: document.querySelector('.customizer-glass[data-sheet="customizer"]'),
+      role: 'rider',
+    },
     { el: grip, role: 'rider' },
   ];
 
@@ -161,7 +167,7 @@ export function initDrawerController() {
           !el.isContentEditable
       );
     if (!first) {
-      (arrowBtn || toggleBtn).focus();
+      toggleBtn.focus();
       return;
     }
     // The sheet is still sliding in, so the browser's own scroll to a
@@ -204,11 +210,6 @@ export function initDrawerController() {
     isOpen = true;
 
     toggleBtn.setAttribute('aria-expanded', 'true');
-    toggleBtn.setAttribute('aria-label', 'Close customizer panel');
-    // No tooltip on a phone: it made a screen reader say the name twice.
-    arrowBtn?.setAttribute('aria-expanded', 'true');
-    arrowBtn?.setAttribute('aria-label', 'Close customizer panel');
-    arrowBtn?.removeAttribute('title');
     drawer.classList.add('drawer-open');
     previewPanel?.classList.add('customizer-sheet-open');
     placePanel();
@@ -272,8 +273,6 @@ export function initDrawerController() {
     syncTour(); // hands the card back its own modality
 
     toggleBtn.setAttribute('aria-expanded', 'false');
-    toggleBtn.setAttribute('aria-label', 'Open customizer panel');
-    arrowBtn?.setAttribute('aria-expanded', 'false');
 
     // Focus leaves before the sheet slides away out of reach.
     if (triggerEl) {
@@ -346,12 +345,6 @@ export function initDrawerController() {
   // A tour can start or end while the sheet is already open, so modality is
   // re-decided rather than fixed at open time.
   document.addEventListener('forge:tutorial-run-change', syncTour);
-
-  // On a phone the arrow closes the open sheet; on a desktop it collapses
-  // the column (main.js), and the two never both act on one press.
-  arrowBtn?.addEventListener('click', () => {
-    if (isPhoneLayout() && isOpen) close();
-  });
 
   registerPhoneDrawer('customizer', { isOpen: () => isOpen, close });
   registerLookDrawer('phone-customizer', {
