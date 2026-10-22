@@ -1576,6 +1576,22 @@ body[data-app-surface='welcome'] #uiModeToggle {
     margin-bottom: 0;
   }
 
+  /* While a drawer's room slides (camera-panel-controller.js), the preview
+     keeps the height it had and the panel clips it, so the picture is laid
+     out and drawn again once, when the slide ends. Not in Full Screen,
+     where the panel is laid out from the drawer's reach. */
+  .main-interface:not(.focus-mode) .preview-panel.room-moving .preview-content {
+    overflow: hidden;
+  }
+
+  .main-interface:not(.focus-mode)
+    .preview-panel.room-moving
+    .preview-canvas-section {
+    flex: 0 0 var(--preview-held-height);
+    height: var(--preview-held-height);
+    min-height: 0;
+  }
+
   /* Hide horizontal gutter on mobile */
   .gutter.gutter-horizontal {
     display: none;

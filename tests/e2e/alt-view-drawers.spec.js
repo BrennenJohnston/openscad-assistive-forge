@@ -184,7 +184,11 @@ function insetOf(clip) {
  */
 function expectDrawerMove(samples, { name, from, opening, edge }) {
   const motion = motionOf(samples);
-  const [minMs, maxMs] = opening ? [450, 550] : [400, 500];
+  // Opening, the drawer meets its stop at four fifths of its 500 ms and
+  // settles back 2 percent over the last 100 ms: a slow frame can miss
+  // that settle and read the box at rest from the stop, so the stop is
+  // the floor. Closing runs straight to its end at 450 ms.
+  const [minMs, maxMs] = opening ? [400, 550] : [400, 500];
   const slow = motion.longestGap >= SLOW_FRAME_MS;
   expect(
     motion.moving,

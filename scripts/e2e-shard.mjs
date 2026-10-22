@@ -198,6 +198,10 @@ export const MEASURED_SECONDS = {
   // ui-schema's phone cases (23.5 s there against 17 s here for the
   // Customizer sheet case, Test Suite 39709840987). Its own file: the
   // planner's shard spread could not hold it inside ui-schema.
+  // Every ordered pair of the phone drawers at two heights and sideways, in
+  // four looks, with the preview laid out once per slide in the look: 216 s
+  // locally, booked at CI's pace for the phone sheets (about 1.4 times).
+  'phone-drawer-pairs.spec.js': 300.0,
   'phone-settings-sheet.spec.js': 175.0,
   'potrace-engine.spec.js': 2.4,
   'preference-matrix.spec.js': 40.7,

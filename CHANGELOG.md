@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On a phone in the Alt View, a drawer opened over another no longer waits
+  while the preview is drawn again on every frame of its slide: the preview
+  keeps its size while the drawer's room slides and fits once when the slide
+  ends.
 - On a phone, the open Customizer's own arrow is drawn in the accent, so it
   reads in every look; it was dark on dark in all but the light theme.
 - Under Windows High Contrast, icons drawn as lines stay lines; the Main

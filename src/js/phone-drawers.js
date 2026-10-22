@@ -50,16 +50,25 @@ export function registerPhoneDrawer(name, drawer) {
 
 /**
  * Close every open drawer but the named one, on a phone only. Focus stays
- * where it is: on the control that is opening the named drawer.
+ * where it is: on the control that is opening the named drawer. Answers
+ * once every close has ended (a close that slides answers with its slide),
+ * so an opener can wait before it measures anything a close still moves;
+ * the opener's own slide need not wait.
  * @param {string} name - The drawer about to open
+ * @returns {Promise<PromiseSettledResult<unknown>[]>}
  */
 export function closeOtherPhoneDrawers(name) {
-  if (!isPhoneLayout()) return;
-  for (const [other, drawer] of drawers) {
-    if (other !== name && drawer.isOpen()) {
-      drawer.close({ restoreFocus: false });
+  const closes = [];
+  if (isPhoneLayout()) {
+    for (const [other, drawer] of drawers) {
+      if (other !== name && drawer.isOpen()) {
+        closes.push(drawer.close({ restoreFocus: false }));
+      }
     }
   }
+  return Promise.allSettled(
+    closes.filter((c) => c && typeof c.then === 'function')
+  );
 }
 
 /**
