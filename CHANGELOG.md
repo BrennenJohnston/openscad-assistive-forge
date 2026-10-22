@@ -7,62 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- In Classic the alternative look has sounds of its own: a cassette deck's
-  door and keys, a camcorder's zoom, a tape transport for the pan and the
-  scroll, and plastic switches, each placed at the level its counterpart
-  plays at.
-- In the Alt View, each look keeps its own Lens settings, starting where they
-  read best: the green and amber looks at Edges 90%, Focus 65% and Glow 50%,
-  Classic's look at Edges 140%, Focus 10% and Glow 10%, where its lines draw
-  no glow and the Glow slider steps aside until Focus reaches 40%.
-- A reset button after each Lens slider puts it back where its look starts.
-
-### Changed
-
-- On a phone, one button opens and closes the Customizer: the Customizer
-  button in the Preview Settings row keeps its name, its arrow turns to point
-  the way the sheet closes, and the sheet shows no arrow of its own.
-- On a phone held upright, Preview Settings & Info opens over the preview as a
-  see-through sheet from under the status line, as tall as its controls at
-  first and never more than 40 percent of the screen; a grip across its bottom
-  edge sets its height, which is kept, and the preview keeps its full size
-  behind it. The Preferences setting for how solid the Customizer is covers
-  this sheet too.
-
-### Fixed
-
-- A rotation typed into Classic's Viewport-Control stays when a preview
-  finishes after it; the first preview's camera fit could put the view back.
-- After a flat model's drawing comes on screen, the status line says the
-  preview is ready; it stayed on "Rendering preview..." beside the ready
-  badge.
-- A model that uses a module the browser engine does not switch on (an
-  experimental one, such as roof()) gets a dialog that says so; it got the
-  advice meant for a selection that draws nothing.
-- An example link whose file cannot be loaded says nothing after its error
-  dialog; it went on to say the example had loaded.
-- On a phone in the Alt View, a drawer opened over another no longer waits
-  while the preview is drawn again on every frame of its slide: the preview
-  keeps its size while the drawer's room slides and fits once when the slide
-  ends.
-- The Full Screen button's icon stands off its word, as Help's does, wherever
-  the word shows.
-- On a phone held sideways in the Alt View, the settings row's buttons no
-  longer lie over one another: the row's gaps close up, and on the
-  narrowest phones the HC button's word gives way to its mark.
-- In the Alt View the status line's box is as wide as its longer line, so
-  held sideways it no longer covers the ready badge beside it.
-- On a phone, the open Customizer's own arrow is drawn in the accent, so it
-  reads in every look; it was dark on dark in all but the light theme.
-- Under Windows High Contrast, icons drawn as lines stay lines; the Main
-  Page's upload arrow had filled in to a solid tray.
-- The preview badge's hourglass and spinner follow the alternative look as
-  text, the way the Generate button's icons do.
-- While it generates, the Generate button's name says so, as its words do.
-
-## [5.7.0] - 2026-10-21
+## [5.7.0] - 2026-10-22
 
 ### Added
 
@@ -70,14 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   official OpenSCAD snapshots, downloaded when asked for and kept; a failure
   that may be the engine's offers another.
 - A game controller drives the app in three presets, Camera, Customizer and
-  Menus. Keys > Controller shows its buttons, gives any action the button you
-  press, tests it, and keeps presets of your own, to export and import. A
-  Joy-Con works alone, held sideways or upright, and a pair is used the way
-  you choose.
-- In the Alt View, a Lens drawer draws the model as lines under 40% Focus, and
-  a sounds button sits beside its key; Preferences > Advanced turns each kind
-  of sound off.
-- Preferences > 3D View sets how solid a phone's Customizer is.
+  Menus; Keys > Controller shows its buttons, gives any action the button you
+  press, tests it, and keeps presets of your own to export and import; a
+  Joy-Con works alone, sideways or upright, and a pair the way you choose.
+- In the Alt View, a Lens drawer draws the model as lines under 40% Focus,
+  with a reset button after each slider; each look keeps its own Lens
+  settings, and in Classic the Glow slider steps aside while the lines draw
+  no glow. A sounds button sits beside the key, Preferences > Advanced turns
+  each kind of sound off, and Classic's look has sounds of its own: a
+  cassette deck's door and keys, a camcorder's zoom, a tape transport and
+  plastic switches.
+- Preferences > 3D View sets how solid a phone's Customizer and Preview
+  Settings are.
 
 ### Changed
 
@@ -86,29 +35,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Models render 10 to 45 percent faster, and Chrome renders a module nested
   more than twice as deep.
 - On a phone the Customizer comes in over the preview, see-through, at the
-  width you drag; the camera controls open in a drawer; held sideways, the
-  header and the menu bar keep to one row each.
+  width you drag, and one button opens and closes it, its arrow turning to
+  point the way it closes; held upright, Preview Settings & Info opens over
+  the preview as a see-through sheet, never more than 40 percent of the
+  screen, with a grip that sets its height and keeps it; the camera controls
+  open in a drawer, and held sideways the header and the menu bar keep to
+  one row each.
 - A number box is as wide as its value, and its slider takes the rest.
-- In the Alt View the drawers slide like desk drawers, and the key stays in the
-  toolbar once it has been found three times.
+- In the Alt View the drawers slide like desk drawers, and the key stays in
+  the toolbar once it has been found three times.
 
 ### Fixed
 
 - The app follows the controller you press, not a 3D mouse's joystick listed
   first, and the right stick turns the view the way it is pushed.
 - An error is said once, by its dialog, and closing it puts focus back where
-  you were.
+  you were; a model that uses a module the browser engine does not switch on
+  gets a dialog that says so, and an example link whose file cannot be
+  loaded says nothing after its error dialog.
 - The menu bar opens the focused button's menu, the upload area is one Tab
   stop, the Save prompt and Discard draft put focus where you work, group
-  headers show their focus ring, and icons stay readable in every state.
-- Opening Preview Settings no longer moves the 3D view, Classic's 3D view
-  toolbar wraps instead of hiding buttons, a library file says "No preview: a
-  library file", and an engine crash no longer blames projection() or roof().
-- On a phone, Preferences scrolls only its settings, and menus held sideways,
-  touch targets, the tour and the drawer toggles work as on other screens. In
-  the Alt View, a selected tab is filled, auto-rotate ticks as a drag does,
-  and the Download icon and a phone's lists keep the look; in Classic, its
-  Lens drawer and cursors follow the look.
+  headers show their focus ring, and icons stay readable in every state, as
+  lines under Windows High Contrast.
+- Opening Preview Settings no longer moves the 3D view, a rotation typed into
+  Classic's Viewport-Control stays when a preview finishes after it, Classic's
+  3D view toolbar wraps instead of hiding buttons, a flat model's status line
+  says its preview is ready, a library file says "No preview: a library
+  file", and an engine crash no longer blames projection() or roof().
+- The Full Screen button's icon stands off its word, the preview badge's
+  hourglass and spinner follow the alternative look as text, and while it
+  generates the Generate button's name says so.
+- On a phone, Preferences scrolls only its settings; menus held sideways,
+  touch targets, the tour and the drawer toggles work as on other screens;
+  the open Customizer's arrow reads in every look; and held sideways in the
+  Alt View the settings row's buttons and the status line no longer cover
+  one another or the ready badge. In the Alt View a drawer opened over
+  another no longer waits for the preview on every frame of its slide, a
+  selected tab is filled, auto-rotate ticks as a drag does, and the Download
+  icon, a phone's lists, and Classic's Lens drawer and cursors follow the
+  look.
 
 ## [5.6.0] - 2026-10-15
 
