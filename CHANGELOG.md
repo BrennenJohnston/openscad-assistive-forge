@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A rotation typed into Classic's Viewport-Control stays when a preview
+  finishes after it; the first preview's camera fit could put the view back.
 - After a flat model's drawing comes on screen, the status line says the
   preview is ready; it stayed on "Rendering preview..." beside the ready
   badge.

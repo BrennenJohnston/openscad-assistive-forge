@@ -341,6 +341,9 @@ export class ViewportControlPanel {
     const pose = this.readCamera();
     if (!pose) return;
 
+    // A typed pose is the person's: a render landing after it must not fit
+    // the camera over it.
+    pm.holdCamera?.();
     this._writing = true;
     try {
       // Translation moves what the camera looks AT, keeping its direction and

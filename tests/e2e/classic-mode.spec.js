@@ -3237,9 +3237,14 @@ test.describe('Classic in the Alt View', () => {
     );
     const key = page.locator('#_hfmToggle');
     await key.click();
+    // The look's attribute arrives once the Alt View has set up its picture;
+    // GitHub's macOS WebKit runner takes longer than the default 5 s on a
+    // first try (read '' there on every develop run, then 'dos' on the
+    // retry), so the wait is the slow lane's, not the default.
     await expect(page.locator('html')).toHaveAttribute(
       'data-classic-retro',
-      'dos'
+      'dos',
+      { timeout: 30_000 }
     );
 
     await page.locator('#classicModeToggle').click();

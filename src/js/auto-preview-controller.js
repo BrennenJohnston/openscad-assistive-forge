@@ -339,7 +339,10 @@ export class AutoPreviewController {
     this.pendingParameters = null;
     this.pendingParamHash = null;
     // A new file needs the camera fitted; a reload of the same one keeps it.
-    if (!keepCamera) this.initialPreviewDone = false;
+    if (!keepCamera) {
+      this.initialPreviewDone = false;
+      this.previewManager?.releaseCamera?.();
+    }
 
     // Reset auto-color override so previous project's colors don't leak
     if (
