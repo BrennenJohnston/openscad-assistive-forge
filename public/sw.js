@@ -128,7 +128,7 @@ self.addEventListener('fetch', (event) => {
   // engine worker does this when a cached engine fails its integrity check):
   // answer it from the network, and keep that answer in place of the cached one.
   if (request.cache === 'reload') {
-    event.respondWith(networkFirst(request));
+    event.respondWith(networkFirst(request, event.clientId));
     return;
   }
 
@@ -137,8 +137,8 @@ self.addEventListener('fetch', (event) => {
   
   event.respondWith(
     strategy === 'cache-first'
-      ? cacheFirst(request)
-      : networkFirst(request)
+      ? cacheFirst(request, event.clientId)
+      : networkFirst(request, event.clientId)
   );
 });
 
@@ -191,7 +191,58 @@ function getCacheStrategy(pathname) {
  * unbounded storage growth from stale versions.
  */
 const MAX_WASM_CACHE_ENTRIES = 6; // openscad.js + openscad.wasm + INTEGRITY.json + headroom
-const MAX_GENERAL_CACHE_ENTRIES = 200;
+// The sound sets alone are a hundred files; the trim must leave them room.
+const MAX_GENERAL_CACHE_ENTRIES = 400;
+
+/**
+ * The shell's own files: the page, this worker, and the built assets the
+ * page names. The trim never removes them: a page whose stylesheet or script
+ * is gone from the cache asks the host for it, and after a deploy the host
+ * no longer has that build's files.
+ */
+function isShellFile(url) {
+  const pathname = typeof url === 'string' ? new URL(url, self.location.origin).pathname : url.pathname;
+  return (
+    pathname === '/' ||
+    pathname === '/index.html' ||
+    pathname === '/sw.js' ||
+    pathname.startsWith('/assets/')
+  );
+}
+
+/**
+ * The host answers a path it does not have with the page itself (200,
+ * text/html). For a script, a stylesheet, a worker or a font that answer is
+ * not the file: it must not be stored, and it means the page asking runs a
+ * build the host has moved on from.
+ */
+function isFallbackHtml(request, response) {
+  const type = (response.headers && response.headers.get('content-type')) || '';
+  if (!type.includes('text/html')) return false;
+  if (request.mode === 'navigate' || request.destination === 'document') return false;
+  const pathname = new URL(request.url, self.location.origin).pathname;
+  return !(pathname === '/' || /\.html?$/.test(pathname));
+}
+
+// The pages already sent to reload in this worker's life, by client id: once
+// each, so a build whose own files were missing cannot reload without end.
+const reloadedClients = new Set();
+
+/**
+ * A page whose built file the host no longer has is an older build still
+ * open after a deploy. Its scripts may not run at all, so the worker sends
+ * the page itself to the address it is at: the reload fetches the current
+ * page and its files.
+ */
+async function reloadStaleClient(clientId) {
+  if (!clientId || reloadedClients.has(clientId) || !self.clients.get) return;
+  reloadedClients.add(clientId);
+  const client = await self.clients.get(clientId);
+  if (client && typeof client.navigate === 'function') {
+    console.warn('[Service Worker] A page runs a build the host has moved on from; reloading it');
+    await client.navigate(client.url);
+  }
+}
 
 /**
  * Evict oldest entries from a cache when it exceeds maxEntries.
@@ -202,10 +253,11 @@ async function trimCache(cacheName, maxEntries) {
   const keys = await cache.keys();
   if (keys.length <= maxEntries) return;
 
-  // Delete oldest entries (first inserted)
-  const toDelete = keys.length - maxEntries;
+  // Delete oldest entries (first inserted), never the shell's own files
+  const expendable = keys.filter((key) => !isShellFile(key.url));
+  const toDelete = Math.min(expendable.length, keys.length - maxEntries);
   for (let i = 0; i < toDelete; i++) {
-    await cache.delete(keys[i]);
+    await cache.delete(expendable[i]);
   }
   console.log(`[Service Worker] Trimmed ${toDelete} stale entries from ${cacheName}`);
 }
@@ -222,7 +274,7 @@ function isWasmAsset(url) {
  * Cache-first strategy: Try cache, fall back to network
  * Best for: Static assets, WASM files, examples
  */
-async function cacheFirst(request) {
+async function cacheFirst(request, clientId) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(request);
   
@@ -232,7 +284,10 @@ async function cacheFirst(request) {
   
   try {
     const response = await fetch(request);
-    
+    if (response && isFallbackHtml(request, response)) {
+      if (isShellFile(request.url)) await reloadStaleClient(clientId);
+      return response;
+    }
     if (response && response.status === 200) {
       // Clone the response (can only be consumed once)
       const responseToCache = response.clone();
@@ -278,12 +333,15 @@ async function keptEngineFirst(request) {
  * Network-first strategy: Try network, fall back to cache
  * Best for: API calls, dynamic content
  */
-async function networkFirst(request) {
+async function networkFirst(request, clientId) {
   const cache = await caches.open(CACHE_NAME);
   
   try {
     const response = await fetch(request);
-    
+    if (response && isFallbackHtml(request, response)) {
+      if (isShellFile(request.url)) await reloadStaleClient(clientId);
+      return response;
+    }
     if (response && response.status === 200) {
       const responseToCache = response.clone();
       cache.put(request, responseToCache);

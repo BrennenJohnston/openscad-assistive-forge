@@ -54,3 +54,21 @@ export function requestSwUpdate({
   setTimeout(reloadOnce, fallbackMs);
   worker.postMessage({ type: 'SKIP_WAITING' });
 }
+
+/**
+ * What the page does when a worker says it is now in charge: nothing when
+ * the page is of the same build, a reload on the Main Page (nothing is
+ * open there to lose), the update banner anywhere else, so the person
+ * chooses the moment. An older page whose files the host has moved on
+ * from would otherwise stay open with no way to load its next file.
+ * @param {Object} options
+ * @param {string} options.pageStamp - the build this page was made from
+ * @param {string} options.workerVersion - the build the worker in charge was made from
+ * @param {string|null} options.surface - the page's surface, 'welcome' on the Main Page
+ * @returns {'none'|'reload'|'banner'}
+ */
+export function staleShellAction({ pageStamp, workerVersion, surface }) {
+  if (!pageStamp || !workerVersion || pageStamp === workerVersion)
+    return 'none';
+  return surface === 'welcome' ? 'reload' : 'banner';
+}
