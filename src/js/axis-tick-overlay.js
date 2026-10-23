@@ -139,6 +139,8 @@ export function computeScale(distanceMm) {
  * @param {Object} [opts]
  * @param {string} [opts.themeKey]  Preview theme key, used for color resolution.
  * @param {number} [opts.distanceMm] Camera distance to the look-at point.
+ * @param {number} [opts.colorHex] A color of the caller's own in place of
+ *   the theme's: the Alt View's line drawing passes its look's.
  * @param {Document} [opts.document] Override `document` (tests).
  * @returns {{
  *   group: Object,
@@ -156,7 +158,9 @@ export function buildAxisTickOverlay(three, opts = {}) {
 
   const themeKey = opts.themeKey || 'light';
   const docRef = opts.document ?? globalThis.document;
-  const { hex: colorHex } = resolveAxisMarkColor(themeKey, docRef);
+  const colorHex = Number.isInteger(opts.colorHex)
+    ? opts.colorHex
+    : resolveAxisMarkColor(themeKey, docRef).hex;
 
   const marker = buildMarkerGeometry(opts.distanceMm);
 

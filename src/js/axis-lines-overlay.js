@@ -45,6 +45,8 @@ const AXIS_VECTORS = {
  * @param {number} [opts.distanceMm] Camera distance to the look-at point —
  *   the arm length, desktop `zoomValue()`. Defaults like the tick overlay.
  * @param {string} [opts.themeKey] Preview theme key, for the color fallback.
+ * @param {number} [opts.colorHex] A color of the caller's own in place of
+ *   the theme's: the Alt View's line drawing passes its look's.
  * @param {Document} [opts.document] Override `document` (tests).
  * @returns {{group: Object, distanceMm: number, dispose: () => void}}
  */
@@ -59,10 +61,9 @@ export function buildAxisLinesOverlay(three, opts = {}) {
       ? opts.distanceMm
       : DEFAULT_DISTANCE_MM;
 
-  const { hex: colorHex } = resolveAxisMarkColor(
-    opts.themeKey || 'light',
-    opts.document
-  );
+  const colorHex = Number.isInteger(opts.colorHex)
+    ? opts.colorHex
+    : resolveAxisMarkColor(opts.themeKey || 'light', opts.document).hex;
 
   const group = new three.Group();
   group.name = '__displayAxes';
