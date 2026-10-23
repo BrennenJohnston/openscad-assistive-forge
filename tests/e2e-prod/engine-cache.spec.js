@@ -144,12 +144,18 @@ const workerSettled = (page) =>
  * that load the second try lands.
  */
 async function gotoSettled(page, url) {
-  try {
-    await page.goto(url);
-  } catch (error) {
-    if (!/ERR_ABORTED/.test(error.message)) throw error;
-    await page.waitForLoadState('load').catch(() => {});
-    await page.goto(url);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await page.goto(url);
+      return;
+    } catch (error) {
+      const selfReload = /ERR_ABORTED|interrupted by another navigation/.test(
+        error.message
+      );
+      if (!selfReload || attempt >= 4) throw error;
+      await page.waitForLoadState('load').catch(() => {});
+      await page.waitForTimeout(500);
+    }
   }
 }
 
