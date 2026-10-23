@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- After an update, a page from the build before no longer loses its
+  stylesheet, scripts or fonts: the offline worker stops keeping the host's
+  fallback page in place of a file, keeps the page's own files when it trims
+  its cache, and reloads an older page on the Main Page once a newer build
+  is in charge (elsewhere the update banner offers the refresh).
 - On a phone's data connection the engine question is asked once: a
   Download given is remembered on that device, and files the browser already
   holds need no question.

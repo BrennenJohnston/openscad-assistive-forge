@@ -194,7 +194,7 @@ import {
   DEFAULT_REGIONS,
   createGamepadNavigator,
 } from './js/gamepad-navigator.js';
-import { requestSwUpdate } from './js/sw-update.js';
+import { requestSwUpdate, staleShellAction } from './js/sw-update.js';
 import {
   initKeyboardShortcuts,
   keyboardConfig,
@@ -1711,8 +1711,18 @@ async function initApp() {
         }
 
         if (event.data.type === 'SW_UPDATED') {
-          // The worker's own word on a fresh visit: nothing to do here.
           console.log(`[SW] Service worker ${event.data.version} is active`);
+          // A worker of a newer build in charge of this page: the host has
+          // moved on from this page's files, so it reloads on the Main Page
+          // and offers the banner anywhere else.
+          const action = staleShellAction({
+            pageStamp: __BUILD_STAMP__,
+            workerVersion: event.data.version,
+            surface: document.body.getAttribute('data-app-surface'),
+          });
+          if (action === 'reload') window.location.reload();
+          else if (action === 'banner')
+            showUpdateBanner(navigator.serviceWorker.controller);
           return;
         }
 

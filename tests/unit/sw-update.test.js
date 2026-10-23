@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { requestSwUpdate } from '../../src/js/sw-update.js';
+import { requestSwUpdate, staleShellAction } from '../../src/js/sw-update.js';
 
 /** A stand-in for navigator.serviceWorker: a controller and its events. */
 function fakeContainer(controller = null) {
@@ -89,5 +89,51 @@ describe('Refresh on the update banner', () => {
     expect(button.getAttribute('aria-busy')).toBe('true');
     expect(button.disabled).toBe(true);
     expect(button.textContent).toBe('Refreshing…');
+  });
+});
+
+describe('a newer worker in charge of an older page', () => {
+  it('does nothing when the page is of the same build', () => {
+    expect(
+      staleShellAction({
+        pageStamp: 'commit-abc',
+        workerVersion: 'commit-abc',
+        surface: 'welcome',
+      })
+    ).toBe('none');
+    expect(
+      staleShellAction({
+        pageStamp: '',
+        workerVersion: 'commit-abc',
+        surface: 'welcome',
+      })
+    ).toBe('none');
+  });
+
+  it('reloads on the Main Page, where nothing is open to lose', () => {
+    expect(
+      staleShellAction({
+        pageStamp: 'commit-old',
+        workerVersion: 'commit-new',
+        surface: 'welcome',
+      })
+    ).toBe('reload');
+  });
+
+  it('offers the banner while a project is open', () => {
+    expect(
+      staleShellAction({
+        pageStamp: 'commit-old',
+        workerVersion: 'commit-new',
+        surface: 'project',
+      })
+    ).toBe('banner');
+    expect(
+      staleShellAction({
+        pageStamp: 'commit-old',
+        workerVersion: 'commit-new',
+        surface: null,
+      })
+    ).toBe('banner');
   });
 });
