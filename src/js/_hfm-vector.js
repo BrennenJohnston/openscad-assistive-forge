@@ -52,6 +52,7 @@ import {
   buildEdgeGeometry,
   getDisplayOptionsController,
 } from './display-options-controller.js';
+import { AXES_OPACITY } from './_hfm-axes.js';
 import {
   buildEdgeTable,
   silhouetteSegments,
@@ -98,9 +99,8 @@ const _SOLID_FROM = 0.995;
 // its angle to the light, from the ambient's fifth to the full.
 const _AMBIENT = 0.2 * Math.PI;
 const _LIGHT = 0.8 * Math.PI;
-// The axes and their marks against the model's lines, and the grid, dimmer
-// still, against the preview's own grid opacity.
-const _HELPER_OPACITY = 0.6;
+// The grid, dimmer than the axes and their marks (`AXES_OPACITY`), against
+// the preview's own grid opacity.
 const _GRID_OPACITY = 0.25;
 // The display options rebuild the preview's axes and marks when the camera
 // distance moves by this share (display-options-controller.js); the pass's
@@ -391,7 +391,7 @@ export function createVectorPass(previewManager) {
     built.group.traverse((part) => {
       if (!part.material) return;
       part.material.transparent = true;
-      part.material.opacity = _HELPER_OPACITY;
+      part.material.opacity = AXES_OPACITY;
     });
     scene.add(built.group);
     return { ...built, colorHex };
