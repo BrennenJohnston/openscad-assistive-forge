@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.7.1] - 2026-10-22
+
 ### Fixed
 
 - After an update, a page from the build before no longer loses its
