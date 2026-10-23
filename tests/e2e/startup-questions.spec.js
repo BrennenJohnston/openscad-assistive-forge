@@ -70,3 +70,61 @@ test('a metered connection is asked before the engine downloads, in the app’s 
   await expect(page.locator('body')).not.toHaveAttribute('data-wasm-ready', 'true')
   expectNoNativeDialog(page)
 })
+
+// Android Chrome reports a phone's data connection as cellular, so the
+// question above would be asked on every visit and by every need of the
+// engine while it starts. The seed below is that connection.
+const cellular = (page) =>
+  page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    const connection = {
+      type: 'cellular',
+      effectiveType: '4g',
+      saveData: false,
+      addEventListener() {},
+      removeEventListener() {},
+    }
+    Object.defineProperty(navigator, 'connection', {
+      get: () => connection,
+      configurable: true,
+    })
+    window.__engineQuestions = 0
+    document.addEventListener('DOMContentLoaded', () => {
+      new MutationObserver(() => {
+        for (const h of document.querySelectorAll('[role="alertdialog"] h2, [role="alertdialog"] h3')) {
+          if (h.textContent.trim() === 'Download the engine?' && !h.__counted) {
+            h.__counted = true
+            window.__engineQuestions += 1
+          }
+        }
+      }).observe(document.body, { childList: true, subtree: true })
+    })
+  })
+
+test('a Download given on a cellular connection is remembered: the next visit asks nothing', async ({
+  page,
+}) => {
+  test.setTimeout(240_000)
+  await cellular(page)
+  attachInvariants(page)
+  await page.goto('/')
+
+  const ask = question(page, 'Download the engine?')
+  await expect(ask).toBeVisible({ timeout: 30_000 })
+  await ask.getByRole('button', { name: 'Download', exact: true }).click()
+  await expect(page.locator('body')).toHaveAttribute('data-wasm-ready', 'true', {
+    timeout: 180_000,
+  })
+  expect(
+    await page.evaluate(() => JSON.parse(localStorage.getItem('openscad-forge-storage-prefs') || '{}'))
+  ).toMatchObject({ engineDownloadAccepted: true })
+
+  await page.reload()
+  await expect(page.locator('body')).toHaveAttribute('data-wasm-ready', 'true', {
+    timeout: 180_000,
+  })
+  await expect(ask).toHaveCount(0)
+  expect(await page.evaluate(() => window.__engineQuestions)).toBe(0)
+  expectNoNativeDialog(page)
+})

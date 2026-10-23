@@ -197,3 +197,39 @@ test.describe('Classic welcome chrome', () => {
     await expect(page.locator('#classicStatusBar')).toBeHidden()
   })
 })
+
+test.describe('the page behind the welcome surface', () => {
+  test.use({ viewport: { width: 412, height: 915 }, hasTouch: true })
+
+  test('cannot scroll by code: the header stays when the heading is scrolled into view', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    })
+    await page.goto('/')
+    await expect(page.locator('#welcomeScreen')).toBeVisible()
+    await expect(page.locator('#features-heading')).toBeVisible()
+
+    // The welcome content scrolls inside its own region; the page itself has
+    // nothing to scroll, so a focus move or a scroll-into-view can never
+    // carry the header off the top (the page refuses finger scrolling, which
+    // would leave it there).
+    const pageScroll = () =>
+      page.evaluate(() => ({
+        page: document.documentElement.scrollHeight,
+        viewport: window.innerHeight,
+      }))
+    const before = await pageScroll()
+    expect(before.page, 'the page is no taller than the viewport').toBeLessThanOrEqual(before.viewport)
+
+    await page.evaluate(() =>
+      document.getElementById('features-heading').scrollIntoView({ block: 'start' })
+    )
+    await page.waitForTimeout(300)
+    const header = await page.locator('.app-header').boundingBox()
+    expect(header.y, 'the header stays at the top').toBe(0)
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+  })
+})

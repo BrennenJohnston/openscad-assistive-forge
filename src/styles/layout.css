@@ -1316,6 +1316,11 @@ body[data-app-surface='welcome'] #uiModeToggle {
 }
 
 .welcome-content {
+  /* Positioned, so its height stays inside its scroll region. Unpositioned,
+     it made the page itself scrollable by code: a focus move or a
+     scroll-into-view carried the header off the top, and the page, which
+     refuses finger scrolling, could not be brought back. */
+  position: relative;
   max-width: 600px;
   text-align: center;
   width: 100%;

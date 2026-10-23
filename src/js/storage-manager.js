@@ -347,9 +347,14 @@ export function getStoragePrefs() {
     return {
       allowLargeDownloads: prefs.allowLargeDownloads ?? true,
       seenDisclosure: prefs.seenDisclosure ?? false,
+      engineDownloadAccepted: prefs.engineDownloadAccepted ?? false,
     };
   } catch (_error) {
-    return { allowLargeDownloads: true, seenDisclosure: false };
+    return {
+      allowLargeDownloads: true,
+      seenDisclosure: false,
+      engineDownloadAccepted: false,
+    };
   }
 }
 
@@ -366,6 +371,30 @@ export function updateStoragePrefs(updates) {
 }
 
 /**
+ * Keep the Download given to the engine question, so it is not asked again
+ * on this device.
+ */
+export function rememberEngineDownload() {
+  updateStoragePrefs({ engineDownloadAccepted: true });
+}
+
+/**
+ * Whether the engine's files are already held by the browser's cache (the
+ * service worker keeps them), in which case there is nothing to download.
+ * @param {string} enginePath - The engine's folder, such as /wasm/openscad-official
+ * @returns {Promise<boolean>}
+ */
+export async function engineFilesCached(enginePath) {
+  if (!('caches' in globalThis) || !globalThis.location) return false;
+  const url = new URL(
+    `${enginePath}/openscad.wasm`,
+    globalThis.location.origin
+  );
+  const hit = await globalThis.caches.match(url.href, { ignoreSearch: true });
+  return Boolean(hit);
+}
+
+/**
  * Check if large downloads should be deferred based on connection
  * @returns {boolean}
  */
@@ -373,6 +402,12 @@ export function shouldDeferLargeDownloads() {
   const prefs = getStoragePrefs();
   if (prefs.allowLargeDownloads === false) {
     return true;
+  }
+  // A Download given once on this device answers the question for good: the
+  // files are kept by the browser, and a phone's data connection reads as
+  // metered on every visit.
+  if (prefs.engineDownloadAccepted) {
+    return false;
   }
 
   const connection = getConnectionInfo();
