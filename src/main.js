@@ -153,6 +153,8 @@ import {
   markFirstVisitComplete,
   updateStoragePrefs,
   shouldDeferLargeDownloads,
+  rememberEngineDownload,
+  engineFilesCached,
   formatBytes as _formatBytes,
   // Persistence and backup
   checkPersistentStorage as _checkPersistentStorage,
@@ -272,6 +274,7 @@ import {
   syncControllerPanel,
 } from './js/controller-panel.js';
 import {
+  DEFAULT_ENGINE_PATH,
   clearDownloads as clearEngineDownloads,
   download as downloadEngine,
   getChosenEngineId,
@@ -6135,7 +6138,6 @@ async function initApp() {
    * @returns {Promise<boolean>} True if initialized successfully
    */
   async function ensureWasmInitialized() {
-    const deferDownloads = shouldDeferLargeDownloads();
     if (!hasUserAcceptedDownload) {
       if (firstVisitModal && firstVisitModal.classList.contains('hidden')) {
         setFirstVisitBlocking(true);
@@ -6149,8 +6151,12 @@ async function initApp() {
     }
     if (wasmInitialized) return true;
 
-    // Check if we should defer large downloads on metered connections
-    if (deferDownloads) {
+    // On a slow or metered connection the download is asked about: once per
+    // device (a Download is remembered), and not for files the browser holds.
+    if (
+      shouldDeferLargeDownloads() &&
+      !(await engineFilesCached(DEFAULT_ENGINE_PATH))
+    ) {
       downloadQuestion ??= showConfirmDialog(
         'This app needs about 15 MB of files, once. You seem to be on a slow or metered connection. Download them now?',
         'Download the engine?',
@@ -6164,6 +6170,7 @@ async function initApp() {
         updateStatus('WASM download deferred', 'info');
         return false;
       }
+      rememberEngineDownload();
     }
 
     // Initialize if not yet done

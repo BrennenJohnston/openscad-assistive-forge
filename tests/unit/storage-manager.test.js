@@ -16,6 +16,8 @@ import {
   getStoragePrefs,
   updateStoragePrefs,
   shouldDeferLargeDownloads,
+  rememberEngineDownload,
+  engineFilesCached,
 } from '../../src/js/storage-manager.js';
 
 describe('Storage Manager', () => {
@@ -348,6 +350,31 @@ describe('Storage Manager', () => {
 
       // Restore
       Storage.prototype.setItem = originalSetItem;
+    });
+  });
+
+  describe('The engine download, remembered', () => {
+    it('a remembered Download stops the deferral on a cellular connection', () => {
+      Object.defineProperty(navigator, 'connection', {
+        value: { type: 'cellular', effectiveType: '4g', saveData: false },
+        configurable: true,
+      });
+      expect(shouldDeferLargeDownloads()).toBe(true);
+      rememberEngineDownload();
+      expect(getStoragePrefs().engineDownloadAccepted).toBe(true);
+      expect(shouldDeferLargeDownloads()).toBe(false);
+    });
+
+    it('a remembered Download survives the other preferences changing', () => {
+      rememberEngineDownload();
+      updateStoragePrefs({ seenDisclosure: true });
+      expect(getStoragePrefs().engineDownloadAccepted).toBe(true);
+    });
+
+    it('the cache probe reads false where the Cache API is absent', async () => {
+      await expect(engineFilesCached('/wasm/openscad-official')).resolves.toBe(
+        false
+      );
     });
   });
 });

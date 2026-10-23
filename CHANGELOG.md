@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- On a phone's data connection the engine question is asked once: a
+  Download given is remembered on that device, and files the browser already
+  holds need no question.
+- On a phone the header no longer slides off the top of the Main Page when
+  the page moves focus or scrolls a heading into view.
+
 ## [5.7.0] - 2026-10-22
 
 ### Added
