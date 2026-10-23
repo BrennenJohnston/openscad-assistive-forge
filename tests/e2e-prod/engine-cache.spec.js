@@ -137,6 +137,22 @@ const workerSettled = (page) =>
     false
   );
 
+/**
+ * A page that reloads itself when a newer worker takes charge can abort a
+ * navigation started in the same moment (the test's next-version worker is
+ * registered under two addresses in turn, so it takes charge twice); after
+ * that load the second try lands.
+ */
+async function gotoSettled(page, url) {
+  try {
+    await page.goto(url);
+  } catch (error) {
+    if (!/ERR_ABORTED/.test(error.message)) throw error;
+    await page.waitForLoadState('load').catch(() => {});
+    await page.goto(url);
+  }
+}
+
 async function waitForEngine(page) {
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
@@ -218,17 +234,17 @@ test('prod-engine-cache: a downloaded engine stays through a service worker upda
     (id) => localStorage.setItem('openscad-forge-engine', id),
     KEPT_ENGINE
   );
-  await page.goto('/');
+  await gotoSettled(page, '/');
   await waitForEngine(page);
   await expect.poll(() => workerSettled(page), { timeout: 60_000 }).toBe(true);
   expect(await keptFiles(page)).toEqual(KEPT_FILES);
-  await page.goto('/');
+  await gotoSettled(page, '/');
   await waitForEngine(page);
 
   // With no network at all, the chosen engine starts from the kept cache.
   await context.setOffline(true);
   builds.length = 0;
-  await page.goto('/');
+  await gotoSettled(page, '/');
   await waitForEngine(page);
   await context.setOffline(false);
   expect(builds.join(' ')).toMatch(/OpenSCAD snapshot 2026\.10\.18/);
