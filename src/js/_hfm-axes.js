@@ -9,8 +9,11 @@
 // the line drawing shows them.
 
 // The axes and their marks against the model, in both of the Alt View's
-// drawings.
-export const AXES_OPACITY = 0.6;
+// drawings: at full strength. A one-pixel line in the look's color at 0.6
+// measured 2.7:1 against the amber screen at its weakest, under the 3:1 a
+// line needed to read the model asks for; the model's own lines are wider,
+// so they still lead.
+export const AXES_OPACITY = 1;
 
 // The display options add these groups to the preview's scene, at its top
 // level, while Show Axes and Show Scale Markers are on.
