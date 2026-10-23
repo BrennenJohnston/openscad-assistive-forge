@@ -194,9 +194,14 @@ test('prod-engine-cache: a downloaded engine stays through a service worker upda
       ),
     })
   );
+  // The next version's worker takes charge of this page, which is of the
+  // version before: on the Main Page the page reloads itself (sw-update.js),
+  // so the test waits for that load before it reads anything more.
+  const reloaded = page.waitForEvent('load', { timeout: 60_000 });
   await page.evaluate(() =>
     navigator.serviceWorker.register('/sw.js?next=1', { scope: '/' })
   );
+  await reloaded;
   await expect
     .poll(() => cacheNames(page), { timeout: 60_000 })
     .toContain(`openscad-forge-${nextVersion}`);
