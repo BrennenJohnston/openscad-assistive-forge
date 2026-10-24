@@ -162,6 +162,93 @@ function keepFaces(page, solid, faint) {
   );
 }
 
+/**
+ * The X axis as the screen shows it: points along the middle of its positive
+ * arm (35 to 65 % of its length, clear of the box), projected with the
+ * preview's camera and kept where they fall on the screen, each looked for
+ * within 3 pixels in a picture of the screen (the method of
+ * alt-view-icon-states.spec.js): a point is drawn when a pixel there sits at
+ * least 0.35 of the way from the screen's color to the look's line color.
+ */
+async function axisRow(page) {
+  const { points, line, screen } = await page.evaluate(() => {
+    const pm = window.previewManager;
+    const camera = pm.getActiveCamera();
+    const canvas = document.querySelector('.hfm-overlay-canvas');
+    const box = canvas.getBoundingClientRect();
+    const reach = camera.position.distanceTo(pm.controls.target);
+    const points = [];
+    for (let i = 0; i <= 12; i++) {
+      const v = camera.position
+        .clone()
+        .set(reach * (0.35 + (0.3 * i) / 12), 0, 0)
+        .project(camera);
+      const x = box.left + ((v.x + 1) / 2) * box.width;
+      const y = box.top + ((1 - v.y) / 2) * box.height;
+      const inside =
+        x > box.left + 4 &&
+        x < box.right - 4 &&
+        y > box.top + 4 &&
+        y < box.bottom - 4;
+      if (inside) points.push([x, y]);
+    }
+    const parse = (css) => {
+      const probe = document.createElement('canvas').getContext('2d');
+      probe.fillStyle = css;
+      probe.fillRect(0, 0, 1, 1);
+      return [...probe.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+    };
+    return {
+      points,
+      line: parse(
+        getComputedStyle(document.body).getPropertyValue('--color-accent').trim()
+      ),
+      screen: parse(getComputedStyle(canvas).backgroundColor),
+    };
+  });
+  const png = await page.screenshot();
+  return page.evaluate(
+    async ({ b64, points, line, screen }) => {
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const bitmap = await createImageBitmap(
+        new Blob([bytes], { type: 'image/png' })
+      );
+      const picture = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const ctx = picture.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(bitmap, 0, 0);
+      const { data, width, height } = ctx.getImageData(
+        0,
+        0,
+        bitmap.width,
+        bitmap.height
+      );
+      const scale = bitmap.width / window.innerWidth;
+      const span = line.map((c, i) => c - screen[i]);
+      const span2 = span.reduce((sum, c) => sum + c * c, 0);
+      let hits = 0;
+      for (const [cssX, cssY] of points) {
+        const cx = Math.round(cssX * scale);
+        const cy = Math.round(cssY * scale);
+        let drawn = false;
+        for (let dy = -3; dy <= 3 && !drawn; dy++) {
+          for (let dx = -3; dx <= 3 && !drawn; dx++) {
+            const x = cx + dx;
+            const y = cy + dy;
+            if (x < 0 || y < 0 || x >= width || y >= height) continue;
+            const i = (y * width + x) * 4;
+            let dot = 0;
+            for (let c = 0; c < 3; c++) dot += (data[i + c] - screen[c]) * span[c];
+            if (dot / span2 >= 0.35) drawn = true;
+          }
+        }
+        if (drawn) hits++;
+      }
+      return { hits, of: points.length };
+    },
+    { b64: png.toString('base64'), points, line, screen }
+  );
+}
+
 // The middle gap between frames, in ms, while `run` runs.
 async function frameGap(page, run) {
   await page.evaluate(() => {
@@ -294,6 +381,12 @@ test.describe('The vector look', () => {
   }) => {
     // The DOS look draws crisp: a dim line is half-lit, and nothing else is.
     await openBox(page, 'classic', 'logo-plate');
+    // Classic shows the axes and their marks from the start, and the lines
+    // draw them under the model's own brightness: off for this measurement.
+    for (const id of ['#classicAxesToggle', '#classicScaleMarkersToggle']) {
+      await page.locator(id).click();
+      await expect(page.locator(id)).toHaveAttribute('aria-pressed', 'false');
+    }
     await slide(page, '_hfmFontScale', 0.35);
     const lines = () =>
       page
@@ -466,5 +559,35 @@ test.describe('The vector look', () => {
     await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
     await expect(status).toContainText('EDGE 200%');
     expect(await values(), 'the DOS look after a reload').toEqual(['2', '0.1', '0.1', '0.01']);
+  });
+
+  test('the DOS look draws the axes and their marks as lines while Show Axes and Show Scale Markers are on, and leaves them out when they are off', async ({
+    page,
+  }) => {
+    // Classic starts with both on, as the desktop does.
+    await openBox(page, 'classic');
+    await slide(page, '_hfmFontScale', 0.3);
+    const axes = page.locator('#classicAxesToggle');
+    const markers = page.locator('#classicScaleMarkersToggle');
+    await expect(axes).toHaveAttribute('aria-pressed', 'true');
+    await expect(markers).toHaveAttribute('aria-pressed', 'true');
+    const shown = await axisRow(page);
+    test
+      .info()
+      .annotations.push({ type: 'measured', description: JSON.stringify(shown) });
+    console.log('the X axis in the DOS lines:', JSON.stringify(shown));
+    expect(shown.of, 'enough of the arm on the screen to judge').toBeGreaterThanOrEqual(6);
+    expect(shown.hits, 'the X axis drawn along its arm').toBeGreaterThanOrEqual(
+      Math.ceil(shown.of * 0.8)
+    );
+
+    await axes.click();
+    await markers.click();
+    await expect(axes).toHaveAttribute('aria-pressed', 'false');
+    await expect(markers).toHaveAttribute('aria-pressed', 'false');
+    // A still view is drawn again on the look's own tick, within a second.
+    await expect
+      .poll(async () => (await axisRow(page)).hits, { timeout: 5_000 })
+      .toBe(0);
   });
 });

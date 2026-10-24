@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The Alt View's line drawing shows the axes, their tick marks and the grid
+  again, and at larger sizes the axes are drawn as lines over the characters.
+
 ## [5.7.1] - 2026-10-22
 
 ### Fixed

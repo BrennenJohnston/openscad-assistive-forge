@@ -12,6 +12,9 @@
 // the look's overlay then shows it (`_hfm.js`). The phosphor looks add a
 // soft dwell where the beam turns, in the line's own color; the DOS look
 // draws at one pixel per CSS pixel with no smoothing, as a raster card did.
+// The preview's own helpers (the axis lines with their tick marks and
+// numerals, and the grid) live in its scene, which this pass does not
+// render, so the pass draws them again in the look's color.
 
 import {
   AmbientLight,
@@ -23,6 +26,10 @@ import {
   EdgesGeometry,
   Float32BufferAttribute,
   Group,
+  Line,
+  LineBasicMaterial,
+  LineDashedMaterial,
+  LineSegments,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
@@ -39,10 +46,13 @@ import {
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
+import { buildAxisLinesOverlay } from './axis-lines-overlay.js';
+import { buildAxisTickOverlay } from './axis-tick-overlay.js';
 import {
   buildEdgeGeometry,
   getDisplayOptionsController,
 } from './display-options-controller.js';
+import { AXES_OPACITY } from './_hfm-axes.js';
 import {
   buildEdgeTable,
   silhouetteSegments,
@@ -50,6 +60,15 @@ import {
 } from './_hfm-edges.js';
 
 const _EDGE_PARTS = { BufferGeometry, EdgesGeometry, Float32BufferAttribute };
+const _HELPER_PARTS = {
+  BufferGeometry,
+  Float32BufferAttribute,
+  Group,
+  Line,
+  LineBasicMaterial,
+  LineDashedMaterial,
+  LineSegments,
+};
 
 // The beam's dwell at a line's end, as wide as this many line widths.
 const _DWELL_SCALE = 2.2;
@@ -80,6 +99,13 @@ const _SOLID_FROM = 0.995;
 // its angle to the light, from the ambient's fifth to the full.
 const _AMBIENT = 0.2 * Math.PI;
 const _LIGHT = 0.8 * Math.PI;
+// The grid, dimmer than the axes and their marks (`AXES_OPACITY`), against
+// the preview's own grid opacity.
+const _GRID_OPACITY = 0.25;
+// The display options rebuild the preview's axes and marks when the camera
+// distance moves by this share (display-options-controller.js); the pass's
+// copies follow the same rule.
+const _HELPER_STALE = 0.005;
 
 /**
  * A soft round spot, bright in the middle, for the dwell points.
@@ -193,6 +219,24 @@ export function createVectorPass(previewManager) {
   lightB.position.set(1, -1, -1);
   rig.add(lightA, lightA.target, lightB, lightB.target);
   scene.add(surface, facets, lines, outline, dwell, ambient, rig);
+
+  // The preview's helpers, drawn again in the look's color: the axis lines
+  // and the tick marks with their numerals as the display options build
+  // them, held with the distance and color they were built for; the grid on
+  // the preview grid's own geometry, which the preview owns and replaces.
+  let axes = null;
+  let marks = null;
+  const helperColor = new Color();
+  const gridPlaceholder = new BufferGeometry();
+  const gridMaterial = new LineBasicMaterial({
+    transparent: true,
+    depthWrite: false,
+  });
+  const grid = new LineSegments(gridPlaceholder, gridMaterial);
+  grid.name = '__vectorGrid';
+  grid.matrixAutoUpdate = false;
+  grid.visible = false;
+  scene.add(grid);
 
   // The DOS look renders at one texel per CSS pixel and is shown unsmoothed.
   let raster = null;
@@ -328,6 +372,61 @@ export function createVectorPass(previewManager) {
     }
   }
 
+  // One helper as the options want it: kept while its distance and color
+  // still hold, built again when either has moved, released when it is off.
+  function _syncHelper(held, wanted, build, distanceMm, colorHex) {
+    const stale =
+      held &&
+      (held.colorHex !== colorHex ||
+        (typeof distanceMm === 'number' &&
+          Math.abs(distanceMm - held.distanceMm) / held.distanceMm >=
+            _HELPER_STALE));
+    if (held && (!wanted || stale)) {
+      scene.remove(held.group);
+      held.dispose();
+      held = null;
+    }
+    if (!wanted || held) return held;
+    const built = build(_HELPER_PARTS, { distanceMm, colorHex });
+    built.group.traverse((part) => {
+      if (!part.material) return;
+      part.material.transparent = true;
+      part.material.opacity = AXES_OPACITY;
+    });
+    scene.add(built.group);
+    return { ...built, colorHex };
+  }
+
+  function _syncHelpers(line) {
+    const options = getDisplayOptionsController();
+    // The distance the display options build the preview's helpers from.
+    const distanceMm = options._cameraDistanceMm?.(previewManager) ?? undefined;
+    const colorHex = helperColor.set(line).getHex();
+    axes = _syncHelper(
+      axes,
+      options.state.axes,
+      buildAxisLinesOverlay,
+      distanceMm,
+      colorHex
+    );
+    marks = _syncHelper(
+      marks,
+      options.state.axisMarks,
+      buildAxisTickOverlay,
+      distanceMm,
+      colorHex
+    );
+
+    const previewGrid = previewManager.gridHelper;
+    grid.visible = Boolean(previewGrid?.visible);
+    if (!grid.visible) return;
+    grid.geometry = previewGrid.geometry;
+    previewGrid.updateWorldMatrix(true, false);
+    grid.matrix.copy(previewGrid.matrixWorld);
+    gridMaterial.color.setHex(colorHex);
+    gridMaterial.opacity = _GRID_OPACITY * (previewGrid.material?.opacity ?? 1);
+  }
+
   return {
     /**
      * Render one frame of the vector look to the preview's canvas.
@@ -360,6 +459,7 @@ export function createVectorPass(previewManager) {
       _syncTable(mesh, creaseDeg);
       _syncOutline(mesh, camera, creaseDeg);
       facets.visible = facets.visible && facetCount > 0;
+      _syncHelpers(line);
 
       scene.background.set(background);
       solid = surfaceOpacity >= _SOLID_FROM;
@@ -431,6 +531,10 @@ export function createVectorPass(previewManager) {
       raster?.dispose();
       rasterQuad.geometry.dispose();
       rasterQuad.material.dispose();
+      axes?.dispose();
+      marks?.dispose();
+      gridPlaceholder.dispose();
+      gridMaterial.dispose();
     },
   };
 }

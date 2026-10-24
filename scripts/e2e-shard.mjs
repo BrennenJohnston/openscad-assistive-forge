@@ -99,7 +99,9 @@ export const MEASURED_SECONDS = {
   'alt-view-icon-states.spec.js': 1050.0,
   'alt-view-reveal.spec.js': 85.2,
   'alt-view-sounds.spec.js': 340.0,
-  'alt-view-vector.spec.js': 139.3,
+  // 139.3 measured for its four cases, plus the axes case since (9 s
+  // locally, the same shape as the others), booked at their mean.
+  'alt-view-vector.spec.js': 174.1,
   'alt-view-without-webgl.spec.js': 4.7,
   'auto-preview.spec.js': 55.4,
   'axis-depth-truth.spec.js': 25.4,

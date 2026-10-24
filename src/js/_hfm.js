@@ -24,6 +24,7 @@
 // surfaces) each hold their own overlay, atlas, and scheduling state without
 // interfering. Pure helpers (sampling layouts, vector math) stay module-level.
 
+import { axesSegments, strokeAxes } from './_hfm-axes.js';
 import { createGpuGlyphPass } from './_hfm-gpu.js';
 import {
   driveWithMemory,
@@ -1653,6 +1654,26 @@ function _vectorColors(st) {
 }
 
 /**
+ * The preview's axis lines, tick marks and numerals stroked over the
+ * characters, which leave only a few stray characters of them.
+ */
+function _strokeAxesOver(st, scene, camera) {
+  const parts = axesSegments(
+    scene,
+    camera,
+    st.overlayCanvas.width,
+    st.overlayCanvas.height
+  );
+  if (!parts.length) return;
+  const dpr = _getDpr();
+  strokeAxes(st.overlayCtx, parts, {
+    color: _vectorColors(st).line,
+    lineWidth: dpr,
+    dash: 4 * dpr,
+  });
+}
+
+/**
  * One frame of the vector look: the lines rendered to the WebGL canvas, then
  * shown on the overlay. The phosphor looks lay a softened copy of the frame
  * over it (the bloom) and keep a trace of the frames before (the Glow
@@ -1959,6 +1980,7 @@ export async function initAltView(previewManager, options = {}) {
         charW: metrics.charW,
         charH: metrics.charH,
       });
+      _strokeAxesOver(st, scene, previewManager.getActiveCamera());
       st.dirty = false;
       const after = performance.now();
       st.lastConvertMs = after;
