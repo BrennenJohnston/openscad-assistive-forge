@@ -128,12 +128,6 @@ These projects are used during development and testing only.
 - **License**: MIT
 - **Usage**: Color math for automated WCAG contrast ratio tests
 
-### happy-dom
-
-- **Repo**: https://github.com/capricorn86/happy-dom
-- **License**: MIT
-- **Usage**: Lightweight DOM environment for unit tests
-
 ### jsdom
 
 - **Repo**: https://github.com/jsdom/jsdom
