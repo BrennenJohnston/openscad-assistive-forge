@@ -2347,15 +2347,18 @@ function _installScrollTicks() {
       seen.end = null;
       return;
     }
+    const bottom = el.scrollHeight - el.clientHeight;
+    const end = top <= 0 ? 'top' : top >= bottom - 1 ? 'bottom' : null;
+    // The end is said within a pixel of it; the glide's last part of a pixel
+    // after that is not a line, so the end stays the last sound.
+    if (end && end === seen.end) return;
     seen.carry =
       Math.sign(seen.carry) === Math.sign(moved) ? seen.carry + moved : moved;
     if (Math.abs(seen.carry) >= _HFM_SCROLL_LINE_PX) {
       seen.carry %= _HFM_SCROLL_LINE_PX;
       _playScrollTick(moved > 0 ? -1 : 1);
     }
-    const bottom = el.scrollHeight - el.clientHeight;
-    const end = top <= 0 ? 'top' : top >= bottom - 1 ? 'bottom' : null;
-    if (end && end !== seen.end) _playScrollEnd();
+    if (end) _playScrollEnd();
     seen.end = end;
   };
   _hfmScrollListeners = [

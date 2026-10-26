@@ -1729,6 +1729,52 @@ describe('the Alt View is heard', () => {
     controller.disableAltViewWithPreview(toggle)
   })
 
+  it("the last part of a pixel a glide moves after a list's end is silent: the end stays the last sound", async () => {
+    pageWithHeaderAndDpad()
+    clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const list = document.createElement('div')
+    let top = 0
+    Object.defineProperty(list, 'scrollTop', { get: () => top, configurable: true })
+    Object.defineProperty(list, 'scrollHeight', { value: 1000, configurable: true })
+    Object.defineProperty(list, 'clientHeight', { value: 400, configurable: true })
+    document.body.appendChild(list)
+    const scrollTo = (y) => {
+      top = y
+      list.dispatchEvent(new Event('scroll'))
+    }
+    const wheel = (deltaY) =>
+      list.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY }))
+    const scrollsAsked = async () => {
+      const { playScrollSound } = await import('../../src/js/crt-sounds.js')
+      return playScrollSound.mock.calls.map(([how]) => (how.end ? 'end' : how.way))
+    }
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    clock += 2000
+    scrollTo(199.5)
+
+    // A long turn of the wheel: its lines, then the end, said within a pixel
+    // of the bottom with 39.5 px carried toward the next line.
+    wheel(5000)
+    clock += 100
+    scrollTo(599)
+    expect(await scrollsAsked()).toEqual([-1, 'end'])
+
+    // The glide settles the last pixel: no line after the end.
+    clock += 100
+    scrollTo(600)
+    expect(await scrollsAsked(), 'the end stays last').toEqual([-1, 'end'])
+
+    // Back up from the end: lines tick again.
+    wheel(-100)
+    clock += 100
+    scrollTo(550)
+    expect((await scrollsAsked()).slice(2)).toEqual([1])
+    controller.disableAltViewWithPreview(toggle)
+  })
+
   it('a kind of sound turned off in Preferences stays silent while the rest play; the choice is kept, read at start, and told to the page', async () => {
     pageWithHeaderAndDpad()
     clock = 0
