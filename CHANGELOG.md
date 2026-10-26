@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- In the Alt View, reaching the end of a list is the last sound a scroll
+  makes: no line's tick follows it any more.
+
 ## [5.7.2] - 2026-10-26
 
 ### Fixed
