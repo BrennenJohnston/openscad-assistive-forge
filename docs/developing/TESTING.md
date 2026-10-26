@@ -207,7 +207,7 @@ record step by step. How to set that up, and what to listen for, is in the
 
 After any changes, verify:
 
-- [ ] `npm run test:run` -- all unit tests pass (287 files, 8,407 tests and 2 skipped, as of 2026-10-22).
+- [ ] `npm run test:run` -- all unit tests pass (289 files, 8,422 tests and 2 skipped, as of 2026-10-26).
 - [ ] `npm run test:e2e` -- E2E tests pass on Chromium (1,675 cases over 146 spec files on one worker, as of 2026-10-22).
 - [ ] Vector parameter widgets still render correctly.
 - [ ] Expert Mode toggle (Ctrl+E) is functional.
