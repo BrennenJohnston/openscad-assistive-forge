@@ -78,7 +78,7 @@
     "colorjs.io": "^0.6.1",
     "eslint": "^10.0.1",
     "globals": "^17.1.0",
-    "happy-dom": "^20.3.0",
+    "happy-dom": "^21.0.4",
     "jsdom": "^27.4.0",
     "lighthouse": "^13.4.1",
     "png-to-ico": "^3.0.1",
