@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Tactile Map Designer: a tactile map tile with up to three raised levels,
+  research-sized symbols, a raised title, a north cue and channels for
+  braille label tape, with a guide and a symbols page.
+- Tactile maps split into plates for your print bed, each named by touch;
+  one button renders every plate and downloads them as one zip with the
+  plan, the levels files, a layout picture and a README.
+- The drawing editor turns a line drawing, a DXF or a traced photo into a
+  tactile map plan: a class on every shape, lines found down their middle,
+  areas with what is drawn inside them, drawn words raised.
+
 ### Fixed
 
 - In the Alt View, reaching the end of a list is the last sound a scroll

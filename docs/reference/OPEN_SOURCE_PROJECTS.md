@@ -164,6 +164,17 @@ These projects were studied for architecture or design patterns. No code was cop
 - **License**: GPL-3.0
 - **Usage**: Cursor pixel designs adapted with color modifications
 
+### Touch Mapper
+
+- **Repo**: https://github.com/skarkkai/touch-mapper
+- **License**: AGPL-3.0
+- **Usage**: Studied for its address-to-map flow while planning the Tactile Map Designer; no code copied
+
+### TMAP (LightHouse MAD Lab)
+
+- **Site**: https://lighthouse-sf.org/tmap/
+- **Usage**: Studied for its address, features and preview flow while planning the Tactile Map Designer; no code copied
+
 ---
 
 ## Specifications Referenced
@@ -172,3 +183,13 @@ These projects were studied for architecture or design patterns. No code was cop
 
 - **Spec**: https://json-schema.org/
 - **Usage**: Draft 2020-12 specification used for parameter validation schema design (implemented via AJV)
+
+### BANA Guidelines and Standards for Tactile Graphics (2022)
+
+- **Publisher**: Braille Authority of North America, https://www.brailleauthority.org/
+- **Usage**: The line styles, symbol sizes, gaps, key samples and map rules the Tactile Map Designer's defaults and warnings rest on (see `docs/guides/TACTILE_MAP_GUIDE.md`)
+
+### ISO 19028
+
+- **Spec**: Accessible design, information contents, figuration and display methods of tactile guide maps; figures taken from the 2024 review by Wabinski, Moscicka and Touya
+- **Usage**: The 10 mm point symbol size and the 0.3 to 1.5 mm height range the Tactile Map Designer keeps to
