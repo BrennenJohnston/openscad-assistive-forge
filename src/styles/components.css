@@ -16505,6 +16505,12 @@ body.tutorial-body-locked {
   min-height: var(--size-touch-target);
 }
 
+/* The panel's number inputs (the custom bed, the drawing width) are
+   targets: the app's floor for this pointer, 44 px on touch */
+.tactile-map-panel .braille-panel-number {
+  min-height: var(--size-touch-target);
+}
+
 .braille-panel {
   margin-bottom: var(--space-md);
   padding: var(--space-md);
