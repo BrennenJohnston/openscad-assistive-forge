@@ -16496,8 +16496,19 @@ body.tutorial-body-locked {
 }
 
 .tactile-map-symbols,
+.tactile-map-drawing-row,
 .tactile-map-actions {
   flex-wrap: wrap;
+}
+
+.tactile-map-drawing {
+  min-height: var(--size-touch-target);
+}
+
+/* The panel's number inputs (the custom bed, the drawing width) are
+   targets: the app's floor for this pointer, 44 px on touch */
+.tactile-map-panel .braille-panel-number {
+  min-height: var(--size-touch-target);
 }
 
 .braille-panel {
@@ -17910,6 +17921,36 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 .drawing-editor-regions-table td[data-plate] {
   font-variant-numeric: tabular-nums;
   text-align: center;
+}
+
+/* ── The map purpose: a class per shape ──────────────────────────────────
+   The menu stands where the role switches stand for the relief purpose, at
+   the row's trailing edge, 44 px tall. Its ring is a solid one, as the
+   buttons wear, not the app's translucent select halo. */
+.drawing-editor-class-heading {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.svg-prep-object .drawing-editor-class-select {
+  flex: 0 1 auto;
+  margin-inline-start: auto;
+  max-width: 100%;
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.svg-prep-object .drawing-editor-class-select:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 /* 44 px, the touch-target floor, on the one control the column has. */

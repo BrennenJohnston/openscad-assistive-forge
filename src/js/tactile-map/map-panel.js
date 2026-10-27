@@ -23,13 +23,31 @@
  * there is nothing to restore after the loop. Cancel stops after the plate
  * under way; a failed plate stops the loop with its message.
  *
+ * Edit drawing as a map opens the drawing editor in its map purpose on the
+ * picture the tile's file control holds (a drawing a person chose through
+ * that control: SVG, DXF, or a photo it traced), with a Class menu on every
+ * shape; Apply classes hands the shapes back and planFromRegions turns them
+ * into this panel's plan at the width the Drawing width control says, so
+ * the summary, the plates and the levels file follow. The drawing is kept
+ * here once seen, because the levels file this panel writes replaces it in
+ * the control, and the door reopens on the drawing with the classes last
+ * applied.
+ *
  * @license GPL-3.0-or-later
  */
 
 import { stateManager } from '../state.js';
 import { setParameterValue } from '../ui-generator.js';
-import { announce, announceError } from '../announcer.js';
+import { announce, announceChange, announceError } from '../announcer.js';
+import { dataUrlToText } from '../svg-text-encoding.js';
 import { sampleStationPlan } from './plan.js';
+import {
+  drawingBox,
+  filledOutlines,
+  planFromRegions,
+  scaleFromWidth,
+  scaleSentence,
+} from './plan-from-drawing.js';
 import { buildLevelRings, levelsSvgFromRings } from './levels-svg.js';
 import {
   BED_PRESETS,
@@ -113,12 +131,47 @@ export function setFileThroughControl(paramName, fileName, svgText) {
 }
 
 /**
+ * The drawing editor the app shares: the one the file control built on the
+ * surface element, or one built here the same way, left on the element
+ * for the control to find (it closes whatever it finds before building its
+ * own, and this panel never keeps a reference past one opening).
+ *
+ * @returns {Promise<object|null>} null on a page with no surface element
+ */
+async function sharedDrawingEditor() {
+  const surfaceEl = document.getElementById('drawingEditorSurface');
+  if (!surfaceEl) return null;
+  if (surfaceEl.__forgeDrawingEditor) return surfaceEl.__forgeDrawingEditor;
+  const { createDrawingEditor } = await import('../drawing-editor/surface.js');
+  if (surfaceEl.__forgeDrawingEditor) return surfaceEl.__forgeDrawingEditor;
+  const editor = createDrawingEditor({
+    surfaceEl,
+    announce: announceChange,
+    onOpen: () => window.dispatchEvent(new CustomEvent('drawing-editor:open')),
+    onClose: () =>
+      window.dispatchEvent(new CustomEvent('drawing-editor:close')),
+    onViewChange: (view, host) =>
+      window.dispatchEvent(
+        new CustomEvent('drawing-editor:view', { detail: { view, host } })
+      ),
+  });
+  surfaceEl.__forgeDrawingEditor = editor;
+  return editor;
+}
+
+/** Whether an SVG is a levels file this panel wrote, by its groups. */
+function isLevelsFile(svg) {
+  return /<g id="level1"/.test(svg) && /<g id="channels"/.test(svg);
+}
+
+/**
  * Mount the panel for a tile whose manifest declares `tactileMap`.
  *
  * @param {{ mapFileParam: string, widthParam: string, heightParam: string, plateIdParam?: string }} config
- * @param {{ plan?: object, setFile?: Function, bedKey?: string, idStyle?: string, getAutoPreviewController?: Function, render?: Function, download?: Function }} [options]
+ * @param {{ plan?: object, setFile?: Function, bedKey?: string, idStyle?: string, getAutoPreviewController?: Function, render?: Function, download?: Function, getEditor?: Function }} [options]
  *   `render(parameters, { format, timeoutMs })` and `download(bytes, name,
- *   format)` stand in for the engine and the file save in a test.
+ *   format)` stand in for the engine and the file save in a test;
+ *   `getEditor()` resolves to the drawing editor the door opens.
  */
 export function initMapPanel(config, options = {}) {
   destroyMapPanel();
@@ -160,6 +213,14 @@ class MapPanel {
     this.render =
       options.render || renderThroughEngine(options.getAutoPreviewController);
     this.download = options.download || downloadFile;
+    this.getEditor = options.getEditor || sharedDrawingEditor;
+    // The drawing the door works on: the picture last seen in the file
+    // control that was not a levels file of this panel's own, with the
+    // classes and the regions the editor last applied.
+    this.drawing = null;
+    this.lastPictureData = null;
+    this.drawingWidthMm = null;
+    this.planWarnings = [];
     this.running = false;
     this.cancelRequested = false;
     this.timer = null;
@@ -189,8 +250,151 @@ class MapPanel {
         this.lastCue = cue;
         this.schedule();
       }
+      this.adoptPicture();
     });
     this.schedule(0);
+  }
+
+  /**
+   * The picture the file control holds, as text, or null when it holds
+   * none or not an SVG.
+   */
+  currentPicture() {
+    const value =
+      stateManager.getState()?.parameters?.[this.config.mapFileParam];
+    const data = value?.data;
+    if (typeof data !== 'string' || !data.startsWith('data:')) return null;
+    const svg = dataUrlToText(data);
+    if (!svg.includes('<svg')) return null;
+    return { svg, name: value.name || 'drawing.svg', data };
+  }
+
+  /**
+   * A new picture in the file control that is not this panel's own levels
+   * file becomes the drawing the door opens, and the Drawing width control
+   * takes the width the file declares, when it declares one. Decoded only
+   * when the control's value changed.
+   */
+  adoptPicture() {
+    const value =
+      stateManager.getState()?.parameters?.[this.config.mapFileParam];
+    const data = value?.data;
+    if (data === this.lastPictureData) return;
+    this.lastPictureData = data;
+    const picture = this.currentPicture();
+    if (!picture || isLevelsFile(picture.svg)) return;
+    const svg = filledOutlines(picture.svg);
+    if (this.drawing && this.drawing.svg === svg) return;
+    this.drawing = {
+      svg,
+      name: picture.name,
+      box: drawingBox(svg),
+      classes: null,
+      regions: null,
+    };
+    const declared = this.drawing.box?.widthMm;
+    if (declared > 0) {
+      this.drawingWidthMm = declared;
+    } else if (!(this.drawingWidthMm > 0)) {
+      this.drawingWidthMm = this.plan.size.w;
+    }
+    if (this.refs.drawingWidth)
+      this.refs.drawingWidth.value = String(this.drawingWidthMm);
+  }
+
+  /**
+   * Open the drawing editor as a map on the drawing: the one kept here,
+   * else whatever the file control holds (the levels file itself, when no
+   * drawing was ever chosen: its shapes are a map's shapes too).
+   */
+  async openDrawing() {
+    this.adoptPicture();
+    if (!this.drawing) {
+      const picture = this.currentPicture();
+      if (!picture) {
+        this.sayDrawing('Choose a drawing for the map file first.', true);
+        return;
+      }
+      this.drawing = {
+        svg: picture.svg,
+        name: picture.name,
+        box: drawingBox(picture.svg),
+        classes: null,
+        regions: null,
+      };
+      if (!(this.drawingWidthMm > 0)) this.drawingWidthMm = this.plan.size.w;
+      if (this.refs.drawingWidth)
+        this.refs.drawingWidth.value = String(this.drawingWidthMm);
+    }
+    const drawing = this.drawing;
+    const editor = await this.getEditor();
+    if (!editor || typeof editor.open !== 'function') {
+      this.sayDrawing('The drawing editor is not on this page.', true);
+      return;
+    }
+    const { analyzeSvg } = await import('../svg-preparer.js');
+    const analysis = analyzeSvg(drawing.svg);
+    editor.open(drawing.svg, analysis, {
+      purpose: 'map',
+      sourceName: drawing.name,
+      initialClasses: drawing.classes,
+      onApply: (result) => this.takeRegions(result),
+      onKeepOriginal: () => {},
+      onClose: () => {},
+    });
+  }
+
+  /** The editor's Apply classes: the regions become this panel's plan. */
+  takeRegions(result) {
+    const regions = Array.isArray(result?.regions) ? result.regions : [];
+    if (!this.drawing) return;
+    this.drawing.regions = regions;
+    this.drawing.classes = Object.fromEntries(
+      regions.map((r) => [r.index, r.class])
+    );
+    this.rebuildFromDrawing();
+  }
+
+  /** The plan from the kept regions at the width the control says. */
+  rebuildFromDrawing() {
+    const drawing = this.drawing;
+    if (!drawing?.regions) return;
+    const widthMm =
+      this.drawingWidthMm > 0 ? this.drawingWidthMm : this.plan.size.w;
+    const { plan, warnings } = planFromRegions({
+      regions: drawing.regions,
+      box: drawing.box,
+      scale: scaleFromWidth(drawing.box, widthMm),
+      mapWidthMm: widthMm,
+    });
+    this.plan = plan;
+    this.planWarnings = warnings;
+    this.plate = 'whole';
+    this.schedule(0);
+  }
+
+  /**
+   * The Drawing width control: the width of the drawing in millimeters,
+   * which sets the scale. Said as a scale once a drawing is known, and the
+   * plan is rebuilt at it when one was applied.
+   */
+  setDrawingWidth(value) {
+    const input = this.refs.drawingWidth;
+    if (!(value > 0)) {
+      if (input && this.drawingWidthMm > 0)
+        input.value = String(this.drawingWidthMm);
+      return;
+    }
+    this.drawingWidthMm = value;
+    const scale = scaleFromWidth(this.drawing?.box, value);
+    if (scale) announce(scaleSentence(scale), { source: SOURCE });
+    this.rebuildFromDrawing();
+  }
+
+  /** A sentence under the door, said once. */
+  sayDrawing(text, failed = false) {
+    if (this.refs.drawingStatus) this.refs.drawingStatus.textContent = text;
+    (failed ? announceError : announce)(text, { source: SOURCE });
   }
 
   tapeWidth() {
@@ -320,6 +524,47 @@ class MapPanel {
     warnings.id = 'tactileMapWarnings';
     section.appendChild(warnings);
     this.refs.warnings = warnings;
+
+    const widthRow = el('div', 'braille-panel-toggle-row tactile-map-drawing');
+    const widthLabel = el('label', 'braille-panel-label', 'Drawing width (mm)');
+    widthLabel.htmlFor = 'tactileMapDrawingWidth';
+    const widthInput = document.createElement('input');
+    widthInput.type = 'number';
+    widthInput.id = 'tactileMapDrawingWidth';
+    widthInput.className = 'braille-panel-number';
+    widthInput.min = '1';
+    widthInput.step = 'any';
+    widthInput.value = String(
+      this.drawingWidthMm > 0 ? this.drawingWidthMm : this.plan.size.w
+    );
+    widthInput.addEventListener('change', () => {
+      this.setDrawingWidth(Number(widthInput.value));
+    });
+    widthRow.appendChild(widthLabel);
+    widthRow.appendChild(widthInput);
+    section.appendChild(widthRow);
+    this.refs.drawingWidth = widthInput;
+
+    const doorRow = el('div', 'braille-translate-row tactile-map-drawing-row');
+    const door = el(
+      'button',
+      'btn btn-secondary braille-translate-btn',
+      'Edit drawing as a map'
+    );
+    door.type = 'button';
+    door.id = 'tactileMapEditDrawing';
+    door.addEventListener('click', () => {
+      this.openDrawing().catch((err) => {
+        this.sayDrawing(err?.message || String(err), true);
+      });
+    });
+    doorRow.appendChild(door);
+    section.appendChild(doorRow);
+    const drawingStatus = el('p', 'braille-panel-help');
+    drawingStatus.id = 'tactileMapDrawingStatus';
+    drawingStatus.setAttribute('role', 'status');
+    section.appendChild(drawingStatus);
+    this.refs.drawingStatus = drawingStatus;
 
     const symbols = el('div', 'braille-translate-row tactile-map-symbols');
     const load = el(
@@ -624,7 +869,9 @@ class MapPanel {
 
     const built = buildLevelRings(this.plan, { tapeWidthMm: this.tapeWidth() });
     this.refs.warnings.replaceChildren(
-      ...built.warnings.map((warning) => el('li', '', warning.text))
+      ...[...this.planWarnings, ...built.warnings].map((warning) =>
+        el('li', '', warning.text)
+      )
     );
 
     let svg;

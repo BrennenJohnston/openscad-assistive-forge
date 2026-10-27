@@ -38,6 +38,7 @@ import {
   ringsToPathData,
 } from '../ring-geometry.js';
 import { activeLibrary } from './symbol-library.js';
+import { levelsByClass } from './map-classes.js';
 
 /** How lines are stroked (the plan allowed offsetRing first; see above). */
 export const STROKE_METHOD = 'segments-and-discs';
@@ -107,28 +108,10 @@ function shapeRings(shape) {
 
 /**
  * The class table: what each class is, on which level, how wide, in which
- * style, with which symbol. The drawing editor's class column ships the
- * same rows later; until then this is the one copy.
+ * style, with which symbol. One copy, in map-classes.js, which the drawing
+ * editor's class menu reads too; this is its shape for the builder.
  */
-export const LEVELS_BY_CLASS = {
-  wall: { kind: 'line', level: 3, width: 2.0, style: 'solid' },
-  curb: { kind: 'line', level: 1, width: 1.0, style: 'solid' },
-  walkway: { kind: 'line', level: 1, width: 1.5, style: 'solid' },
-  route: { kind: 'line', level: 2, width: 1.5, style: 'dotted' },
-  crossing: { kind: 'line', level: 2, width: 1.5, style: 'ticks' },
-  track: { kind: 'line', level: 1, width: 1.0, style: 'double' },
-  area: { kind: 'area', level: 1 },
-  stairs: { kind: 'point', level: 2, symbol: 'stairs' },
-  'elevator-up': { kind: 'point', level: 2, symbol: 'elevator-up' },
-  'elevator-down': { kind: 'point', level: 2, symbol: 'elevator-down' },
-  entrance: { kind: 'point', level: 2, symbol: 'entrance' },
-  landmark: { kind: 'point', level: 2, symbol: 'landmark-circle' },
-  'you-are-here': { kind: 'point', level: 2, symbol: 'you-are-here' },
-  'transit-stop': { kind: 'point', level: 2, symbol: 'transit-stop' },
-  channel: { kind: 'channel' },
-  text: { kind: 'text' },
-  ignore: { kind: 'ignore' },
-};
+export const LEVELS_BY_CLASS = levelsByClass();
 
 export const DEFAULT_SETTINGS = {
   classes: LEVELS_BY_CLASS,
@@ -172,6 +155,11 @@ const pt = (x, y) => ({ x, y });
 /** A ring wound the way clipper writes a solid: positive area. */
 function positive(ring) {
   return areaOf(ring) < 0 ? [...ring].reverse() : ring;
+}
+
+/** A ring wound the way clipper writes a hole: negative area. */
+function negative(ring) {
+  return areaOf(ring) > 0 ? [...ring].reverse() : ring;
 }
 
 function discRing(cx, cy, r, n = DISC_SEGMENTS) {
@@ -491,7 +479,13 @@ export function buildLevelRings(plan, settings = {}) {
       }
     } else if (kind === 'area') {
       const level = f.level ?? cls.level ?? 1;
-      built.push({ f, level, rings: [positive(toPoints(f.ring))] });
+      // The holes wound the other way stay open under the level's NonZero
+      // union, unless another shape of the level covers them.
+      const rings = [
+        positive(toPoints(f.ring)),
+        ...(f.holes || []).map((hole) => negative(toPoints(hole))),
+      ];
+      built.push({ f, level, rings });
       if (f.texture) textures.add(f.texture);
     } else if (kind === 'point') {
       const level = f.level ?? cls.level ?? 2;

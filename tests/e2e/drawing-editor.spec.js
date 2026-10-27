@@ -2185,6 +2185,157 @@ test.describe('Reset puts the Layer column back and says so', () => {
  * the start; behind it the editor says what it takes and offers to choose a
  * file, and the file chosen opens in it.
  */
+/**
+ * The map purpose: a class per shape, so a line map becomes a plan.
+ *
+ * The map purpose has no door of its own yet (the plates panel's comes with
+ * the plan from a drawing), so the editor the file control builds is
+ * reopened in it, the way a host will: the same editor, the same element.
+ */
+test.describe('the map purpose', () => {
+  const SAMPLE = path.join(
+    process.cwd(),
+    'public',
+    'examples',
+    'tactile-map',
+    'sample_station.svg'
+  )
+
+  test('by keyboard: Tab to the first row\'s class, Home for Wall, Shift+Tab to Apply classes, Enter; the plan comes back and is said', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000)
+    await recordAnnouncements(page)
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    })
+    await page.goto('/?example=tactile-map')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      timeout: 240000,
+    })
+    await page.waitForFunction(
+      () =>
+        Object.keys(window.stateManager?.getState()?.parameters || {}).length >
+        0,
+      null,
+      { timeout: 120000 }
+    )
+    for (let i = 0; i < 2; i++) {
+      const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+      if (await notNow.isVisible().catch(() => false)) {
+        await notNow.click()
+        await page.waitForTimeout(300)
+      }
+    }
+    await page.setInputFiles('#param-map_file', SAMPLE)
+    await page.evaluate(() => {
+      let d = document.querySelector('#param-map_file')?.closest('details')
+      while (d) {
+        d.open = true
+        d = d.parentElement?.closest('details')
+      }
+    })
+    const door = page
+      .locator('.svg-prep-status')
+      .getByRole('button', { name: 'Open the drawing editor' })
+      .first()
+    await door.waitFor({ state: 'visible', timeout: 60000 })
+    await door.scrollIntoViewIfNeeded()
+    await door.click({ timeout: 30000 })
+    await expect(
+      page.locator('.svg-prep-result-pane svg').first()
+    ).toBeVisible({ timeout: 90000 })
+
+    const rows = await page.evaluate(async () => {
+      const editor =
+        document.getElementById('drawingEditorSurface').__forgeDrawingEditor
+      const { analyzeSvg } = await import('/src/js/svg-preparer.js')
+      const svg = await (
+        await fetch('/examples/tactile-map/sample_station.svg')
+      ).text()
+      window.__mapPlan = null
+      editor.open(svg, analyzeSvg(svg), {
+        purpose: 'map',
+        onApply: (plan) => {
+          window.__mapPlan = plan
+        },
+        onKeepOriginal: () => {},
+      })
+      return document.querySelectorAll('#drawingEditorSurface .svg-prep-object')
+        .length
+    })
+    expect(rows).toBeGreaterThan(1)
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor').first()
+    ).toHaveAttribute('data-purpose', 'map')
+    const selects = page.locator(
+      '#drawingEditorSurface .drawing-editor-class-select'
+    )
+    await expect(selects).toHaveCount(rows)
+    await expect(
+      page.locator('#drawingEditorSurface .svg-prep-role-group').first()
+    ).toBeHidden()
+    // The menu stands at the app's target floor for this pointer: 44 px on
+    // touch, the desktop density's floor on a fine pointer (the role switches
+    // it replaces are the same height).
+    const floor = await page.evaluate(() =>
+      parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue(
+          '--size-touch-target'
+        )
+      )
+    )
+    expect(floor).toBeGreaterThanOrEqual(36)
+    const box = await selects.first().boundingBox()
+    expect(box.height).toBeGreaterThanOrEqual(floor)
+
+    // Keyboard only, from the editor's title: Tab until the first row's menu.
+    await page.evaluate(() =>
+      document.querySelector('#drawingEditorSurface .drawing-editor-title').focus()
+    )
+    let landed = false
+    for (let i = 0; i < 80 && !landed; i++) {
+      await page.keyboard.press('Tab')
+      landed = await page.evaluate(() =>
+        document.activeElement?.classList.contains('drawing-editor-class-select')
+      )
+    }
+    expect(landed).toBe(true)
+    await page.keyboard.press('Home')
+    await expect(selects.first()).toHaveValue('wall')
+
+    const mark = await announcementMark(page)
+    let onApply = false
+    for (let i = 0; i < 120 && !onApply; i++) {
+      await page.keyboard.press('Shift+Tab')
+      onApply = await page.evaluate(() =>
+        document.activeElement?.classList.contains('drawing-editor-apply')
+      )
+    }
+    expect(onApply).toBe(true)
+    await page.keyboard.press('Enter')
+    await expect
+      .poll(
+        () => page.evaluate(() => window.__mapPlan?.regions?.length ?? null),
+        { timeout: 30000 }
+      )
+      .toBe(rows)
+    const plan = await page.evaluate(() => window.__mapPlan)
+    expect(plan.regions[0].class).toBe('wall')
+    expect(plan.regions.filter((r) => r.class !== 'ignore')).toHaveLength(1)
+    expect(plan.regions[0].rings.length).toBeGreaterThanOrEqual(1)
+    // The preview the app redraws as the editor closes may be said in the
+    // same message, so the sentence is looked for inside the write.
+    const sentence = new RegExp(
+      `Map plan updated: 1 feature, ${rows - 1} ignored\\.`
+    )
+    const writes = await writesOf(page, mark, sentence)
+    expect(writes.length).toBeGreaterThanOrEqual(1)
+    await expect(surface(page)).toBeHidden()
+  })
+})
+
 test.describe('the drawing editor without a picture', () => {
   const STAR = path.join(
     process.cwd(),

@@ -42,6 +42,9 @@ import { setParameterValue } from '../../src/js/ui-generator.js';
 import { announce, announceError } from '../../src/js/announcer.js';
 import { stateManager } from '../../src/js/state.js';
 import { sampleStationPlan } from '../../src/js/tactile-map/plan.js';
+import { analyzeSvg } from '../../src/js/svg-preparer.js';
+import { ringsFromPathData } from '../../src/js/ring-geometry.js';
+import { svgToDataUrl, dataUrlToText } from '../../src/js/svg-text-encoding.js';
 
 const CONFIG = {
   mapFileParam: 'map_file',
@@ -268,9 +271,9 @@ describe('the map panel', () => {
       SETTLE
     );
     expect(
-      [...document.querySelectorAll('#tactileMapPlates input[type="radio"]')].map(
-        (r) => r.value
-      )
+      [
+        ...document.querySelectorAll('#tactileMapPlates input[type="radio"]'),
+      ].map((r) => r.value)
     ).toEqual(['whole']);
     expect(String(params().map_width_mm)).toBe('480');
     expect(files[files.length - 1].fileName).toBe('levels_whole.svg');
@@ -487,5 +490,174 @@ describe('render every plate and download', () => {
       SETTLE
     );
     expect(downloads.length).toBe(0);
+  });
+});
+
+/**
+ * A drawing at 340 x 240 mm: a 300 x 2 mm bar and a 20 x 20 mm square at
+ * its far corner, so the shapes span 300 x 200 mm.
+ */
+const DRAWING =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="340mm" height="240mm" viewBox="0 0 340 240">' +
+  '<rect x="20" y="20" width="300" height="2"/>' +
+  '<rect x="300" y="200" width="20" height="20"/>' +
+  '</svg>';
+
+/** The regions the editor's map purpose hands back for a drawing. */
+function regionsOf(svg, classes) {
+  return analyzeSvg(svg).elements.map((el, i) => ({
+    key: `shape-${i}`,
+    index: i,
+    name: `Shape ${i + 1}`,
+    class: classes[i] || 'ignore',
+    pathData: el.pathData,
+    rings: ringsFromPathData(el.pathData),
+  }));
+}
+
+describe('the drawing door', () => {
+  let editor;
+  let opens;
+
+  function mountWithDoor(options = {}) {
+    opens = [];
+    editor = {
+      open: vi.fn((svg, analysis, opts) => {
+        opens.push({ svg, analysis, options: opts });
+      }),
+      isOpen: vi.fn(() => false),
+    };
+    mount({ getEditor: vi.fn(async () => editor), ...options });
+  }
+
+  const holdDrawing = () => {
+    stateManager.setState({
+      parameters: {
+        ...params(),
+        map_file: { name: 'station.svg', data: svgToDataUrl(DRAWING) },
+      },
+    });
+  };
+
+  it('stands above the symbol buttons with its width control, never between the render button and its status', () => {
+    mountWithDoor();
+    const door = document.getElementById('tactileMapEditDrawing');
+    expect(door.textContent).toBe('Edit drawing as a map');
+    expect(door.type).toBe('button');
+    const width = document.getElementById('tactileMapDrawingWidth');
+    expect(width.type).toBe('number');
+    expect(
+      document.querySelector('label[for="tactileMapDrawingWidth"]').textContent
+    ).toBe('Drawing width (mm)');
+    expect(width.value).toBe('480');
+    const order = [
+      ...document.querySelectorAll(
+        '#tactileMapDrawingWidth, #tactileMapEditDrawing, .tactile-map-symbols, #tactileMapRenderAll, #tactileMapRenderStatus'
+      ),
+    ].map((el) => el.id || el.className);
+    expect(order).toEqual([
+      'tactileMapDrawingWidth',
+      'tactileMapEditDrawing',
+      'braille-translate-row tactile-map-symbols',
+      'tactileMapRenderAll',
+      'tactileMapRenderStatus',
+    ]);
+  });
+
+  it('opens the editor as a map on the picture in the file control, and Apply classes makes the plan', async () => {
+    mountWithDoor();
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    holdDrawing();
+    click('tactileMapEditDrawing');
+    await vi.waitFor(() => expect(opens.length).toBe(1), SETTLE);
+    const [{ svg, analysis, options }] = opens;
+    expect(svg).toBe(DRAWING);
+    expect(analysis.elements).toHaveLength(2);
+    expect(options.purpose).toBe('map');
+    expect(options.sourceName).toBe('station.svg');
+    expect(options.initialClasses).toBeNull();
+    expect(document.getElementById('tactileMapDrawingWidth').value).toBe('340');
+
+    const before = files.length;
+    options.onApply({
+      regions: regionsOf(DRAWING, { 0: 'wall', 1: 'area' }),
+      svg: DRAWING,
+    });
+    await vi.waitFor(
+      () => expect(summary()).toBe('2 plates of 151 x 202 mm, A1 to A2.'),
+      SETTLE
+    );
+    await vi.waitFor(
+      () => expect(files.length).toBeGreaterThan(before),
+      SETTLE
+    );
+    const last = files[files.length - 1];
+    expect(last.fileName).toBe('levels_whole.svg');
+    expect(last.svg).toMatch(/viewBox="0 0 302 202"/);
+    expect(last.svg).toMatch(/<g id="level3">\s*<path/);
+    expect(String(params().map_width_mm)).toBe('302');
+    expect(String(params().map_height_mm)).toBe('202');
+    expect(document.getElementById('tactileMapWarnings').children.length).toBe(
+      0
+    );
+  });
+
+  it('reopens on the drawing it kept, with the classes applied before, when the control holds the levels file', async () => {
+    mountWithDoor();
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    holdDrawing();
+    click('tactileMapEditDrawing');
+    await vi.waitFor(() => expect(opens.length).toBe(1), SETTLE);
+    opens[0].options.onApply({
+      regions: regionsOf(DRAWING, { 0: 'wall', 1: 'area' }),
+      svg: DRAWING,
+    });
+    await vi.waitFor(
+      () => expect(summary()).toBe('2 plates of 151 x 202 mm, A1 to A2.'),
+      SETTLE
+    );
+    const levels = files[files.length - 1];
+    stateManager.setState({
+      parameters: {
+        ...params(),
+        map_file: { name: levels.fileName, data: svgToDataUrl(levels.svg) },
+      },
+    });
+    click('tactileMapEditDrawing');
+    await vi.waitFor(() => expect(opens.length).toBe(2), SETTLE);
+    expect(opens[1].svg).toBe(DRAWING);
+    expect(opens[1].options.initialClasses).toEqual({ 0: 'wall', 1: 'area' });
+    expect(dataUrlToText(svgToDataUrl(levels.svg))).toBe(levels.svg);
+  });
+
+  it('says the scale when the drawing width changes, and rebuilds the plan at it', async () => {
+    mountWithDoor();
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    holdDrawing();
+    click('tactileMapEditDrawing');
+    await vi.waitFor(() => expect(opens.length).toBe(1), SETTLE);
+    opens[0].options.onApply({
+      regions: regionsOf(DRAWING, { 0: 'wall', 1: 'area' }),
+      svg: DRAWING,
+    });
+    await vi.waitFor(
+      () => expect(summary()).toBe('2 plates of 151 x 202 mm, A1 to A2.'),
+      SETTLE
+    );
+    const width = document.getElementById('tactileMapDrawingWidth');
+    width.value = '170';
+    width.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(announce).toHaveBeenCalledWith(
+      'Scale set: one drawing unit is 0.5 mm.',
+      expect.anything()
+    );
+    await vi.waitFor(
+      () =>
+        expect(summary()).toBe(
+          'One plate of 152 x 102 mm; the whole map fits.'
+        ),
+      SETTLE
+    );
+    expect(String(params().map_width_mm)).toBe('152');
   });
 });
