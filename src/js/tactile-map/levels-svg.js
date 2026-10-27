@@ -34,6 +34,7 @@ import {
   ringsFromPathData,
   ringsToPathData,
 } from '../ring-geometry.js';
+import { activeLibrary } from './symbol-library.js';
 
 /** How lines are stroked (the plan allowed offsetRing first; see above). */
 export const STROKE_METHOD = 'segments-and-discs';
@@ -128,7 +129,8 @@ export const LEVELS_BY_CLASS = {
 
 export const DEFAULT_SETTINGS = {
   classes: LEVELS_BY_CLASS,
-  symbols: BUILTIN_SYMBOLS,
+  // null means the symbol library in use (activeLibrary()).
+  symbols: null,
   symbolSizeMm: 10,
   minGapMm: 3,
   tapeWidthMm: 12.7,
@@ -442,7 +444,7 @@ const nameOf = (f) => f.name || f.id;
 export function buildLevelRings(plan, settings = {}) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
   const classes = s.classes || LEVELS_BY_CLASS;
-  const symbols = symbolMap(s.symbols || BUILTIN_SYMBOLS);
+  const symbols = symbolMap(s.symbols || activeLibrary());
   const w = plan.size.w;
   const h = plan.size.h;
   const warnings = [];
