@@ -54,7 +54,12 @@ describe('the registry is the one source the loader reads', () => {
     expect(Object.keys(PROGRAMS)).toEqual([
       'charm-customizer',
       'braille-card-customizer',
-    ]);
+      'tactile-map-designer',
+    ])
+    expect(PROGRAMS['tactile-map-designer']).toEqual({
+      label: 'Tactile Map Designer',
+      examples: ['tactile-map'],
+    });
   });
 });
 
@@ -173,7 +178,8 @@ describe('adding a tile is a one-place edit', () => {
 
   it('reports which program a shipped example belongs to', () => {
     expect(programForExample('q-charm')).toBe('charm-customizer');
-    expect(programForExample('braille-sign')).toBe('braille-card-customizer');
+    expect(programForExample('braille-sign')).toBe('braille-card-customizer')
+    expect(programForExample('tactile-map')).toBe('tactile-map-designer');
     expect(programForExample('simple-box')).toBeNull();
   });
 

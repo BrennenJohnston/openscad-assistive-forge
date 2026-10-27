@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 import path from 'path'
 
 // The welcome screen is one decluttered surface: a single "Main Page"
@@ -231,5 +232,46 @@ test.describe('the page behind the welcome surface', () => {
     const header = await page.locator('.app-header').boundingBox()
     expect(header.y, 'the header stays at the top').toBe(0)
     expect(await page.evaluate(() => window.scrollY)).toBe(0)
+  })
+})
+
+// The Tactile Map Designer card: found by its heading, clean under axe, and
+// its button opens the tile with the plates panel above the controls.
+test.describe('the Tactile Map Designer card', () => {
+  test('opens the tile from the welcome surface', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 10_000 })
+    const card = page.locator('.role-path-card', {
+      has: page.locator('.role-path-title', { hasText: 'Tactile Map Designer' }),
+    })
+    await expect(card).toHaveCount(1)
+    await expect(card.locator('.role-path-meta')).toContainText(
+      'built from my tactile station maps'
+    )
+    await expect(card.locator('.role-path-meta a')).toHaveCount(0)
+    await card.locator('summary').click()
+    await expect(card.locator('.role-path-tips li')).toHaveCount(4)
+    const select = card.locator('#tactileMapVariantSelect')
+    await expect(select).toHaveValue('tactile-map')
+    const button = card.locator('#openTactileMapBtn')
+    await expect(button).toHaveText('Open Tactile Map Designer')
+    await expect(button).toHaveAttribute('data-example', 'tactile-map')
+
+    const results = await new AxeBuilder({ page })
+      .include('#welcomeScreen')
+      .analyze()
+    expect(
+      results.violations,
+      results.violations
+        .map((v) => `${v.id}: ${v.help} (${v.nodes.length})`)
+        .join('\n')
+    ).toEqual([])
+
+    await button.click()
+    await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('#tactileMapPanel h2')).toHaveText(
+      'Tactile map plates',
+      { timeout: 15_000 }
+    )
   })
 })

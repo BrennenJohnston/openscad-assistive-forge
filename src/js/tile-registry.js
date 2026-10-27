@@ -186,6 +186,10 @@ const PROGRAMS = {
     label: 'Braille Card Designer',
     examples: ['braille-wedge-card', 'braille-charm', 'braille-sign'],
   },
+  'tactile-map-designer': {
+    label: 'Tactile Map Designer',
+    examples: ['tactile-map'],
+  },
 };
 
 /**

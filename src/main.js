@@ -9169,6 +9169,17 @@ if (rounded) {
     });
   }
 
+  // Wire the tactile map tool selector the same way (one tool today)
+  const tactileMapVariantSelect = document.getElementById(
+    'tactileMapVariantSelect'
+  );
+  const openTactileMapBtn = document.getElementById('openTactileMapBtn');
+  if (tactileMapVariantSelect && openTactileMapBtn) {
+    tactileMapVariantSelect.addEventListener('change', () => {
+      openTactileMapBtn.dataset.example = tactileMapVariantSelect.value;
+    });
+  }
+
   // =========================================
   // Deep-linking: URL parameter support for external website integration
   // Allows external sites to link directly to Forge with a specific example loaded
