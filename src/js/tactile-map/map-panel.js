@@ -14,6 +14,15 @@
  * File handed to it, as if chosen), because a file input takes no plain
  * value; the sizes go through setParameterValue like any other control.
  *
+ * Render every plate and download walks the plates in order, renders each
+ * through the app's export path (the render controller the preview
+ * controller holds, with the project's files: one engine, one render at a
+ * time) with the parameter set the plate radio would write, and offers one
+ * archive: a mesh per plate, the plan, a levels file per plate and a
+ * README. The panel's own selection and the preview are not touched, so
+ * there is nothing to restore after the loop. Cancel stops after the plate
+ * under way; a failed plate stops the loop with its message.
+ *
  * @license GPL-3.0-or-later
  */
 
@@ -24,13 +33,52 @@ import { sampleStationPlan } from './plan.js';
 import { buildLevelRings, levelsSvgFromRings } from './levels-svg.js';
 import { BED_PRESETS, planPlates, plateLevelsSvg } from './plate-tiling.js';
 import { loadSymbolLibraryFile, setLibrary } from './symbol-library.js';
+import {
+  archiveEntries,
+  levelHeights,
+  plateParameterSets,
+  readmeText,
+} from './plate-export.js';
+import { OUTPUT_FORMATS, downloadFile, projectStem } from '../download.js';
 
 const DEBOUNCE_MS = 350;
 const CUSTOM_MIN_MM = 100;
 const CUSTOM_MAX_MM = 600;
 const SOURCE = 'tactile-map';
+const PLATE_TIMEOUT_MS = 60_000;
+const ENGINE_NOT_READY =
+  'The OpenSCAD engine has not initialized yet. Please wait or refresh the page.';
 
 let panel = null;
+
+/**
+ * A render through the app's export path: the render controller the
+ * preview controller holds, the project's files and libraries, the format
+ * asked for, and a time limit per plate.
+ *
+ * @param {Function|undefined} getController - Returns the AutoPreviewController, or null
+ * @returns {(parameters: Object, options: {format: string, timeoutMs: number}) => Promise<ArrayBuffer|Uint8Array>}
+ */
+function renderThroughEngine(getController) {
+  return (parameters, { format, timeoutMs }) => {
+    const controller = getController?.();
+    const engine = controller?.renderController;
+    const state = stateManager.getState();
+    if (!engine || !state.uploadedFile?.content) {
+      return Promise.reject(new Error(ENGINE_NOT_READY));
+    }
+    return engine
+      .renderFull(state.uploadedFile.content, parameters, {
+        outputFormat: format,
+        timeoutMs,
+        paramTypes: state.paramTypes || {},
+        files: state.projectFiles,
+        mainFile: state.mainFilePath,
+        libraries: controller.enabledLibraries || [],
+      })
+      .then((result) => result.data || result.stl);
+  };
+}
 
 /**
  * Hand the tile's file control a file, as if a person had chosen it.
@@ -60,7 +108,9 @@ export function setFileThroughControl(paramName, fileName, svgText) {
  * Mount the panel for a tile whose manifest declares `tactileMap`.
  *
  * @param {{ mapFileParam: string, widthParam: string, heightParam: string, plateIdParam?: string }} config
- * @param {{ plan?: object, setFile?: Function, bedKey?: string }} [options]
+ * @param {{ plan?: object, setFile?: Function, bedKey?: string, idStyle?: string, getAutoPreviewController?: Function, render?: Function, download?: Function }} [options]
+ *   `render(parameters, { format, timeoutMs })` and `download(bytes, name,
+ *   format)` stand in for the engine and the file save in a test.
  */
 export function initMapPanel(config, options = {}) {
   destroyMapPanel();
@@ -97,6 +147,11 @@ class MapPanel {
     this.custom = { w: 256, d: 256 };
     this.plate = 'whole';
     this.idStyle = options.idStyle || 'none';
+    this.render =
+      options.render || renderThroughEngine(options.getAutoPreviewController);
+    this.download = options.download || downloadFile;
+    this.running = false;
+    this.cancelRequested = false;
     this.timer = null;
     this.layout = null;
     this.lastTape = null;
@@ -282,7 +337,162 @@ class MapPanel {
     section.appendChild(symbols);
     section.appendChild(status);
 
+    const actions = el('div', 'braille-translate-row tactile-map-actions');
+    const renderAll = el(
+      'button',
+      'btn btn-primary braille-translate-btn',
+      'Render every plate and download'
+    );
+    renderAll.type = 'button';
+    renderAll.id = 'tactileMapRenderAll';
+    renderAll.addEventListener('click', () => {
+      this.renderEveryPlate().catch((err) => {
+        this.say(err?.message || String(err), true);
+      });
+    });
+    const cancel = el(
+      'button',
+      'btn btn-secondary braille-translate-btn',
+      'Cancel'
+    );
+    cancel.type = 'button';
+    cancel.id = 'tactileMapRenderCancel';
+    cancel.hidden = true;
+    cancel.addEventListener('click', () => {
+      if (!this.running) return;
+      this.cancelRequested = true;
+      this.say('Stopping after this plate.');
+    });
+    actions.appendChild(renderAll);
+    actions.appendChild(cancel);
+    section.appendChild(actions);
+    this.refs.renderAll = renderAll;
+    this.refs.cancel = cancel;
+
+    const renderStatus = el('p', 'braille-panel-help');
+    renderStatus.id = 'tactileMapRenderStatus';
+    section.appendChild(renderStatus);
+    this.refs.renderStatus = renderStatus;
+
     return section;
+  }
+
+  /** Show a sentence under the buttons and say it once through the announcer. */
+  say(text, failed = false) {
+    if (this.refs.renderStatus) this.refs.renderStatus.textContent = text;
+    (failed ? announceError : announce)(text, { source: SOURCE });
+  }
+
+  /**
+   * Render each plate in turn and offer the archive. One render at a time,
+   * in plate order; Cancel stops after the plate under way; a failed plate
+   * stops the loop with its message, and the plates finished so far are
+   * still offered.
+   */
+  async renderEveryPlate() {
+    if (this.running || !this.layout) return;
+    const state = stateManager.getState();
+    const format = state.outputFormat === '3mf' ? '3mf' : 'stl';
+    const stem = projectStem(state.uploadedFile?.name || 'tactile_map');
+    const parameters = state.parameters || {};
+    const built = buildLevelRings(this.plan, { tapeWidthMm: this.tapeWidth() });
+    const sets = plateParameterSets({
+      rings: built.rings,
+      plates: this.layout.plates,
+      idStyle: this.idStyle,
+      config: this.config,
+      parameters,
+    });
+    const n = sets.length;
+    const { renderAll, cancel } = this.refs;
+
+    this.running = true;
+    this.cancelRequested = false;
+    renderAll.hidden = true;
+    cancel.hidden = false;
+    cancel.focus();
+
+    const rendered = [];
+    let stop = null;
+    try {
+      for (const set of sets) {
+        let bytes;
+        try {
+          bytes = await this.render(set.parameters, {
+            format,
+            timeoutMs: PLATE_TIMEOUT_MS,
+          });
+        } catch (err) {
+          stop = { error: err?.message || String(err) };
+          break;
+        }
+        rendered.push({ id: set.id, bytes });
+        this.say(`Plate ${rendered.length} of ${n} rendered.`);
+        if (this.cancelRequested) {
+          stop = {};
+          break;
+        }
+      }
+
+      let sentence;
+      if (rendered.length === 0) {
+        sentence =
+          'Stopped before the first plate finished; nothing to download.';
+      } else {
+        const fileName = `${stem}_plates.zip`;
+        const bytes = await this.buildArchive({
+          stem,
+          extension: OUTPUT_FORMATS[format]?.extension || '.stl',
+          rendered,
+          sets,
+          parameters,
+        });
+        this.download(bytes, fileName, 'zip');
+        if (stop) {
+          sentence = `Stopped after plate ${rendered.length}; the zip holds the plates finished so far.`;
+        } else if (n === 1) {
+          sentence = `The plate is in ${fileName}.`;
+        } else {
+          sentence = `All ${n} plates are in ${fileName}.`;
+        }
+      }
+      if (stop?.error) sentence += ` ${stop.error}`;
+      this.say(sentence, Boolean(stop?.error));
+    } finally {
+      this.running = false;
+      renderAll.hidden = false;
+      if (document.activeElement === cancel) renderAll.focus();
+      cancel.hidden = true;
+    }
+  }
+
+  async buildArchive({ stem, extension, rendered, sets, parameters }) {
+    const bed = this.bed();
+    const readme = readmeText({
+      mapName:
+        String(parameters.title_text || '').trim() ||
+        this.plan.meta?.title ||
+        stem,
+      bedName:
+        this.bedKey === 'custom' ? `custom ${bed.w} x ${bed.d} mm` : bed.name,
+      layout: this.layout,
+      size: this.plan.size,
+      heights: levelHeights(parameters),
+      tapeWidthMm: this.tapeWidth(),
+    });
+    const { default: JSZip } = await import('jszip');
+    const zip = new JSZip();
+    for (const entry of archiveEntries({
+      stem,
+      extension,
+      rendered,
+      sets,
+      plan: this.plan,
+      readme,
+    })) {
+      zip.file(entry.name, entry.data);
+    }
+    return zip.generateAsync({ type: 'uint8array' });
   }
 
   schedule(delay = DEBOUNCE_MS) {

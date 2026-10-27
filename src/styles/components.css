@@ -16495,7 +16495,8 @@ body.tutorial-body-locked {
   display: none;
 }
 
-.tactile-map-symbols {
+.tactile-map-symbols,
+.tactile-map-actions {
   flex-wrap: wrap;
 }
 

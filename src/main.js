@@ -6190,10 +6190,10 @@ async function initApp() {
       // Only parameters the user actually changed travel as -D.
       // Everything else follows the SCAD source's own declarations, which is
       // what lets an edited default take effect at all.
-      renderController.setWithheldDefineKeyResolver(() => {
+      renderController.setWithheldDefineKeyResolver((rendering) => {
         const defineState = stateManager.getState();
         return collectWithheldDefineKeys({
-          parameters: defineState.parameters || {},
+          parameters: rendering || defineState.parameters || {},
           defaults: defineState.defaults || {},
           schemaNames: Object.keys(defineState.schema?.parameters || {}),
         });

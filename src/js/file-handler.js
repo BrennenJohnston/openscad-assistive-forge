@@ -1103,7 +1103,7 @@ export function initFileHandler({
       destroyMapPanel();
       if (pendingMapConfig) {
         try {
-          initMapPanel(pendingMapConfig);
+          initMapPanel(pendingMapConfig, { getAutoPreviewController });
         } catch (mapError) {
           console.error(
             '[TactileMap] Failed to initialize the plates panel:',
