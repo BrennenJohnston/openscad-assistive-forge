@@ -12,7 +12,7 @@
  * @license GPL-3.0-or-later
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('../../src/js/focus-trap.js', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -21,22 +21,22 @@ vi.mock('../../src/js/focus-trap.js', async (importOriginal) => ({
     deactivate: vi.fn(),
     isActive: vi.fn(() => false),
   })),
-}))
+}));
 vi.mock('../../src/js/announcer.js', () => ({
   announce: vi.fn(),
   POLITENESS: { POLITE: 'polite', ASSERTIVE: 'assertive' },
-}))
+}));
 vi.mock('../../src/js/feature-flags.js', () => ({
   isEnabled: vi.fn(() => false),
-}))
+}));
 
-import { createDrawingEditor } from '../../src/js/drawing-editor/surface.js'
-import { EDITOR_STRINGS as S } from '../../src/js/drawing-editor/strings.js'
-import { analyzeSvg } from '../../src/js/svg-preparer.js'
+import { createDrawingEditor } from '../../src/js/drawing-editor/surface.js';
+import { EDITOR_STRINGS as S } from '../../src/js/drawing-editor/strings.js';
+import { analyzeSvg } from '../../src/js/svg-preparer.js';
 import {
   MAP_CLASSES,
   MAP_CLASS_KEYS,
-} from '../../src/js/tactile-map/map-classes.js'
+} from '../../src/js/tactile-map/map-classes.js';
 
 /** Three circles in a row: enough rows to delete one and keep the rest. */
 const THREE =
@@ -44,49 +44,50 @@ const THREE =
   '<circle cx="50" cy="50" r="10" fill="black"/>' +
   '<circle cx="90" cy="50" r="10" fill="black"/>' +
   '<circle cx="130" cy="50" r="10" fill="black"/>' +
-  '</svg>'
+  '</svg>';
 
-let surface
-let announce
-let editor
-let onApply
+let surface;
+let announce;
+let editor;
+let onApply;
 
-const rows = () => [...surface.querySelectorAll('.svg-prep-object')]
-const selectOf = (i) => rows()[i].querySelector('.drawing-editor-class-select')
+const rows = () => [...surface.querySelectorAll('.svg-prep-object')];
+const selectOf = (i) => rows()[i].querySelector('.drawing-editor-class-select');
 const choose = (i, value) => {
-  const select = selectOf(i)
-  select.value = value
-  select.dispatchEvent(new Event('change', { bubbles: true }))
-}
-const status = () => surface.querySelector('.drawing-editor-status').textContent
-const applyButton = () => surface.querySelector('.drawing-editor-apply')
+  const select = selectOf(i);
+  select.value = value;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+};
+const status = () =>
+  surface.querySelector('.drawing-editor-status').textContent;
+const applyButton = () => surface.querySelector('.drawing-editor-apply');
 
 function openMap(extra = {}) {
-  onApply = vi.fn()
+  onApply = vi.fn();
   editor.open(THREE, analyzeSvg(THREE), {
     purpose: 'map',
     onApply,
     onKeepOriginal: vi.fn(),
     ...extra,
-  })
+  });
 }
 
 beforeEach(() => {
-  surface = document.createElement('div')
-  surface.id = 'drawingEditorSurface'
-  surface.hidden = true
-  document.body.appendChild(surface)
-  announce = vi.fn()
-  editor = createDrawingEditor({ surfaceEl: surface, announce })
-  vi.clearAllMocks()
-})
+  surface = document.createElement('div');
+  surface.id = 'drawingEditorSurface';
+  surface.hidden = true;
+  document.body.appendChild(surface);
+  announce = vi.fn();
+  editor = createDrawingEditor({ surfaceEl: surface, announce });
+  vi.clearAllMocks();
+});
 
 afterEach(() => {
-  document.body.innerHTML = ''
-})
+  document.body.innerHTML = '';
+});
 
 describe('the class table', () => {
-  it('lists the fourteen classes and Ignore last, each with a kind, a name and a source', () => {
+  it('lists the fifteen classes and Ignore last, each with a kind, a name and a source', () => {
     expect(MAP_CLASS_KEYS).toEqual([
       'wall',
       'curb',
@@ -102,17 +103,20 @@ describe('the class table', () => {
       'landmark',
       'you-are-here',
       'transit-stop',
+      'text',
       'ignore',
-    ])
+    ]);
     for (const row of MAP_CLASSES) {
-      expect(row.name).toBeTruthy()
-      expect(['line', 'area', 'point', 'ignore']).toContain(row.kind)
-      expect(row.source).toBeTruthy()
+      expect(row.name).toBeTruthy();
+      expect(['line', 'area', 'point', 'ignore']).toContain(row.kind);
+      expect(row.source).toBeTruthy();
       if (row.kind === 'line') {
-        expect(row.widthMm).toBeGreaterThan(0)
-        expect(['solid', 'dotted', 'dashed', 'double', 'ticks']).toContain(row.style)
+        expect(row.widthMm).toBeGreaterThan(0);
+        expect(['solid', 'dotted', 'dashed', 'double', 'ticks']).toContain(
+          row.style
+        );
       }
-      if (row.kind === 'point') expect(row.symbolKey).toBeTruthy()
+      if (row.kind === 'point') expect(row.symbolKey).toBeTruthy();
     }
     expect(MAP_CLASSES.map((c) => c.name)).toEqual([
       'Wall',
@@ -129,138 +133,177 @@ describe('the class table', () => {
       'Landmark',
       'You are here',
       'Transit stop',
+      'Text',
       'Ignore',
-    ])
-  })
-})
+    ]);
+    // Drawn words are areas one symbol step above the floor they sit on:
+    // the title's own raise with the defaults, the symbol level.
+    const text = MAP_CLASSES.find((c) => c.key === 'text');
+    expect(text.kind).toBe('area');
+    expect(text.level).toBe(2);
+  });
+});
 
 describe('the map purpose', () => {
   it('shows a Class menu on every row, headed Class, with no role switches, and starts at Ignore', () => {
-    openMap()
-    expect(surface.querySelector('.drawing-editor').dataset.purpose).toBe('map')
-    expect(surface.querySelector('.drawing-editor-class-heading').textContent).toBe(S.colClass)
-    expect(surface.querySelector('.drawing-editor-class-heading').hidden).toBe(false)
-    expect(rows()).toHaveLength(3)
+    openMap();
+    expect(surface.querySelector('.drawing-editor').dataset.purpose).toBe(
+      'map'
+    );
+    expect(
+      surface.querySelector('.drawing-editor-class-heading').textContent
+    ).toBe(S.colClass);
+    expect(surface.querySelector('.drawing-editor-class-heading').hidden).toBe(
+      false
+    );
+    expect(rows()).toHaveLength(3);
     for (const row of rows()) {
-      expect(row.querySelector('.svg-prep-role-group').hidden).toBe(true)
-      const select = row.querySelector('.drawing-editor-class-select')
-      expect(select).not.toBeNull()
-      expect([...select.options].map((o) => o.value)).toEqual(MAP_CLASS_KEYS)
-      expect(select.options[select.options.length - 1].textContent).toBe('Ignore')
-      expect(select.value).toBe('ignore')
+      expect(row.querySelector('.svg-prep-role-group').hidden).toBe(true);
+      const select = row.querySelector('.drawing-editor-class-select');
+      expect(select).not.toBeNull();
+      expect([...select.options].map((o) => o.value)).toEqual(MAP_CLASS_KEYS);
+      expect(select.options[select.options.length - 1].textContent).toBe(
+        'Ignore'
+      );
+      expect(select.value).toBe('ignore');
     }
-    expect(selectOf(0).getAttribute('aria-label')).toBe(S.classFor('Circle 1 (r=10)'))
+    expect(selectOf(0).getAttribute('aria-label')).toBe(
+      S.classFor('Circle 1 (r=10)')
+    );
     // The stencil's furniture stays away, and the workspace's Apply (the
     // flatten) gives way to the map's own.
-    expect(surface.querySelector('details[data-section="colours"]').hidden).toBe(true)
-    expect(surface.querySelector('.drawing-editor-regions').hidden).toBe(true)
-    expect(surface.querySelector('.drawing-editor-shapes').hidden).toBe(false)
-    expect(applyButton().hidden).toBe(false)
-    expect(applyButton().textContent).toBe(S.applyClasses)
-    expect(surface.querySelector('.svg-prep-footer [data-action="apply"]').hidden).toBe(true)
-    expect(editor.getMapClasses()).toEqual({})
-  })
+    expect(
+      surface.querySelector('details[data-section="colours"]').hidden
+    ).toBe(true);
+    expect(surface.querySelector('.drawing-editor-regions').hidden).toBe(true);
+    expect(surface.querySelector('.drawing-editor-shapes').hidden).toBe(false);
+    expect(applyButton().hidden).toBe(false);
+    expect(applyButton().textContent).toBe(S.applyClasses);
+    expect(
+      surface.querySelector('.svg-prep-footer [data-action="apply"]').hidden
+    ).toBe(true);
+    expect(editor.getMapClasses()).toEqual({});
+  });
 
   it('choosing Wall on a row and applying hands back that shape with class wall and its rings, and says the plan', async () => {
-    openMap()
-    choose(0, 'wall')
-    expect(editor.getMapClasses()).toEqual({ 0: 'wall' })
-    applyButton().click()
-    await vi.waitFor(() => expect(onApply).toHaveBeenCalledTimes(1))
-    const plan = onApply.mock.calls[0][0]
-    expect(plan.regions).toHaveLength(3)
+    openMap();
+    choose(0, 'wall');
+    expect(editor.getMapClasses()).toEqual({ 0: 'wall' });
+    applyButton().click();
+    await vi.waitFor(() => expect(onApply).toHaveBeenCalledTimes(1));
+    const plan = onApply.mock.calls[0][0];
+    expect(plan.regions).toHaveLength(3);
     expect(plan.regions.map((r) => [r.key, r.class])).toEqual([
       ['shape-0', 'wall'],
       ['shape-1', 'ignore'],
       ['shape-2', 'ignore'],
-    ])
-    expect(plan.regions[0].name).toBe('Circle 1 (r=10)')
-    expect(plan.regions[0].rings.length).toBeGreaterThanOrEqual(1)
-    expect(plan.regions[0].rings[0].length).toBeGreaterThan(8)
+    ]);
+    expect(plan.regions[0].name).toBe('Circle 1 (r=10)');
+    expect(plan.regions[0].rings.length).toBeGreaterThanOrEqual(1);
+    expect(plan.regions[0].rings[0].length).toBeGreaterThan(8);
     expect(plan.regions[0].rings[0][0]).toEqual(
       expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) })
-    )
+    );
     // Said by the host's announcer as the editor goes, under a source of its
     // own, so the preview's sentence on the close is said beside it rather
     // than in its place.
     expect(announce).toHaveBeenCalledWith(
       S.mapApplied(1, 2),
       expect.objectContaining({ source: 'drawing-editor' })
-    )
-    expect(S.mapApplied(1, 2)).toBe('Map plan updated: 1 feature, 2 ignored.')
-    expect(S.mapApplied(2, 0)).toBe('Map plan updated: 2 features, 0 ignored.')
-    expect(surface.hidden).toBe(true)
-  })
+    );
+    expect(S.mapApplied(1, 2)).toBe('Map plan updated: 1 feature, 2 ignored.');
+    expect(S.mapApplied(2, 0)).toBe('Map plan updated: 2 features, 0 ignored.');
+    expect(surface.hidden).toBe(true);
+  });
 
   it('a class change is undoable: Undo puts Ignore back and says so, Redo says what came back', () => {
-    openMap()
-    choose(1, 'route')
-    expect(selectOf(1).value).toBe('route')
-    const undo = surface.querySelector('.drawing-editor-history [data-action="undo"]')
-    expect(undo.disabled).toBe(false)
-    undo.click()
-    expect(selectOf(1).value).toBe('ignore')
-    expect(editor.getMapClasses()).toEqual({})
-    expect(status()).toBe(S.classReverted('Circle 2 (r=10)', 'Ignore'))
+    openMap();
+    choose(1, 'route');
+    expect(selectOf(1).value).toBe('route');
+    const undo = surface.querySelector(
+      '.drawing-editor-history [data-action="undo"]'
+    );
+    expect(undo.disabled).toBe(false);
+    undo.click();
+    expect(selectOf(1).value).toBe('ignore');
+    expect(editor.getMapClasses()).toEqual({});
+    expect(status()).toBe(S.classReverted('Circle 2 (r=10)', 'Ignore'));
     expect(S.classReverted('Circle 2 (r=10)', 'Ignore')).toBe(
       'Class of Circle 2 (r=10) back to Ignore.'
-    )
-    surface.querySelector('.drawing-editor-history [data-action="redo"]').click()
-    expect(selectOf(1).value).toBe('route')
-    expect(status()).toBe(S.redone(S.labelSetClass('Circle 2 (r=10)', 'Route')))
-  })
+    );
+    surface
+      .querySelector('.drawing-editor-history [data-action="redo"]')
+      .click();
+    expect(selectOf(1).value).toBe('route');
+    expect(status()).toBe(
+      S.redone(S.labelSetClass('Circle 2 (r=10)', 'Route'))
+    );
+  });
 
   it('Ctrl+Z inside the editor undoes a class and never reaches the page', () => {
-    openMap()
-    choose(2, 'area')
-    const heardOutside = vi.fn()
-    document.addEventListener('keydown', heardOutside)
+    openMap();
+    choose(2, 'area');
+    const heardOutside = vi.fn();
+    document.addEventListener('keydown', heardOutside);
     selectOf(2).dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true })
-    )
-    expect(selectOf(2).value).toBe('ignore')
-    expect(heardOutside).not.toHaveBeenCalled()
-    document.removeEventListener('keydown', heardOutside)
-  })
+      new KeyboardEvent('keydown', {
+        key: 'z',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    expect(selectOf(2).value).toBe('ignore');
+    expect(heardOutside).not.toHaveBeenCalled();
+    document.removeEventListener('keydown', heardOutside);
+  });
 
   it('a deleted row shifts nothing: the classes travel with the original index', async () => {
-    openMap()
-    choose(1, 'route')
-    choose(2, 'stairs')
-    rows()[0].querySelector('[data-delete-index="0"]').click()
-    await vi.waitFor(() => expect(rows()).toHaveLength(2))
-    expect(selectOf(0).value).toBe('route')
-    expect(selectOf(1).value).toBe('stairs')
-    expect(editor.getMapClasses()).toEqual({ 1: 'route', 2: 'stairs' })
-    applyButton().click()
-    await vi.waitFor(() => expect(onApply).toHaveBeenCalledTimes(1))
-    expect(onApply.mock.calls[0][0].regions.map((r) => [r.key, r.class])).toEqual([
+    openMap();
+    choose(1, 'route');
+    choose(2, 'stairs');
+    rows()[0].querySelector('[data-delete-index="0"]').click();
+    await vi.waitFor(() => expect(rows()).toHaveLength(2));
+    expect(selectOf(0).value).toBe('route');
+    expect(selectOf(1).value).toBe('stairs');
+    expect(editor.getMapClasses()).toEqual({ 1: 'route', 2: 'stairs' });
+    applyButton().click();
+    await vi.waitFor(() => expect(onApply).toHaveBeenCalledTimes(1));
+    expect(
+      onApply.mock.calls[0][0].regions.map((r) => [r.key, r.class])
+    ).toEqual([
       ['shape-1', 'route'],
       ['shape-2', 'stairs'],
-    ])
-  })
+    ]);
+  });
 
   it('a saved set of classes comes back onto the rows', () => {
-    openMap({ initialClasses: { 2: 'entrance' } })
-    expect(selectOf(2).value).toBe('entrance')
-    expect(selectOf(0).value).toBe('ignore')
-  })
+    openMap({ initialClasses: { 2: 'entrance' } });
+    expect(selectOf(2).value).toBe('entrance');
+    expect(selectOf(0).value).toBe('ignore');
+  });
 
   it('leaves the relief purpose as it was: role switches, no class menus', () => {
-    openMap()
-    editor.dismiss()
+    openMap();
+    editor.dismiss();
     editor.open(THREE, analyzeSvg(THREE), {
       purpose: 'relief',
       onApply: vi.fn(),
       onKeepOriginal: vi.fn(),
-    })
-    expect(surface.querySelector('.drawing-editor').dataset.purpose).toBe('relief')
-    expect(surface.querySelectorAll('.drawing-editor-class-select')).toHaveLength(0)
-    expect(surface.querySelector('.drawing-editor-class-heading').hidden).toBe(true)
+    });
+    expect(surface.querySelector('.drawing-editor').dataset.purpose).toBe(
+      'relief'
+    );
+    expect(
+      surface.querySelectorAll('.drawing-editor-class-select')
+    ).toHaveLength(0);
+    expect(surface.querySelector('.drawing-editor-class-heading').hidden).toBe(
+      true
+    );
     for (const row of rows()) {
-      expect(row.querySelector('.svg-prep-role-group').hidden).toBe(false)
+      expect(row.querySelector('.svg-prep-role-group').hidden).toBe(false);
     }
-    expect(applyButton().hidden).toBe(true)
-    expect(editor.getMapClasses()).toBeNull()
-  })
-})
+    expect(applyButton().hidden).toBe(true);
+    expect(editor.getMapClasses()).toBeNull();
+  });
+});

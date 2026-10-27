@@ -147,6 +147,14 @@ export const MAP_CLASSES = Object.freeze([
     source: 'BANA 2022 8.5.4: a filled square with a notch',
   },
   {
+    key: 'text',
+    name: 'Text',
+    kind: 'area',
+    level: 2,
+    source:
+      'ADA 703.2: raised characters at least 0.8 mm above their surface; my printed station maps raise their words one symbol step above the floor they stand on, the symbol level',
+  },
+  {
     key: 'ignore',
     name: 'Ignore',
     kind: 'ignore',
@@ -168,9 +176,11 @@ export function mapClass(key) {
 
 /**
  * The table in the shape the levels builder reads: one entry per class
- * with its kind, level, width, style and symbol, plus the two kinds of
- * feature a plan carries that are not classes a shape takes (a label
- * channel and raised text).
+ * with its kind, level, width, style and symbol, plus the one kind of
+ * feature a plan carries that is not a class a shape takes (a label
+ * channel). A drawn word is the Text class: an area on the symbol level,
+ * its counters the holes the plan keeps; a typed word (the plan's text
+ * kind) is drawn by the tile itself and reads no class.
  *
  * @returns {Record<string, {kind: string, level?: number, width?: number, style?: string, symbol?: string}>}
  */
@@ -185,6 +195,5 @@ export function levelsByClass() {
     out[c.key] = row;
   }
   out.channel = { kind: 'channel' };
-  out.text = { kind: 'text' };
   return out;
 }

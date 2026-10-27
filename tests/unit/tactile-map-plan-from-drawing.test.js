@@ -30,6 +30,7 @@ import {
   scaleSentence,
 } from '../../src/js/tactile-map/plan-from-drawing.js';
 import { validatePlan } from '../../src/js/tactile-map/plan.js';
+import { buildLevelRings } from '../../src/js/tactile-map/levels-svg.js';
 
 /**
  * A drawing at 480 x 360 units, one unit a millimeter: a 100 x 2 bar, a
@@ -231,6 +232,22 @@ describe('a plan from a drawing', () => {
         maxY: 98,
       });
       expect(validatePlan(plan).ok).toBe(true);
+    }
+  });
+
+  it('turns a drawn letter classed Text into an area with its counter open, on the symbol level', () => {
+    for (const classes of [{ 4: 'text', 5: 'text' }, { 4: 'text' }]) {
+      const { plan, warnings } = build(DRAWING, classes);
+      expect(warnings).toEqual([]);
+      expect(plan.features).toHaveLength(1);
+      const [word] = plan.features;
+      expect(word.kind).toBe('area');
+      expect(word.class).toBe('text');
+      expect(word.holes).toHaveLength(1);
+      expect(validatePlan(plan).ok).toBe(true);
+      const { rings } = buildLevelRings(plan);
+      expect(rings.level1).toEqual([]);
+      expect(rings.level2).toHaveLength(2);
     }
   });
 

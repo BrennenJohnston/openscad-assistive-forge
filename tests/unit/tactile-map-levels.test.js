@@ -21,6 +21,7 @@ import {
   strokePolyline,
   STROKE_METHOD,
   BUILTIN_SYMBOLS,
+  LEVELS_BY_CLASS,
 } from '../../src/js/tactile-map/levels-svg.js';
 import { offsetRing } from '../../src/js/svg-offset.js';
 import { regionArea, ringsFromPathData } from '../../src/js/ring-geometry.js';
@@ -194,6 +195,40 @@ describe('the levels file', () => {
     const d = pathDataOf(groupsOf(svg).level1);
     expect((d.match(/M /g) || []).length).toBe(2);
     expect(regionArea(ringsFromPathData(d))).toBeCloseTo(9600, 0);
+  });
+
+  it('raises a drawn word, classed Text, to the symbol level with its counters open', () => {
+    expect(LEVELS_BY_CLASS.text).toEqual({ kind: 'area', level: 2 });
+    const plan = emptyPlan(480, 360);
+    plan.features.push({
+      id: 'letter-o',
+      class: 'text',
+      kind: 'area',
+      ring: [
+        [100, 100],
+        [116, 100],
+        [116, 120],
+        [100, 120],
+      ],
+      holes: [
+        [
+          [104, 104],
+          [112, 104],
+          [112, 116],
+          [104, 116],
+        ],
+      ],
+      on: true,
+    });
+    const { rings, warnings } = buildLevelRings(plan);
+    expect(warnings).toEqual([]);
+    expect(rings.level1).toEqual([]);
+    expect(rings.level2).toHaveLength(2);
+    const areas = rings.level2
+      .map((r) => regionArea([r]))
+      .sort((a, b) => a - b);
+    expect(Math.abs(areas[0] + 96)).toBeLessThan(1);
+    expect(Math.abs(areas[1] - 320)).toBeLessThan(1);
   });
 
   it('draws a 10 mm triangle within 2 percent of 43.3 square millimeters', () => {
