@@ -290,6 +290,21 @@ export const EDITOR_STRINGS = Object.freeze({
   labelRemoveMany: (n) => `${count(n, 'region', 'regions')} removed`,
   labelRestore: (name) => `${name} put back`,
 
+  // ── The map purpose ────────────────────────────────────────────────────
+  /** The column's name, above the shapes list. A11Y. */
+  colClass: 'Class',
+  /** The menu's name: the row's name is visible, the menu needs its own. A11Y. */
+  classFor: (name) => `Class for ${name}`,
+  /** The map purpose's Apply: the classes go with the drawing's shapes. */
+  applyClasses: 'Apply classes',
+  /** Said as the plan leaves the editor. A11Y (two shapes). */
+  mapApplied: (n, m) =>
+    `Map plan updated: ${count(n, 'feature', 'features')}, ${m} ignored.`,
+  /** After Undo takes a class back. A11Y. */
+  classReverted: (name, cls) => `Class of ${name} back to ${cls}.`,
+  /** The command label, heard again on redo. */
+  labelSetClass: (name, cls) => `${name} set to ${cls}`,
+
   // ── The colors section ────────────────────────────────────────────────
   /** How many regions a swatch is on (two shapes). */
   usedBy: (n) => `used by ${count(n, 'region', 'regions')}`,

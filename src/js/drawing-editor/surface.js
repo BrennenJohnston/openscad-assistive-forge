@@ -34,6 +34,14 @@
  *            keys, and an Undo that says what came back. The two are one
  *            selection: ticking a row and clicking a region do the same
  *            thing by the same path.
+ *   map      the Tactile Map Designer: every shape of a line drawing gets a
+ *            class from the map's class table (map-classes.js), in a menu on
+ *            its row where the role switches stand for the relief purpose.
+ *            The class lives beside the workspace, keyed by the shape's
+ *            ORIGINAL index like the roles are: a column of the workspace's
+ *            own row model would have to ride its saved choices key, which
+ *            is a persistence change. Apply hands the host every surviving
+ *            shape with its class and its rings.
  *
  * This file is `surface.js` and not `index.js` for a reason that is worth a
  * line: a chunk is named after its module, and an `index.js` here becomes an
@@ -52,6 +60,7 @@ import { createCropPanel } from './crop-panel.js';
 import { readDrawingBox } from '../image-crop.js';
 import { createCommandStack } from './undo.js';
 import { createRegionCanvas, TOOLS } from './canvas.js';
+import { MAP_CLASSES } from '../tactile-map/map-classes.js';
 
 /** The color engine, loaded once, on the first stencil open. */
 let enginePromise = null;
@@ -756,12 +765,18 @@ export function createDrawingEditor({
       ? new ResizeObserver(() => syncToolbarBand())
       : null;
   bandObserver?.observe(root);
+  // The map purpose's column name, above the list the menus sit in.
+  const classHeading = document.createElement('p');
+  classHeading.className = 'drawing-editor-class-heading';
+  classHeading.textContent = S.colClass;
+  classHeading.hidden = true;
   const shapesBlock = document.createElement('div');
   shapesBlock.className = 'drawing-editor-shapes';
   shapesBlock.append(
     refs.thinNotice,
     refs.layerSummary,
     refs.bulkBar,
+    classHeading,
     refs.objects
   );
   sections.regions.content.append(shapesBlock, regionsBlock);
@@ -819,6 +834,11 @@ export function createDrawingEditor({
   let empty = false;
   let chooseFile = null;
   let purpose = 'relief';
+  // The map purpose's state: a class per shape, keyed by the shape's
+  // ORIGINAL index (the numbering the workspace's roles travel in, the only
+  // one that survives a delete), and the elements the drawing was read into.
+  const mapClasses = new Map();
+  let mapElements = [];
   /** 'drawing' or 'charm'. Back to the drawing on every open. */
   let view = 'drawing';
   /** Whether the drawer was open when the charm view closed it. */
@@ -837,6 +857,16 @@ export function createDrawingEditor({
   let selected = new Set();
   const rows = new Map();
   const stack = createCommandStack({ onChange: updateHistoryButtons });
+  // The workspace rebuilds its rows on a delete and on its undo, menus and
+  // switches with them, so the map purpose's menus are put back whenever
+  // the list changes under it.
+  const rowsObserver =
+    typeof MutationObserver === 'function'
+      ? new MutationObserver(() => {
+          if (isOpen && purpose === 'map') ensureClassSelects();
+        })
+      : null;
+  rowsObserver?.observe(refs.objects, { childList: true });
   // The view: the plan or the original, and which plate, if any.
   let showingOriginal = false;
   let plateIndex = -1;
@@ -1028,6 +1058,7 @@ export function createDrawingEditor({
       purpose: askedPurpose,
       openedSentence,
       initialPlan: savedPlan,
+      initialClasses: savedClasses = null,
       startInCropView = false,
       pictureHref = null,
       pictureBox = null,
@@ -1035,7 +1066,12 @@ export function createDrawingEditor({
     } = options;
     const reopening = isOpen;
     callbacks = rest;
-    purpose = askedPurpose === 'stencil' ? 'stencil' : 'relief';
+    purpose =
+      askedPurpose === 'stencil'
+        ? 'stencil'
+        : askedPurpose === 'map'
+          ? 'map'
+          : 'relief';
     root.dataset.purpose = purpose;
     // Every open starts on the drawing. A re-trace calls open() on an
     // editor that is already up, and coming back to a charm view of a drawing
@@ -1096,7 +1132,14 @@ export function createDrawingEditor({
       syncCrop();
       setCount('warnings', analysis?.warnings?.length || null);
 
-      if (purpose === 'stencil') {
+      if (purpose === 'map') {
+        mapElements = analysis?.elements || [];
+        mapClasses.clear();
+        seedClasses(savedClasses);
+        ensureClassSelects();
+        setCount('regions', mapElements.length);
+        say(openedSentence || S.opened);
+      } else if (purpose === 'stencil') {
         setCount('regions', null);
         setCount('colours', null);
         setCount('plates', null);
@@ -1249,9 +1292,11 @@ export function createDrawingEditor({
   /** Show what this purpose needs and nothing it does not. */
   function applyPurpose() {
     const stencil = purpose === 'stencil';
+    const map = purpose === 'map';
     // The picture is the editor. The stencil purpose starts with the drawer
     // closed - the canvas and the paint tools carry the task; the relief
-    // purpose starts with it open - the shape list is the hands.
+    // purpose starts with it open - the shape list is the hands, and the
+    // map purpose's menus live in that same list.
     //
     // Except on a narrow screen. There the panel is not a strip beside the
     // drawing, it is a drawer laid over it: 396 px of a 412 px screen. Open,
@@ -1265,13 +1310,16 @@ export function createDrawingEditor({
     sections.plates.details.hidden = !stencil;
     regionsBlock.hidden = !stencil;
     shapesBlock.hidden = stencil;
+    classHeading.hidden = !map;
     stencilTools.hidden = !stencil;
     viewGroup.hidden = !stencil;
     zoomGroup.hidden = !stencil;
-    historyGroup.hidden = !stencil;
+    // Undo and Redo belong to the two purposes with a command stack.
+    historyGroup.hidden = !(stencil || map);
     canvas.root.hidden = !stencil;
     legend.hidden = !stencil;
-    applyBtn.hidden = !stencil;
+    applyBtn.hidden = !(stencil || map);
+    applyBtn.textContent = map ? S.applyClasses : S.applyColours;
     // The word follows the purpose too. A region is a thing the stencil lane
     // cuts and paints; what somebody is looking at on a charm is a shape, which
     // is already the word the rows and counts use.
@@ -1285,20 +1333,27 @@ export function createDrawingEditor({
     }
     // Roles, offsets, the design width and the before/after panes are the
     // relief purpose's vocabulary: a stencil region has a color, not a
-    // role, and the plate's size is a parameter beside the editor.
-    refs.rolesToggleBtn.hidden = stencil;
+    // role, a map shape has a class, and the plate's size is a parameter
+    // beside the editor.
+    refs.rolesToggleBtn.hidden = stencil || map;
     refs.compareBtn.hidden = stencil;
-    refs.designWidthGroup.hidden = stencil || refs.designWidthGroup.hidden;
-    refs.legendRow.hidden = stencil || refs.legendRow.hidden;
+    refs.designWidthGroup.hidden =
+      stencil || map || refs.designWidthGroup.hidden;
+    refs.legendRow.hidden = stencil || map || refs.legendRow.hidden;
     refs.previews.hidden = stencil;
-    // The stencil purpose applies its plan with its own button; the
-    // workspace's Apply, Save and Reset act on the flatten, which the plates
-    // do not use.
-    refs.applyBtn.hidden = stencil || refs.applyBtn.hidden;
-    refs.applyHint.hidden = stencil || refs.applyHint.hidden;
-    refs.saveBtn.hidden = stencil || refs.saveBtn.hidden;
-    refs.saveDxfBtn.hidden = stencil || refs.saveDxfBtn.hidden;
-    refs.resetBtn.hidden = stencil;
+    // The stencil and map purposes apply their plan with their own button;
+    // the workspace's Apply, Save and Reset act on the flatten, which
+    // neither uses.
+    refs.applyBtn.hidden = stencil || map || refs.applyBtn.hidden;
+    refs.applyHint.hidden = stencil || map || refs.applyHint.hidden;
+    refs.saveBtn.hidden = stencil || map || refs.saveBtn.hidden;
+    refs.saveDxfBtn.hidden = stencil || map || refs.saveDxfBtn.hidden;
+    refs.resetBtn.hidden = stencil || map;
+    if (!map) {
+      mapClasses.clear();
+      mapElements = [];
+      removeClassSelects();
+    }
     if (!stencil) {
       regionsBlock.replaceChildren();
       swatchList.replaceChildren();
@@ -1824,7 +1879,7 @@ export function createDrawingEditor({
 
   function undo() {
     const cmd = stack.undo();
-    say(cmd ? S.undone(cmd.label) : S.nothingToUndo);
+    say(cmd ? cmd.undoSentence || S.undone(cmd.label) : S.nothingToUndo);
   }
 
   function redo() {
@@ -1852,6 +1907,155 @@ export function createDrawingEditor({
     canvas.setTool(id);
     for (const [tool, el] of toolButtons) {
       el.setAttribute('aria-pressed', String(tool === canvas.getTool()));
+    }
+  }
+
+  // ── The map purpose ─────────────────────────────────────────────────────
+
+  /** Each live row's original index, in row order. */
+  function originalIndices() {
+    const deleted = new Set(workspace.getDeletedIndices());
+    const out = [];
+    for (let i = 0; i < mapElements.length; i++) {
+      if (!deleted.has(i)) out.push(i);
+    }
+    return out;
+  }
+
+  const className = (key) =>
+    MAP_CLASSES.find((c) => c.key === key)?.name || key;
+
+  /** A saved set of classes, by original index, laid back over the shapes. */
+  function seedClasses(saved) {
+    if (!saved || typeof saved !== 'object') return;
+    for (const [index, key] of Object.entries(saved)) {
+      const i = Number(index);
+      if (!Number.isInteger(i) || key === 'ignore') continue;
+      if (MAP_CLASSES.some((c) => c.key === key)) mapClasses.set(i, key);
+    }
+  }
+
+  function rowNameOf(item, live) {
+    return (
+      item?.querySelector('.svg-prep-object-name')?.textContent ||
+      `Shape ${live + 1}`
+    );
+  }
+
+  /** The Class menu on every row that lacks one, the role switches hidden. */
+  function ensureClassSelects() {
+    const originals = originalIndices();
+    refs.objects.querySelectorAll('.svg-prep-object').forEach((item) => {
+      const live = parseInt(item.dataset.index, 10);
+      const orig = originals[live];
+      if (!Number.isInteger(orig)) return;
+      const roleGroup = item.querySelector('.svg-prep-role-group');
+      if (roleGroup) roleGroup.hidden = true;
+      let select = item.querySelector('.drawing-editor-class-select');
+      if (!select) {
+        select = document.createElement('select');
+        select.className = 'drawing-editor-class-select';
+        for (const c of MAP_CLASSES) {
+          const opt = document.createElement('option');
+          opt.value = c.key;
+          opt.textContent = c.name;
+          select.appendChild(opt);
+        }
+        select.addEventListener('change', () => {
+          const at = parseInt(select.dataset.original, 10);
+          if (Number.isInteger(at)) setClass(at, select.value);
+        });
+        // Where the role switches stand: before them, at the row's trailing
+        // edge, ahead of the row's More.
+        const before = roleGroup || item.querySelector('.svg-prep-more-btn');
+        if (before) item.insertBefore(select, before);
+        else item.appendChild(select);
+      }
+      select.dataset.original = String(orig);
+      select.setAttribute('aria-label', S.classFor(rowNameOf(item, live)));
+      select.value = mapClasses.get(orig) || 'ignore';
+    });
+  }
+
+  function removeClassSelects() {
+    refs.objects
+      .querySelectorAll('.drawing-editor-class-select')
+      .forEach((select) => select.remove());
+    refs.objects.querySelectorAll('.svg-prep-role-group').forEach((group) => {
+      group.hidden = false;
+    });
+  }
+
+  /** Every menu to the class its shape has now; focus stays where it is. */
+  function syncClassSelects() {
+    refs.objects
+      .querySelectorAll('.drawing-editor-class-select')
+      .forEach((select) => {
+        const at = parseInt(select.dataset.original, 10);
+        select.value = mapClasses.get(at) || 'ignore';
+      });
+  }
+
+  function nameOfOriginal(orig) {
+    const live = originalIndices().indexOf(orig);
+    const item =
+      live >= 0
+        ? refs.objects.querySelector(`.svg-prep-object[data-index="${live}"]`)
+        : null;
+    return item ? rowNameOf(item, live) : `Shape ${orig + 1}`;
+  }
+
+  /**
+   * A shape's class, as a command Undo can take back and name. The menu
+   * says its own new value as the control a person just operated; Undo says
+   * what came back.
+   */
+  function setClass(orig, next) {
+    const before = mapClasses.get(orig) || 'ignore';
+    if (before === next) return;
+    const name = nameOfOriginal(orig);
+    const write = (key) => {
+      if (key === 'ignore') mapClasses.delete(orig);
+      else mapClasses.set(orig, key);
+      syncClassSelects();
+    };
+    stack.run({
+      label: S.labelSetClass(name, className(next)),
+      do: () => write(next),
+      undo: () => write(before),
+      undoSentence: S.classReverted(name, className(before)),
+    });
+  }
+
+  /**
+   * Hand the host every surviving shape with its class and its rings, in
+   * the drawing's own units, and say what the plan holds as the editor goes.
+   */
+  async function applyMap() {
+    const geometry = await import('../ring-geometry.js');
+    if (!isOpen || purpose !== 'map') return;
+    const regions = originalIndices().map((orig) => {
+      const el = mapElements[orig];
+      const pathData = el?.pathData || '';
+      return {
+        key: `shape-${orig}`,
+        index: orig,
+        name: nameOfOriginal(orig),
+        class: mapClasses.get(orig) || 'ignore',
+        pathData,
+        rings: pathData ? geometry.ringsFromPathData(pathData) : [],
+      };
+    });
+    const n = regions.filter((r) => r.class !== 'ignore').length;
+    const sentence = S.mapApplied(n, regions.length - n);
+    status.textContent = sentence;
+    finish('onApply', { regions, svg: currentSvg });
+    // Said by the host's announcer under a source of its own, after the
+    // close: the app redraws the preview as the editor goes and says so in
+    // the announcer's default slot, where a sentence with no source is
+    // replaced inside the hold; one with a source is said beside it.
+    if (typeof announce === 'function') {
+      announce(sentence, { source: 'drawing-editor' });
     }
   }
 
@@ -2304,6 +2508,19 @@ export function createDrawingEditor({
   // parameters back a step and rebuilds the file control under the editor's
   // feet.
   root.addEventListener('keydown', (event) => {
+    if (purpose === 'map') {
+      // Undo and Redo only: the workspace keeps Delete and Ctrl+A on its
+      // rows, and the menus keep their own keys.
+      const mod = event.ctrlKey || event.metaKey;
+      if (!mod || isTextField(event.target)) return;
+      const key = event.key.toLowerCase();
+      if (key !== 'z' && key !== 'y') return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (key === 'y' || event.shiftKey) redo();
+      else undo();
+      return;
+    }
     if (purpose !== 'stencil' || !plan) return;
     if (handleTableKeys(event)) return;
     const target = event.target;
@@ -2376,6 +2593,13 @@ export function createDrawingEditor({
   // ── Leaving ─────────────────────────────────────────────────────────────
 
   applyBtn.addEventListener('click', () => {
+    if (purpose === 'map') {
+      applyMap().catch((err) => {
+        console.error('[Drawing editor] the map plan could not be built:', err);
+        say(S.engineFailed);
+      });
+      return;
+    }
     // The plan goes with the drawing as it is: the plates are cut from the
     // original and the plan, never from a flatten.
     finish('onApply', currentSvg);
@@ -2469,6 +2693,9 @@ export function createDrawingEditor({
       purpose === 'stencil' && engine && plan
         ? engine.serialisePlan(plan, regions)
         : null,
+    /** The map purpose's classes by original index; null on the others. */
+    getMapClasses: () =>
+      purpose === 'map' ? Object.fromEntries(mapClasses) : null,
     /** The selection and the tool, for a spec that wants to read them. */
     getSelection: () => [...selected],
     getTool: () => canvas.getTool(),
@@ -2480,6 +2707,7 @@ export function createDrawingEditor({
     redo,
     destroy: () => {
       dismissSurface();
+      rowsObserver?.disconnect();
       canvas.destroy();
       workspace.destroy();
       root.remove();
