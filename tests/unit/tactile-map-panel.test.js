@@ -48,6 +48,8 @@ const CONFIG = {
   widthParam: 'map_width_mm',
   heightParam: 'map_height_mm',
   plateIdParam: 'plate_id',
+  plateShowsTitleParam: 'plate_shows_title',
+  plateShowsNorthParam: 'plate_shows_north',
 };
 
 const SETTLE = { timeout: 4000, interval: 25 };
@@ -193,6 +195,91 @@ describe('the map panel', () => {
     );
   });
 
+  it('turns the title and the north cue off on every plate but the top corners, and on again for the whole map', async () => {
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const choose = async (id) => {
+      const radio = document.querySelector(
+        `#tactileMapPlates input[value="${id}"]`
+      );
+      radio.checked = true;
+      radio.dispatchEvent(new Event('change', { bubbles: true }));
+      const fileName = id === 'whole' ? 'levels_whole.svg' : `levels_${id}.svg`;
+      await vi.waitFor(
+        () => expect(files[files.length - 1].fileName).toBe(fileName),
+        SETTLE
+      );
+      return [params().plate_shows_title, params().plate_shows_north];
+    };
+    expect(await choose('A1')).toEqual(['yes', 'no']);
+    expect(await choose('A2')).toEqual(['no', 'yes']);
+    expect(await choose('B1')).toEqual(['no', 'no']);
+    expect(await choose('whole')).toEqual(['yes', 'yes']);
+    // A north line runs along the whole top row.
+    stateManager.setState({
+      parameters: { ...params(), north_cue: 'North line' },
+    });
+    expect(await choose('A1')).toEqual(['yes', 'yes']);
+    expect(await choose('B2')).toEqual(['no', 'no']);
+  });
+
+  it('offers the plate name style with notches first, and writes the letters only for the margin style', async () => {
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const style = document.getElementById('tactileMapIdStyle');
+    expect(style.value).toBe('notches');
+    expect([...style.options].map((o) => o.textContent)).toEqual([
+      'Notches on the bottom edge',
+      'Raised letters in the margin',
+    ]);
+    expect(
+      document.querySelector('label[for="tactileMapIdStyle"]').textContent
+    ).toBe('Plate name style');
+    const b2 = document.querySelector('#tactileMapPlates input[value="B2"]');
+    b2.checked = true;
+    b2.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(
+      () => expect(files[files.length - 1].fileName).toBe('levels_B2.svg'),
+      SETTLE
+    );
+    expect(params().plate_id).toBe('');
+    expect(files[files.length - 1].svg).toMatch(/<g id="cutouts"><path /);
+    style.value = 'margin';
+    style.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(params().plate_id).toBe('B2'), SETTLE);
+    expect(files[files.length - 1].svg).toMatch(/viewBox="0 0 240 190"/);
+    expect(files[files.length - 1].svg).toMatch(/<g id="cutouts"><\/g>/);
+  });
+
+  it('refuses a bed that cuts the map into plates under 100 x 75 mm, and keeps the whole map', async () => {
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const select = document.getElementById('tactileMapBed');
+    select.value = 'custom';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    const w = document.getElementById('tactileMapBedWidth');
+    const d = document.getElementById('tactileMapBedDepth');
+    w.value = '110';
+    d.value = '110';
+    w.dispatchEvent(new Event('change', { bubbles: true }));
+    d.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(
+      () =>
+        expect(summary()).toBe(
+          'A 110 x 110 mm bed cuts this map into plates of 96 x 90 mm, under the 100 x 75 mm minimum. Choose a larger bed.'
+        ),
+      SETTLE
+    );
+    expect(
+      [...document.querySelectorAll('#tactileMapPlates input[type="radio"]')].map(
+        (r) => r.value
+      )
+    ).toEqual(['whole']);
+    expect(String(params().map_width_mm)).toBe('480');
+    expect(files[files.length - 1].fileName).toBe('levels_whole.svg');
+    click('tactileMapRenderAll');
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(downloads).toHaveLength(0);
+    expect(status()).toBe('');
+  });
+
   it('offers a custom bed size and refuses nothing under 100 mm silently', async () => {
     const select = document.getElementById('tactileMapBed');
     select.value = 'custom';
@@ -218,7 +305,7 @@ describe('the map panel', () => {
 });
 
 describe('render every plate and download', () => {
-  it('renders the four plates in order into one archive of ten entries', async () => {
+  it('renders the four plates in order into one archive of eleven entries', async () => {
     await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
     const render = document.getElementById('tactileMapRenderAll');
     expect(render.textContent).toBe('Render every plate and download');
@@ -233,6 +320,7 @@ describe('render every plate and download', () => {
       'levels_B1.svg',
       'levels_B2.svg',
       'map_plan.json',
+      'plate_grid.svg',
       'tactile_map_A1.stl',
       'tactile_map_A2.stl',
       'tactile_map_B1.stl',
@@ -252,7 +340,11 @@ describe('render every plate and download', () => {
         'Print one of each: A1, A2, B1, B2. ' +
         'Lay them out as the grid reads, row A at the top, column 1 at the left, and glue them edge to edge onto a backing board of 480 x 360 mm. ' +
         'Levels, measured from the underside: base 0.4 mm, then 1.0, 1.8, 2.4 mm. ' +
-        'Label channels take 12.7 mm tape.\n'
+        'Label channels take 12.7 mm tape. ' +
+        'The picture plate_grid.svg shows the layout.\n'
+    );
+    expect(await zip.file('plate_grid.svg').async('string')).toContain(
+      '>B2</text>'
     );
     expect(status()).toBe('All 4 plates are in tactile_map_plates.zip.');
     expect(announce).toHaveBeenCalledWith(
@@ -289,6 +381,10 @@ describe('render every plate and download', () => {
     expect(first.map_width_mm).toBe(240);
     expect(first.map_height_mm).toBe(180);
     expect(first.plate_id).toBe('');
+    expect(first.plate_shows_title).toBe('yes');
+    expect(first.plate_shows_north).toBe('no');
+    expect(calls[1].parameters.plate_shows_north).toBe('yes');
+    expect(calls[3].parameters.plate_shows_title).toBe('no');
     expect(first.map_file.data).toMatch(/^data:image\/svg\+xml;base64,/);
     expect(first.title_text).toBe('Station');
     expect(calls[0].options).toEqual({ format: 'stl', timeoutMs: 60000 });

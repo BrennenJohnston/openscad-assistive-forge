@@ -2,10 +2,13 @@
  * The levels builder: a map plan in, the levels file out.
  *
  * The levels file is one SVG in millimeters with a group per height,
- * <g id="level1"> to <g id="level3"> and <g id="channels">, which the
- * Tactile Map tile imports one group at a time by id. A fifth group,
- * <g id="letters">, holds the box the raised title will take, for the
- * checks only: the model draws the letters itself with text().
+ * <g id="level1"> to <g id="level3">, <g id="channels"> and
+ * <g id="cutouts"> (what is cut right through the plate: a plate's name as
+ * notches, added by the plate splitter), which the Tactile Map tile imports
+ * one group at a time by id; every group is written, empty or not, since a
+ * missing id is a warning. One more group, <g id="letters">, holds the box
+ * the raised title will take, for the checks only: the model draws the
+ * letters itself with text().
  *
  * Lines are stroked here, not by offsetRing: that function offsets a CLOSED
  * ring, so an open polyline handed to it comes back as a filled loop (a
@@ -634,7 +637,15 @@ export function buildLevelRings(plan, settings = {}) {
   }
 
   // The groups: one NonZero union per level.
-  const groupRings = { level1: [], level2: [], level3: [], channels: [] };
+  // cutouts stays empty here: a plate's name as notches joins it in the
+  // plate splitter, and the tile imports every group, so each is present.
+  const groupRings = {
+    level1: [],
+    level2: [],
+    level3: [],
+    channels: [],
+    cutouts: [],
+  };
   for (const b of built) {
     const key = b.level === 'channels' ? 'channels' : `level${b.level}`;
     if (!groupRings[key]) groupRings[key] = [];

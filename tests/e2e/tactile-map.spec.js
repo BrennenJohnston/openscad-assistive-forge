@@ -120,6 +120,7 @@ test.describe('Tactile Map tile', () => {
     expect(names).toContain('map_plan.json')
     expect(names).toContain('README.txt')
     expect(names).toContain('levels_A1.svg')
+    expect(names).toContain('plate_grid.svg')
     const a1 = await zip.file('tactile_map_A1.stl').async('uint8array')
     expect(a1.length).toBeGreaterThan(84)
     const { triangles } = parseSTL(a1)

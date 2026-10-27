@@ -108,6 +108,7 @@ describe('the levels file', () => {
       'level2',
       'level3',
       'channels',
+      'cutouts',
       'letters',
     ]);
     expect(ringsOf(groups.level1)).toHaveLength(0);

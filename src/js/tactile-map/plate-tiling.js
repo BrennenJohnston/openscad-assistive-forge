@@ -16,10 +16,12 @@
  * own; a fragment under 1 mm on its longer side, left by a cut through a
  * corner, is dropped and counted rather than printed as a speck.
  *
- * A plate can carry its name: as a 10 mm strip along its bottom edge for
- * 6 mm raised letters (the tile draws the letters from a parameter; this
- * file only reserves the box), or as notches on the bottom edge a finger
- * can count, one notch per row letter and one dot per column number.
+ * A plate can carry its name: as notches on the bottom edge a finger can
+ * count, one notch per row letter and one dot per column number, cut right
+ * through the plate (the levels file's cutouts group, which the tile cuts
+ * through everything), or as a 10 mm strip along its bottom edge for 6 mm
+ * raised letters (the tile draws the letters from a parameter; this file
+ * only reserves the box).
  *
  * No DOM here: a worker may import this file.
  *
@@ -57,11 +59,17 @@ export const BED_PRESETS = [
   { key: 'custom', name: 'Custom size', w: null, d: null },
 ];
 
-/** How a plate carries its name. */
+/** How a plate carries its name, the default first. */
 export const ID_STYLES = [
-  { key: 'margin', name: 'Raised letters in the margin' },
   { key: 'notches', name: 'Notches on the bottom edge' },
+  { key: 'margin', name: 'Raised letters in the margin' },
 ];
+
+/**
+ * The smallest plate the Tactile Map tile accepts: its map_width_mm and
+ * map_height_mm minimums, in millimeters. A test keeps the two equal.
+ */
+export const PLATE_MIN_MM = { w: 100, h: 75 };
 
 /** Kept clear of the bed's edges on every side. */
 export const PLATE_MARGIN_MM = 2;
@@ -220,6 +228,7 @@ export function plateLevelsSvg(levelRings, plate, options = {}) {
     rings[key] = kept;
   }
   if (!rings.channels) rings.channels = [];
+  if (!rings.cutouts) rings.cutouts = [];
 
   const size = { w: plate.w, h: plate.h };
   const textBoxes = [];
@@ -227,18 +236,19 @@ export function plateLevelsSvg(levelRings, plate, options = {}) {
 
   if (idStyle === 'notches') {
     // One notch per row letter (A is one), at a 6 mm pitch from the left;
-    // then a 12 mm gap and one dot per column number. Each reaches past the
-    // bottom edge so the cut meets it cleanly.
+    // then a 12 mm gap and one dot per column number, in the cutouts group
+    // the tile cuts right through the plate. Each reaches past the bottom
+    // edge so the cut meets it cleanly.
     const notches = parts.row + 1;
     for (let i = 1; i <= notches; i++) {
       const x0 = NOTCH_PITCH * i;
-      rings.channels.push(
+      rings.cutouts.push(
         rectRing(x0, plate.h - NOTCH_DEPTH, x0 + NOTCH_W, plate.h + 0.5)
       );
     }
     const dotsStart = NOTCH_PITCH * notches + NOTCH_W + DOT_GAP;
     for (let j = 0; j <= parts.col; j++) {
-      rings.channels.push(
+      rings.cutouts.push(
         discRing(
           dotsStart + DOT_D / 2 + NOTCH_PITCH * j,
           plate.h - NOTCH_DEPTH,

@@ -31,12 +31,20 @@ import { setParameterValue } from '../ui-generator.js';
 import { announce, announceError } from '../announcer.js';
 import { sampleStationPlan } from './plan.js';
 import { buildLevelRings, levelsSvgFromRings } from './levels-svg.js';
-import { BED_PRESETS, planPlates, plateLevelsSvg } from './plate-tiling.js';
+import {
+  BED_PRESETS,
+  ID_STYLES,
+  PLATE_MIN_MM,
+  planPlates,
+  plateLevelsSvg,
+} from './plate-tiling.js';
 import { loadSymbolLibraryFile, setLibrary } from './symbol-library.js';
 import {
   archiveEntries,
   levelHeights,
+  plateGridSvg,
   plateParameterSets,
+  plateRoles,
   readmeText,
 } from './plate-export.js';
 import { OUTPUT_FORMATS, downloadFile, projectStem } from '../download.js';
@@ -146,7 +154,9 @@ class MapPanel {
     this.bedKey = options.bedKey || BED_PRESETS[0].key;
     this.custom = { w: 256, d: 256 };
     this.plate = 'whole';
-    this.idStyle = options.idStyle || 'none';
+    this.idStyle = ID_STYLES.some((s) => s.key === options.idStyle)
+      ? options.idStyle
+      : ID_STYLES[0].key;
     this.render =
       options.render || renderThroughEngine(options.getAutoPreviewController);
     this.download = options.download || downloadFile;
@@ -155,6 +165,7 @@ class MapPanel {
     this.timer = null;
     this.layout = null;
     this.lastTape = null;
+    this.lastCue = null;
     this.refs = {};
     this.el = null;
     this.unsubscribe = null;
@@ -169,10 +180,13 @@ class MapPanel {
     this.el = this.build();
     parametersContainer.parentNode.insertBefore(this.el, parametersContainer);
     this.lastTape = this.tapeWidth();
+    this.lastCue = this.northCue();
     this.unsubscribe = stateManager.subscribe(() => {
       const tape = this.tapeWidth();
-      if (tape !== this.lastTape) {
+      const cue = this.northCue();
+      if (tape !== this.lastTape || cue !== this.lastCue) {
         this.lastTape = tape;
+        this.lastCue = cue;
         this.schedule();
       }
     });
@@ -184,6 +198,12 @@ class MapPanel {
       stateManager.getState()?.parameters?.label_tape_width_mm
     );
     return Number.isFinite(value) && value > 0 ? value : 12.7;
+  }
+
+  /** The tile's north cue, which decides where a split map's cue goes. */
+  northCue() {
+    const cue = stateManager.getState()?.parameters?.north_cue;
+    return typeof cue === 'string' && cue ? cue : 'Arrow with N';
   }
 
   bed() {
@@ -276,6 +296,25 @@ class MapPanel {
     plates.appendChild(el('legend', '', 'Plate'));
     section.appendChild(plates);
     this.refs.plates = plates;
+
+    const styleLabel = el('label', 'braille-panel-label', 'Plate name style');
+    styleLabel.htmlFor = 'tactileMapIdStyle';
+    section.appendChild(styleLabel);
+    const styleSelect = el('select', 'braille-panel-select');
+    styleSelect.id = 'tactileMapIdStyle';
+    for (const style of ID_STYLES) {
+      const option = document.createElement('option');
+      option.value = style.key;
+      option.textContent = style.name;
+      styleSelect.appendChild(option);
+    }
+    styleSelect.value = this.idStyle;
+    styleSelect.addEventListener('change', () => {
+      this.idStyle = styleSelect.value;
+      this.schedule(0);
+    });
+    section.appendChild(styleSelect);
+    this.refs.idStyle = styleSelect;
 
     const warnings = el('ul', 'braille-panel-help tactile-map-warnings');
     warnings.id = 'tactileMapWarnings';
@@ -398,8 +437,9 @@ class MapPanel {
     const built = buildLevelRings(this.plan, { tapeWidthMm: this.tapeWidth() });
     const sets = plateParameterSets({
       rings: built.rings,
-      plates: this.layout.plates,
+      layout: this.layout,
       idStyle: this.idStyle,
+      northCue: this.northCue(),
       config: this.config,
       parameters,
     });
@@ -445,6 +485,7 @@ class MapPanel {
           extension: OUTPUT_FORMATS[format]?.extension || '.stl',
           rendered,
           sets,
+          rings: built.rings,
           parameters,
         });
         this.download(bytes, fileName, 'zip');
@@ -466,19 +507,26 @@ class MapPanel {
     }
   }
 
-  async buildArchive({ stem, extension, rendered, sets, parameters }) {
+  async buildArchive({ stem, extension, rendered, sets, rings, parameters }) {
     const bed = this.bed();
+    const bedName =
+      this.bedKey === 'custom' ? `custom ${bed.w} x ${bed.d} mm` : bed.name;
     const readme = readmeText({
       mapName:
         String(parameters.title_text || '').trim() ||
         this.plan.meta?.title ||
         stem,
-      bedName:
-        this.bedKey === 'custom' ? `custom ${bed.w} x ${bed.d} mm` : bed.name,
+      bedName,
       layout: this.layout,
       size: this.plan.size,
       heights: levelHeights(parameters),
       tapeWidthMm: this.tapeWidth(),
+    });
+    const grid = plateGridSvg({
+      rings,
+      layout: this.layout,
+      size: this.plan.size,
+      bedName,
     });
     const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
@@ -489,6 +537,7 @@ class MapPanel {
       sets,
       plan: this.plan,
       readme,
+      grid,
     })) {
       zip.file(entry.name, entry.data);
     }
@@ -509,7 +558,10 @@ class MapPanel {
       ...fieldset.querySelectorAll('.braille-panel-toggle-row'),
     ])
       row.remove();
-    const ids = ['whole', ...this.layout.plates.map((p) => p.id)];
+    const ids = [
+      'whole',
+      ...(this.layout ? this.layout.plates.map((p) => p.id) : []),
+    ];
     if (!ids.includes(this.plate)) this.plate = 'whole';
     for (const id of ids) {
       const row = el('div', 'braille-panel-toggle-row');
@@ -549,14 +601,23 @@ class MapPanel {
   update() {
     if (!this.el) return;
     const { w, h } = this.plan.size;
-    this.layout = planPlates({ w, h, bed: this.bed() });
-    const n = this.layout.plates.length;
-    const first = this.layout.plates[0].id;
-    const last = this.layout.plates[n - 1].id;
-    const sentence =
-      n === 1
-        ? `One plate of ${this.layout.plateW} x ${this.layout.plateH} mm; the whole map fits.`
-        : `${n} plates of ${this.layout.plateW} x ${this.layout.plateH} mm, ${first} to ${last}.`;
+    const bed = this.bed();
+    const layout = planPlates({ w, h, bed });
+    // The tile refuses a plate under its floor; a bed that cuts the map
+    // that small is refused here, in a sentence, and the whole map stays.
+    const tooSmall =
+      layout.plateW < PLATE_MIN_MM.w - 1e-9 ||
+      layout.plateH < PLATE_MIN_MM.h - 1e-9;
+    this.layout = tooSmall ? null : layout;
+    const n = layout.plates.length;
+    let sentence;
+    if (tooSmall) {
+      sentence = `A ${bed.w} x ${bed.d} mm bed cuts this map into plates of ${layout.plateW} x ${layout.plateH} mm, under the ${PLATE_MIN_MM.w} x ${PLATE_MIN_MM.h} mm minimum. Choose a larger bed.`;
+    } else if (n === 1) {
+      sentence = `One plate of ${layout.plateW} x ${layout.plateH} mm; the whole map fits.`;
+    } else {
+      sentence = `${n} plates of ${layout.plateW} x ${layout.plateH} mm, ${layout.plates[0].id} to ${layout.plates[n - 1].id}.`;
+    }
     if (this.refs.summary.textContent !== sentence)
       this.refs.summary.textContent = sentence;
     this.rebuildPlates();
@@ -570,6 +631,8 @@ class MapPanel {
     let size;
     let fileName;
     let plateId = '';
+    let showTitle = 'yes';
+    let showNorth = 'yes';
     if (this.plate === 'whole') {
       svg = levelsSvgFromRings(built.rings, this.plan.size, built.textBoxes);
       size = this.plan.size;
@@ -577,15 +640,22 @@ class MapPanel {
     } else {
       const plate = this.layout.plates.find((p) => p.id === this.plate);
       const out = plateLevelsSvg(built.rings, plate, { id: this.idStyle });
+      const roles = plateRoles(plate, this.layout, this.northCue());
       svg = out.svg;
       size = out.size;
       fileName = `levels_${plate.id}.svg`;
       if (this.idStyle === 'margin') plateId = plate.id;
+      showTitle = roles.title ? 'yes' : 'no';
+      showNorth = roles.north ? 'yes' : 'no';
     }
     setParameterValue(this.config.widthParam, size.w);
     setParameterValue(this.config.heightParam, size.h);
     if (this.config.plateIdParam)
       setParameterValue(this.config.plateIdParam, plateId);
+    if (this.config.plateShowsTitleParam)
+      setParameterValue(this.config.plateShowsTitleParam, showTitle);
+    if (this.config.plateShowsNorthParam)
+      setParameterValue(this.config.plateShowsNorthParam, showNorth);
     if (!this.setFile(this.config.mapFileParam, fileName, svg)) {
       console.warn(
         `[MapPanel] No file control for parameter: ${this.config.mapFileParam}`

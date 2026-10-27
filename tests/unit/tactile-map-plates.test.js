@@ -7,9 +7,12 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   BED_PRESETS,
   ID_STYLES,
+  PLATE_MIN_MM,
   planPlates,
   plateLevelsSvg,
 } from '../../src/js/tactile-map/plate-tiling.js';
@@ -52,10 +55,25 @@ describe('the bed presets', () => {
       'Custom size',
     ]);
     expect(bed('x1c')).toMatchObject({ w: 256, d: 256 });
+    // The default first, as the bed menu does.
     expect(ID_STYLES.map((s) => s.name)).toEqual([
-      'Raised letters in the margin',
       'Notches on the bottom edge',
+      'Raised letters in the margin',
     ]);
+  });
+
+  it("keep the plate floor equal to the tile's smallest map", () => {
+    const scad = readFileSync(
+      join(process.cwd(), 'public', 'examples', 'tactile-map', 'tactile_map.scad'),
+      'utf8'
+    );
+    const minimum = (name) =>
+      Number(new RegExp(`${name} = \\d+; // \\[(\\d+):`).exec(scad)[1]);
+    expect(PLATE_MIN_MM).toEqual({
+      w: minimum('map_width_mm'),
+      h: minimum('map_height_mm'),
+    });
+    expect(PLATE_MIN_MM).toEqual({ w: 100, h: 75 });
   });
 });
 
@@ -161,12 +179,19 @@ describe('plateLevelsSvg', () => {
     expect(out.dropped).toBe(1);
   });
 
-  it('marks plate B3 with two notches and three dots in the channels', () => {
+  it('marks plate B3 with two notches and three dots cut through the plate, leaving the channels alone', () => {
     const nine = planPlates({ w: 480, h: 360, bed: bed('a1-mini') });
     const B3 = nine.plates.find((p) => p.id === 'B3');
     const out = plateLevelsSvg(rings, B3, { id: 'notches' });
-    expect(groupRings(out.svg, 'channels')).toHaveLength(5);
+    expect(groupRings(out.svg, 'cutouts')).toHaveLength(5);
+    expect(groupRings(out.svg, 'channels')).toHaveLength(0);
     expect(out.size).toEqual({ w: 160, h: 120 });
+  });
+
+  it('writes an empty cutouts group into a plate without a name, so the tile never imports a missing id', () => {
+    for (const plate of layout.plates) {
+      expect(plateLevelsSvg(rings, plate).svg).toMatch(/<g id="cutouts"><\/g>/);
+    }
   });
 
   it('adds a 10 mm margin strip with the id box when asked for letters', () => {
