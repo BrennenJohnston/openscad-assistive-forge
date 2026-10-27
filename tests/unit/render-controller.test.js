@@ -1260,3 +1260,30 @@ describe('a restart that fails does not stop later renders', () => {
     await expect(next).resolves.toBeTruthy()
   })
 })
+
+describe('withheld -D keys', () => {
+  it('hands the resolver the parameters of the render it judges, and drops only those', () => {
+    const controller = new RenderController()
+    const resolver = vi.fn(
+      (parameters) =>
+        new Set(Object.keys(parameters).filter((key) => parameters[key] === 480))
+    )
+    controller.setWithheldDefineKeyResolver(resolver)
+    const kept = controller._withholdUntouchedParameters({
+      map_width_mm: 240,
+      map_height_mm: 480,
+      title_text: '',
+    })
+    expect(resolver).toHaveBeenCalledWith({
+      map_width_mm: 240,
+      map_height_mm: 480,
+      title_text: '',
+    })
+    expect(kept).toEqual({ map_width_mm: 240, title_text: '' })
+  })
+
+  it('passes every parameter through when no resolver is set', () => {
+    const controller = new RenderController()
+    expect(controller._withholdUntouchedParameters({ a: 1 })).toEqual({ a: 1 })
+  })
+})

@@ -8,11 +8,14 @@
 //
 // The map comes in as one SVG, the levels file, drawn in millimeters with one
 // group per height: <g id="level1"> is the floor (platforms, walkways, areas),
-// <g id="level2"> the symbols and routes, <g id="level3"> the walls, and
-// <g id="channels"> the strips sunk for label tape. Each group is imported on
-// its own by its id and raised to its level, so one file carries the whole
-// map and the heights never drift apart. The Tactile Map Designer panel
-// writes this file; a saved one works the same in desktop OpenSCAD.
+// <g id="level2"> the symbols and routes, <g id="level3"> the walls,
+// <g id="channels"> the strips sunk for label tape, and <g id="cutouts"> what
+// is cut right through the plate (a plate's name as notches on its edge).
+// Each group is imported on its own by its id and raised to its level, so one
+// file carries the whole map and the heights never drift apart. The Tactile
+// Map Designer panel writes this file; a saved one works the same in desktop
+// OpenSCAD. Every group must be present, empty or not: a missing id is a
+// warning.
 //
 // The heights are the ones my printed station maps settled on: a 0.4 mm base
 // glued to a corrugated plastic board, the floor 0.6 mm above it, the symbols
@@ -31,9 +34,9 @@
 // The map's levels file (SVG). The Tactile Map Designer panel writes it; you can also choose one you saved.
 map_file = "sample_station.svg"; // [file:svg]
 // Width of the whole map (mm). About two hand spans: 480 is the default.
-map_width_mm = 480; // [200:1:600]
+map_width_mm = 480; // [100:1:600]
 // Height of the whole map (mm). About one hand span: 360 is the default.
-map_height_mm = 360; // [150:1:450]
+map_height_mm = 360; // [75:1:450]
 
 /* [Print style] */
 // Thin plates for a backing board prints a 0.4 mm base to glue onto corrugated plastic. All printed uses a 1.2 mm base and needs no board.
@@ -60,6 +63,12 @@ title_raise_mm = 0.8; // [0.8:0.05:2]
 north_cue = "Arrow with N"; // [Arrow with N, North line, None]
 // A raised border around the map.
 border = "no"; // [yes, no]
+// The plate's name, drawn as raised letters in the margin when the margin id style is on.
+plate_id = "";
+// Draw the title on this plate. The Tactile Map Designer panel keeps it on the top-left plate only.
+plate_shows_title = "yes"; // [yes, no]
+// Draw the north cue on this plate. The panel keeps the arrow on the top-right plate only and a north line along the whole top row.
+plate_shows_north = "yes"; // [yes, no]
 
 /* [Label channels] */
 // Width of your braille label tape (mm): 9.5 for 3/8 in tape, 12.7 for 1/2 in tape, the whole range of tapes the channels fit. Channels are cut 0.4 mm wider.
@@ -111,8 +120,8 @@ TITLE_CAP_RANGE_MM = [16, 50.8];       // ADA 703.2.5, 5/8 to 2 in
 TITLE_RAISE_MIN_MM = 0.8;              // ADA 703.2.1, 1/32 in
 TAPE_WIDTHS_MM = [9.5, 12.7];          // 3/8 in and 1/2 in label tape
 CHANNEL_DEPTH_RANGE_MM = [0.2, 0.5];   // my printed maps (0.3)
-MAP_WIDTH_RANGE_MM = [200, 600];       // about two hand spans
-MAP_HEIGHT_RANGE_MM = [150, 450];      // about one hand span
+MAP_WIDTH_RANGE_MM = [100, 600];       // a plate of a split map at the least; about two hand spans at most
+MAP_HEIGHT_RANGE_MM = [75, 450];       // a plate at the least; about one hand span at most
 
 function in_range(v, r) = v >= r[0] && v <= r[1];
 
@@ -139,9 +148,9 @@ assert(in_range(label_channel_depth_mm, CHANNEL_DEPTH_RANGE_MM),
 assert(label_tape_width_mm == TAPE_WIDTHS_MM[0] || label_tape_width_mm == TAPE_WIDTHS_MM[1],
        "label_tape_width_mm must be 9.5 or 12.7 mm.");
 assert(in_range(map_width_mm, MAP_WIDTH_RANGE_MM),
-       str("map_width_mm is ", map_width_mm, " mm, outside 200 to 600 mm."));
+       str("map_width_mm is ", map_width_mm, " mm, outside 100 to 600 mm."));
 assert(in_range(map_height_mm, MAP_HEIGHT_RANGE_MM),
-       str("map_height_mm is ", map_height_mm, " mm, outside 150 to 450 mm."));
+       str("map_height_mm is ", map_height_mm, " mm, outside 75 to 450 mm."));
 
 // =============================================================================
 // HEIGHTS
@@ -169,14 +178,18 @@ echo(str("Finished map: ", map_width_mm, " x ", map_height_mm, " mm; levels at "
 function to_upper(s) =
     chr([for (c = s) let(o = ord(c)) (o >= 97 && o <= 122) ? o - 32 : o]);
 
+// Whether this plate draws the north cue at all: the cue's own switch, and
+// the plate's (a split map draws the arrow on its top-right plate only).
+north_on_plate = north_cue != "None" && plate_shows_north == "yes";
+
 // The face a raised letter may use: the plate inside the edge clearance, less
-// the arrow's column when the arrow is on.
+// the arrow's column when the arrow is drawn on this plate.
 title_right_x = map_width_mm - EDGE_CLEARANCE_MM
-    - (north_cue == "Arrow with N" ? NORTH_ARROW_COLUMN_MM : 0);
+    - ((north_cue == "Arrow with N" && north_on_plate) ? NORTH_ARROW_COLUMN_MM : 0);
 // The title's capitals start 9.525 mm below the top edge, or below the north
-// line and a gap when that line is on.
+// line and a gap when that line is drawn on this plate.
 title_top_y = map_height_mm - EDGE_CLEARANCE_MM
-    - (north_cue == "North line" ? NORTH_LINE_W + NORTH_GAP_MM : 0);
+    - ((north_cue == "North line" && north_on_plate) ? NORTH_LINE_W + NORTH_GAP_MM : 0);
 
 module face_2d() {
     translate([EDGE_CLEARANCE_MM, EDGE_CLEARANCE_MM])
@@ -197,8 +210,9 @@ module levels() {
 
 // The title: uppercase, left-aligned 9.525 mm in from the left edge, clipped
 // to the face so a long title never runs off the plate or under the arrow.
+// A split map draws it on its top-left plate only.
 module title() {
-    if (len(title_text) > 0)
+    if (len(title_text) > 0 && plate_shows_title == "yes")
         translate([0, 0, base_eff - _fuse])
             linear_extrude(height = title_raise_mm + _fuse)
                 intersection() {
@@ -236,11 +250,27 @@ module north_line_2d() {
 }
 
 module north_cue() {
-    if (north_cue != "None")
+    if (north_on_plate)
         translate([0, 0, base_eff - _fuse])
             linear_extrude(height = level_z(1) - base_eff + _fuse)
                 if (north_cue == "North line") north_line_2d();
                 else north_arrow_2d();
+}
+
+// The plate's name: 6 mm capitals centered in the 10 mm strip along the
+// bottom edge that the margin id style adds to a plate's levels file.
+PLATE_ID_MM = 6;
+PLATE_ID_STRIP_MM = 10;
+module plate_name() {
+    if (len(plate_id) > 0)
+        translate([map_width_mm / 2, PLATE_ID_STRIP_MM / 2, base_eff - _fuse])
+            linear_extrude(height = title_raise_mm + _fuse)
+                text(to_upper(plate_id),
+                     size = PLATE_ID_MM / LETTER_CAP_FACTOR,
+                     font = "Liberation Sans",
+                     spacing = TITLE_LETTER_SPACING,
+                     halign = "center",
+                     valign = "center");
 }
 
 module border_frame() {
@@ -262,6 +292,14 @@ module channels() {
             import(map_file, id = "channels", center = false);
 }
 
+// What is cut right through the plate: a plate's name as notches on its
+// bottom edge, slots a finger finds and the eye sees from the back.
+module cutouts() {
+    translate([0, 0, -_fuse])
+        linear_extrude(height = base_eff + 20)
+            import(map_file, id = "cutouts", center = false);
+}
+
 // =============================================================================
 // THE MAP
 // =============================================================================
@@ -274,8 +312,10 @@ module tactile_map() {
             title();
             north_cue();
             border_frame();
+            plate_name();
         }
         channels();
+        cutouts();
     }
 }
 

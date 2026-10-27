@@ -86,6 +86,7 @@ import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import { STORAGE_KEY_MODEL_COLOR } from './storage-keys.js';
 import { readScopedPref } from './ui-scoped-prefs.js';
 import { initBraillePanel, destroyBraillePanel } from './braille-panel.js';
+import { initMapPanel, destroyMapPanel } from './tactile-map/map-panel.js';
 
 let currentExampleKey = null;
 
@@ -93,6 +94,9 @@ let currentExampleKey = null;
 // `brailleTranslation` block; consumed by handleFile after the parameter UI
 // renders (the panel writes Line_N params through the generated controls).
 let pendingBrailleConfig = null;
+// `tactileMap` block of a tile's manifest: the Tactile Map Designer panel's
+// parameter names; consumed where the braille panel is mounted.
+let pendingMapConfig = null;
 
 /**
  * Reverse-lookup an example key from EXAMPLE_DEFINITIONS by file name.
@@ -114,6 +118,7 @@ function findExampleKeyByFileName(fileName) {
  */
 async function restoreGalleryFromManifest(exampleKey) {
   pendingBrailleConfig = null;
+  pendingMapConfig = null;
   const example = EXAMPLE_DEFINITIONS[exampleKey];
   if (!example?.manifest) return;
 
@@ -121,6 +126,11 @@ async function restoreGalleryFromManifest(exampleKey) {
     const manifestResponse = await fetch(example.manifest);
     if (!manifestResponse.ok) return;
     const manifestData = await manifestResponse.json();
+
+    const tactileMap = manifestData.tactileMap;
+    if (tactileMap?.mapFileParam) {
+      pendingMapConfig = tactileMap;
+    }
 
     const braille = manifestData.brailleTranslation;
     if (braille?.lineParams?.length > 0 || braille?.charParam) {
@@ -614,6 +624,7 @@ export function initFileHandler({
     if (source !== 'example' && source !== 'program-example') {
       currentExampleKey = null;
       pendingBrailleConfig = null;
+      pendingMapConfig = null;
     }
 
     const rawFileName =
@@ -1089,6 +1100,17 @@ export function initFileHandler({
       // Braille Card Customizer: mount the translation panel above the
       // parameter controls when the manifest declares brailleTranslation.
       destroyBraillePanel();
+      destroyMapPanel();
+      if (pendingMapConfig) {
+        try {
+          initMapPanel(pendingMapConfig, { getAutoPreviewController });
+        } catch (mapError) {
+          console.error(
+            '[TactileMap] Failed to initialize the plates panel:',
+            mapError
+          );
+        }
+      }
       if (pendingBrailleConfig) {
         try {
           initBraillePanel(pendingBrailleConfig);

@@ -7,6 +7,14 @@
   "main": "tactile_map.scad",
   "files": ["tactile_map.scad", "sample_station.svg"],
   "program": "tactile-map-designer",
+  "tactileMap": {
+    "mapFileParam": "map_file",
+    "widthParam": "map_width_mm",
+    "heightParam": "map_height_mm",
+    "plateIdParam": "plate_id",
+    "plateShowsTitleParam": "plate_shows_title",
+    "plateShowsNorthParam": "plate_shows_north"
+  },
   "tactile": [
     "base_thickness_mm",
     "level_step_mm",

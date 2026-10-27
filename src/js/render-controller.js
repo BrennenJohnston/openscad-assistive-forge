@@ -782,8 +782,11 @@ export class RenderController {
   }
 
   /**
-   * Supply the names this controller must withhold from `-D`.
-   * @param {(() => Set<string>)|null} resolver
+   * Supply the names this controller must withhold from `-D`. The resolver
+   * is handed the parameters of the render it judges: a caller rendering
+   * values other than the state's (every plate of a map in turn) must not
+   * lose them to the state's untouched defaults.
+   * @param {((parameters: Object) => Set<string>)|null} resolver
    */
   setWithheldDefineKeyResolver(resolver) {
     this._getWithheldDefineKeys = resolver;
@@ -812,7 +815,7 @@ export class RenderController {
     if (!this._getWithheldDefineKeys) return parameters;
     let withheld;
     try {
-      withheld = this._getWithheldDefineKeys();
+      withheld = this._getWithheldDefineKeys(parameters);
     } catch (error) {
       console.warn('[Render] Could not resolve withheld -D keys:', error);
       return parameters;

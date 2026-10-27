@@ -6190,10 +6190,10 @@ async function initApp() {
       // Only parameters the user actually changed travel as -D.
       // Everything else follows the SCAD source's own declarations, which is
       // what lets an edited default take effect at all.
-      renderController.setWithheldDefineKeyResolver(() => {
+      renderController.setWithheldDefineKeyResolver((rendering) => {
         const defineState = stateManager.getState();
         return collectWithheldDefineKeys({
-          parameters: defineState.parameters || {},
+          parameters: rendering || defineState.parameters || {},
           defaults: defineState.defaults || {},
           schemaNames: Object.keys(defineState.schema?.parameters || {}),
         });
@@ -9166,6 +9166,17 @@ if (rounded) {
   if (brailleVariantSelect && openBrailleCardBtn) {
     brailleVariantSelect.addEventListener('change', () => {
       openBrailleCardBtn.dataset.example = brailleVariantSelect.value;
+    });
+  }
+
+  // Wire the tactile map tool selector the same way (one tool today)
+  const tactileMapVariantSelect = document.getElementById(
+    'tactileMapVariantSelect'
+  );
+  const openTactileMapBtn = document.getElementById('openTactileMapBtn');
+  if (tactileMapVariantSelect && openTactileMapBtn) {
+    tactileMapVariantSelect.addEventListener('change', () => {
+      openTactileMapBtn.dataset.example = tactileMapVariantSelect.value;
     });
   }
 

@@ -1687,6 +1687,14 @@ const TUTORIALS = {
         position: 'top',
       },
       {
+        title: 'Tactile Map Designer',
+        content: `
+          <p>This card makes tactile maps for 3D printing. Upload or trace a line drawing of a station, campus or building, and it builds raised levels, symbols, a title and channels for braille label tape, then cuts the map into plates that fit your printer. When you are ready, the <strong>Open Tactile Map Designer</strong> button starts it.</p>
+        `,
+        highlightSelector: '@tactile-map',
+        position: 'top',
+      },
+      {
         title: 'Clear Cache',
         content: `
           <p>This button opens a dialog that frees the browser storage the app uses. It keeps your saved projects unless you untick the box that keeps them, and exporting a backup first is always the safe move. You do not need it now. If you open it to look, press <strong>Cancel</strong> to come back to this tour.</p>
@@ -1789,6 +1797,14 @@ const TUTORIALS = {
           <p>This card makes 3D-printable braille. Type text and get cards, charms, or two-part tactile signs. Braille translation runs on your device, so nothing you type leaves it. When you are ready, the <strong>Open Braille Card Designer</strong> button starts it.</p>
         `,
         highlightSelector: '@braille-card',
+        position: 'top',
+      },
+      {
+        title: 'Tactile Map Designer',
+        content: `
+          <p>This card makes tactile maps for 3D printing. Upload or trace a line drawing of a station, campus or building, and it builds raised levels, symbols, a title and channels for braille label tape, then cuts the map into plates that fit your printer. When you are ready, the <strong>Open Tactile Map Designer</strong> button starts it.</p>
+        `,
+        highlightSelector: '@tactile-map',
         position: 'top',
       },
       {

@@ -1,0 +1,675 @@
+/**
+ * The Tactile Map Designer panel: the print bed, the plates and the plate
+ * picker, above the Tactile Map tile's controls.
+ *
+ * Manifest-driven, like the braille panel: a `tactileMap` block in the
+ * tile's manifest names the parameters this panel writes, and
+ * file-handler.js mounts it after the parameter UI renders. The panel keeps
+ * the map plan, cuts it into plates for the bed a person picks, says in one
+ * sentence how many plates there are, and writes the chosen plate's levels
+ * file and size into the tile's parameters, so the preview and the export
+ * show that plate. Whole map shows everything at once.
+ *
+ * The levels file reaches the tile through the file control's own input (a
+ * File handed to it, as if chosen), because a file input takes no plain
+ * value; the sizes go through setParameterValue like any other control.
+ *
+ * Render every plate and download walks the plates in order, renders each
+ * through the app's export path (the render controller the preview
+ * controller holds, with the project's files: one engine, one render at a
+ * time) with the parameter set the plate radio would write, and offers one
+ * archive: a mesh per plate, the plan, a levels file per plate and a
+ * README. The panel's own selection and the preview are not touched, so
+ * there is nothing to restore after the loop. Cancel stops after the plate
+ * under way; a failed plate stops the loop with its message.
+ *
+ * @license GPL-3.0-or-later
+ */
+
+import { stateManager } from '../state.js';
+import { setParameterValue } from '../ui-generator.js';
+import { announce, announceError } from '../announcer.js';
+import { sampleStationPlan } from './plan.js';
+import { buildLevelRings, levelsSvgFromRings } from './levels-svg.js';
+import {
+  BED_PRESETS,
+  ID_STYLES,
+  PLATE_MIN_MM,
+  planPlates,
+  plateLevelsSvg,
+} from './plate-tiling.js';
+import { loadSymbolLibraryFile, setLibrary } from './symbol-library.js';
+import {
+  archiveEntries,
+  levelHeights,
+  plateGridSvg,
+  plateParameterSets,
+  plateRoles,
+  readmeText,
+} from './plate-export.js';
+import { OUTPUT_FORMATS, downloadFile, projectStem } from '../download.js';
+
+const DEBOUNCE_MS = 350;
+const CUSTOM_MIN_MM = 100;
+const CUSTOM_MAX_MM = 600;
+const SOURCE = 'tactile-map';
+const PLATE_TIMEOUT_MS = 60_000;
+const ENGINE_NOT_READY =
+  'The OpenSCAD engine has not initialized yet. Please wait or refresh the page.';
+
+let panel = null;
+
+/**
+ * A render through the app's export path: the render controller the
+ * preview controller holds, the project's files and libraries, the format
+ * asked for, and a time limit per plate.
+ *
+ * @param {Function|undefined} getController - Returns the AutoPreviewController, or null
+ * @returns {(parameters: Object, options: {format: string, timeoutMs: number}) => Promise<ArrayBuffer|Uint8Array>}
+ */
+function renderThroughEngine(getController) {
+  return (parameters, { format, timeoutMs }) => {
+    const controller = getController?.();
+    const engine = controller?.renderController;
+    const state = stateManager.getState();
+    if (!engine || !state.uploadedFile?.content) {
+      return Promise.reject(new Error(ENGINE_NOT_READY));
+    }
+    return engine
+      .renderFull(state.uploadedFile.content, parameters, {
+        outputFormat: format,
+        timeoutMs,
+        paramTypes: state.paramTypes || {},
+        files: state.projectFiles,
+        mainFile: state.mainFilePath,
+        libraries: controller.enabledLibraries || [],
+      })
+      .then((result) => result.data || result.stl);
+  };
+}
+
+/**
+ * Hand the tile's file control a file, as if a person had chosen it.
+ *
+ * @param {string} paramName
+ * @param {string} fileName
+ * @param {string} svgText
+ * @returns {boolean} Whether the control took it
+ */
+export function setFileThroughControl(paramName, fileName, svgText) {
+  const input = document.getElementById(`param-${paramName}`);
+  if (
+    !input ||
+    typeof DataTransfer === 'undefined' ||
+    typeof File === 'undefined'
+  ) {
+    return false;
+  }
+  const transfer = new DataTransfer();
+  transfer.items.add(new File([svgText], fileName, { type: 'image/svg+xml' }));
+  input.files = transfer.files;
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  return true;
+}
+
+/**
+ * Mount the panel for a tile whose manifest declares `tactileMap`.
+ *
+ * @param {{ mapFileParam: string, widthParam: string, heightParam: string, plateIdParam?: string }} config
+ * @param {{ plan?: object, setFile?: Function, bedKey?: string, idStyle?: string, getAutoPreviewController?: Function, render?: Function, download?: Function }} [options]
+ *   `render(parameters, { format, timeoutMs })` and `download(bytes, name,
+ *   format)` stand in for the engine and the file save in a test.
+ */
+export function initMapPanel(config, options = {}) {
+  destroyMapPanel();
+  panel = new MapPanel(config, options);
+  panel.mount();
+}
+
+/** Remove the panel. */
+export function destroyMapPanel() {
+  if (panel) {
+    panel.destroy();
+    panel = null;
+  }
+}
+
+/** @returns {boolean} Whether the panel is mounted (for tests) */
+export function isMapPanelActive() {
+  return panel !== null;
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+class MapPanel {
+  constructor(config, options) {
+    this.config = config;
+    this.plan = options.plan || sampleStationPlan();
+    this.setFile = options.setFile || setFileThroughControl;
+    this.bedKey = options.bedKey || BED_PRESETS[0].key;
+    this.custom = { w: 256, d: 256 };
+    this.plate = 'whole';
+    this.idStyle = ID_STYLES.some((s) => s.key === options.idStyle)
+      ? options.idStyle
+      : ID_STYLES[0].key;
+    this.render =
+      options.render || renderThroughEngine(options.getAutoPreviewController);
+    this.download = options.download || downloadFile;
+    this.running = false;
+    this.cancelRequested = false;
+    this.timer = null;
+    this.layout = null;
+    this.lastTape = null;
+    this.lastCue = null;
+    this.refs = {};
+    this.el = null;
+    this.unsubscribe = null;
+  }
+
+  mount() {
+    const parametersContainer = document.getElementById('parametersContainer');
+    if (!parametersContainer?.parentNode) {
+      console.warn('[MapPanel] parametersContainer not found; not mounting');
+      return;
+    }
+    this.el = this.build();
+    parametersContainer.parentNode.insertBefore(this.el, parametersContainer);
+    this.lastTape = this.tapeWidth();
+    this.lastCue = this.northCue();
+    this.unsubscribe = stateManager.subscribe(() => {
+      const tape = this.tapeWidth();
+      const cue = this.northCue();
+      if (tape !== this.lastTape || cue !== this.lastCue) {
+        this.lastTape = tape;
+        this.lastCue = cue;
+        this.schedule();
+      }
+    });
+    this.schedule(0);
+  }
+
+  tapeWidth() {
+    const value = Number(
+      stateManager.getState()?.parameters?.label_tape_width_mm
+    );
+    return Number.isFinite(value) && value > 0 ? value : 12.7;
+  }
+
+  /** The tile's north cue, which decides where a split map's cue goes. */
+  northCue() {
+    const cue = stateManager.getState()?.parameters?.north_cue;
+    return typeof cue === 'string' && cue ? cue : 'Arrow with N';
+  }
+
+  bed() {
+    if (this.bedKey === 'custom') return { w: this.custom.w, d: this.custom.d };
+    return BED_PRESETS.find((b) => b.key === this.bedKey) || BED_PRESETS[0];
+  }
+
+  build() {
+    const section = el('section', 'braille-panel tactile-map-panel');
+    section.id = 'tactileMapPanel';
+    section.setAttribute('aria-labelledby', 'tactileMapHeading');
+
+    const heading = el('h2', 'braille-panel-heading', 'Tactile map plates');
+    heading.id = 'tactileMapHeading';
+    section.appendChild(heading);
+
+    const help = el(
+      'p',
+      'braille-panel-help',
+      'Pick your printer’s bed and the map splits into equal plates. Choose a plate to preview and export it; Whole map shows everything at once.'
+    );
+    help.id = 'tactileMapHelp';
+    section.appendChild(help);
+
+    const bedLabel = el('label', 'braille-panel-label', 'Print bed');
+    bedLabel.htmlFor = 'tactileMapBed';
+    section.appendChild(bedLabel);
+
+    const select = el('select', 'braille-panel-select');
+    select.id = 'tactileMapBed';
+    select.setAttribute('aria-describedby', 'tactileMapHelp');
+    for (const bed of BED_PRESETS) {
+      const option = document.createElement('option');
+      option.value = bed.key;
+      option.textContent = bed.name;
+      select.appendChild(option);
+    }
+    select.value = this.bedKey;
+    select.addEventListener('change', () => {
+      this.bedKey = select.value;
+      this.refs.custom.hidden = this.bedKey !== 'custom';
+      this.schedule();
+    });
+    section.appendChild(select);
+    this.refs.select = select;
+
+    const custom = el('div', 'tactile-map-custom');
+    custom.hidden = this.bedKey !== 'custom';
+    for (const [key, id, text] of [
+      ['w', 'tactileMapBedWidth', 'Bed width (mm)'],
+      ['d', 'tactileMapBedDepth', 'Bed depth (mm)'],
+    ]) {
+      const row = el('div', 'braille-panel-toggle-row');
+      const label = el('label', 'braille-panel-label', text);
+      label.htmlFor = id;
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.id = id;
+      input.className = 'braille-panel-number';
+      input.min = String(CUSTOM_MIN_MM);
+      input.max = String(CUSTOM_MAX_MM);
+      input.step = '1';
+      input.value = String(this.custom[key]);
+      input.addEventListener('change', () => {
+        const value = Number(input.value);
+        if (Number.isFinite(value)) {
+          this.custom[key] = Math.min(
+            CUSTOM_MAX_MM,
+            Math.max(CUSTOM_MIN_MM, value)
+          );
+          input.value = String(this.custom[key]);
+          this.schedule();
+        }
+      });
+      row.appendChild(label);
+      row.appendChild(input);
+      custom.appendChild(row);
+    }
+    section.appendChild(custom);
+    this.refs.custom = custom;
+
+    const summary = el('p', 'braille-panel-help tactile-map-summary');
+    summary.id = 'tactileMapSummary';
+    summary.setAttribute('aria-live', 'polite');
+    section.appendChild(summary);
+    this.refs.summary = summary;
+
+    const plates = el('fieldset', 'braille-panel-choice');
+    plates.id = 'tactileMapPlates';
+    plates.appendChild(el('legend', '', 'Plate'));
+    section.appendChild(plates);
+    this.refs.plates = plates;
+
+    const styleLabel = el('label', 'braille-panel-label', 'Plate name style');
+    styleLabel.htmlFor = 'tactileMapIdStyle';
+    section.appendChild(styleLabel);
+    const styleSelect = el('select', 'braille-panel-select');
+    styleSelect.id = 'tactileMapIdStyle';
+    for (const style of ID_STYLES) {
+      const option = document.createElement('option');
+      option.value = style.key;
+      option.textContent = style.name;
+      styleSelect.appendChild(option);
+    }
+    styleSelect.value = this.idStyle;
+    styleSelect.addEventListener('change', () => {
+      this.idStyle = styleSelect.value;
+      this.schedule(0);
+    });
+    section.appendChild(styleSelect);
+    this.refs.idStyle = styleSelect;
+
+    const warnings = el('ul', 'braille-panel-help tactile-map-warnings');
+    warnings.id = 'tactileMapWarnings';
+    section.appendChild(warnings);
+    this.refs.warnings = warnings;
+
+    const symbols = el('div', 'braille-translate-row tactile-map-symbols');
+    const load = el(
+      'button',
+      'btn btn-secondary braille-translate-btn',
+      'Load a symbol library'
+    );
+    load.type = 'button';
+    const reset = el(
+      'button',
+      'btn btn-secondary braille-translate-btn',
+      'Use the built-in symbols'
+    );
+    reset.type = 'button';
+    const file = document.createElement('input');
+    file.type = 'file';
+    file.accept = '.json,application/json';
+    file.id = 'tactileMapSymbolFile';
+    file.hidden = true;
+    file.tabIndex = -1;
+    file.setAttribute('aria-hidden', 'true');
+    const status = el('p', 'braille-panel-help');
+    status.id = 'tactileMapSymbolStatus';
+    status.setAttribute('role', 'status');
+    load.addEventListener('click', () => file.click());
+    file.addEventListener('change', () => {
+      const chosen = file.files && file.files[0];
+      if (!chosen) return;
+      loadSymbolLibraryFile(chosen)
+        .then(({ symbols: set, warnings: notes }) => {
+          setLibrary(set);
+          const sentence = `Loaded ${set.length} symbols from ${chosen.name}. They replace the built-in set until you clear them.`;
+          status.textContent = [sentence, ...notes].join(' ');
+          announce(status.textContent, { source: SOURCE });
+          this.schedule(0);
+        })
+        .catch((err) => {
+          status.textContent = err.message;
+          announceError(err.message, { source: SOURCE });
+        })
+        .finally(() => {
+          file.value = '';
+        });
+    });
+    reset.addEventListener('click', () => {
+      setLibrary(null);
+      status.textContent = 'Using the built-in symbols.';
+      announce(status.textContent, { source: SOURCE });
+      this.schedule(0);
+    });
+    symbols.appendChild(load);
+    symbols.appendChild(reset);
+    symbols.appendChild(file);
+    section.appendChild(symbols);
+    section.appendChild(status);
+
+    const actions = el('div', 'braille-translate-row tactile-map-actions');
+    const renderAll = el(
+      'button',
+      'btn btn-primary braille-translate-btn',
+      'Render every plate and download'
+    );
+    renderAll.type = 'button';
+    renderAll.id = 'tactileMapRenderAll';
+    renderAll.addEventListener('click', () => {
+      this.renderEveryPlate().catch((err) => {
+        this.say(err?.message || String(err), true);
+      });
+    });
+    const cancel = el(
+      'button',
+      'btn btn-secondary braille-translate-btn',
+      'Cancel'
+    );
+    cancel.type = 'button';
+    cancel.id = 'tactileMapRenderCancel';
+    cancel.hidden = true;
+    cancel.addEventListener('click', () => {
+      if (!this.running) return;
+      this.cancelRequested = true;
+      this.say('Stopping after this plate.');
+    });
+    actions.appendChild(renderAll);
+    actions.appendChild(cancel);
+    section.appendChild(actions);
+    this.refs.renderAll = renderAll;
+    this.refs.cancel = cancel;
+
+    const renderStatus = el('p', 'braille-panel-help');
+    renderStatus.id = 'tactileMapRenderStatus';
+    section.appendChild(renderStatus);
+    this.refs.renderStatus = renderStatus;
+
+    return section;
+  }
+
+  /** Show a sentence under the buttons and say it once through the announcer. */
+  say(text, failed = false) {
+    if (this.refs.renderStatus) this.refs.renderStatus.textContent = text;
+    (failed ? announceError : announce)(text, { source: SOURCE });
+  }
+
+  /**
+   * Render each plate in turn and offer the archive. One render at a time,
+   * in plate order; Cancel stops after the plate under way; a failed plate
+   * stops the loop with its message, and the plates finished so far are
+   * still offered.
+   */
+  async renderEveryPlate() {
+    if (this.running || !this.layout) return;
+    const state = stateManager.getState();
+    const format = state.outputFormat === '3mf' ? '3mf' : 'stl';
+    const stem = projectStem(state.uploadedFile?.name || 'tactile_map');
+    const parameters = state.parameters || {};
+    const built = buildLevelRings(this.plan, { tapeWidthMm: this.tapeWidth() });
+    const sets = plateParameterSets({
+      rings: built.rings,
+      layout: this.layout,
+      idStyle: this.idStyle,
+      northCue: this.northCue(),
+      config: this.config,
+      parameters,
+    });
+    const n = sets.length;
+    const { renderAll, cancel } = this.refs;
+
+    this.running = true;
+    this.cancelRequested = false;
+    renderAll.hidden = true;
+    cancel.hidden = false;
+    cancel.focus();
+
+    const rendered = [];
+    let stop = null;
+    try {
+      for (const set of sets) {
+        let bytes;
+        try {
+          bytes = await this.render(set.parameters, {
+            format,
+            timeoutMs: PLATE_TIMEOUT_MS,
+          });
+        } catch (err) {
+          stop = { error: err?.message || String(err) };
+          break;
+        }
+        rendered.push({ id: set.id, bytes });
+        this.say(`Plate ${rendered.length} of ${n} rendered.`);
+        if (this.cancelRequested) {
+          stop = {};
+          break;
+        }
+      }
+
+      let sentence;
+      if (rendered.length === 0) {
+        sentence =
+          'Stopped before the first plate finished; nothing to download.';
+      } else {
+        const fileName = `${stem}_plates.zip`;
+        const bytes = await this.buildArchive({
+          stem,
+          extension: OUTPUT_FORMATS[format]?.extension || '.stl',
+          rendered,
+          sets,
+          rings: built.rings,
+          parameters,
+        });
+        this.download(bytes, fileName, 'zip');
+        if (stop) {
+          sentence = `Stopped after plate ${rendered.length}; the zip holds the plates finished so far.`;
+        } else if (n === 1) {
+          sentence = `The plate is in ${fileName}.`;
+        } else {
+          sentence = `All ${n} plates are in ${fileName}.`;
+        }
+      }
+      if (stop?.error) sentence += ` ${stop.error}`;
+      this.say(sentence, Boolean(stop?.error));
+    } finally {
+      this.running = false;
+      renderAll.hidden = false;
+      if (document.activeElement === cancel) renderAll.focus();
+      cancel.hidden = true;
+    }
+  }
+
+  async buildArchive({ stem, extension, rendered, sets, rings, parameters }) {
+    const bed = this.bed();
+    const bedName =
+      this.bedKey === 'custom' ? `custom ${bed.w} x ${bed.d} mm` : bed.name;
+    const readme = readmeText({
+      mapName:
+        String(parameters.title_text || '').trim() ||
+        this.plan.meta?.title ||
+        stem,
+      bedName,
+      layout: this.layout,
+      size: this.plan.size,
+      heights: levelHeights(parameters),
+      tapeWidthMm: this.tapeWidth(),
+    });
+    const grid = plateGridSvg({
+      rings,
+      layout: this.layout,
+      size: this.plan.size,
+      bedName,
+    });
+    const { default: JSZip } = await import('jszip');
+    const zip = new JSZip();
+    for (const entry of archiveEntries({
+      stem,
+      extension,
+      rendered,
+      sets,
+      plan: this.plan,
+      readme,
+      grid,
+    })) {
+      zip.file(entry.name, entry.data);
+    }
+    return zip.generateAsync({ type: 'uint8array' });
+  }
+
+  schedule(delay = DEBOUNCE_MS) {
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.update(), delay);
+  }
+
+  rebuildPlates() {
+    const fieldset = this.refs.plates;
+    const focused = document.activeElement;
+    const hadFocus =
+      focused && fieldset.contains(focused) ? focused.value : null;
+    for (const row of [
+      ...fieldset.querySelectorAll('.braille-panel-toggle-row'),
+    ])
+      row.remove();
+    const ids = [
+      'whole',
+      ...(this.layout ? this.layout.plates.map((p) => p.id) : []),
+    ];
+    if (!ids.includes(this.plate)) this.plate = 'whole';
+    for (const id of ids) {
+      const row = el('div', 'braille-panel-toggle-row');
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'tactileMapPlate';
+      input.id = `tactileMapPlate-${id}`;
+      input.value = id;
+      input.checked = id === this.plate;
+      input.addEventListener('change', () => {
+        if (!input.checked) return;
+        this.plate = id;
+        announce(
+          id === 'whole' ? 'Showing the whole map.' : `Showing plate ${id}.`,
+          {
+            source: SOURCE,
+          }
+        );
+        this.schedule(0);
+      });
+      const label = el(
+        'label',
+        '',
+        id === 'whole' ? 'Whole map' : `Plate ${id}`
+      );
+      label.htmlFor = input.id;
+      row.appendChild(input);
+      row.appendChild(label);
+      fieldset.appendChild(row);
+      if (hadFocus === id) input.focus();
+    }
+    if (hadFocus && !ids.includes(hadFocus)) {
+      fieldset.querySelector(`input[value="${this.plate}"]`)?.focus();
+    }
+  }
+
+  update() {
+    if (!this.el) return;
+    const { w, h } = this.plan.size;
+    const bed = this.bed();
+    const layout = planPlates({ w, h, bed });
+    // The tile refuses a plate under its floor; a bed that cuts the map
+    // that small is refused here, in a sentence, and the whole map stays.
+    const tooSmall =
+      layout.plateW < PLATE_MIN_MM.w - 1e-9 ||
+      layout.plateH < PLATE_MIN_MM.h - 1e-9;
+    this.layout = tooSmall ? null : layout;
+    const n = layout.plates.length;
+    let sentence;
+    if (tooSmall) {
+      sentence = `A ${bed.w} x ${bed.d} mm bed cuts this map into plates of ${layout.plateW} x ${layout.plateH} mm, under the ${PLATE_MIN_MM.w} x ${PLATE_MIN_MM.h} mm minimum. Choose a larger bed.`;
+    } else if (n === 1) {
+      sentence = `One plate of ${layout.plateW} x ${layout.plateH} mm; the whole map fits.`;
+    } else {
+      sentence = `${n} plates of ${layout.plateW} x ${layout.plateH} mm, ${layout.plates[0].id} to ${layout.plates[n - 1].id}.`;
+    }
+    if (this.refs.summary.textContent !== sentence)
+      this.refs.summary.textContent = sentence;
+    this.rebuildPlates();
+
+    const built = buildLevelRings(this.plan, { tapeWidthMm: this.tapeWidth() });
+    this.refs.warnings.replaceChildren(
+      ...built.warnings.map((warning) => el('li', '', warning.text))
+    );
+
+    let svg;
+    let size;
+    let fileName;
+    let plateId = '';
+    let showTitle = 'yes';
+    let showNorth = 'yes';
+    if (this.plate === 'whole') {
+      svg = levelsSvgFromRings(built.rings, this.plan.size, built.textBoxes);
+      size = this.plan.size;
+      fileName = 'levels_whole.svg';
+    } else {
+      const plate = this.layout.plates.find((p) => p.id === this.plate);
+      const out = plateLevelsSvg(built.rings, plate, { id: this.idStyle });
+      const roles = plateRoles(plate, this.layout, this.northCue());
+      svg = out.svg;
+      size = out.size;
+      fileName = `levels_${plate.id}.svg`;
+      if (this.idStyle === 'margin') plateId = plate.id;
+      showTitle = roles.title ? 'yes' : 'no';
+      showNorth = roles.north ? 'yes' : 'no';
+    }
+    setParameterValue(this.config.widthParam, size.w);
+    setParameterValue(this.config.heightParam, size.h);
+    if (this.config.plateIdParam)
+      setParameterValue(this.config.plateIdParam, plateId);
+    if (this.config.plateShowsTitleParam)
+      setParameterValue(this.config.plateShowsTitleParam, showTitle);
+    if (this.config.plateShowsNorthParam)
+      setParameterValue(this.config.plateShowsNorthParam, showNorth);
+    if (!this.setFile(this.config.mapFileParam, fileName, svg)) {
+      console.warn(
+        `[MapPanel] No file control for parameter: ${this.config.mapFileParam}`
+      );
+    }
+  }
+
+  destroy() {
+    clearTimeout(this.timer);
+    if (this.unsubscribe) {
+      this.unsubscribe();
+      this.unsubscribe = null;
+    }
+    if (this.el?.parentNode) this.el.parentNode.removeChild(this.el);
+    this.el = null;
+  }
+}

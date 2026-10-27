@@ -87,6 +87,25 @@ describe('the Tactile Map tile', () => {
     expect(src).not.toMatch(/center\s*=\s*true/);
   });
 
+  it('cuts a cutouts group through the plate, lets the panel switch the title and north cue per plate, and takes a plate down to 100 x 75', () => {
+    const src = source();
+    const p = params();
+    // The plate's name as notches must be findable by a finger: a slot
+    // through the plate, not a 0.3 mm recess, so it has a pass of its own.
+    expect(src).toMatch(/import\s*\(\s*map_file\s*,\s*id\s*=\s*"cutouts"/);
+    const choices = (param) => param.enum.map((o) => o.value ?? o);
+    expect(choices(p.plate_shows_title)).toEqual(['yes', 'no']);
+    expect(p.plate_shows_title.default).toBe('yes');
+    expect(choices(p.plate_shows_north)).toEqual(['yes', 'no']);
+    expect(p.plate_shows_north.default).toBe('yes');
+    // The floor was set for a whole map; a plate of a split map may be a
+    // quarter of that.
+    expect(p.map_width_mm.minimum).toBe(100);
+    expect(p.map_height_mm.minimum).toBe(75);
+    expect(src).toMatch(/outside 100 to 600 mm/);
+    expect(src).toMatch(/outside 75 to 450 mm/);
+  });
+
   it('ships the sample levels file it defaults to', () => {
     const m = manifest();
     const p = params();

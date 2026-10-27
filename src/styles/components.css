@@ -16468,6 +16468,38 @@ body.tutorial-body-locked {
    Braille translation panel (Braille Card Customizer)
    ========================================================================== */
 
+/* The Tactile Map Designer panel shares the braille panel's parts; these
+   are its own: the custom bed inputs in a row, the summary kept legible, the
+   plate radios as touch targets, the two library buttons side by side. */
+.tactile-map-custom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.tactile-map-summary {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.tactile-map-panel .braille-panel-choice .braille-panel-toggle-row {
+  min-height: var(--size-touch-target);
+}
+
+.tactile-map-warnings {
+  margin: 0;
+  padding-left: var(--space-md);
+}
+
+.tactile-map-warnings:empty {
+  display: none;
+}
+
+.tactile-map-symbols,
+.tactile-map-actions {
+  flex-wrap: wrap;
+}
+
 .braille-panel {
   margin-bottom: var(--space-md);
   padding: var(--space-md);
