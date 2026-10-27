@@ -128,6 +128,7 @@ describe('a plan from a drawing', () => {
     const [area] = plan.features;
     expect(area.kind).toBe('area');
     expect(area.class).toBe('area');
+    expect(area.holes).toBeUndefined();
     expect(area.ring.length).toBeGreaterThanOrEqual(4);
     expect(plan.size).toEqual({ w: 20, h: 20 });
     expect(boundsOf(area.ring)).toEqual({
@@ -205,6 +206,31 @@ describe('a plan from a drawing', () => {
       expect(b.maxX).toBeLessThanOrEqual(100.5);
       expect(b.minX).toBeLessThanOrEqual(2.5);
       expect(b.maxX).toBeGreaterThanOrEqual(99.5);
+    }
+  });
+
+  it('turns an outline drawn as two rings classed area into one area with one hole', () => {
+    for (const classes of [{ 4: 'area', 5: 'area' }, { 4: 'area' }]) {
+      const { plan, warnings } = build(DRAWING, classes);
+      expect(warnings).toEqual([]);
+      expect(plan.features).toHaveLength(1);
+      const [area] = plan.features;
+      expect(area.kind).toBe('area');
+      expect(plan.size).toEqual({ w: 100, h: 100 });
+      expect(boundsOf(area.ring)).toEqual({
+        minX: 0,
+        maxX: 100,
+        minY: 0,
+        maxY: 100,
+      });
+      expect(area.holes).toHaveLength(1);
+      expect(boundsOf(area.holes[0])).toEqual({
+        minX: 2,
+        maxX: 98,
+        minY: 2,
+        maxY: 98,
+      });
+      expect(validatePlan(plan).ok).toBe(true);
     }
   });
 

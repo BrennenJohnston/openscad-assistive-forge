@@ -21,8 +21,9 @@
  *   so the centerline runs between the two edges. Small round shapes of
  *   one line class (the dots of a dotted route) are joined in order of
  *   nearness into one line.
- * - an AREA class: the shape's outer ring, filled; its holes are dropped
- *   (an outline classed as an area means the whole of it).
+ * - an AREA class: the shape's outer ring with its holes kept open (the
+ *   shape's inner rings of its own class or ignored: a courtyard, a slot,
+ *   the letters cut into a plateau).
  * - a POINT class: a point at the shape's center, with the class's symbol
  *   drawn there by the levels builder; the drawn shape itself is dropped.
  *   The bars or strokes of one drawn symbol, within SYMBOL_MERGE_MM of
@@ -825,16 +826,18 @@ export function planFromRegions({
   };
   const nameOf = (region) => region.name || region.key;
   const pairs = (ring) => ring.map((p) => [round2(p.x), round2(p.y)]);
+  const areaFeature = (e, id) => ({
+    id,
+    class: e.cls,
+    kind: 'area',
+    name: nameOf(e.region),
+    ring: pairs(e.mm),
+    ...(e.holes.length ? { holes: e.holes.map((hole) => pairs(hole.mm)) } : {}),
+    on: true,
+  });
   const keepAsArea = (e, code) => {
     const id = idFor(e.region);
-    plan.features.push({
-      id,
-      class: e.cls,
-      kind: 'area',
-      name: nameOf(e.region),
-      ring: pairs(e.mm),
-      on: true,
-    });
+    plan.features.push(areaFeature(e, id));
     warnings.push({
       code,
       featureId: id,
@@ -848,14 +851,7 @@ export function planFromRegions({
   const shapes = entries.filter((e) => !e.hole && e.kind !== 'ignore');
   for (const e of shapes) {
     if (e.kind === 'area') {
-      plan.features.push({
-        id: idFor(e.region),
-        class: e.cls,
-        kind: 'area',
-        name: nameOf(e.region),
-        ring: pairs(e.mm),
-        on: true,
-      });
+      plan.features.push(areaFeature(e, idFor(e.region)));
     } else if (e.kind === 'point') {
       const c = centroid(e.mm);
       if (!points.has(e.cls)) points.set(e.cls, []);

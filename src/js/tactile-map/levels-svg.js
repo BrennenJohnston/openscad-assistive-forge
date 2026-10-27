@@ -157,6 +157,11 @@ function positive(ring) {
   return areaOf(ring) < 0 ? [...ring].reverse() : ring;
 }
 
+/** A ring wound the way clipper writes a hole: negative area. */
+function negative(ring) {
+  return areaOf(ring) > 0 ? [...ring].reverse() : ring;
+}
+
 function discRing(cx, cy, r, n = DISC_SEGMENTS) {
   const ring = [];
   for (let i = 0; i < n; i++) {
@@ -474,7 +479,13 @@ export function buildLevelRings(plan, settings = {}) {
       }
     } else if (kind === 'area') {
       const level = f.level ?? cls.level ?? 1;
-      built.push({ f, level, rings: [positive(toPoints(f.ring))] });
+      // The holes wound the other way stay open under the level's NonZero
+      // union, unless another shape of the level covers them.
+      const rings = [
+        positive(toPoints(f.ring)),
+        ...(f.holes || []).map((hole) => negative(toPoints(hole))),
+      ];
+      built.push({ f, level, rings });
       if (f.texture) textures.add(f.texture);
     } else if (kind === 'point') {
       const level = f.level ?? cls.level ?? 2;

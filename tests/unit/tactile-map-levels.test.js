@@ -68,6 +68,42 @@ describe('the plan', () => {
     expect(result.ok).toBe(false);
     expect(result.errors.join(' ')).toMatch(/blob/);
   });
+
+  it("refuses an area's hole that is not a ring, in a sentence", () => {
+    const plan = emptyPlan(480, 360);
+    plan.features.push({
+      id: 'yard',
+      class: 'area',
+      kind: 'area',
+      ring: [
+        [0, 0],
+        [100, 0],
+        [100, 100],
+        [0, 100],
+      ],
+      holes: [
+        [
+          [20, 20],
+          [40, 40],
+        ],
+      ],
+      on: true,
+    });
+    const result = validatePlan(plan);
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual([
+      'yard has a hole that is not a ring of three or more points.',
+    ]);
+    plan.features[0].holes = [
+      [
+        [20, 20],
+        [40, 20],
+        [40, 40],
+        [20, 40],
+      ],
+    ];
+    expect(validatePlan(plan)).toEqual({ ok: true, errors: [] });
+  });
 });
 
 describe('the levels file', () => {
@@ -123,6 +159,41 @@ describe('the levels file', () => {
     expect(parts.rings.level3).toHaveLength(1);
     expect(parts.rings.level1).toHaveLength(0);
     expect(Object.keys(BUILTIN_SYMBOLS)).toContain('stairs');
+  });
+
+  it("keeps an area's holes open: a 100 mm plateau with a 20 mm slot", () => {
+    const plan = emptyPlan(480, 360);
+    plan.features.push({
+      id: 'plateau',
+      class: 'area',
+      kind: 'area',
+      ring: [
+        [0, 0],
+        [100, 0],
+        [100, 100],
+        [0, 100],
+      ],
+      holes: [
+        [
+          [20, 20],
+          [40, 20],
+          [40, 40],
+          [20, 40],
+        ],
+      ],
+      on: true,
+    });
+    const { rings } = buildLevelRings(plan);
+    expect(rings.level1).toHaveLength(2);
+    const areas = rings.level1
+      .map((r) => regionArea([r]))
+      .sort((a, b) => a - b);
+    expect(Math.abs(areas[0] + 400)).toBeLessThan(1);
+    expect(Math.abs(areas[1] - 10000)).toBeLessThan(1);
+    const { svg } = buildLevelsSvg(plan);
+    const d = pathDataOf(groupsOf(svg).level1);
+    expect((d.match(/M /g) || []).length).toBe(2);
+    expect(regionArea(ringsFromPathData(d))).toBeCloseTo(9600, 0);
   });
 
   it('draws a 10 mm triangle within 2 percent of 43.3 square millimeters', () => {

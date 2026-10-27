@@ -17,8 +17,10 @@
  *   kind 'line':    points [[x, y], ...] (two or more); width? (mm, instead
  *                   of the class's); style? ('solid', 'dotted', 'dashed',
  *                   'double', 'ticks')
- *   kind 'area':    ring [[x, y], ...] (three or more); texture? (a name;
- *                   none by default)
+ *   kind 'area':    ring [[x, y], ...] (three or more); holes? (rings of
+ *                   three or more points inside the ring, left open: a
+ *                   courtyard, a slot, a letter's counter); texture? (a
+ *                   name; none by default)
  *   kind 'point':   at [x, y] (the symbol's center); symbol? (a symbol key
  *                   instead of the class's); size? (mm)
  *   kind 'text':    at [x, y] (the top left of the letters); text; size?
@@ -119,6 +121,17 @@ export function validatePlan(plan) {
           );
         else if (!f.ring.every(isPair))
           errors.push(`${f.id} has a point that is not two numbers.`);
+        if (
+          f.holes !== undefined &&
+          (!Array.isArray(f.holes) ||
+            f.holes.some(
+              (h) => !Array.isArray(h) || h.length < 3 || !h.every(isPair)
+            ))
+        ) {
+          errors.push(
+            `${f.id} has a hole that is not a ring of three or more points.`
+          );
+        }
       } else {
         if (!isPair(f.at))
           errors.push(`${f.id} has no place (at) made of two numbers.`);
