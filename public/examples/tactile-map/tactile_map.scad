@@ -60,6 +60,8 @@ title_raise_mm = 0.8; // [0.8:0.05:2]
 north_cue = "Arrow with N"; // [Arrow with N, North line, None]
 // A raised border around the map.
 border = "no"; // [yes, no]
+// The plate's name, drawn as raised letters in the margin when the margin id style is on.
+plate_id = "";
 
 /* [Label channels] */
 // Width of your braille label tape (mm): 9.5 for 3/8 in tape, 12.7 for 1/2 in tape, the whole range of tapes the channels fit. Channels are cut 0.4 mm wider.
@@ -243,6 +245,22 @@ module north_cue() {
                 else north_arrow_2d();
 }
 
+// The plate's name: 6 mm capitals centered in the 10 mm strip along the
+// bottom edge that the margin id style adds to a plate's levels file.
+PLATE_ID_MM = 6;
+PLATE_ID_STRIP_MM = 10;
+module plate_name() {
+    if (len(plate_id) > 0)
+        translate([map_width_mm / 2, PLATE_ID_STRIP_MM / 2, base_eff - _fuse])
+            linear_extrude(height = title_raise_mm + _fuse)
+                text(to_upper(plate_id),
+                     size = PLATE_ID_MM / LETTER_CAP_FACTOR,
+                     font = "Liberation Sans",
+                     spacing = TITLE_LETTER_SPACING,
+                     halign = "center",
+                     valign = "center");
+}
+
 module border_frame() {
     if (border == "yes")
         translate([0, 0, base_eff - _fuse])
@@ -274,6 +292,7 @@ module tactile_map() {
             title();
             north_cue();
             border_frame();
+            plate_name();
         }
         channels();
     }

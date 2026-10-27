@@ -138,6 +138,13 @@ const EXAMPLES = {
     description: 'Braille Sign',
     manifest: '/examples/braille-sign/manifest.json',
   },
+  'tactile-map': {
+    path: '/examples/tactile-map/tactile_map.scad',
+    name: 'tactile_map.scad',
+    description: 'Tactile Map',
+    manifest: '/examples/tactile-map/manifest.json',
+    additionalFiles: ['/examples/tactile-map/sample_station.svg'],
+  },
   'q-charm': {
     path: '/examples/q-charm/q_charm.scad',
     name: 'q_charm.scad',
