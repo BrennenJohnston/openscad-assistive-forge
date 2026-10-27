@@ -16496,8 +16496,13 @@ body.tutorial-body-locked {
 }
 
 .tactile-map-symbols,
+.tactile-map-drawing-row,
 .tactile-map-actions {
   flex-wrap: wrap;
+}
+
+.tactile-map-drawing {
+  min-height: var(--size-touch-target);
 }
 
 .braille-panel {
