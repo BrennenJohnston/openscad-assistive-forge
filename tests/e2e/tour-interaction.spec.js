@@ -592,9 +592,10 @@ test.describe('The welcome page does not offer an inert switch', () => {
   }) => {
     await boot(page);
     await startWelcomeTour(page);
-    // 13 steps, less the Connect Folder step where the browser has no
-    // directory picker (Firefox): the count names only the steps it shows.
-    const total = await page.evaluate(() => ('showDirectoryPicker' in window ? 13 : 12));
+    // 14 steps (the Tactile Map Designer card has one), less the Connect
+    // Folder step where the browser has no directory picker (Firefox): the
+    // count names only the steps it shows.
+    const total = await page.evaluate(() => ('showDirectoryPicker' in window ? 14 : 13));
     await expect(page.locator('.tutorial-progress')).toContainText(
       `Step 1 of ${total}`
     );
@@ -611,7 +612,7 @@ test.describe('The welcome page does not offer an inert switch', () => {
   }) => {
     await boot(page, { classic: true });
     await startWelcomeTour(page);
-    const total = await page.evaluate(() => ('showDirectoryPicker' in window ? 10 : 9));
+    const total = await page.evaluate(() => ('showDirectoryPicker' in window ? 11 : 10));
     await expect(page.locator('.tutorial-progress')).toContainText(
       `Step 1 of ${total}`
     );
