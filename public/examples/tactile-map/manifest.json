@@ -1,0 +1,26 @@
+{
+  "name": "Tactile Map",
+  "description": "A tactile map plate built from a map file: a thin base, up to three raised levels, a raised title, a north cue and recessed channels for braille label tape. The panel above the controls splits a large map into plates for your printer.",
+  "version": "0.1.0",
+  "author": "Brennen Johnston",
+  "license": "GPL-3.0-or-later",
+  "main": "tactile_map.scad",
+  "files": ["tactile_map.scad", "sample_station.svg"],
+  "program": "tactile-map-designer",
+  "tactile": [
+    "base_thickness_mm",
+    "level_step_mm",
+    "symbol_step_mm",
+    "levels_used",
+    "title_char_height_mm",
+    "title_raise_mm",
+    "label_tape_width_mm",
+    "label_channel_depth_mm",
+    "map_width_mm",
+    "map_height_mm"
+  ],
+  "tags": ["tactile", "map", "accessibility", "orientation", "mobility", "braille"],
+  "inspired_by": {
+    "name": "My own hand-made tactile station maps"
+  }
+}
