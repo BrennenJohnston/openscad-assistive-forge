@@ -362,9 +362,9 @@ export function initThemeToggle(buttonId, onToggle = null) {
   }
 
   // Synced from the manager, not written only inside this button's own
-  // click handler: Ctrl+T, a City Walk in-game toggle and, under 'auto',
-  // the system changing scheme all change the theme too, and the button
-  // has to describe the state it is actually in, whoever changed it.
+  // click handler: Ctrl+T and, under 'auto', the system changing scheme
+  // change the theme too, and the button has to describe the state it is
+  // actually in, whoever changed it.
   // The name says the theme chosen, not the one the system resolved it to:
   // "Auto" was read as "dark" at night, the same as Dark.
   const names = {

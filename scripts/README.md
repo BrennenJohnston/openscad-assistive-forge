@@ -23,13 +23,6 @@ listed below.
 | `desktop-audit.ps1` | Runs desktop OpenSCAD (2021.01 CGAL and 2026.01.03 Manifold) over the keyguard fixture or a full preset sweep and captures reference output, geometry stats, face colours and screenshots | by hand, Windows, with desktop OpenSCAD installed |
 | `validate-example.mjs` | Static checks over the shipped example models | `npm run validate:examples`, and in CI |
 | `e2e-shard.mjs` | Packs the e2e suite into CI shards by measured cost | CI only, per browser lane |
-| `bake-city-extract.mjs` | Bakes an OpenStreetMap extract for the Alt View's city scene | by hand |
-| `city-elevation.mjs` | Adds an elevation block to a baked city extract | by hand |
-| `city-light-poles.mjs` | Merges a public street-light register into a baked extract | by hand |
-| `bench-city-walk.mjs` | Frame-time bench for the city scene; refuses headless and software GL | by hand |
-| `census-city-walk.mjs` | Placement census over the shipped extracts and builders | by hand |
-| `seq-city-walk.mjs` | Frame-sequence stability instrument for the city converter | by hand |
-| `stability-city-walk.mjs` | Still-image stability instrument for the city converter | by hand |
 | `build-potrace-wasm.sh` | Compiles Potrace to WebAssembly from one pinned, checksummed tarball into `public/wasm/potrace/` | the "Build Potrace wasm" workflow, or by hand with emsdk active |
 | `potrace-glue.c` | The code between Potrace and the browser: an ink mask in, SVG path data out. Compiled by the script above | not run directly |
 | `make-icon-fixtures.mjs` | Draws the two stock-icon-shaped fixtures the credit-line tests trace, so none has to be downloaded | by hand, when the fixtures change |

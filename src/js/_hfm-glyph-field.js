@@ -13,9 +13,9 @@
 // cell read it.
 //
 // What is pure here and why. Everything below is arithmetic on numbers and
-// typed arrays - no DOM, no three.js, no canvas. The class pass and the
-// converter call it; the unit tests pin it. The one impure step, reading a
-// CanvasTexture's pixels, lives in city-class-pass.js where the texture is.
+// typed arrays - no DOM, no three.js, no canvas. The converter calls it;
+// the unit tests pin it. The one impure step, reading a texture's pixels,
+// belongs to the class pass that writes the field, not here.
 //
 // The field is deliberately coarse, and that is the whole mechanism. A
 // field at the source texture's own resolution would not be stable: a cell
@@ -55,14 +55,12 @@
  *
  * The surfaces whose texture is a dither rather than a structure - ground,
  * paving, greenspace - have nothing to lose and everything to gain: the
- * ground is the worst churn in the game at 23.52 %/frame stateless.
+ * ground is the worst churn measured, 23.52 %/frame stateless.
  *
- * The ids are literals on purpose. Importing SURFACE_CLASS here would close
- * a cycle - city-class-pass.js has to import this module to build its
- * fields - and vitest does not tolerate it: the seq-metrics suite fails to
- * import with SURFACE_CLASS undefined. The same choice, for the same reason,
- * as CITY_BACKING_EXEMPT_CLASS_IDS in hc-palettes.js. A unit case asserts
- * every number below is the class it claims to be.
+ * The ids are literals on purpose: they are the wire format between the
+ * class pass that writes the field and this module, appended and never
+ * renumbered, and the pass that writes them is not this repository's to
+ * import. A unit case pins every number below to the class it names.
  */
 export const ANCHORED_CLASSES = Object.freeze([
   1, // SURFACE_CLASS.GROUND

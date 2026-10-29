@@ -28,9 +28,6 @@ jobs:
   e2e-tests-edge:
     name: E2E Tests (Edge ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    # The City Walk e2e suites are paused on CI (the skip in
-    # tests/e2e/helpers/city-walk.js says why), and the rest of the suite
-    # fits 45 minutes with room.
     timeout-minutes: 45
 
     strategy:

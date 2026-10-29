@@ -59,12 +59,6 @@ export const CLASSIC_REGIONS = [
 
 const FOCUS_SOURCE = 'gamepad';
 
-/** Whether the City Walk is up: it reads the controller itself then. */
-function cityWalkRunning() {
-  const layer = document.getElementById('cityWalkLayer');
-  return !!layer && !layer.hidden;
-}
-
 /**
  * Whether an element can take focus now: shown, and not inside something
  * inert, hidden or hidden from assistive technology.
@@ -307,13 +301,13 @@ function landingOf(part) {
  * @param {() => Region[]} [options.getRegions] - the window's parts, in
  *   order
  * @param {() => boolean} [options.isPaused] - true while something else has
- *   the controller (by default, while the City Walk runs)
+ *   the controller
  * @param {() => void} [options.onUnhandledBack] - closes what is open when
  *   nothing takes the Escape that Back sends
  */
 export function createGamepadNavigator({
   getRegions = () => DEFAULT_REGIONS,
-  isPaused = cityWalkRunning,
+  isPaused = () => false,
   onUnhandledBack = () => {},
 } = {}) {
   const step = (by) => {

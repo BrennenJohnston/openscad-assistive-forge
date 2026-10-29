@@ -185,7 +185,6 @@ import { initSequenceDetector } from './js/_seq.js';
 import {
   createGamepadController,
   createGamepadMapping,
-  createWalkMapping,
   isGamepadSupported,
   GAMEPAD_ACTIONS,
 } from './js/gamepad-controller.js';
@@ -1987,14 +1986,8 @@ async function initApp() {
     getPadId: () => gamepadController?.getGamepadInfo()?.id ?? '',
     userPresets: gamepadPresets,
   });
-  // The game's own buttons, named by the layout the app's table follows.
-  const walkMapping = createWalkMapping({
-    getPadId: () => gamepadController?.getGamepadInfo()?.id ?? '',
-    getFamily: () => gamepadMapping.get().family,
-  });
   // Keys ▸ Controller: the status line, the assignments and the test.
   initControllerPanel({
-    walkMapping,
     getGamepadStatus: () => ({
       supported: !!gamepadController,
       // The same display-name trim the connection status line uses, so the
@@ -5800,9 +5793,9 @@ async function initApp() {
   const contrastBtn = document.getElementById('contrastToggle');
   if (contrastBtn) {
     // The label is synced from the state, not written only inside this
-    // handler: Ctrl+H and the City Walk's in-game toggle change the contrast
-    // too, and the label must not say the opposite of the truth to the people
-    // who cannot see the button change.
+    // handler: Ctrl+H changes the contrast too, and the label must not say
+    // the opposite of the truth to the people who cannot see the button
+    // change.
     const syncContrastLabel = () => {
       const on = themeManager.highContrast;
       // The name keeps its visible word; on or off is the pressed state.
@@ -12184,81 +12177,6 @@ if (rounded) {
       return 'Alt View unlocked. Refresh to persist.';
     };
 
-    // ASCII City Walk: the gated welcome card's launch button. The
-    // game module is lazy-loaded on first press so it costs nothing until
-    // someone who found the unlock actually plays.
-    const cityWalkLaunchBtn = document.getElementById('cityWalkLaunchBtn');
-    if (cityWalkLaunchBtn) {
-      // The game is desktop-only, gated on the same viewport shape as Classic.
-      // Entry only: a session already running survives any resize, and Escape
-      // always leaves.
-      const cityWalkGateReason = () =>
-        document
-          .getElementById('cityWalkGateReason')
-          ?.textContent.replace(/\s+/g, ' ')
-          .trim();
-
-      const updateCityWalkGate = () => {
-        const gated = !isViewportDesktopShaped();
-        const reasonEl = document.getElementById('cityWalkGateReason');
-        // Shown, not sr-only: on a phone there is no hover tooltip, so the
-        // reason has to be on the card for a sighted player to read.
-        if (reasonEl) reasonEl.hidden = !gated;
-        if (gated) {
-          cityWalkLaunchBtn.setAttribute('aria-disabled', 'true');
-          cityWalkLaunchBtn.setAttribute(
-            'aria-describedby',
-            'cityWalkGateReason'
-          );
-          const reason = cityWalkGateReason();
-          if (reason) {
-            cityWalkLaunchBtn.setAttribute(
-              'title',
-              `Enter the City. ${reason}`
-            );
-          }
-        } else {
-          cityWalkLaunchBtn.removeAttribute('aria-disabled');
-          cityWalkLaunchBtn.removeAttribute('aria-describedby');
-          cityWalkLaunchBtn.removeAttribute('title');
-        }
-      };
-      updateCityWalkGate();
-      subscribeViewportShape(updateCityWalkGate);
-
-      cityWalkLaunchBtn.addEventListener('click', async (event) => {
-        // Gated means aria-disabled, not disabled: the click still arrives, so
-        // say why rather than doing nothing (the Classic toggle's pattern).
-        if (cityWalkLaunchBtn.getAttribute('aria-disabled') === 'true') {
-          event.preventDefault();
-          const reason = cityWalkGateReason();
-          announceImmediate(
-            reason
-              ? `ASCII City Walk unavailable. ${reason}`
-              : 'ASCII City Walk unavailable.'
-          );
-          return;
-        }
-        // No disabled toggle here: disabling the button would blur it, and
-        // the controller restores focus to this trigger on exit. Re-entry is
-        // already guarded by the controller's session singleton.
-        try {
-          const mod = await import('./js/game/city-walk-controller.js');
-          await mod.launchCityWalk({
-            hfmCtrl,
-            triggerEl: cityWalkLaunchBtn,
-            walkMapping,
-            openControllerSettings: ({ onClose }) =>
-              openShortcutsDialog({ tab: 'controller', onClose }),
-            joyConChoice: () => joyConChoice,
-          });
-        } catch (error) {
-          console.error('[CityWalk] Failed to launch:', error);
-          _announceError('The game could not be started. Please try again.');
-        }
-      });
-    }
-
     // Expose startTutorial globally for E2E test automation
     window.startTutorial = (tutorialId) => startTutorial(tutorialId);
 
@@ -16770,16 +16688,10 @@ if (rounded) {
       const target = previewManager?.controls?.target;
       return camera && target ? camera.position.distanceTo(target) : 0;
     };
-    // While the City Walk runs it reads the controller itself; the preview
-    // behind it must not move.
-    const cityWalkUp = () => {
-      const layer = document.getElementById('cityWalkLayer');
-      return !!layer && !layer.hidden;
-    };
     // Each move the controller makes is the view's own to the Alt View,
     // which ticks for it as it would for a drag.
     gamepadController.on('camera:rotate', ({ x, y }) => {
-      if (previewManager && !cityWalkUp()) {
+      if (previewManager) {
         noteControllerMove();
         previewManager.rotateHorizontal((x * Math.PI) / 180);
         previewManager.rotateVertical((y * Math.PI) / 180);
@@ -16787,7 +16699,7 @@ if (rounded) {
     });
 
     gamepadController.on('camera:zoom', ({ delta }) => {
-      if (!previewManager || cityWalkUp()) return;
+      if (!previewManager) return;
       // An orthographic view zooms by a factor of 1 + 0.02 for each unit
       // zoomCamera() takes, rather than by moving: the same share becomes
       // that factor there.
@@ -16799,7 +16711,7 @@ if (rounded) {
     });
 
     gamepadController.on('camera:pan', ({ x, y }) => {
-      if (previewManager && !cityWalkUp()) {
+      if (previewManager) {
         const span = viewSpan();
         noteControllerMove();
         previewManager.panCamera(x * span, y * span);
@@ -16812,10 +16724,9 @@ if (rounded) {
     // do) and the bumpers walk the standard views; in Customizer, the
     // bumpers step through the parameters and the triggers through the
     // groups. In each, A presses, B does what Escape does (a render's
-    // Cancel included), and View steps to the next preset. The navigator
-    // stands down while the City Walk runs. In the Alt View a press that
-    // acts with no control on screen plays a key (the rest press a control
-    // or move the view, which have their own sounds).
+    // Cancel included), and View steps to the next preset. In the Alt View a
+    // press that acts with no control on screen plays a key (the rest press
+    // a control or move the view, which have their own sounds).
     // The triggers' parts are the Classic interface's own in Classic; the
     // standard list covers a desktop and a phone (a part not shown is
     // passed by).
@@ -16828,7 +16739,7 @@ if (rounded) {
     });
     const PAD_TURN_STEP = 0.1;
     const turnView = (horizontal, vertical) => {
-      if (!previewManager || cityWalkUp()) return;
+      if (!previewManager) return;
       if (horizontal) previewManager.rotateHorizontal(horizontal);
       if (vertical) previewManager.rotateVertical(vertical);
     };
@@ -16837,7 +16748,7 @@ if (rounded) {
     const STANDARD_VIEWS = ['front', 'right', 'back', 'left', 'top', 'bottom'];
     let standardViewAt = -1;
     const walkViews = (by) => {
-      if (!previewManager || cityWalkUp()) return;
+      if (!previewManager) return;
       standardViewAt =
         (standardViewAt + by + STANDARD_VIEWS.length) % STANDARD_VIEWS.length;
       const view = STANDARD_VIEWS[standardViewAt];
@@ -16863,9 +16774,7 @@ if (rounded) {
       right: () => gamepadNavigator.arrow('right'),
       fullScreen: gamepadNavigator.fullScreen,
       // The controller's own button opens Keys on its own tab.
-      keys: () => {
-        if (!cityWalkUp()) openShortcutsDialog({ tab: 'controller' });
-      },
+      keys: () => openShortcutsDialog({ tab: 'controller' }),
       resetView: () => {
         playPadKey();
         resetViewCommand();

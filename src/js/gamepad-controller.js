@@ -10,7 +10,6 @@
 
 import {
   STORAGE_KEY_GAMEPAD_MAPPING,
-  STORAGE_KEY_GAMEPAD_WALK_MAPPING,
   safeGetItem,
   safeSetItem,
 } from './storage-keys.js';
@@ -238,41 +237,6 @@ export const GAMEPAD_PRESET_ORDER = Object.freeze(Object.keys(GAMEPAD_PRESETS));
 
 /** The preset a person starts with. */
 export const DEFAULT_GAMEPAD_PRESET = 'camera';
-
-/**
- * The City Walk's own actions, in its table's order. The sticks and the
- * D-pad are not among them: they always walk and look there.
- */
-export const CITY_WALK_ACTIONS = [
-  { id: 'map', name: 'Map' },
-  { id: 'back', name: 'Back' },
-  { id: 'help', name: 'Help' },
-  { id: 'previousLandmark', name: 'Previous landmark' },
-  { id: 'nextLandmark', name: 'Next landmark' },
-  { id: 'walkTo', name: 'Walk to the landmark' },
-  { id: 'autoWalk', name: 'Auto-walk' },
-];
-
-/** The City Walk's one preset: its buttons before anyone changes them. */
-export const CITY_WALK_PRESETS = {
-  walk: {
-    name: 'City Walk buttons',
-    assignments: {
-      map: 'a',
-      back: 'b',
-      help: 'start',
-      previousLandmark: 'lb',
-      nextLandmark: 'rb',
-      walkTo: 'rt',
-      autoWalk: 'lt',
-    },
-  },
-};
-
-/** The inputs the City Walk's actions can take: every button but the D-pad. */
-const CITY_WALK_INPUTS = GAMEPAD_BUTTON_NAMES.filter(
-  (name) => !['up', 'down', 'left', 'right'].includes(name)
-);
 
 /** The controller families whose button names the Controller tab uses. */
 export const GAMEPAD_FAMILIES = [
@@ -516,8 +480,8 @@ function validAssignments(table, actionIds, inputs) {
 /**
  * The saved controller mapping: the preset, the family when a person chose
  * one (else it follows the pad), and a person's own assignments when they
- * changed any. The app's by default; the City Walk's table is the same
- * thing with its own actions, preset, inputs and key.
+ * changed any. The app's by default; the options below let a table of
+ * its own have its own actions, preset, inputs and key.
  * @param {Object} [options]
  * @param {() => string} [options.getPadId]
  * @param {() => string|null} [options.getFamily] - the family to follow
@@ -687,23 +651,6 @@ export function createGamepadMapping({
       return () => listeners.delete(listener);
     },
   };
-}
-
-/**
- * The City Walk's table, kept apart from the app's: its seven actions, its
- * one preset, every button but the D-pad.
- * @param {{getPadId?: () => string, getFamily?: () => string|null}} [options]
- */
-export function createWalkMapping({ getPadId, getFamily } = {}) {
-  return createGamepadMapping({
-    getPadId,
-    getFamily,
-    actions: CITY_WALK_ACTIONS,
-    presets: CITY_WALK_PRESETS,
-    defaultPreset: 'walk',
-    inputs: CITY_WALK_INPUTS,
-    storageKey: STORAGE_KEY_GAMEPAD_WALK_MAPPING,
-  });
 }
 
 /**

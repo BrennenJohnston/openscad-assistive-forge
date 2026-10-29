@@ -59,7 +59,7 @@ import {
   anchoredGlyph,
   buildLadders,
   FIELD_LEVELS,
-} from './game/city-glyph-field.js';
+} from './_hfm-glyph-field.js';
 
 // Tuning knobs
 // _MIN_INTERVAL_MS      — conversion throttle ceiling (~30 fps while dirty)
@@ -162,9 +162,9 @@ function _createInstanceState() {
     // Written on every frame; read only through the DEV-only getters.
     convertStats: { last: 0, sum: 0, max: 0, samples: 0 },
 
-    // Caller opt-in for the small-character treatment. The City Walk
-    // sets it; the preview's Alt View leaves it false so its own smallest
-    // setting renders exactly as it always has.
+    // Caller opt-in for the small-character treatment. The preview's Alt
+    // View leaves it false so its own smallest setting renders exactly as it
+    // always has.
     tinyCellsAllowed: false,
 
     // Sampling plan: the distinct sample pixels a cell's sixteen taps
@@ -289,7 +289,7 @@ function _setContrastScale(st, scale) {
 
 function _setFontScale(st, scale) {
   const next = Number.isFinite(scale) ? scale : 1;
-  // Instance floor is 0.05, not the preview's 0.4: the City Walk asks
+  // Instance floor is 0.05, not the preview's 0.4: a caller may ask
   // for characters small enough to disappear into, and hfm-controller.js
   // still gives the preview's Alt View no characters under 0.4 (its
   // slider goes lower, to the vector look). Below ~0.15 the fontSizePx
@@ -1767,8 +1767,8 @@ function _renderVectorFrame(st, { renderer, previewManager, container }) {
  * @param {{allowTinyCells?: boolean}} [options] - allowTinyCells opts this
  *   instance into the small-character treatment: glyph atlases below
  *   a 4 px cell are normalized back to full opacity, so the picture does not
- *   dim as the characters shrink. The City Walk sets it; the preview's Alt
- *   View does not, and so is unchanged at every setting
+ *   dim as the characters shrink. The preview's Alt View does not set it,
+ *   and so is unchanged at every setting
  *   its own 0.3-2.5 slider can reach.
  * @returns {Object} API for controlling the alternate view
  */
@@ -2439,8 +2439,7 @@ export async function initAltView(previewManager, options = {}) {
     },
     /**
      * The painted cell's size in canvas pixels at the current font scale.
-     * Read-only, so a caller can filter its scene for the cell raster (the
-     * City Walk's facade textures do).
+     * Read-only, so a caller can filter its scene for the cell raster.
      */
     getCellPx() {
       return { w: metrics.charW, h: metrics.charH };
@@ -2448,8 +2447,8 @@ export async function initAltView(previewManager, options = {}) {
     /**
      * The convert counters the frame loop already keeps, exposed
      * cumulatively so a caller can time a span by diffing two snapshots.
-     * Read-only and allocation-light; the City Walk's entry calibration is
-     * the customer. The richer getConvertStats readout stays DEV-only.
+     * Read-only and allocation-light, for a caller that calibrates itself on
+     * entry. The richer getConvertStats readout stays DEV-only.
      */
     getConvertTotals() {
       return {

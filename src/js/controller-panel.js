@@ -1,8 +1,7 @@
 /**
  * The Keys dialog's Controller tab: the status line, the layout and preset
  * pickers, one row per action with its button and a Change button that waits
- * for one press, and a readout of what the browser reads from the pad. Once
- * the game is found, a second table holds its own buttons.
+ * for one press, and a readout of what the browser reads from the pad.
  *
  * The readout's lines follow the pad on every frame while the tab is shown.
  * A press still does what it is assigned to do, so a test takes each press
@@ -12,8 +11,6 @@
  */
 
 import {
-  CITY_WALK_ACTIONS,
-  CITY_WALK_PRESETS,
   GAMEPAD_ACTIONS,
   GAMEPAD_BUTTON_NAMES,
   GAMEPAD_PRESETS,
@@ -29,7 +26,6 @@ import { showConfirmDialog } from './dialogs.js';
  * @typedef {Object} ControllerPanelHandlers
  * @property {() => {supported: boolean, padName: string|null}} [getGamepadStatus]
  * @property {GamepadHandlers} [gamepad]
- * @property {ReturnType<typeof import('./gamepad-controller.js').createWalkMapping>} [walkMapping]
  */
 
 /**
@@ -68,8 +64,8 @@ const STICKS = [
 const el = (id) => document.getElementById(id);
 
 /**
- * The tab's two tables: the app's, and the game's own, each with its
- * actions, its presets, its mapping and the prefix of its ids.
+ * The tab's tables: each with its actions, its presets, its mapping and
+ * the prefix of its ids.
  */
 const TABLES = [
   {
@@ -77,12 +73,6 @@ const TABLES = [
     actions: GAMEPAD_ACTIONS,
     presets: GAMEPAD_PRESETS,
     mapping: () => handlers.gamepad?.mapping,
-  },
-  {
-    prefix: 'keysWalk',
-    actions: CITY_WALK_ACTIONS,
-    presets: CITY_WALK_PRESETS,
-    mapping: () => handlers.walkMapping,
   },
 ];
 
@@ -401,7 +391,7 @@ function renderTable(table, family) {
 /**
  * Change one action's button: wait for one press on the controller (Escape
  * stops waiting), then assign it and say what changed. A press the table
- * cannot take (the game's D-pad walks) changes nothing.
+ * cannot take changes nothing.
  * @param {typeof TABLES[number]} table
  * @param {string} actionId
  */

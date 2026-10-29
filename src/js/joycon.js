@@ -14,9 +14,7 @@
  * A layout turns that into a full pad's controls the app already reads: the
  * stick on the right stick (it turns the view), the four buttons on an extra
  * pair of axes (they pan), SL and SR on the triggers (they zoom), and the
- * other buttons on the inputs its table names. The City Walk's layout puts
- * the stick on the left stick (it walks) and the four buttons on the right
- * (they look).
+ * other buttons on the inputs its table names.
  *
  * @license GPL-3.0-or-later
  */
@@ -44,17 +42,6 @@ const CAMERA_INPUTS = {
   x: 'resetView',
   start: 'fullScreen',
   home: 'keys',
-};
-// The City Walk's jobs on one Joy-Con, whose four buttons look there: the
-// trigger is the map as it activates in the app, the side button goes back.
-const WALK_INPUTS = {
-  a: 'map',
-  b: 'back',
-  lb: 'previousLandmark',
-  rb: 'nextLandmark',
-  lt: 'autoWalk',
-  rt: 'walkTo',
-  start: 'help',
 };
 const SEPARATE_INPUTS = {
   ...CAMERA_INPUTS,
@@ -272,35 +259,6 @@ function cameraPad(pad, parts) {
   };
 }
 
-/**
- * A full pad's controls for the City Walk from one Joy-Con's parts: the
- * stick on the left stick (it walks), the four buttons on the right stick
- * (they look), and the other buttons on the inputs its table names.
- */
-function walkPad(pad, parts) {
-  const values = new Array(17).fill(0);
-  values[0] = parts.trigger;
-  values[1] = parts.side;
-  values[4] = parts.sl;
-  values[5] = parts.sr;
-  values[6] = parts.home;
-  values[7] = parts.stickPress;
-  values[9] = parts.plus;
-  return {
-    id: pad.id,
-    index: pad.index,
-    connected: true,
-    mapping: 'standard',
-    buttons: values.map(button),
-    axes: [
-      parts.stick[0],
-      parts.stick[1],
-      parts.right - parts.left,
-      parts.down - parts.up,
-    ],
-  };
-}
-
 /** The pair used separately: the right half the camera, the left the Customizer. */
 function separatePad(pad) {
   const v = (index) => valueOf(pad, index);
@@ -346,26 +304,6 @@ export function joyConLayout(pad, choice) {
     };
   }
   return null;
-}
-
-/**
- * The City Walk's layout for a listed pad: one Joy-Con, alone or one half
- * of the pair, walks with its stick and looks with its four buttons. Null
- * when the pad is read as it is (the pair used together or separately is
- * already a full pad there).
- * @param {Gamepad|null} pad
- * @param {{hold: string|null, pair: string|null}} choice
- * @returns {{name: string, view: (pad: Gamepad) => object,
- *   inputs: Object<string, string>}|null}
- */
-export function joyConWalkLayout(pad, choice) {
-  const one = oneJoyCon(pad, choice);
-  if (!one) return null;
-  return {
-    name: `walk-${one.name}`,
-    view: (gamepad) => walkPad(gamepad, one.parts(gamepad)),
-    inputs: WALK_INPUTS,
-  };
 }
 
 /** Whether a listed pad is the merged pair in the shape measured. */

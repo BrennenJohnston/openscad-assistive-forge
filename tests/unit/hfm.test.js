@@ -438,7 +438,7 @@ describe('initAltView — API surface', () => {
     expect(api.setContrastScale(99)).toBe(4.0)
     expect(api.setContrastScale(0)).toBe(0.5)
     expect(api.setFontScale(99)).toBe(2.5)
-    // The instance floor is 0.05 so the City Walk can go tiny. The
+    // The instance floor is 0.05 so a caller can go tiny. The
     // preview's Alt View never sees it - hfm-controller.js clamps to 0.5
     // first (guarded by the next test).
     expect(api.setFontScale(0)).toBe(0.05)

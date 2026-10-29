@@ -21,12 +21,11 @@ import { gzipSync } from 'zlib';
 // Lazy-loaded static payloads fetched on demand at runtime, never part of
 // the initial page load (same rationale as the WASM binary exclusion).
 // liblouis/ holds the braille translation tables loaded only by the
-// Braille Card Customizer's worker; examples/ascii-city/ holds the
-// City Walk game's map extracts, fetched only when a player picks a city;
+// Braille Card Customizer's worker;
 // wasm/engines/ holds the official OpenSCAD engines' loaders and checksums,
 // fetched only when a person downloads one of them.
 // Entries are dist-relative path prefixes (POSIX separators).
-const EXCLUDED_DIRS = ['liblouis', 'examples/ascii-city', 'wasm/engines'];
+const EXCLUDED_DIRS = ['liblouis', 'wasm/engines'];
 
 // The vendored OpenSCAD libraries ship whole, but the app loads only their
 // .scad files (not weighed here) and each library's manifest.json. The rest

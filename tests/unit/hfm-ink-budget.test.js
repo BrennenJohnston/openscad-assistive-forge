@@ -8,10 +8,23 @@ import {
   normalizeChroma,
   parsePaletteColor,
 } from '../../src/js/_hfm-paint.js'
-import {
-  HC_PALETTE_GREEN,
-  CITY_PALETTE_INK_BUDGET,
-} from '../../src/js/game/hc-palettes.js'
+
+// The fixture palette and budget the budget was tuned with: a six-entry
+// high-contrast set with white as its last entry, and a budget with the
+// floor off and the white gate on.
+const HC_PALETTE_GREEN = [
+  '#00ff00',
+  '#00ffff',
+  '#ffff00',
+  '#ff00ff',
+  '#ff3333',
+  '#ffffff',
+]
+const CITY_PALETTE_INK_BUDGET = Object.freeze({
+  floor: 0,
+  whiteLum: 0.9,
+  whiteChroma: 0.12,
+})
 
 /**
  * Without a budget, colour mode has no way to say "this cell is dim": the
@@ -106,28 +119,4 @@ describe('the ink budget: configuration', () => {
     expect(normalizeInkBudget({ floor: -1 }).floor).toBe(DEFAULT_INK_BUDGET.floor)
   })
 
-  it('has no floor, and keeps the white gate', () => {
-    // The floor is zero. Measured at the Seattle spawn, standing, 30 %:
-    //
-    //   floor 0.5   3.1 % inked
-    //   floor 0.3  28.5 % inked
-    //   floor 0    88.4 % inked, white share 0.00 %   <- shipped
-    //
-    // A floor leaves the city's lights floating in black, and the darkness is
-    // what a player notices. The two halves do different jobs, which is why
-    // one can go: the white gate alone takes white from 61.8 % to 0.01 % and
-    // changes nothing else, so the gate is what removes the flat white fields
-    // that make colour mode unreadable, and the floor is what makes the city
-    // dark. The gate stays.
-    expect(CITY_PALETTE_INK_BUDGET.floor).toBe(0)
-    expect(CITY_PALETTE_INK_BUDGET.whiteLum).toBe(0.9)
-    // A floor of zero must not switch the whole budget off: the gate has to
-    // survive it, and normalizeInkBudget only returns null when both are off.
-    expect(normalizeInkBudget(CITY_PALETTE_INK_BUDGET)).toEqual({
-      floor: 0,
-      whiteLum: 0.9,
-      whiteChroma: 0.12,
-    })
-    expect(normalizeInkBudget({ floor: 0, whiteLum: 0 })).toBeNull()
-  })
 })

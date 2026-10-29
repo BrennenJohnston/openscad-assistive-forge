@@ -1,23 +1,19 @@
 import { describe, it, expect } from 'vitest'
 import path from 'node:path'
-import { readFileSync } from 'node:fs'
 import {
   MEASURED_SECONDS,
   DEFAULT_WEIGHT_S,
   PROJECT_IGNORES,
-  CI_SKIPPED,
-  CI_SKIPPED_WEIGHT_S,
   planShards,
   filesForProject,
   listSpecFiles,
-  weightsFor,
 } from '../../scripts/e2e-shard.mjs'
 
 /**
  * The e2e lanes are sharded by measured cost rather than by test count:
- * count-based sharding would put a quarter of the whole Chromium lane -
- * ascii-city-walk.spec.js, 18 minutes of it - permanently in shard 1 and
- * leave that shard failing on Playwright's 35-minute ceiling.
+ * count-based sharding once put a quarter of the whole Chromium lane - one
+ * 18-minute file - permanently in shard 1 and left that shard failing on
+ * Playwright's 35-minute ceiling.
  *
  * What has to stay true is not the exact division, which will move whenever a
  * weight does. It is that every spec file runs on exactly one shard, and that
@@ -33,7 +29,7 @@ describe('e2e shard planner', () => {
 
   it('finds the suite', () => {
     expect(files.length).toBeGreaterThan(50)
-    expect(files).toContain('ascii-city-walk.spec.js')
+    expect(files).toContain('accessibility.spec.js')
     expect(files.every((f) => f.endsWith('.spec.js'))).toBe(true)
   })
 
@@ -63,15 +59,12 @@ describe('e2e shard planner', () => {
   // Two CI workers per shard, plus a couple of minutes of checkout, npm ci
   // and browser install before any test runs.
   const SETUP_MIN = 3
-  // The lanes are projected the way CI plans them, with weightsFor(true): a
-  // City Walk file skips there in seconds and is booked at what skipping
-  // costs, not at the minutes it takes a local board. Projected with the
-  // local weights, each Edge and Firefox shard carried about fourteen minutes
-  // nobody spends (35.0 projected, 15 to 22 minutes run, 2026-10-18). When
-  // the suites come back to CI, weightsFor(true) books them in full again.
-  const ciWeights = weightsFor(true)
+  // The lanes are projected with the measured weights, the way CI plans them.
   const ciLoad = (shard) =>
-    shard.reduce((sum, f) => sum + (ciWeights[f] ?? DEFAULT_WEIGHT_S), 0)
+    shard.reduce(
+      (sum, f) => sum + (MEASURED_SECONDS[f] ?? DEFAULT_WEIGHT_S),
+      0
+    )
   const projectMin = (shard) => ciLoad(shard) / 60 / 2 + SETUP_MIN
 
   it('never lets a Chromium shard approach the 35-minute ceiling', () => {
@@ -81,11 +74,11 @@ describe('e2e shard planner', () => {
     // model can be right and still lie, if nobody re-measures what it is
     // multiplying.
     //
-    // Chromium runs seven shards (test.yml): with fewer, the lane's heavy city
-    // suites push a shard past the 2100 s clock, and the two-core runner does
+    // Chromium runs seven shards (test.yml): with fewer, the lane's heaviest
+    // files pushed a shard past the 2100 s clock, and the two-core runner does
     // not parallelize software 3D. Twenty-five minutes leaves ten of margin on
     // a thirty-five minute ceiling, which is what a starved runner eats.
-    for (const shard of planShards(files, ciWeights, 7)) {
+    for (const shard of planShards(files, MEASURED_SECONDS, 7)) {
       const wallMin = projectMin(shard)
       expect(
         wallMin,
@@ -114,7 +107,7 @@ describe('e2e shard planner', () => {
       ['firefox', 4],
     ]) {
       const lane = filesForProject(files, project)
-      for (const shard of planShards(lane, ciWeights, laneShards)) {
+      for (const shard of planShards(lane, MEASURED_SECONDS, laneShards)) {
         const wallMin = projectMin(shard)
         expect(
           wallMin,
@@ -171,75 +164,5 @@ describe('e2e shard planner', () => {
       measuredButGone,
       'the weight table names spec files that are no longer here'
     ).toEqual([])
-  })
-})
-
-/**
- * A lane should be booked for what it will actually run.
- *
- * The City Walk suites are paused on CI and skip themselves in seconds
- * there. Booked at their full measured minutes, the three heaviest would
- * each get a shard on the Chromium lane, leaving three of six idle on CI
- * and pushing everything else into the remainder - one shard carrying 44
- * files, with tests failing there for crowding rather than for behaviour.
- */
-describe('planning for what CI actually runs', () => {
-  const files = filesForProject(
-    listSpecFiles(path.resolve('tests/e2e')),
-    'chromium'
-  )
-
-  it('every CI-skipped file is a spec that exists', () => {
-    const gone = CI_SKIPPED.filter((f) => !files.includes(f))
-    expect(gone, 'CI_SKIPPED names spec files that are no longer here').toEqual(
-      []
-    )
-  })
-
-  it('every CI-skipped file really does skip itself on CI', () => {
-    // The skip lives in one helper; a file claiming to be skipped without
-    // using it would be booked at nothing and then run for minutes.
-    for (const file of CI_SKIPPED) {
-      const source = readFileSync(path.resolve('tests/e2e', file), 'utf-8')
-      expect(
-        source.includes('useCityWalkFixtures'),
-        `${file} is listed as skipped on CI but does not use the helper that skips it`
-      ).toBe(true)
-    }
-  })
-
-  it('local planning is untouched: a local board runs these suites in full', () => {
-    expect(weightsFor(false)).toBe(MEASURED_SECONDS)
-  })
-
-  it('CI planning books a skipped suite at what skipping costs', () => {
-    const onCI = weightsFor(true)
-    for (const file of CI_SKIPPED) expect(onCI[file]).toBe(CI_SKIPPED_WEIGHT_S)
-    // And leaves everything else exactly as measured.
-    for (const [file, seconds] of Object.entries(MEASURED_SECONDS)) {
-      if (!CI_SKIPPED.includes(file)) expect(onCI[file]).toBe(seconds)
-    }
-  })
-
-  it('no CI shard is left idle while another carries everything', () => {
-    const plan = planShards(files, weightsFor(true), 7)
-    // Otherwise three shards would hold one file each - a file that skips.
-    // A shard may hold few files when one of them is long (ui-schema alone
-    // is over twenty minutes), as long as something in it runs.
-    for (const shard of plan) {
-      expect(
-        shard.some((f) => !CI_SKIPPED.includes(f)),
-        `a shard of files that all skip on CI: ${shard}`
-      ).toBe(true)
-    }
-
-    const loads = plan.map((shard) =>
-      shard.reduce(
-        (sum, f) => sum + (weightsFor(true)[f] ?? DEFAULT_WEIGHT_S),
-        0
-      )
-    )
-    const spread = Math.max(...loads) - Math.min(...loads)
-    expect(spread, `booked seconds per shard: ${loads}`).toBeLessThan(60)
   })
 })

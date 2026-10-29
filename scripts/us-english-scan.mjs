@@ -19,9 +19,8 @@
  * What it deliberately does not read, because the rule leaves them alone:
  * identifiers, CSS class names, file names and settings keys (`colourCount`,
  * `wallColour`, `colour-separation.js`, `.drawing-editor-colour-select`), the
- * City Walk's OpenStreetMap data, the tool output under
- * `docs/accessibility/vpat/evidence/`, and the dated audit records under
- * `docs/archive/audit/`.
+ * tool output under `docs/accessibility/vpat/evidence/`, and the dated audit
+ * records under `docs/archive/audit/`.
  *
  * A word inside a string or comment counts only when it stands alone in
  * prose: a character of `-_/\#$` on either side means it is part of a name,
@@ -42,9 +41,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 // [what to look for, what to write instead]. Every entry is a form that is
 // British where American English has another spelling. Words that are correct
-// in both ("dialogue", "catalogue") are not here, and neither is "kerb": in
-// this repository it is the OpenStreetMap tag name the City Walk's road code
-// follows, not a spelling of "curb".
+// in both ("dialogue", "catalogue") are not here.
 export const BRITISH = [
   [/\bcolour(ed|ing|s|less|ful)?\b/i, 'color'],
   [/\bcentre(d|s|line|lines)?\b/i, 'center'],
@@ -120,7 +117,6 @@ const DIR_SKIP = new Set([
 const PATH_SKIP = [
   join('docs', 'accessibility', 'vpat', 'evidence'),
   join('docs', 'archive', 'audit'),
-  join('public', 'examples', 'ascii-city'),
 ]
 
 const ROOT_PAPERS = [

@@ -37,7 +37,6 @@ const EXPECTED_KEYS = {
     'openscad-forge-phone-customizer-opacity',
   STORAGE_KEY_PHONE_SETTINGS_HEIGHT: 'openscad-forge-phone-settings-height',
   STORAGE_KEY_GAMEPAD_MAPPING: 'openscad-forge-gamepad-mapping',
-  STORAGE_KEY_GAMEPAD_WALK_MAPPING: 'openscad-forge-gamepad-walk-mapping',
   STORAGE_KEY_JOYCON: 'openscad-forge-joycon',
   STORAGE_KEY_GAMEPAD_PRESETS: 'openscad-forge-gamepad-presets',
 
@@ -105,28 +104,6 @@ const EXPECTED_KEYS = {
   STORAGE_KEY_HFM_GRID: 'openscad-forge-hfm-grid',
   STORAGE_KEY_ALT_UNLOCK: 'openscad-forge-alt-unlock',
 
-  // City Walk game: persistent walking-speed multiplier
-  STORAGE_KEY_CITY_WALK_SPEED: 'openscad-forge-city-walk-speed',
-
-  // City Walk game: persistent ASCII character scale
-  STORAGE_KEY_CITY_WALK_FONT_SCALE: 'openscad-forge-city-walk-font-scale',
-
-  // City Walk game: the machine's last calibrated size floor
-  STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR:
-    'openscad-forge-city-walk-calibrated-floor',
-
-  // City Walk game: colour on/off; absent means follow high contrast
-  STORAGE_KEY_CITY_WALK_COLOUR: 'openscad-forge-city-walk-colour',
-  // Day/Night and the empty city. Both are player choices the game
-  // remembers, and both are absent by default - Night and a busy city are
-  // what ships.
-  STORAGE_KEY_CITY_WALK_DAYLIGHT: 'openscad-forge-city-walk-daylight',
-  STORAGE_KEY_CITY_WALK_EMPTY_CITY: 'openscad-forge-city-walk-empty-city',
-  STORAGE_KEY_CITY_WALK_MAP_STYLE: 'openscad-forge-city-walk-map-style',
-  STORAGE_KEY_CITY_WALK_CAMERA_PANEL: 'openscad-drawer-camera-city-walk-state',
-  // The mouse-look mode (follow | drag | off); absent means follow,
-  // or off when the machine asks for reduced motion.
-  STORAGE_KEY_CITY_WALK_LOOK: 'openscad-forge-city-walk-look',
 };
 
 describe('storage-keys exported constants', () => {
@@ -242,22 +219,6 @@ describe('safeGetItem / safeSetItem / safeRemoveItem', () => {
 describe('storage-keys helpers', () => {
   it('getAppPrefKey generates openscad-forge-* keys', () => {
     expect(storageKeys.getAppPrefKey('theme')).toBe('openscad-forge-theme');
-  });
-
-  it('getCityWalkProgressKey is one key per city, under the app prefix', () => {
-    // A key per city, because progress is per city - and the shape is pinned
-    // here because later features extend its value rather than mint sibling
-    // keys beside it.
-    expect(storageKeys.getCityWalkProgressKey('seattle')).toBe(
-      'openscad-forge-city-walk-progress-seattle'
-    );
-    expect(storageKeys.getCityWalkProgressKey('denver')).toBe(
-      'openscad-forge-city-walk-progress-denver'
-    );
-    // Two cities never share a key, which is the whole point of the shape.
-    expect(storageKeys.getCityWalkProgressKey('seattle')).not.toBe(
-      storageKeys.getCityWalkProgressKey('burnaby')
-    );
   });
 
   it('getDrawerStateKey generates openscad-drawer-*-state keys', () => {

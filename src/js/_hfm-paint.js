@@ -127,9 +127,9 @@ export function buildGlyphAtlas({
  * pixel is fully opaque restores the intended mapping (amber's floor
  * measures 8.99:1 after, high-contrast dark 19.43:1).
  *
- * Scope: the caller must opt in (the City Walk does; the preview's Alt View
- * does not), and the cell must be at most _TINY_BRIGHTNESS_MAX_CSS_PX wide.
- * The opt-in is what makes this game-only, and it is not decoration: Iosevka
+ * Scope: the caller must opt in (the preview's Alt View does not), and the
+ * cell must be at most _TINY_BRIGHTNESS_MAX_CSS_PX wide. The opt-in is what
+ * keeps this away from the preview, and it is not decoration: Iosevka
  * Term advances at about half its size, so the preview slider's own 0.5
  * minimum lands on a 7 px font and a 4 px cell — inside the width threshold.
  * A width test alone would brighten the main app's Alt View by about 11% at
@@ -261,7 +261,7 @@ export function resizeOverlay(canvas, cssW, cssH, dpr, persistCanvas) {
 // The paths are pixel-identical, which is the only reason this is allowed to
 // reach the preview's Alt View as well: 40 of 40 full-frame comparisons across
 // two cities, mono and palette, charW 2 through 12, differed in 0 of ~1.6M
-// pixels on every channel (tests/e2e/ascii-city-walk.spec.js keeps this true).
+// pixels on every channel (measured in the game this was first built for).
 // The brightness treatment, which is visible, is gated separately — it keeps
 // a 4 px scope, because widening it would brighten the game at larger sizes
 // and, since the shape vectors are read from the brightened atlas, change
@@ -296,7 +296,7 @@ const _glowBuffers = new WeakMap();
  *
  * A trail is a memory of where things were, and it is only ever wanted when
  * the next picture is a continuation of the last. When the picture is CUT -
- * the City Walk's map and street views share nothing at all - that memory
+ * a map view and a street view share nothing at all - that memory
  * paints the old view over the new one for as long as it takes to decay,
  * which reads as a double exposure rather than as an afterglow.
  *
