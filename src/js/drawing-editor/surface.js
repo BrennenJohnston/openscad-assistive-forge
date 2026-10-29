@@ -1338,7 +1338,14 @@ export function createDrawingEditor({
     regionsBlock.hidden = !stencil;
     shapesBlock.hidden = stencil;
     classHeading.hidden = !map;
-    stencilTools.hidden = !stencil;
+    // The map purpose takes two of the stencil's hands, Select and Hand (to
+    // drag the picture); the marquee, the paint and the remove tools and the
+    // paint menu are the stencil's alone.
+    stencilTools.hidden = !(stencil || map);
+    paintGroup.hidden = map;
+    for (const [id, el] of toolButtons) {
+      el.hidden = map && id !== 'select' && id !== 'hand';
+    }
     viewGroup.hidden = !stencil;
     // The region canvas is the picture of the two purposes that work on
     // shapes one by one: the stencil paints them, the map classes them.
@@ -2093,6 +2100,7 @@ export function createDrawingEditor({
       list.push({ key: String(i), d, bbox, interior });
     });
     canvas.setView('plan');
+    setTool('select');
     canvas.setDrawing(
       svgString,
       list,
@@ -2672,7 +2680,8 @@ export function createDrawingEditor({
   // feet.
   root.addEventListener('keydown', (event) => {
     if (purpose === 'map') {
-      // On the canvas: plus and minus zoom, 0 fits the whole drawing.
+      // On the canvas: plus and minus zoom, 0 fits the whole drawing, V and H
+      // pick the Select and the Hand tool.
       if (event.target === canvas.svg && !event.ctrlKey && !event.metaKey) {
         const zoom = { '+': 'in', '=': 'in', '-': 'out', 0: 'fit' }[event.key];
         if (zoom) {
@@ -2681,6 +2690,14 @@ export function createDrawingEditor({
           if (zoom === 'in') canvas.zoomIn();
           else if (zoom === 'out') canvas.zoomOut();
           else canvas.fit();
+          return;
+        }
+        const tool = { v: 'select', h: 'hand' }[event.key.toLowerCase()];
+        if (tool) {
+          event.preventDefault();
+          event.stopPropagation();
+          setTool(tool);
+          say(S.toolChosen(S.tools[tool]));
           return;
         }
       }

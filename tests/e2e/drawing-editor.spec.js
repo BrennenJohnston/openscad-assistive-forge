@@ -2422,6 +2422,28 @@ test.describe('the map purpose on its canvas', () => {
         })
       )
       .toBe('1')
+
+    // The Hand tool: a drag moves the picture (the viewBox's origin shifts).
+    const hand = page.locator(
+      '#drawingEditorSurface .drawing-editor-tool[data-tool="hand"]'
+    )
+    await expect(hand).toBeVisible()
+    await expect(
+      page.locator(
+        '#drawingEditorSurface .drawing-editor-tool[data-tool="paint"]'
+      )
+    ).toBeHidden()
+    await hand.click()
+    await expect(svg).toHaveAttribute('data-tool', 'hand')
+    const before = await svg.getAttribute('viewBox')
+    const box = await svg.boundingBox()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 40, {
+      steps: 8,
+    })
+    await page.mouse.up()
+    expect(await svg.getAttribute('viewBox')).not.toBe(before)
   })
 })
 

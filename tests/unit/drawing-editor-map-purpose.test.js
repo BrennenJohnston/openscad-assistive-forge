@@ -239,6 +239,30 @@ describe('the map purpose', () => {
     expect(document.activeElement).toBe(selectOf(1));
   });
 
+  it('offers the Select and Hand tools and no paint tools; Hand pans the canvas, V comes back to Select', async () => {
+    openMap();
+    await vi.waitFor(() => expect(regionPaths()).toHaveLength(3));
+    const tools = surface.querySelector('.drawing-editor-tools');
+    expect(tools.hidden).toBe(false);
+    expect(surface.querySelector('.drawing-editor-stencil-tools').hidden).toBe(
+      false
+    );
+    expect(surface.querySelector('.drawing-editor-paint').hidden).toBe(true);
+    const shown = [...tools.querySelectorAll('.drawing-editor-tool')]
+      .filter((b) => !b.hidden)
+      .map((b) => b.dataset.tool);
+    expect(shown).toEqual(['select', 'hand']);
+    const svg = surface.querySelector('.drawing-editor-canvas-svg');
+    expect(svg.dataset.tool).toBe('select');
+    tools.querySelector('[data-tool="hand"]').click();
+    expect(svg.dataset.tool).toBe('hand');
+    expect(
+      tools.querySelector('[data-tool="hand"]').getAttribute('aria-pressed')
+    ).toBe('true');
+    svg.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', bubbles: true }));
+    expect(svg.dataset.tool).toBe('select');
+  });
+
   it('choosing Wall on a row and applying hands back that shape with class wall and its rings, and says the plan', async () => {
     openMap();
     choose(0, 'wall');
