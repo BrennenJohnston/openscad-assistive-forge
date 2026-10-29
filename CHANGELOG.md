@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A menu focused by keyboard shows a solid ring in every look, where the
+  dark and light looks drew a faint halo.
 - In the Alt View, reaching the end of a list is the last sound a scroll
   makes: no line's tick follows it any more.
 
