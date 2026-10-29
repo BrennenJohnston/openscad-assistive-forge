@@ -2927,8 +2927,7 @@ function _playFinding(stage, toggle, { appeared = false } = {}) {
   return false;
 }
 
-// Whoever put it there: the Alt View, before a project opens or with one, or
-// the City Walk.
+// Whoever put it there: the Alt View, before a project opens or with one.
 function _lookOn() {
   return document.documentElement.getAttribute('data-ui-variant') === 'mono';
 }
@@ -3185,9 +3184,9 @@ export function initHfmController({
 
     /**
      * Switch the variant-specific assets (logo, favicon) on or off without
-     * touching the alt-view render state. Used by the City Walk game, which
-     * forces the mono variant for its own lifetime and must restore the
-     * standard assets on exit.
+     * touching the alt-view render state, for a caller that forces the mono
+     * variant for its own lifetime and must restore the standard assets on
+     * exit.
      * @param {boolean} enabled
      */
     setVariantAssets(enabled) {

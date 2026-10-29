@@ -17,7 +17,6 @@ import { readFileSync } from 'fs';
 // The guard drives the same function the renderer does, so a change to
 // the drive maths is measured here rather than re-derived.
 import { driveColor } from '../../src/js/_hfm-paint.js';
-import { MONO_INTENSITY_LEVELS } from '../../src/js/game/hc-palettes.js';
 import { resolve as resolvePath, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -1009,79 +1008,21 @@ describe('APCA Contrast (Future WCAG 3.0) - Informational', () => {
   });
 });
 
-describe('City Walk high-contrast glyph palettes', () => {
-  // Multicolor glyphs exist only under high contrast; every entry must stay
-  // legible on the game's black background. Change a hex in hc-palettes.js
-  // and this guard measures it.
-  const black = '#000000';
-
-  it('green-HC ANSI bright set: every entry >= 4.5:1 on black', async () => {
-    const { HC_PALETTE_GREEN } = await import(
-      '../../src/js/game/hc-palettes.js'
-    );
-    expect(HC_PALETTE_GREEN.length).toBeGreaterThanOrEqual(4);
-    for (const hex of HC_PALETTE_GREEN) {
-      const ratio = getContrastRatio(hex, black);
-      expect(ratio, `${hex} on black`).toBeGreaterThanOrEqual(4.5);
-    }
-  });
-
-  it('amber-HC cyberpunk neon set: every entry >= 4.5:1 on black', async () => {
-    const { HC_PALETTE_AMBER } = await import(
-      '../../src/js/game/hc-palettes.js'
-    );
-    expect(HC_PALETTE_AMBER.length).toBeGreaterThanOrEqual(4);
-    for (const hex of HC_PALETTE_AMBER) {
-      const ratio = getContrastRatio(hex, black);
-      expect(ratio, `${hex} on black`).toBeGreaterThanOrEqual(4.5);
-    }
-  });
-
-  // Colour is a toggle of its own, so a player can turn it off while high
-  // contrast is on, and land on a single phosphor. That is what has to stay
-  // legible, and it is a token in variant.css that somebody may one day
-  // retune -- so the phosphor is read from the same token the ASCII painter
-  // reads and measured, rather than trusted.
-  //
-  // Note on what is not asserted: "the phosphor beats every palette entry"
-  // is false (cyan 16.75:1 and yellow 19.56:1 both beat green's 15.30:1),
-  // and "the phosphor beats the palette's worst entry" is vacuous -- green
-  // is so luminous that brightening both of its dim entries still could not
-  // fail it. Only the 4.5:1 floor below can actually fire.
-  it('the bare phosphor is legible on its own, colour or no colour', async () => {
-    const { HC_PALETTE_GREEN, HC_PALETTE_AMBER } = await import(
-      '../../src/js/game/hc-palettes.js'
-    );
-    // The phosphors are read from the tokens the ASCII painter itself reads
-    // (getPhosphorColor -> --color-accent under [data-ui-variant='mono']), so
-    // changing a phosphor is measured here rather than assumed.
-    const phosphors = [
-      [monoGreen['--color-accent'], HC_PALETTE_GREEN],
-      [monoAmber['--color-accent'], HC_PALETTE_AMBER],
-    ];
-    for (const [hex, palette] of phosphors) {
-      expect(hex, 'mono --color-accent must be defined').toBeTruthy();
-      const bare = getContrastRatio(hex, black);
-      expect(bare, `${hex} phosphor on black`).toBeGreaterThanOrEqual(4.5);
-      // And the palette it replaces is still guarded above, so both sides of
-      // the toggle clear the same floor.
-      expect(palette.length).toBeGreaterThanOrEqual(4);
-    }
-  });
-});
-
 /**
  * The monochrome intensity levels.
  *
- * The City Walk dims the darker half of its cells so a single-phosphor city
- * has depth instead of one flat tone. Dimming is exactly the direction that
- * can break legibility, so every level the renderer ships is re-measured here
+ * A caller of the converter may dim the darker half of its cells so a
+ * single-phosphor picture has depth instead of one flat tone. Dimming is
+ * exactly the direction that can break legibility, so the levels the
+ * converter's intensity treatment was tuned with are re-measured here
  * against the real phosphor tokens, through the renderer's own driveColor.
  *
  * The 4.5:1 floor is what fixes 0.65 as the dimmest allowed drive: 0.55
  * measures 3.82:1 in amber and fails.
  */
 describe('Color Contrast - Mono intensity levels', () => {
+  // Dimmest first; 1 is the bare phosphor.
+  const MONO_INTENSITY_LEVELS = [0.65, 1];
   const black = '#000000';
   const phosphors = [
     { name: 'green (dark theme)', css: monoGreen['--color-accent'] },
@@ -1100,8 +1041,8 @@ describe('Color Contrast - Mono intensity levels', () => {
     expect(MONO_INTENSITY_LEVELS.length).toBeGreaterThanOrEqual(2);
     const sorted = [...MONO_INTENSITY_LEVELS].sort((a, b) => a - b);
     expect(MONO_INTENSITY_LEVELS).toEqual(sorted);
-    // Nothing brighter than the bare phosphor: the peak the game already had
-    // is what the guards elsewhere in this file measured.
+    // Nothing brighter than the bare phosphor, which the guards elsewhere in
+    // this file measured.
     expect(Math.max(...MONO_INTENSITY_LEVELS)).toBeLessThanOrEqual(1);
   });
 

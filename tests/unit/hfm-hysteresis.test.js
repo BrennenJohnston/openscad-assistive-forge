@@ -13,7 +13,6 @@ import {
 } from '../../src/js/_hfm-hysteresis.js'
 import { SPACE_INDEX } from '../../src/js/_hfm-paint.js'
 import { pickIntensityIndex } from '../../src/js/_hfm-paint.js'
-import { CITY_TEMPORAL_HYSTERESIS } from '../../src/js/game/hc-palettes.js'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 
@@ -319,22 +318,23 @@ describe('_hfm-hysteresis: configuration and history', () => {
 
 describe('_hfm-hysteresis: whose converter gets a memory', () => {
   /**
-   * The converter is shared. `_hfm.js` draws the main app's Alt View as well
-   * as the game, and the Alt View converts one still frame: a memory of a
-   * previous frame can only cost it, and the main app's defaults must not
-   * move. The guarantee is structural, so the guard is too - a future change
-   * that reaches for setTemporalHysteresis from anywhere else has to come
-   * here and say why.
+   * The converter is shared, and the main app's Alt View converts one still
+   * frame: a memory of a previous frame can only cost it, and the main app's
+   * defaults must not move. The memory was built for a moving picture whose
+   * game lives in a repository of its own now, so nothing in src/ turns it
+   * on. The guarantee is structural, so the guard is too - a future change
+   * that reaches for setTemporalHysteresis from anywhere has to come here
+   * and say why.
    */
-  /** Every converter switch that must stay the game's alone, and its caller. */
-  const GAME_ONLY_SWITCHES = [
-    ['.setTemporalHysteresis', 'js/game/city-walk-controller.js'],
+  /** Every converter switch that nothing in src/ calls. */
+  const UNCALLED_SWITCHES = [
+    '.setTemporalHysteresis',
     // The share cap bounds the solid bright layer. The main app's Alt
     // View draws a still and has no layer to bound.
-    ['.setReverseShareCap', 'js/game/city-walk-controller.js'],
+    '.setReverseShareCap',
   ]
 
-  it('is turned on by the city walk, and by nothing else in src/', () => {
+  it('is turned on by nothing in src/', () => {
     // vitest runs from the repository root, and its import.meta.url is a
     // served URL rather than a file one - so the path comes from the cwd.
     const root = join(process.cwd(), 'src')
@@ -352,10 +352,10 @@ describe('_hfm-hysteresis: whose converter gets a memory', () => {
       }
     }
     walk(root)
-    expect(callers).toEqual(['js/game/city-walk-controller.js'])
+    expect(callers).toEqual([])
   })
 
-  it('keeps every other game-only converter switch out of the main app too', () => {
+  it('keeps every other uncalled converter switch out of the main app too', () => {
     const root = join(process.cwd(), 'src')
     const files = []
     const walk = (dir) => {
@@ -366,20 +366,12 @@ describe('_hfm-hysteresis: whose converter gets a memory', () => {
       }
     }
     walk(root)
-    for (const [call, expected] of GAME_ONLY_SWITCHES) {
+    for (const call of UNCALLED_SWITCHES) {
       const callers = files
         .filter((f) => readFileSync(f, 'utf8').includes(call))
         .map((f) => relative(root, f).split(sep).join('/'))
-      expect(callers, `${call} is called from more than the game`).toEqual([
-        expected,
-      ])
+      expect(callers, `${call} is called from the main app`).toEqual([])
     }
-  })
-
-  it('the game asks for bands that are actually on', () => {
-    expect(normalizeHysteresis(CITY_TEMPORAL_HYSTERESIS)).toEqual(
-      CITY_TEMPORAL_HYSTERESIS
-    )
   })
 })
 

@@ -29,7 +29,8 @@ import { SPACE_INDEX, FIRST_CHAR_CODE } from '../../src/js/_hfm-paint.js'
  * splits them: the CPU path is exercised for real, the span arithmetic the
  * shader reads is exercised for real through `buildVocabSpans`, and the one
  * line that cannot be reached from either is pinned by reading the source.
- * The e2e board runs the real shader (ascii-city-walk-street.spec.js).
+ * The real shader ran on the e2e board of the game this converter was first
+ * measured in; here the source is read.
  */
 
 const cpuSource = readFileSync(
@@ -250,16 +251,6 @@ describe('the span table the shader reads', () => {
     // SKY is class 0, which the shader reads at span index 1.
     expect(spans[1 * 2]).toBe(spans[0])
     expect(spans[1 * 2 + 1]).toBe(spans[1])
-
-    // The red proof, in the same case: the rule really is what makes the
-    // difference. Without the fallback loop, span 1 would be [0, 0].
-    const { GLYPH_VOCABULARIES } = await import(
-      '../../src/js/game/glyph-vocabularies.js'
-    )
-    const { SURFACE_CLASS } = await import(
-      '../../src/js/game/city-class-pass.js'
-    )
-    expect(GLYPH_VOCABULARIES[SURFACE_CLASS.SKY]).toBeUndefined()
   })
 
   it('drops a span index the table cannot carry rather than writing past it', () => {
