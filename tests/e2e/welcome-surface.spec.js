@@ -233,6 +233,28 @@ test.describe('the page behind the welcome surface', () => {
     expect(header.y, 'the header stays at the top').toBe(0)
     expect(await page.evaluate(() => window.scrollY)).toBe(0)
   })
+
+  // The cards' Tool menus are the one control on the welcome surface that
+  // sat under the touch floor (36 px on every card); they stand at the
+  // token's height, 44 px on a touch screen.
+  test('every card Tool menu is at least 44 px tall on a touch screen', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    })
+    await page.goto('/')
+    await expect(page.locator('#welcomeScreen')).toBeVisible()
+    const menus = page.locator('.charm-variant-select')
+    const count = await menus.count()
+    expect(count, 'the cards with a Tool menu').toBeGreaterThanOrEqual(3)
+    for (let i = 0; i < count; i++) {
+      await menus.nth(i).scrollIntoViewIfNeeded()
+      const box = await menus.nth(i).boundingBox()
+      expect(box.height, `Tool menu ${i + 1}`).toBeGreaterThanOrEqual(44)
+    }
+  })
 })
 
 // The Tactile Map Designer card: found by its heading, clean under axe, and
