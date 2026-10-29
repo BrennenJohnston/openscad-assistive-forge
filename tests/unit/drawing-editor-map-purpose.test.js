@@ -185,6 +185,60 @@ describe('the map purpose', () => {
     expect(editor.getMapClasses()).toEqual({});
   });
 
+  // The picture: the region canvas, one region per shape, the relief panes
+  // and tools away (the owner found the map purpose showing the relief
+  // purpose's empty result pane).
+  const regionPaths = () => [
+    ...surface.querySelectorAll(
+      '.drawing-editor-canvas-svg [data-layer="regions"] path'
+    ),
+  ];
+
+  it('shows the drawing on the region canvas, one region per shape in order, with the relief panes and bulk tools hidden and the zoom buttons shown', async () => {
+    openMap();
+    const canvas = surface.querySelector('.drawing-editor-canvas');
+    expect(canvas.hidden).toBe(false);
+    expect(surface.querySelector('.svg-prep-previews').hidden).toBe(true);
+    expect(surface.querySelector('.svg-prep-bulk-bar').hidden).toBe(true);
+    expect(surface.querySelector('.drawing-editor-zoom').hidden).toBe(false);
+    await vi.waitFor(() => expect(regionPaths()).toHaveLength(3));
+    expect(regionPaths().map((p) => p.dataset.region)).toEqual([
+      '0',
+      '1',
+      '2',
+    ]);
+    const svg = surface.querySelector('.drawing-editor-canvas-svg');
+    expect(
+      document.getElementById(svg.getAttribute('aria-labelledby')).textContent
+    ).toBe(S.mapCanvasLabel);
+    expect(
+      document.getElementById(svg.getAttribute('aria-describedby')).textContent
+    ).toBe(S.mapCanvasHelp);
+  });
+
+  it('tints a classed shape, names shapes under the arrow keys, and Enter on a shape focuses its Class menu', async () => {
+    openMap();
+    await vi.waitFor(() => expect(regionPaths()).toHaveLength(3));
+    choose(0, 'wall');
+    expect(regionPaths()[0].style.getPropertyValue('--region-fill')).not.toBe(
+      ''
+    );
+    expect(regionPaths()[1].style.getPropertyValue('--region-fill')).toBe('');
+    const svg = surface.querySelector('.drawing-editor-canvas-svg');
+    svg.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Home', bubbles: true })
+    );
+    expect(status()).toBe(S.mapHighlighting('Circle 1 (r=10)', 'Wall'));
+    svg.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
+    );
+    expect(status()).toBe(S.mapHighlightingUnclassed('Circle 2 (r=10)'));
+    svg.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    );
+    expect(document.activeElement).toBe(selectOf(1));
+  });
+
   it('choosing Wall on a row and applying hands back that shape with class wall and its rings, and says the plan', async () => {
     openMap();
     choose(0, 'wall');
