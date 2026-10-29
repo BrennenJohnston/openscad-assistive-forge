@@ -136,6 +136,12 @@ async function restoreGalleryFromManifest(exampleKey) {
     const tactileMap = manifestData.tactileMap;
     if (tactileMap?.mapFileParam) {
       pendingMapConfig = tactileMap;
+      // Start fetching the panel's chunk now, while the tile's own files
+      // load, so the mount below finds it ready and the controls settle in
+      // the same breath as before.
+      loadMapPanel().catch((error) => {
+        console.error('[TactileMap] The panel failed to load:', error);
+      });
     }
 
     const braille = manifestData.brailleTranslation;

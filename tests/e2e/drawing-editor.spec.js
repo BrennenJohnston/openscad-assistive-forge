@@ -2221,12 +2221,16 @@ test.describe('the map purpose', () => {
       null,
       { timeout: 120000 }
     )
-    for (let i = 0; i < 2; i++) {
-      const notNow = page.getByRole('button', { name: 'Not now', exact: true })
-      if (await notNow.isVisible().catch(() => false)) {
-        await notNow.click()
-        await page.waitForTimeout(300)
-      }
+    // The save-project prompt comes up a moment after the parameters land
+    // (the map panel loads as its own chunk first); wait for it rather than
+    // glance, or it opens over the door below.
+    const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 8000 })
+      await notNow.click()
+      await notNow.waitFor({ state: 'hidden', timeout: 5000 })
+    } catch {
+      // No save-project prompt this time.
     }
     await page.setInputFiles('#param-map_file', SAMPLE)
     await page.evaluate(() => {
