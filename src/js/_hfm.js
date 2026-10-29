@@ -59,7 +59,7 @@ import {
   anchoredGlyph,
   buildLadders,
   FIELD_LEVELS,
-} from './game/city-glyph-field.js';
+} from './_hfm-glyph-field.js';
 
 // Tuning knobs
 // _MIN_INTERVAL_MS      — conversion throttle ceiling (~30 fps while dirty)

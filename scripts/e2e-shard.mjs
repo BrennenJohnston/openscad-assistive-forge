@@ -11,12 +11,12 @@
  *   shard 1/2 : 50.3 test-minutes, 476 tests   -> 26m48s wall
  *   shard 2/2 : 20.9 test-minutes, 475 tests   -> 12m28s wall
  *
- * One file is a quarter of the whole lane: ascii-city-walk.spec.js runs 68
- * tests in 18.0 minutes, each one loading a city and building a 3D scene. It
- * sorts under "a", so no count-based division can put it anywhere but the
- * first shard, and splitting it into siblings would not move it either - the
- * pieces sort next to their parent. Shard 1/2 has failed three times on
- * Playwright's 35-minute globalTimeout, at 32.5, 32.5 and 34.7 minutes.
+ * One file was a quarter of the whole lane: a suite of 68 tests, each one
+ * building a 3D scene, ran 18.0 minutes. It sorted under "a", so no
+ * count-based division could put it anywhere but the first shard, and
+ * splitting it into siblings would not have moved it either - the pieces
+ * sort next to their parent. Shard 1/2 failed three times on Playwright's
+ * 35-minute globalTimeout, at 32.5, 32.5 and 34.7 minutes.
  *
  * So the division is made here, from measured cost, instead of being inherited
  * from the alphabet. Every spec file in tests/e2e is placed in exactly one
@@ -48,8 +48,8 @@ import { fileURLToPath } from 'node:url';
  * means the model was not decaying everywhere: it was wrong exactly where the
  * suite grew, and optimistic by minutes a shard, which is how a lane can
  * project 25 minutes and take 32. A file missing from the table is booked at
- * DEFAULT_WEIGHT_S, far too little for a suite that builds a 3D city in every
- * case.
+ * DEFAULT_WEIGHT_S, far too little for a suite that builds a 3D scene in
+ * every case.
  *
  * Re-measure from a green run, never a red one. A shard that timed out shows
  * every file at 3-5x its weight, including files no branch touched. That
@@ -57,22 +57,6 @@ import { fileURLToPath } from 'node:url';
  * it would bake the starvation into the model permanently.
  */
 export const MEASURED_SECONDS = {
-  // The City Walk suites skip on CI (CI_SKIPPED, below), so no CI run
-  // measures them, and on CI each is planned at CI_SKIPPED_WEIGHT_S. These
-  // seven numbers plan a local board: a green local Chromium board's
-  // per-file sums times 1.8, with the street file priced level with the
-  // walk and controls files from whole-lane CI evidence when the suites
-  // still ran there, and the teleport and perf-smoke files scaled from the
-  // controls file. Two of the walk file's cases hold a key until something
-  // happens, so their cost follows the frame rate: the ones to watch.
-  'ascii-city-walk-calibration.spec.js': 228,
-  'ascii-city-walk-controls.spec.js': 2068,
-  'ascii-city-walk-furniture.spec.js': 164,
-  'ascii-city-walk-perf-smoke.spec.js': 66,
-  'ascii-city-walk-street.spec.js': 2050,
-  'ascii-city-walk-teleport.spec.js': 211,
-  'ascii-city-walk.spec.js': 2078,
-
   // Every number below is the sum of the durations the list reporter
   // printed for that file, every attempt counted (a retry too: the shard
   // pays for it), on the seven Chromium shards of a green run, rounded up to
@@ -341,51 +325,6 @@ export const PROJECT_IGNORES = Object.freeze({
 });
 
 /**
- * Suites that run on CI but skip themselves the moment they start.
- *
- * The City Walk e2e suites are paused on CI: CI software-renders the 3D city
- * at about two seconds a frame, so every one of these files reports skipped
- * in seconds there while still costing its full measured minutes on a local
- * hardware board. `useCityWalkFixtures()` carries the one skip.
- *
- * The planner has to know, because it books time per file. Without this, the
- * three heaviest City Walk files were given a shard each (2,078 s, 2,068 s
- * and 2,050 s booked, seconds actually spent), which left three of six
- * shards idle on CI and pushed everything else into the remainder (shard 6
- * alone carried 44 files), and two tests began failing there for crowding
- * rather than for behavior.
- *
- * Reverse this the moment the suites come back: delete the `test.skip` in
- * `useCityWalkFixtures()` and this list together, or the lanes will be booked
- * for work they are once again doing.
- */
-export const CI_SKIPPED = Object.freeze([
-  'ascii-city-walk.spec.js',
-  'ascii-city-walk-calibration.spec.js',
-  'ascii-city-walk-controls.spec.js',
-  'ascii-city-walk-furniture.spec.js',
-  'ascii-city-walk-perf-smoke.spec.js',
-  'ascii-city-walk-street.spec.js',
-  'ascii-city-walk-teleport.spec.js',
-]);
-
-/** What a file that skips itself on arrival actually costs there. */
-export const CI_SKIPPED_WEIGHT_S = 10;
-
-/**
- * The weights to plan with, for the environment doing the planning.
- *
- * @param {boolean} [onCI] - default: whether this process is running on CI
- * @returns {Record<string, number>}
- */
-export function weightsFor(onCI = !!process.env.CI) {
-  if (!onCI) return MEASURED_SECONDS;
-  const out = { ...MEASURED_SECONDS };
-  for (const file of CI_SKIPPED) out[file] = CI_SKIPPED_WEIGHT_S;
-  return out;
-}
-
-/**
  * The spec files a project runs: everything under tests/e2e, less what the
  * table above says it leaves out. An unknown project name runs everything.
  *
@@ -467,6 +406,6 @@ if (invokedDirectly) {
     );
     process.exit(1);
   }
-  const shard = planShards(files, weightsFor(), total)[index - 1];
+  const shard = planShards(files, MEASURED_SECONDS, total)[index - 1];
   process.stdout.write(shard.map((f) => `tests/e2e/${f}`).join(' '));
 }

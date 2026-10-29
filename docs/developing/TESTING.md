@@ -28,10 +28,6 @@ open, I use:
 PW_BASE_URL=http://localhost:5173 npx playwright test --project=chromium
 ```
 
-The ASCII City Walk suites build a 3D city in every case and take most of a
-local run. When a run is about something else, `--grep-invert ascii-city-walk`
-leaves them out.
-
 ## Where the tests live
 
 | Path | What it is | How to run it |

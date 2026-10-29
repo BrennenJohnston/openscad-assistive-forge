@@ -120,7 +120,6 @@ const DIR_SKIP = new Set([
 const PATH_SKIP = [
   join('docs', 'accessibility', 'vpat', 'evidence'),
   join('docs', 'archive', 'audit'),
-  join('public', 'examples', 'ascii-city'),
 ]
 
 const ROOT_PAPERS = [

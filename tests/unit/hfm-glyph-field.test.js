@@ -12,9 +12,30 @@ import {
   isAnchoredClass,
   luminance,
   quantiseLevel,
-} from '../../../src/js/game/city-glyph-field.js'
-import { SURFACE_CLASS } from '../../../src/js/game/city-class-pass.js'
-import { coherence } from '../../../src/js/game/seq-metrics.js'
+} from '../../src/js/_hfm-glyph-field.js'
+
+/**
+ * The surface classes a class pass writes into the field, by number. The
+ * numbers are the wire format: appended, never renumbered. The module keeps
+ * them as literals; this table is what the literals are checked against.
+ */
+const SURFACE_CLASS = Object.freeze({
+  SKY: 0,
+  GROUND: 1,
+  ROAD: 2,
+  CURB: 3,
+  BUILDING_WALL: 4,
+  BUILDING_ROOF: 5,
+  STOREFRONT: 6,
+  SIGN: 7,
+  MAST: 8,
+  TREE: 9,
+  CAR: 10,
+  LAMP: 11,
+  PERSON: 12,
+  SIDEWALK: 13,
+  GREEN: 14,
+})
 
 /** A flat RGBA image of one grey, for the box-average cases. */
 const solid = (w, h, v) => {
@@ -34,9 +55,9 @@ const vectors = (coverages) =>
 
 describe('the anchored class set', () => {
   it('every literal id is the class it claims to be', () => {
-    // city-glyph-field.js writes the ids as numbers to avoid closing an
-    // import cycle with city-class-pass.js. This is the guard that makes that
-    // safe: the test is outside the cycle, so it may import both.
+    // The module writes the ids as numbers, the wire format it shares with
+    // the class pass that fills the field. This is the guard that makes that
+    // safe: each number is pinned to its name.
     expect(ANCHORED_CLASSES).toEqual([
       SURFACE_CLASS.GROUND,
       SURFACE_CLASS.BUILDING_WALL,
@@ -54,8 +75,8 @@ describe('the anchored class set', () => {
   })
 
   it('anchors the facade, which costs steadiness', () => {
-    // Anchoring the facade costs steadiness, measured at the Seattle spawn on
-    // a 24-frame walk, 30 %, mono, GPU path both sides:
+    // Anchoring the facade costs steadiness, measured on a 24-frame walk
+    // through a city scene, 30 %, mono, GPU path both sides:
     //
     //   class        screen pick   anchored at 64
     //   ground       29.98 %       0.60 %
@@ -255,51 +276,5 @@ describe('reading a glyph out of the field', () => {
     // And it is a real slide: a fixture whose glyphs were all the same would
     // pass the loop above while proving nothing at all.
     expect(new Set(g0).size).toBeGreaterThan(1)
-    expect(coherence(g0, g1, cols, rows, 1, 0).pct).toBe(100)
-  })
-})
-
-describe('coherence tells a slide from a re-roll', () => {
-  it('a pure slide scores 100 %', () => {
-    const prev = [1, 2, 3, 4, 5, 6, 7, 8]
-    const next = [9, 1, 2, 3, 4, 5, 6, 7]
-    expect(coherence(prev, next, 8, 1, 1, 0)).toMatchObject({ pct: 100 })
-  })
-
-  it('a re-roll of the same cells scores nothing', () => {
-    const prev = [1, 2, 3, 4, 5, 6, 7, 8]
-    const next = [20, 21, 22, 23, 24, 25, 26, 27]
-    expect(coherence(prev, next, 8, 1, 1, 0).pct).toBe(0)
-  })
-
-  it('a still picture has nothing to be coherent about, and says 0', () => {
-    const same = [1, 2, 3, 4]
-    const c = coherence(same, same, 4, 1, 1, 0)
-    expect(c.changed).toBe(0)
-    expect(c.pct).toBe(0)
-  })
-
-  it('counts only the cells that changed, and only where it can judge', () => {
-    // Four cells, sliding right by one:
-    //   0: unchanged, and its source is off-grid anyway - not counted
-    //   1: took cell 0's old glyph - changed and coherent
-    //   2: took something cell 1 never held - changed and incoherent
-    //   3: unchanged - not counted
-    const prev = [1, 2, 3, 9]
-    const next = [1, 1, 7, 9]
-    const c = coherence(prev, next, 4, 1, 1, 0)
-    expect(c.changed).toBe(2)
-    expect(c.coherent).toBe(1)
-    expect(c.pct).toBe(50)
-  })
-
-  it('works down a column as well as along a row', () => {
-    const prev = [1, 2, 3, 4]
-    const next = [9, 1, 2, 3]
-    expect(coherence(prev, next, 1, 4, 0, 1).pct).toBe(100)
-  })
-
-  it('refuses frames that are not the same grid', () => {
-    expect(() => coherence([1, 2], [1, 2, 3], 2, 1, 1, 0)).toThrow(/entries/)
   })
 })
