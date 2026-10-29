@@ -86,7 +86,6 @@ import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import { STORAGE_KEY_MODEL_COLOR } from './storage-keys.js';
 import { readScopedPref } from './ui-scoped-prefs.js';
 import { initBraillePanel, destroyBraillePanel } from './braille-panel.js';
-import { initMapPanel, destroyMapPanel } from './tactile-map/map-panel.js';
 
 let currentExampleKey = null;
 
@@ -97,6 +96,13 @@ let pendingBrailleConfig = null;
 // `tactileMap` block of a tile's manifest: the Tactile Map Designer panel's
 // parameter names; consumed where the braille panel is mounted.
 let pendingMapConfig = null;
+// The Tactile Map Designer panel and everything it pulls in (the levels
+// builder, the plate splitter, the plan from a drawing, the symbol library)
+// load once, the first time a map tile opens: they are a lazy chunk, not
+// part of the app's entry.
+let mapPanelModule = null;
+const loadMapPanel = () =>
+  (mapPanelModule ??= import('./tactile-map/map-panel.js'));
 
 /**
  * Reverse-lookup an example key from EXAMPLE_DEFINITIONS by file name.
@@ -1100,9 +1106,12 @@ export function initFileHandler({
       // Braille Card Customizer: mount the translation panel above the
       // parameter controls when the manifest declares brailleTranslation.
       destroyBraillePanel();
-      destroyMapPanel();
+      // A panel mounted for an earlier tile goes before this tile's controls
+      // settle; a page that never opened a map tile has nothing to remove.
+      if (mapPanelModule) (await mapPanelModule).destroyMapPanel();
       if (pendingMapConfig) {
         try {
+          const { initMapPanel } = await loadMapPanel();
           initMapPanel(pendingMapConfig, { getAutoPreviewController });
         } catch (mapError) {
           console.error(
