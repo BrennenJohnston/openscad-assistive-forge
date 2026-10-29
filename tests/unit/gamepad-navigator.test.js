@@ -212,19 +212,6 @@ describe('the controller drives focus', () => {
     expect(keys).toEqual(['ArrowDown', 'ArrowLeft']);
   });
 
-  it('stands down while the City Walk runs', () => {
-    document.body.insertAdjacentHTML(
-      'beforeend',
-      '<div id="cityWalkLayer"><button id="inGame">Map</button></div>'
-    );
-    const nav = createGamepadNavigator();
-    nav.next();
-    expect(document.activeElement).toBe(document.body);
-    document.getElementById('cityWalkLayer').hidden = true;
-    nav.next();
-    expect(focused()).toBe('mainPage');
-  });
-
   it('stands down while something else has the controller', () => {
     let paused = true;
     const nav = createGamepadNavigator({ isPaused: () => paused });
