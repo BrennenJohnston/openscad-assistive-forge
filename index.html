@@ -1798,64 +1798,6 @@
                     </button>
                   </div>
                 </div>
-                <!-- ASCII City Walk: hidden until the Alt View unlock
-                     reveals every [data-hfm-gated] element. Its button loads
-                     no example — main.js wires it to the game controller
-                     directly, like the tour card above. -->
-                <div
-                  class="role-path-card city-walk-card"
-                  id="cityWalkCard"
-                  hidden
-                  data-hfm-gated
-                >
-                  <h3 class="role-path-title">ASCII City Walk</h3>
-                  <p class="role-path-meta">
-                    Hidden game &bull; real city maps &bull; keyboard controls
-                  </p>
-                  <p class="role-path-description">
-                    Walk through a real city drawn entirely in ASCII characters.
-                    Pick a city, stroll its streets in first person, and flip to
-                    a top-down map view.
-                  </p>
-                  <details class="role-path-details">
-                    <summary>How to play</summary>
-                    <ul class="role-path-tips" aria-label="How to play">
-                      <li>Arrow keys or W A S D walk; Q and E turn</li>
-                      <li>Hold Shift to move faster</li>
-                      <li>M switches between street and map view</li>
-                      <li>Escape leaves the game</li>
-                    </ul>
-                  </details>
-                  <div class="role-path-actions">
-                    <button
-                      type="button"
-                      class="btn btn-primary btn-role-try"
-                      id="cityWalkLaunchBtn"
-                    >
-                      Enter the City
-                    </button>
-                  </div>
-                  <!-- Read as the launch button's description while the
-                       viewport gate holds it aria-disabled (phones, portrait,
-                       narrow windows). main.js unhides it with the gate, so a
-                       sighted phone player sees the reason too. An open game
-                       is never gated: only entry is. -->
-                  <p class="role-path-meta" id="cityWalkGateReason" hidden>
-                    Desktop only for now. The city walk needs a wide landscape
-                    window. Try it on a computer, or widen this window.
-                  </p>
-                  <p class="role-path-meta city-walk-attribution">
-                    Map data &copy;
-                    <a
-                      href="https://www.openstreetmap.org/copyright"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      >OpenStreetMap contributors<span class="sr-only">
-                        (opens in new tab)</span
-                      ></a
-                    >
-                  </p>
-                </div>
               </div>
               <!-- Accessibility Spotlights -->
               <details
@@ -8010,24 +7952,6 @@
                 persist; closing the browser reverts to normal
               </li>
             </ul>
-            <h4>ASCII City Walk (hidden game)</h4>
-            <p>
-              Unlocking Alt View also reveals a playable game on the welcome
-              screen: <strong>ASCII City Walk</strong>. Pick a real city (built
-              from OpenStreetMap building and street data) and walk its streets
-              in first person, rendered entirely in ASCII characters. Keyboard
-              only: arrow keys or W A S D walk, Q and E turn, Shift is faster, M
-              switches to a top-down map view, and Escape leaves. Map data
-              &copy;
-              <a
-                href="https://www.openstreetmap.org/copyright"
-                target="_blank"
-                rel="noopener noreferrer"
-                >OpenStreetMap contributors<span class="sr-only">
-                  (opens in new tab)</span
-                ></a
-              >.
-            </p>
             <h4>How the drawing works</h4>
             <p>
               Each character is the one whose shape best matches the picture in
@@ -9460,35 +9384,6 @@
                 />
               </div>
             </fieldset>
-            <fieldset
-              id="keysWalkSection"
-              class="preferences-fieldset keys-walk-section"
-              data-hfm-gated
-              hidden
-            >
-              <legend class="preferences-legend">In the City Walk</legend>
-              <p class="preferences-field-note">
-                The sticks and the D-pad always walk and look.
-              </p>
-              <table id="keysWalkAssignments" class="gamepad-assignments">
-                <thead>
-                  <tr>
-                    <th scope="col">Action</th>
-                    <th scope="col">Button</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-              <div class="preferences-check-row">
-                <button
-                  type="button"
-                  id="keysWalkReset"
-                  class="btn btn-sm btn-outline gamepad-reset"
-                >
-                  Reset the City Walk buttons
-                </button>
-              </div>
-            </fieldset>
           </div>
         </div>
 
@@ -10296,10 +10191,6 @@ No console output yet. Generate a model to see output.</pre
         </div>
       </div>
     </div>
-    <!-- ASCII City Walk game layer. Empty shell: the controller
-         (src/js/game/city-walk-controller.js) builds and tears down its
-         contents around each session. -->
-    <div id="cityWalkLayer" class="city-walk-layer" hidden></div>
 
     <script type="module" src="/src/main.js"></script>
   </body>

@@ -193,8 +193,6 @@ test.describe('Keys', () => {
       29
     );
     await expect(page.locator('#controllerReadoutPad')).toBeHidden();
-    // A fresh profile has not found the game: its section stays hidden.
-    await expect(page.locator('#keysWalkSection')).toBeHidden();
     // The Joy-Cons' choices belong to the Nintendo layout alone.
     await expect(page.locator('#prefsJoyConHold')).toBeHidden();
     await expect(page.locator('#prefsJoyConPair')).toBeHidden();

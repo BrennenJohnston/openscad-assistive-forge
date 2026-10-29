@@ -229,7 +229,7 @@ body {
    unavailable without relying on colour alone (dimmed and the cursor
    changes), matching the Classic toolbar's disabled-with-reason look.
 
-   0.7, not 0.5, so this gate reads like the City Walk card's (game.css).
+   0.7, not 0.5, the same choice the braille pager's button makes.
    opacity composites the whole control over its backdrop, so the pair a
    person sees is not the pair getComputedStyle reports, and nothing
    measures it unless a guard does the blending: axe skips contrast on
