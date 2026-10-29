@@ -74,6 +74,9 @@ async function ringContrast(page, png, box) {
       const bitmap = await createImageBitmap(
         new Blob([bytes], { type: 'image/png' })
       );
+      // The picture's own scale: Chromium and WebKit draw it at the device
+      // scale, Firefox at 1x whatever the context asked for.
+      const scale = bitmap.width / window.innerWidth;
       const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       ctx.drawImage(bitmap, 0, 0);
@@ -103,15 +106,24 @@ async function ringContrast(page, png, box) {
         const i = (y * width + x) * 4;
         return [data[i], data[i + 1], data[i + 2]];
       };
-      const { left, top, right, bottom } = box;
+      const left = Math.round(box.left * scale);
+      const top = Math.round(box.top * scale);
+      const right = Math.round(box.right * scale);
+      const bottom = Math.round(box.bottom * scale);
+      const band = Math.round(7 * scale);
       const around = [];
-      for (let y = top - 14; y < bottom + 14; y++) {
-        for (let x = left - 14; x < right + 14; x++) {
+      for (let y = top - band; y < bottom + band; y++) {
+        for (let x = left - band; x < right + band; x++) {
           const inBox = x >= left && x < right && y >= top && y < bottom;
           if (!inBox && x >= 0 && y >= 0 && x < width && y < bitmap.height) {
             around.push(px(x, y));
           }
         }
+      }
+      if (around.length === 0) {
+        throw new Error(
+          `no pixels around the box at scale ${scale} (picture ${bitmap.width} x ${bitmap.height})`
+        );
       }
       const ground = mostCommon(around);
       const gl = lum(ground);
@@ -147,11 +159,12 @@ test.describe('a native menu focused by keyboard', () => {
       await page.waitForTimeout(350);
       const box = await page.locator(selector).boundingBox();
       const png = await page.screenshot();
+      // The box in CSS pixels; the reader scales it to the picture it got.
       const read = await ringContrast(page, png, {
-        left: Math.round(box.x * 2),
-        top: Math.round(box.y * 2),
-        right: Math.round((box.x + box.width) * 2),
-        bottom: Math.round((box.y + box.height) * 2),
+        left: box.x,
+        top: box.y,
+        right: box.x + box.width,
+        bottom: box.y + box.height,
       });
       expect(
         read.contrast,
