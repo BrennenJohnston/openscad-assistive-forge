@@ -1,6 +1,6 @@
 # Tactile map symbols
 
-**Owner review pending.** This page is a draft; every sentence waits for my reading, and the set itself is provisional until it has been printed and felt.
+The set is provisional until it has been printed and felt; a shape that confuses readers is a change to data, not to the app.
 
 The Tactile Map tile places point symbols for the things a reader looks for on a map: stairs, elevators, entrances, landmarks, a transit stop, and the place the reader stands. This page lists the nine shapes the app ships, what each stands for, how big it prints, and where its shape comes from. You can also load a set of your own, which the last section explains.
 
@@ -14,19 +14,19 @@ The Tactile Map tile places point symbols for the things a reader looks for on a
 
 ## The nine shapes
 
-| Name | Stands for | Shape at 10 mm | Where the shape comes from |
-|---|---|---|---|
-| Stairs | A staircase | Three horizontal bars, each 1.6 mm tall, across the full width | Parallel bars read as stairs in the symbol study by McCallum, Ungar and Jehoel (British Journal of Visual Impairment 24(2), 2006); bars are a BANA line style |
-| Elevator up | An elevator, read as "up" | A solid triangle, apex up, 10 mm wide and 9 mm tall | Simple arrows read best in the same study; the proportions follow BANA 2022 3.4.3.7 on arrowheads |
-| Elevator down | An elevator, read as "down" | The same triangle, apex down | The up arrow turned over |
-| Entrance | A door or gate, with its flat side toward the way in | A half disc, 10 mm across and 5 mm tall, flat side down | ISO 19028 uses a semicircle to show a direction (Wabinski, Moscicka and Touya 2024) |
-| Landmark, circle | Any landmark you name in the key | A disc 10 mm across | BANA 2022 3.4.3.11; Jehoel, Ungar, McCallum and Rowell (2009) found a circle identified from 5.5 mm |
-| Landmark, square | A second landmark | A square 9 mm on a side | The same sources; a square identified from 5.0 mm |
-| Landmark, triangle | A third landmark | An equilateral triangle, 10 mm on a side | The same sources; a triangle identified from 6.4 mm, so it is the shape to use last at small sizes |
-| You are here | The reader's own place | A disc 10 mm across with a 3 mm square hole in its center | BANA 2022 8.5.6 asks for the most prominent symbol on the map, first in the key |
-| Transit stop | A bus, train or tram stop | A 9 mm square with a 3 by 4.5 mm notch cut from its top edge | BANA 2022 8.6.5: a shape used for two things differs by 25 to 30 percent of its size, so the notch keeps it apart from the landmark square |
+| Name               | Stands for                                           | Shape at 10 mm                                                 | Where the shape comes from                                                                                                                                    |
+| ------------------ | ---------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stairs             | A staircase                                          | Three horizontal bars, each 1.6 mm tall, across the full width | Parallel bars read as stairs in the symbol study by McCallum, Ungar and Jehoel (British Journal of Visual Impairment 24(2), 2006); bars are a BANA line style |
+| Elevator up        | An elevator, read as "up"                            | A solid triangle, apex up, 10 mm wide and 9 mm tall            | Simple arrows read best in the same study; the proportions follow BANA 2022 3.4.3.7 on arrowheads                                                             |
+| Elevator down      | An elevator, read as "down"                          | The same triangle, apex down                                   | The up arrow turned over                                                                                                                                      |
+| Entrance           | A door or gate, with its flat side toward the way in | A half disc, 10 mm across and 5 mm tall, flat side down        | ISO 19028 uses a semicircle to show a direction (Wabinski, Moscicka and Touya 2024)                                                                           |
+| Landmark, circle   | Any landmark you name in the key                     | A disc 10 mm across                                            | BANA 2022 3.4.3.11; Jehoel, Ungar, McCallum and Rowell (2009) found a circle identified from 5.5 mm                                                           |
+| Landmark, square   | A second landmark                                    | A square 9 mm on a side                                        | The same sources; a square identified from 5.0 mm                                                                                                             |
+| Landmark, triangle | A third landmark                                     | An equilateral triangle, 10 mm on a side                       | The same sources; a triangle identified from 6.4 mm, so it is the shape to use last at small sizes                                                            |
+| You are here       | The reader's own place                               | A disc 10 mm across with a 3 mm square hole in its center      | BANA 2022 8.5.6 asks for the most prominent symbol on the map, first in the key                                                                               |
+| Transit stop       | A bus, train or tram stop                            | A 9 mm square with a 3 by 4.5 mm notch cut from its top edge   | BANA 2022 8.6.5: a shape used for two things differs by 25 to 30 percent of its size, so the notch keeps it apart from the landmark square                    |
 
-A reader tells a shape by its outline, so the set stays small and each outline differs from its neighbors in more than one way. If two of them confuse you or your readers, say which two; swapping a shape is a change to data, not to the app.
+A reader tells a shape by its outline, so the set stays small and each outline differs from its neighbors in more than one way. The classes that place these symbols, and the lines and areas beside them, are in the [Tactile Map Designer guide](TACTILE_MAP_GUIDE.md).
 
 ## Loading a set of your own
 

@@ -45,6 +45,13 @@ The welcome screen ships with ready-to-use customizers -- no `.scad` file needed
   card and the charm keep too. See the
   [Braille Card guide](docs/guides/BRAILLE_CARD_GUIDE.md) and the
   [Braille sign standards](docs/guides/BRAILLE_STANDARDS.md).
+- **Tactile Map Designer** -- turn a line drawing of a station, campus or
+  building into a map read by touch: up to three raised levels, symbols at
+  a size a finger can tell apart, a raised title, a north cue and channels
+  for braille label tape, split into plates that fit your printer and
+  rendered into one zip. See the
+  [Tactile Map guide](docs/guides/TACTILE_MAP_GUIDE.md) and the
+  [Tactile map symbols](docs/guides/TACTILE_MAP_SYMBOLS.md).
 - **Charm Designer** -- design wearable charms, pendants, and logo plates
   with engraved or raised icons, including C-clip charms that snap onto
   silicone bracelets. Import your own SVG, DXF or photo, or pick from the
