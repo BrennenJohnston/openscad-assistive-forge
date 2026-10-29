@@ -252,7 +252,10 @@ test.describe('the page behind the welcome surface', () => {
     for (let i = 0; i < count; i++) {
       await menus.nth(i).scrollIntoViewIfNeeded()
       const box = await menus.nth(i).boundingBox()
-      expect(box.height, `Tool menu ${i + 1}`).toBeGreaterThanOrEqual(44)
+      // Firefox lays the box out in fractions (43.99997 for a 44 px rule);
+      // half a pixel of slack keeps the floor without reading a layout
+      // engine's rounding as a defect. Before the fix the menu was 36 px.
+      expect(box.height, `Tool menu ${i + 1}`).toBeGreaterThanOrEqual(43.5)
     }
   })
 })
