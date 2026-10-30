@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The drawing editor turns a line drawing, a DXF or a traced photo into a
   tactile map plan: a class on every shape, lines found down their middle,
   areas with what is drawn inside them, drawn words raised.
+- Tactile Map Designer: type an address and get a draft map of the
+  sidewalks and landmarks you choose, from OpenStreetMap, live or from a
+  file you drop in.
+- Tactile Map Designer: sidewalks steeper than a grade you set can carry
+  uphill chevrons, from public terrain tiles.
 
 ### Fixed
 
