@@ -2,7 +2,7 @@
 
 The set is provisional until it has been printed and felt; a shape that confuses readers is a change to data, not to the app.
 
-The Tactile Map tile places point symbols for the things a reader looks for on a map: stairs, elevators, entrances, landmarks, a transit stop, and the place the reader stands. This page lists the nine shapes the app ships, what each stands for, how big it prints, and where its shape comes from. You can also load a set of your own, which the last section explains.
+The Tactile Map tile places point symbols for the things a reader looks for on a map: stairs, elevators, entrances, landmarks, a transit stop, and the place the reader stands. This page lists the ten shapes the app ships, what each stands for, how big it prints, and where its shape comes from. You can also load a set of your own, which the last section explains.
 
 ## The rules every symbol keeps
 
@@ -12,7 +12,7 @@ The Tactile Map tile places point symbols for the things a reader looks for on a
 - Every shape is a filled, flat-topped area, raised 0.8 mm above the floor level so it stands out from lines. Shapes with a few straight sides and a clear outline, prisms and pyramids rather than domes, were recognized best in printed tests (Gual, Puyuelo and Lloveras 2012).
 - The levels builder warns when a map carries more than 15 different symbols or two symbols closer than 3 mm, because maps with too much on them are the complaint readers raise most often.
 
-## The nine shapes
+## The ten shapes
 
 | Name               | Stands for                                           | Shape at 10 mm                                                 | Where the shape comes from                                                                                                                                    |
 | ------------------ | ---------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -25,6 +25,7 @@ The Tactile Map tile places point symbols for the things a reader looks for on a
 | Landmark, triangle | A third landmark                                     | An equilateral triangle, 10 mm on a side                       | The same sources; a triangle identified from 6.4 mm, so it is the shape to use last at small sizes                                                            |
 | You are here       | The reader's own place                               | A disc 10 mm across with a 3 mm square hole in its center      | BANA 2022 8.5.6 asks for the most prominent symbol on the map, first in the key                                                                               |
 | Transit stop       | A bus, train or tram stop                            | A 9 mm square with a 3 by 4.5 mm notch cut from its top edge   | BANA 2022 8.6.5: a shape used for two things differs by 25 to 30 percent of its size, so the notch keeps it apart from the landmark square                    |
+| Uphill chevron     | The uphill direction of a steep sidewalk             | A V band 10 mm wide, its point up; along a line it is drawn every 10 mm, 6 mm across, pointing uphill | Arrows are read by their point (McCallum, Ungar and Jehoel 2006); the chevron pitch keeps inside BANA 2022 3.4.3.3's dash figures; steepness follows the OpenSidewalks incline, rise over run |
 
 A reader tells a shape by its outline, so the set stays small and each outline differs from its neighbors in more than one way. The classes that place these symbols, and the lines and areas beside them, are in the [Tactile Map Designer guide](TACTILE_MAP_GUIDE.md).
 
@@ -44,7 +45,7 @@ Choose **Load a symbol library** in the Tactile Map Designer panel and pick a JS
 ]
 ```
 
-- `key` is what a map's features refer to; use the nine keys above to replace the shipped shapes one for one, or your own keys for new ones.
+- `key` is what a map's features refer to; use the ten keys above to replace the shipped shapes one for one, or your own keys for new ones.
 - `name` is what the key sheet prints and a screen reader says.
 - `pathData` is SVG path data in a box one unit wide and one unit tall, y down, drawn as filled shapes with no strokes. Several subpaths make several parts; a subpath inside another makes a hole.
 - `minSizeMm` is the smallest size the shape still reads at; 6 is the floor.
