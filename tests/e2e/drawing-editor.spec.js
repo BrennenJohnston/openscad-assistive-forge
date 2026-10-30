@@ -2336,6 +2336,117 @@ test.describe('the map purpose', () => {
   })
 })
 
+// The map purpose's picture, through the plates panel's own door: the shapes
+// drawn on the region canvas, named under the arrow keys, and a click on a
+// shape opening its row's Class menu. Before the fix the stage showed the
+// relief purpose's result pane, empty for the panel's levels file.
+test.describe('the map purpose on its canvas', () => {
+  test('the door shows the drawing on the canvas; Home and ArrowRight name the shapes; a click focuses the Class menu', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000)
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    })
+    await page.goto('/?example=tactile-map')
+    await expect(page.locator('#tactileMapPanel')).toBeVisible({
+      timeout: 60000,
+    })
+    const notNow = page.locator('#saveProjectNotNow')
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 5000 })
+      await notNow.click()
+    } catch {
+      // no prompt
+    }
+    const drawing =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="200mm" height="100mm" viewBox="0 0 200 100">' +
+      '<rect x="10" y="10" width="60" height="30"/>' +
+      '<circle cx="120" cy="50" r="15"/>' +
+      '<rect x="160" y="70" width="20" height="20"/>' +
+      '</svg>'
+    await page.setInputFiles('#param-map_file', {
+      name: 'three.svg',
+      mimeType: 'image/svg+xml',
+      buffer: Buffer.from(drawing),
+    })
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => window.stateManager?.getState()?.parameters?.map_file?.name
+          ),
+        { timeout: 30000 }
+      )
+      .toBe('three.svg')
+    await page.locator('#tactileMapEditDrawing').click()
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor').first()
+    ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 })
+
+    const canvas = page.locator('#drawingEditorSurface .drawing-editor-canvas')
+    await expect(canvas).toBeVisible()
+    expect((await canvas.boundingBox()).width).toBeGreaterThanOrEqual(200)
+    const paths = page.locator(
+      '#drawingEditorSurface .drawing-editor-canvas-svg [data-layer="regions"] path'
+    )
+    await expect(paths).toHaveCount(3)
+    await expect(
+      page.locator('#drawingEditorSurface .svg-prep-previews')
+    ).toBeHidden()
+
+    // The keyboard: the canvas has the focus after a click on its empty
+    // ground; Home names the first shape, ArrowRight the next.
+    const svg = page.locator('#drawingEditorSurface .drawing-editor-canvas-svg')
+    await svg.click({ position: { x: 4, y: 4 } })
+    await page.keyboard.press('Home')
+    const statusLine = page.locator(
+      '#drawingEditorSurface .drawing-editor-status'
+    )
+    await expect(statusLine).toHaveText(/, no class yet\.$/)
+    const first = await statusLine.textContent()
+    await page.keyboard.press('ArrowRight')
+    await expect(statusLine).toHaveText(/, no class yet\.$/)
+    expect(await statusLine.textContent()).not.toBe(first)
+
+    // A click on a shape: its row's Class menu takes the focus.
+    await paths.nth(1).click({ force: true })
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const el = document.activeElement
+          return el?.classList.contains('drawing-editor-class-select')
+            ? el.dataset.original
+            : null
+        })
+      )
+      .toBe('1')
+
+    // The Hand tool: a drag moves the picture (the viewBox's origin shifts).
+    const hand = page.locator(
+      '#drawingEditorSurface .drawing-editor-tool[data-tool="hand"]'
+    )
+    await expect(hand).toBeVisible()
+    await expect(
+      page.locator(
+        '#drawingEditorSurface .drawing-editor-tool[data-tool="paint"]'
+      )
+    ).toBeHidden()
+    await hand.click()
+    await expect(svg).toHaveAttribute('data-tool', 'hand')
+    const before = await svg.getAttribute('viewBox')
+    const box = await svg.boundingBox()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 40, {
+      steps: 8,
+    })
+    await page.mouse.up()
+    expect(await svg.getAttribute('viewBox')).not.toBe(before)
+  })
+})
+
 test.describe('the drawing editor without a picture', () => {
   const STAR = path.join(
     process.cwd(),
