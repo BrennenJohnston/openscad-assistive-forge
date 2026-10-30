@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The drawing editor's map purpose shows the drawing again, with pan, zoom
+  and a keyboard walk between shapes.
 - The welcome cards' Tool menus are 44 px tall on a touch screen, the same
   floor as the buttons beside them.
 - In the Alt View, reaching the end of a list is the last sound a scroll

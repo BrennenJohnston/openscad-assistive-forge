@@ -789,30 +789,51 @@ export function createDrawingEditor({
     container: stage,
     labelId: canvasLabelId,
     on: {
+      // In the map purpose a shape has no selection and no paint: a click,
+      // Enter or a double click goes to its row's Class menu.
       onClick: (key, shift) => {
+        if (purpose === 'map') {
+          focusMapRow(key);
+          return;
+        }
         if (shift) toggleSelected(key);
         else setSelection(new Set([key]));
         announceSelection();
       },
       onEmptyClick: (shift) => {
+        if (purpose === 'map') return;
         if (shift || selected.size === 0) return;
         setSelection(new Set());
         announceSelection();
       },
       onMarquee: (keys, shift) => {
+        if (purpose === 'map') return;
         const next = shift ? new Set(selected) : new Set();
         for (const k of keys) next.add(k);
         setSelection(next);
         announceSelection();
       },
-      onPaint: (key) => assign([key], paintSelect.value),
-      onRemove: (key) => remove([key]),
-      onHighlight: (key) => describeHighlight(key),
+      onPaint: (key) => {
+        if (purpose !== 'map') assign([key], paintSelect.value);
+      },
+      onRemove: (key) => {
+        if (purpose !== 'map') remove([key]);
+      },
+      onHighlight: (key) =>
+        purpose === 'map' ? describeMapHighlight(key) : describeHighlight(key),
       onToggle: (key) => {
+        if (purpose === 'map') {
+          focusMapRow(key);
+          return;
+        }
         toggleSelected(key);
         announceSelection();
       },
       onOpenColour: (key) => {
+        if (purpose === 'map') {
+          focusMapRow(key);
+          return;
+        }
         const select = rowSelect(key);
         if (!select) return;
         select.focus();
@@ -1138,6 +1159,12 @@ export function createDrawingEditor({
         seedClasses(savedClasses);
         ensureClassSelects();
         setCount('regions', mapElements.length);
+        feedMapCanvas(svgString).catch((err) => {
+          console.error(
+            '[Drawing editor] the map canvas could not be drawn:',
+            err
+          );
+        });
         say(openedSentence || S.opened);
       } else if (purpose === 'stencil') {
         setCount('regions', null);
@@ -1311,12 +1338,26 @@ export function createDrawingEditor({
     regionsBlock.hidden = !stencil;
     shapesBlock.hidden = stencil;
     classHeading.hidden = !map;
-    stencilTools.hidden = !stencil;
+    // The map purpose takes two of the stencil's hands, Select and Hand (to
+    // drag the picture); the marquee, the paint and the remove tools and the
+    // paint menu are the stencil's alone.
+    stencilTools.hidden = !(stencil || map);
+    paintGroup.hidden = map;
+    for (const [id, el] of toolButtons) {
+      el.hidden = map && id !== 'select' && id !== 'hand';
+    }
     viewGroup.hidden = !stencil;
-    zoomGroup.hidden = !stencil;
+    // The region canvas is the picture of the two purposes that work on
+    // shapes one by one: the stencil paints them, the map classes them.
+    zoomGroup.hidden = !(stencil || map);
     // Undo and Redo belong to the two purposes with a command stack.
     historyGroup.hidden = !(stencil || map);
-    canvas.root.hidden = !stencil;
+    canvas.root.hidden = !(stencil || map);
+    canvasLabel.textContent = map ? S.mapCanvasLabel : S.canvasLabel;
+    const canvasHelp = document.getElementById(`${canvasLabelId}-help`);
+    if (canvasHelp) {
+      canvasHelp.textContent = map ? S.mapCanvasHelp : S.canvasHelp;
+    }
     legend.hidden = !stencil;
     applyBtn.hidden = !(stencil || map);
     applyBtn.textContent = map ? S.applyClasses : S.applyColours;
@@ -1340,7 +1381,11 @@ export function createDrawingEditor({
     refs.designWidthGroup.hidden =
       stencil || map || refs.designWidthGroup.hidden;
     refs.legendRow.hidden = stencil || map || refs.legendRow.hidden;
-    refs.previews.hidden = stencil;
+    // The relief purpose's before-and-after panes, its bulk tools and its
+    // charm-width sentence act on roles and a flatten the map never makes.
+    refs.previews.hidden = stencil || map;
+    refs.bulkBar.hidden = map;
+    refs.designWidthHelp.hidden = stencil || map || refs.designWidthHelp.hidden;
     // The stencil and map purposes apply their plan with their own button;
     // the workspace's Apply, Save and Reset act on the flatten, which
     // neither uses.
@@ -1975,6 +2020,7 @@ export function createDrawingEditor({
       select.setAttribute('aria-label', S.classFor(rowNameOf(item, live)));
       select.value = mapClasses.get(orig) || 'ignore';
     });
+    paintMapCanvas();
   }
 
   function removeClassSelects() {
@@ -2005,6 +2051,110 @@ export function createDrawingEditor({
     return item ? rowNameOf(item, live) : `Shape ${orig + 1}`;
   }
 
+  // ── The map purpose's picture ───────────────────────────────────────────
+
+  /** The drawing's viewBox as a bounds box, for a drawing whose shapes give none. */
+  function viewBoxExtent(svgString) {
+    const m = /viewBox\s*=\s*"([^"]+)"/.exec(svgString || '');
+    if (!m) return null;
+    const [x, y, w, h] = m[1]
+      .trim()
+      .split(/[\s,]+/)
+      .map(Number);
+    if (![x, y, w, h].every(Number.isFinite) || !(w > 0) || !(h > 0)) {
+      return null;
+    }
+    return { minX: x, minY: y, maxX: x + w, maxY: y + h };
+  }
+
+  const asPoint = (p) => (Array.isArray(p) ? { x: p[0], y: p[1] } : p);
+
+  /**
+   * Every shape of the drawing as a region on the canvas, keyed by its
+   * ORIGINAL index (the key its class travels under), over the drawing
+   * itself dimmed underneath. The rings come from the same path data Apply
+   * hands back, so the picture and the plan cannot disagree.
+   */
+  async function feedMapCanvas(svgString) {
+    const token = ++openToken;
+    const geometry = await import('../ring-geometry.js');
+    if (token !== openToken || !isOpen || purpose !== 'map') return;
+    const list = [];
+    const all = [];
+    mapElements.forEach((el, i) => {
+      const d = el?.pathData || '';
+      if (!d) return;
+      let points = [];
+      try {
+        points = geometry.ringsFromPathData(d).flat().map(asPoint);
+      } catch {
+        points = [];
+      }
+      all.push(...points);
+      const bbox = boundsOf(points);
+      // The arrow keys walk by a point inside each shape; the box's middle
+      // serves (a ring's true interior is not needed to tell left from right).
+      const interior = bbox
+        ? { x: (bbox.minX + bbox.maxX) / 2, y: (bbox.minY + bbox.maxY) / 2 }
+        : null;
+      list.push({ key: String(i), d, bbox, interior });
+    });
+    canvas.setView('plan');
+    setTool('select');
+    canvas.setDrawing(
+      svgString,
+      list,
+      boundsOf(all) || viewBoxExtent(svgString)
+    );
+    paintMapCanvas();
+  }
+
+  /** Classed shapes tinted, deleted rows hatched, the rest the drawing's own. */
+  function paintMapCanvas() {
+    if (purpose !== 'map') return;
+    const fills = {};
+    for (const [orig, key] of mapClasses) {
+      if (key !== 'ignore') {
+        fills[String(orig)] =
+          'var(--drawing-editor-map-tint, var(--drawing-editor-base-tint))';
+      }
+    }
+    const removed = new Set(workspace.getDeletedIndices().map(String));
+    canvas.setState({ fills, selected: new Set(), removed });
+  }
+
+  /** A live row's canvas key: the shape's original index. */
+  function mapKeyOfRow(item) {
+    const live = parseInt(item?.dataset.index, 10);
+    const orig = originalIndices()[live];
+    return Number.isInteger(orig) ? String(orig) : null;
+  }
+
+  /** A shape picked on the canvas: its row into view, its Class menu focused. */
+  function focusMapRow(key) {
+    const orig = Number(key);
+    const live = originalIndices().indexOf(orig);
+    const item =
+      live >= 0
+        ? refs.objects.querySelector(`.svg-prep-object[data-index="${live}"]`)
+        : null;
+    if (!item) return;
+    if (panel.hidden) setPanel(true);
+    item.scrollIntoView?.({ block: 'nearest' });
+    canvas.setHighlight(key);
+    item.querySelector('.drawing-editor-class-select')?.focus();
+  }
+
+  /** The status line as the highlight moves: the shape and its class. */
+  function describeMapHighlight(key) {
+    const orig = Number(key);
+    const name = nameOfOriginal(orig);
+    const cls = mapClasses.get(orig);
+    status.textContent = cls
+      ? S.mapHighlighting(name, className(cls))
+      : S.mapHighlightingUnclassed(name);
+  }
+
   /**
    * A shape's class, as a command Undo can take back and name. The menu
    * says its own new value as the control a person just operated; Undo says
@@ -2018,6 +2168,7 @@ export function createDrawingEditor({
       if (key === 'ignore') mapClasses.delete(orig);
       else mapClasses.set(orig, key);
       syncClassSelects();
+      paintMapCanvas();
     };
     stack.run({
       label: S.labelSetClass(name, className(next)),
@@ -2501,6 +2652,26 @@ export function createDrawingEditor({
       canvas.setHighlight(tr.dataset.region, { pulse: true });
       describeHighlight(tr.dataset.region);
     }
+    if (purpose === 'map') {
+      const item = event.target.closest?.('.svg-prep-object');
+      const key =
+        item && refs.objects.contains(item) ? mapKeyOfRow(item) : null;
+      if (key) canvas.setHighlight(key, { pulse: true });
+    }
+  });
+
+  // A pointer over a shape's row lights the shape on the canvas; off the
+  // row, the light goes.
+  refs.objects.addEventListener('pointerover', (event) => {
+    if (purpose !== 'map') return;
+    const item = event.target.closest?.('.svg-prep-object');
+    const key = item ? mapKeyOfRow(item) : null;
+    if (key) canvas.setHighlight(key);
+  });
+  refs.objects.addEventListener('pointerout', (event) => {
+    if (purpose !== 'map') return;
+    const item = event.target.closest?.('.svg-prep-object');
+    if (item && !item.contains(event.relatedTarget)) canvas.clearHighlight();
   });
 
   // Every shortcut the editor takes is stopped here. Otherwise Ctrl+Z inside
@@ -2509,6 +2680,27 @@ export function createDrawingEditor({
   // feet.
   root.addEventListener('keydown', (event) => {
     if (purpose === 'map') {
+      // On the canvas: plus and minus zoom, 0 fits the whole drawing, V and H
+      // pick the Select and the Hand tool.
+      if (event.target === canvas.svg && !event.ctrlKey && !event.metaKey) {
+        const zoom = { '+': 'in', '=': 'in', '-': 'out', 0: 'fit' }[event.key];
+        if (zoom) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (zoom === 'in') canvas.zoomIn();
+          else if (zoom === 'out') canvas.zoomOut();
+          else canvas.fit();
+          return;
+        }
+        const tool = { v: 'select', h: 'hand' }[event.key.toLowerCase()];
+        if (tool) {
+          event.preventDefault();
+          event.stopPropagation();
+          setTool(tool);
+          say(S.toolChosen(S.tools[tool]));
+          return;
+        }
+      }
       // Undo and Redo only: the workspace keeps Delete and Ctrl+A on its
       // rows, and the menus keep their own keys.
       const mod = event.ctrlKey || event.metaKey;

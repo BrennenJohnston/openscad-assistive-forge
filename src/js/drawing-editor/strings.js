@@ -243,6 +243,13 @@ export const EDITOR_STRINGS = Object.freeze({
   /** The status line as the highlight moves. A11Y (two shapes). */
   highlighting: (name, colour, plate) => `${name}, ${colour}, plate ${plate}.`,
   highlightingRemoved: (name) => `${name}, removed.`,
+  /** The canvas in the map purpose: its name and its keyboard help. A11Y. */
+  mapCanvasLabel: 'Map shapes',
+  mapCanvasHelp:
+    "Arrow keys move between shapes. Enter opens the shape's Class menu. Plus and minus zoom; 0 fits the whole drawing.",
+  /** The status line as the highlight moves in the map purpose. A11Y (two shapes). */
+  mapHighlighting: (name, cls) => `${name}, ${cls}.`,
+  mapHighlightingUnclassed: (name) => `${name}, no class yet.`,
 
   // ── The regions table ──────────────────────────────────────────────────
   regionsCaption: 'Regions in this drawing',
