@@ -18,6 +18,7 @@ import {
 import {
   buildLevelsSvg,
   buildLevelRings,
+  chevronsLine,
   strokePolyline,
   STROKE_METHOD,
   BUILTIN_SYMBOLS,
@@ -367,5 +368,58 @@ describe('the sample station plan', () => {
     const dir = join(tmpdir(), 'tactile-map-levels');
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'sample-plan.svg'), svg);
+  });
+});
+
+describe('the chevrons style', () => {
+  const line = [
+    [0, 180],
+    [100, 180],
+  ];
+  /** The x of every point that lies out past the line's own width: the chevrons' arm ends. */
+  const armEnds = (rings) =>
+    rings
+      .flat()
+      .filter((p) => Math.abs(p.y - 180) > 2.5)
+      .map((p) => p.x);
+
+  it('draws a chevron every 10 mm, 6 mm across, pointing to the uphill end', () => {
+    const rings = chevronsLine(line, 1.5, 10, 6, 'end');
+    const ends = armEnds(rings);
+    expect(ends.length).toBeGreaterThan(0);
+    // Ten chevrons centered at 5, 15, ... 95: their arm ends sit 3 mm back of each center.
+    const clusters = new Set(ends.map((x) => Math.round((x + 3 - 5) / 10)));
+    expect(clusters.size).toBe(10);
+    expect(Math.min(...ends)).toBeGreaterThan(0.5);
+    expect(Math.min(...ends)).toBeLessThan(3.5);
+    const ys = rings.flat().map((p) => p.y);
+    expect(Math.max(...ys) - 180).toBeLessThanOrEqual(3 + 0.76);
+    expect(180 - Math.min(...ys)).toBeLessThanOrEqual(3 + 0.76);
+  });
+
+  it('turns the chevrons round when the uphill end is the start', () => {
+    const ends = armEnds(chevronsLine(line, 1.5, 10, 6, 'start'));
+    // The arm ends now sit 3 mm past each center: the first near 8.
+    expect(Math.min(...ends)).toBeGreaterThan(6.5);
+    expect(Math.min(...ends)).toBeLessThan(9.5);
+  });
+
+  it('is what the levels builder draws for the steep class, on level 2', () => {
+    const plan = emptyPlan(480, 360);
+    plan.features.push({
+      id: 'steep-1',
+      class: 'steep',
+      kind: 'line',
+      points: line,
+      on: true,
+      style: 'chevrons',
+      uphill: 'end',
+    });
+    const { rings, warnings } = buildLevelRings(plan);
+    const onLevel2 = Object.entries(rings).find(
+      ([key, list]) => /2/.test(key) && list.length > 0
+    );
+    expect(onLevel2).toBeTruthy();
+    expect(warnings.filter((w) => w.code === 'line-too-wide')).toEqual([]);
   });
 });
