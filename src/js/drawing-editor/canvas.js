@@ -35,6 +35,7 @@ export const TOOLS = Object.freeze([
   { id: 'paint', key: 'p' },
   { id: 'remove', key: 'r' },
   { id: 'hand', key: 'h' },
+  { id: 'route', key: 'w' },
 ]);
 
 /** Room around the drawing when it is fitted, as a fraction of its size. */

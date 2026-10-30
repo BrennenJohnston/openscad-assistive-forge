@@ -12,14 +12,15 @@
  * @license GPL-3.0-or-later
  */
 
-import { test, expect } from '@playwright/test'
-import AxeBuilder from '@axe-core/playwright'
-import path from 'node:path'
+import { readFileSync } from 'node:fs';
+import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import path from 'node:path';
 import {
   recordAnnouncements,
   announcementMark,
   announcementsSince,
-} from './helpers/invariants.js'
+} from './helpers/invariants.js';
 
 // Every press in this file waits for the CI runner's page. A press lands at
 // once and then waits for the page to acknowledge it, and on a slow CI
@@ -31,10 +32,10 @@ import {
 // speed (the reopen's own timing assertion is Apply ready within three
 // seconds), so the presses get the runner's time rather than the config's
 // ten seconds.
-test.use({ actionTimeout: 120000 })
+test.use({ actionTimeout: 120000 });
 
-const surface = (page) => page.locator('#drawingEditorSurface')
-const canvas = (page) => page.locator('#previewContainer canvas').first()
+const surface = (page) => page.locator('#drawingEditorSurface');
+const canvas = (page) => page.locator('#previewContainer canvas').first();
 
 /** Wait until no region that speaks has been written for a while. */
 async function quiet(page, ms = 3000) {
@@ -42,13 +43,13 @@ async function quiet(page, ms = 3000) {
     .poll(
       () =>
         page.evaluate((gap) => {
-          const writes = window.__announcements || []
-          const last = writes.length ? writes[writes.length - 1].t : 0
-          return performance.now() - last > gap
+          const writes = window.__announcements || [];
+          const last = writes.length ? writes[writes.length - 1].t : 0;
+          return performance.now() - last > gap;
         }, ms),
       { timeout: 120000, intervals: [500] }
     )
-    .toBe(true)
+    .toBe(true);
 }
 
 /**
@@ -57,11 +58,11 @@ async function quiet(page, ms = 3000) {
  * 350 ms first), so a second voice has had its chance to show up.
  */
 async function writesOf(page, mark, sentence) {
-  await page.waitForTimeout(1500)
-  const writes = await announcementsSince(page, mark)
+  await page.waitForTimeout(1500);
+  const writes = await announcementsSince(page, mark);
   return writes.filter((w) =>
     sentence instanceof RegExp ? sentence.test(w.text) : w.text === sentence
-  )
+  );
 }
 
 /**
@@ -76,134 +77,140 @@ test.describe('the Drawing / Charm switch', () => {
     'fixtures',
     'svg-edit',
     'nested-squares.svg'
-  )
+  );
 
   async function openCharmEditor(page) {
     await page.addInitScript(() => {
-      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
-      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
-    })
-    await page.goto('/')
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+    await page.goto('/');
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       timeout: 240000,
-    })
-    await page.selectOption('#charmVariantSelect', 'q-charm')
-    await page.click('#openCharmMakerBtn')
+    });
+    await page.selectOption('#charmVariantSelect', 'q-charm');
+    await page.click('#openCharmMakerBtn');
     await page.waitForFunction(
       () =>
         Object.keys(window.stateManager?.getState()?.parameters || {}).length >
         0,
       null,
       { timeout: 120000 }
-    )
+    );
     for (let i = 0; i < 2; i++) {
-      const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+      const notNow = page.getByRole('button', { name: 'Not now', exact: true });
       if (await notNow.isVisible().catch(() => false)) {
-        await notNow.click()
-        await page.waitForTimeout(300)
+        await notNow.click();
+        await page.waitForTimeout(300);
       }
     }
-    await page.setInputFiles('#param-design_file', NESTED)
+    await page.setInputFiles('#param-design_file', NESTED);
     await page.evaluate(() => {
-      let d = document.querySelector('#param-design_file')?.closest('details')
+      let d = document.querySelector('#param-design_file')?.closest('details');
       while (d) {
-        d.open = true
-        d = d.parentElement?.closest('details')
+        d.open = true;
+        d = d.parentElement?.closest('details');
       }
-    })
+    });
     const door = page
       .locator('.svg-prep-status')
       .getByRole('button', { name: 'Open the drawing editor' })
-      .first()
-    await door.waitFor({ state: 'visible', timeout: 60000 })
-    await door.scrollIntoViewIfNeeded()
-    await door.click({ timeout: 30000 })
-    await expect(
-      page.locator('.svg-prep-result-pane svg').first()
-    ).toBeVisible({ timeout: 90000 })
+      .first();
+    await door.waitFor({ state: 'visible', timeout: 60000 });
+    await door.scrollIntoViewIfNeeded();
+    await door.click({ timeout: 30000 });
+    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible(
+      { timeout: 90000 }
+    );
   }
 
-  const charm = (page) => page.getByRole('radio', { name: 'Charm' })
-  const drawing = (page) => page.getByRole('radio', { name: 'Drawing' })
+  const charm = (page) => page.getByRole('radio', { name: 'Charm' });
+  const drawing = (page) => page.getByRole('radio', { name: 'Drawing' });
 
   test('it is a real radio group, and the drawing is what it opens on', async ({
     page,
   }) => {
-    test.setTimeout(300000)
-    await openCharmEditor(page)
+    test.setTimeout(300000);
+    await openCharmEditor(page);
 
     // Two named choices where only one can be true: the markup says so, so
     // nothing has to say it again in ARIA.
-    await expect(page.locator('.drawing-editor-view-switch')).toBeVisible()
-    await expect(drawing(page)).toBeChecked()
-    await expect(charm(page)).not.toBeChecked()
+    await expect(page.locator('.drawing-editor-view-switch')).toBeVisible();
+    await expect(drawing(page)).toBeChecked();
+    await expect(charm(page)).not.toBeChecked();
 
     // Both are real targets, not labels standing in front of a clipped input.
     for (const radio of [drawing(page), charm(page)]) {
-      const box = await radio.boundingBox()
-      expect(box.width, 'radio width').toBeGreaterThanOrEqual(44)
-      expect(box.height, 'radio height').toBeGreaterThanOrEqual(44)
+      const box = await radio.boundingBox();
+      expect(box.width, 'radio width').toBeGreaterThanOrEqual(44);
+      expect(box.height, 'radio height').toBeGreaterThanOrEqual(44);
     }
-  })
+  });
 
   test('Charm shows the model behind the editor, and Drawing puts it back', async ({
     page,
   }) => {
-    test.setTimeout(300000)
-    await recordAnnouncements(page)
-    await openCharmEditor(page)
+    test.setTimeout(300000);
+    await recordAnnouncements(page);
+    await openCharmEditor(page);
 
     // The drawing is what is on screen, and the canvas behind is out of sight.
-    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible()
-    await expect(canvas(page)).toBeHidden()
+    await expect(
+      page.locator('.svg-prep-result-pane svg').first()
+    ).toBeVisible();
+    await expect(canvas(page)).toBeHidden();
 
-    let mark = await announcementMark(page)
-    await charm(page).click()
+    let mark = await announcementMark(page);
+    await charm(page).click();
     // The canvas comes back WITHOUT the editor giving up the area: the toolbar
     // is still there and so is the way back.
-    await expect(canvas(page)).toBeVisible()
-    await expect(page.locator('.drawing-editor-toolbar')).toBeVisible()
-    await expect(charm(page)).toBeChecked()
+    await expect(canvas(page)).toBeVisible();
+    await expect(page.locator('.drawing-editor-toolbar')).toBeVisible();
+    await expect(charm(page)).toBeChecked();
     // The drawing is not merely covered: it is out of the accessibility tree
     // too, because a picture nobody can see must not still be read out.
-    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeHidden()
+    await expect(
+      page.locator('.svg-prep-result-pane svg').first()
+    ).toBeHidden();
     await expect(page.locator('.drawing-editor-status')).toHaveText(
       'Showing the charm.'
-    )
+    );
     // One press, one sentence: the status line says it and nothing again.
-    let said = await writesOf(page, mark, 'Showing the charm.')
-    expect(said, JSON.stringify(said)).toHaveLength(1)
+    let said = await writesOf(page, mark, 'Showing the charm.');
+    expect(said, JSON.stringify(said)).toHaveLength(1);
 
-    mark = await announcementMark(page)
-    await drawing(page).click()
-    await expect(canvas(page)).toBeHidden()
-    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible()
+    mark = await announcementMark(page);
+    await drawing(page).click();
+    await expect(canvas(page)).toBeHidden();
+    await expect(
+      page.locator('.svg-prep-result-pane svg').first()
+    ).toBeVisible();
     await expect(page.locator('.drawing-editor-status')).toHaveText(
       'Showing the drawing.'
-    )
-    said = await writesOf(page, mark, 'Showing the drawing.')
-    expect(said, JSON.stringify(said)).toHaveLength(1)
-  })
+    );
+    said = await writesOf(page, mark, 'Showing the drawing.');
+    expect(said, JSON.stringify(said)).toHaveLength(1);
+  });
 
-  test('the drawer gets out of the charm\'s way, and comes back as it was', async ({
+  test("the drawer gets out of the charm's way, and comes back as it was", async ({
     page,
   }) => {
-    test.setTimeout(300000)
-    await openCharmEditor(page)
+    test.setTimeout(300000);
+    await openCharmEditor(page);
 
     // At 1280 the drawer covers 310 px of the canvas and the charm
     // is 515 px wide, so leaving it open hides 206 px of the thing the switch
     // exists to show.
-    const panel = page.locator('.drawing-editor-panel')
-    await expect(panel).toBeVisible()
+    const panel = page.locator('.drawing-editor-panel');
+    await expect(panel).toBeVisible();
 
-    await charm(page).click()
-    await expect(panel).toBeHidden()
+    await charm(page).click();
+    await expect(panel).toBeHidden();
 
     // Closing it was the switch's doing, so the switch gives it back.
-    await drawing(page).click()
-    await expect(panel).toBeVisible()
-  })
+    await drawing(page).click();
+    await expect(panel).toBeVisible();
+  });
 
   test('the charm is framed in the window it is seen through', async ({
     page,
@@ -215,23 +222,28 @@ test.describe('the Drawing / Charm switch', () => {
     // window left over is 460 by 445. Framed for the canvas, the charm is
     // drawn to fill a tall box and the near-square window shows a band across
     // its middle: a slab, not a charm.
-    test.setTimeout(300000)
-    await openCharmEditor(page)
-    await charm(page).click()
-    await expect(canvas(page)).toBeVisible()
+    test.setTimeout(300000);
+    await openCharmEditor(page);
+    await charm(page).click();
+    await expect(canvas(page)).toBeVisible();
 
     const readBoxes = () =>
       page.evaluate(() => {
         const r = (el) => {
-          const b = el.getBoundingClientRect()
-          return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)]
-        }
+          const b = el.getBoundingClientRect();
+          return [
+            Math.round(b.left),
+            Math.round(b.top),
+            Math.round(b.width),
+            Math.round(b.height),
+          ];
+        };
         return {
           canvas: r(document.querySelector('#previewContainer canvas')),
           stage: r(document.querySelector('.drawing-editor-stage')),
           container: r(document.getElementById('previewContainer')),
-        }
-      })
+        };
+      });
     // The canvas sits on the window, not on the whole area behind the editor.
     // The canvas is re-framed to the stage a beat after it becomes visible,
     // and a sample taken in that beat can read the previous layout's box, so
@@ -239,79 +251,81 @@ test.describe('the Drawing / Charm switch', () => {
     await expect
       .poll(
         async () => {
-          const b = await readBoxes()
-          return Math.max(...[0, 1, 2, 3].map((i) => Math.abs(b.canvas[i] - b.stage[i])))
+          const b = await readBoxes();
+          return Math.max(
+            ...[0, 1, 2, 3].map((i) => Math.abs(b.canvas[i] - b.stage[i]))
+          );
         },
         { timeout: 15000, message: 'the canvas never settled on the stage' }
       )
-      .toBeLessThanOrEqual(2)
-    const boxes = await readBoxes()
+      .toBeLessThanOrEqual(2);
+    const boxes = await readBoxes();
     // And it is really a different box from the one it would otherwise have.
-    expect(boxes.stage[3]).toBeLessThan(boxes.container[3] - 50)
+    expect(boxes.stage[3]).toBeLessThan(boxes.container[3] - 50);
 
     // Leaving the charm view gives the whole area back. Read from the INLINE
     // size, not from the box: the canvas is display:none again in the drawing
     // view, so its box is 0 by 0 and says nothing. And 'no inline size' was
     // never the resting state either - three.js writes a CSS width and height
     // of its own on every setSize.
-    await drawing(page).click()
+    await drawing(page).click();
     const after = await page.evaluate(() => {
-      const el = document.querySelector('#previewContainer canvas')
+      const el = document.querySelector('#previewContainer canvas');
       // clientWidth, not the bounding box: that is what the resize handler
       // reads, and the box includes the container's own border.
-      const c = document.getElementById('previewContainer')
+      const c = document.getElementById('previewContainer');
       return {
         position: el.style.position,
         width: parseInt(el.style.width, 10),
         height: parseInt(el.style.height, 10),
         container: [c.clientWidth, c.clientHeight],
-      }
-    })
-    expect(after.position).toBe('')
-    expect(Math.abs(after.width - after.container[0])).toBeLessThanOrEqual(2)
-    expect(Math.abs(after.height - after.container[1])).toBeLessThanOrEqual(2)
-  })
+      };
+    });
+    expect(after.position).toBe('');
+    expect(Math.abs(after.width - after.container[0])).toBeLessThanOrEqual(2);
+    expect(Math.abs(after.height - after.container[1])).toBeLessThanOrEqual(2);
+  });
 
   test('the switch keeps every choice the editor had', async ({ page }) => {
-    test.setTimeout(300000)
-    await openCharmEditor(page)
+    test.setTimeout(300000);
+    await openCharmEditor(page);
 
-    const rows = page.locator('.svg-prep-object')
-    const before = await rows.count()
+    const rows = page.locator('.svg-prep-object');
+    const before = await rows.count();
     await page
       .locator(
         '.svg-prep-object[data-index="1"] .svg-prep-role-group input[value="ignore"]'
       )
-      .check()
+      .check();
 
-    await charm(page).click()
-    await drawing(page).click()
+    await charm(page).click();
+    await drawing(page).click();
 
     // Nothing was rebuilt, so nothing was lost.
-    await expect(rows).toHaveCount(before)
+    await expect(rows).toHaveCount(before);
     await expect(
       page.locator(
         '.svg-prep-object[data-index="1"] .svg-prep-role-group input[value="ignore"]'
       )
-    ).toBeChecked()
-  })
+    ).toBeChecked();
+  });
 
   test('the open editor still passes an accessibility scan in the charm view', async ({
     page,
   }) => {
-    test.setTimeout(300000)
-    await openCharmEditor(page)
-    await charm(page).click()
-    await expect(canvas(page)).toBeVisible()
+    test.setTimeout(300000);
+    await openCharmEditor(page);
+    await charm(page).click();
+    await expect(canvas(page)).toBeVisible();
 
     const results = await new AxeBuilder({ page })
       .include('#drawingEditorSurface')
-      .analyze()
+      .analyze();
     expect(
       results.violations,
       JSON.stringify(results.violations, null, 2)
-    ).toEqual([])
-  })
+    ).toEqual([]);
+  });
 
   test('a preview drawn while you edit costs a quarter of a full one', async ({
     page,
@@ -320,45 +334,45 @@ test.describe('the Drawing / Charm switch', () => {
     // work on the drawing in front of it, and at full quality this charm costs
     // 29,372 triangles and 1.2 MB a render, because q_charm sets its own
     // $fn = 64. So the editor's session renders at draft quality.
-    test.setTimeout(600000)
-    await openCharmEditor(page)
+    test.setTimeout(600000);
+    await openCharmEditor(page);
 
     const triangles = async () => {
       await expect(page.locator('text=Preview ready').first()).toBeVisible({
         timeout: 240000,
-      })
+      });
       const text = await page
         .locator('[class*="status"]')
         .filter({ hasText: /triangles/ })
         .first()
-        .textContent()
-      const found = /([\d,]+)\s+triangles/.exec(text || '')
-      return found ? Number(found[1].replace(/,/g, '')) : null
-    }
+        .textContent();
+      const found = /([\d,]+)\s+triangles/.exec(text || '');
+      return found ? Number(found[1].replace(/,/g, '')) : null;
+    };
     // Something has to CHANGE for a preview to be drawn at all.
     const nudge = async (value) => {
       await page.evaluate((v) => {
         const el =
           document.querySelector('#param-engrave_depth') ||
-          document.querySelector('input[name="engrave_depth"]')
-        if (!el) return
-        el.value = String(v)
-        el.dispatchEvent(new Event('input', { bubbles: true }))
-        el.dispatchEvent(new Event('change', { bubbles: true }))
-      }, value)
-      await page.waitForTimeout(1500)
-    }
+          document.querySelector('input[name="engrave_depth"]');
+        if (!el) return;
+        el.value = String(v);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }, value);
+      await page.waitForTimeout(1500);
+    };
 
-    await nudge(1.0)
-    const whileEditing = await triangles()
+    await nudge(1.0);
+    const whileEditing = await triangles();
     expect(whileEditing, 'triangles while the editor is open').toBeGreaterThan(
       0
-    )
+    );
 
-    await page.getByRole('button', { name: 'Keep original' }).click()
-    await page.waitForTimeout(1000)
-    await nudge(1.1)
-    const afterClosing = await triangles()
+    await page.getByRole('button', { name: 'Keep original' }).click();
+    await page.waitForTimeout(1000);
+    await nudge(1.1);
+    const afterClosing = await triangles();
 
     // The session is cheaper, and the person's own setting comes back the
     // moment it ends (7,500 triangles while editing against 29,388 after, a
@@ -370,35 +384,41 @@ test.describe('the Drawing / Charm switch', () => {
       whileEditing,
       `${whileEditing} while editing vs ${afterClosing} after`
     ).toBeLessThan(afterClosing * 0.6);
-    expect(afterClosing).toBeGreaterThan(20000)
-  })
+    expect(afterClosing).toBeGreaterThan(20000);
+  });
 
   test('the switch is not offered where there is no charm to switch to', async ({
     page,
   }) => {
     // Through the standalone door there is no model behind the editor at all.
-    test.setTimeout(300000)
+    test.setTimeout(300000);
     await page.addInitScript(() => {
-      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
-      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
-    })
-    await page.goto('/')
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+    await page.goto('/');
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       timeout: 240000,
-    })
-    await page.locator('summary.spotlights-summary').click()
-    await page.locator('#editDrawingSpotlightBtn').click()
+    });
+    await page.locator('summary.spotlights-summary').click();
+    await page.locator('#editDrawingSpotlightBtn').click();
     await page
       .locator('#svgEditFileInput')
       .setInputFiles(
-        path.join(process.cwd(), 'tests', 'fixtures', 'svg-edit', 'nested-squares.svg')
-      )
-    await expect(
-      page.locator('.svg-prep-result-pane svg').first()
-    ).toBeVisible({ timeout: 90000 })
-    await expect(page.locator('.drawing-editor-view-switch')).toBeHidden()
-  })
-})
+        path.join(
+          process.cwd(),
+          'tests',
+          'fixtures',
+          'svg-edit',
+          'nested-squares.svg'
+        )
+      );
+    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible(
+      { timeout: 90000 }
+    );
+    await expect(page.locator('.drawing-editor-view-switch')).toBeHidden();
+  });
+});
 
 test.describe('the toolbar on the charm host', () => {
   // The charm host is where a cramped toolbar shows: the door host fills the
@@ -412,94 +432,95 @@ test.describe('the toolbar on the charm host', () => {
     'fixtures',
     'svg-edit',
     'nested-squares.svg'
-  )
+  );
 
   async function openCharmEditor(page) {
     await page.addInitScript(() => {
-      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
-      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
-    })
-    await page.goto('/')
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+    await page.goto('/');
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       timeout: 240000,
-    })
-    await page.selectOption('#charmVariantSelect', 'q-charm')
-    await page.click('#openCharmMakerBtn')
+    });
+    await page.selectOption('#charmVariantSelect', 'q-charm');
+    await page.click('#openCharmMakerBtn');
     await page.waitForFunction(
       () =>
         Object.keys(window.stateManager?.getState()?.parameters || {}).length >
         0,
       null,
       { timeout: 120000 }
-    )
+    );
     for (let i = 0; i < 2; i++) {
-      const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+      const notNow = page.getByRole('button', { name: 'Not now', exact: true });
       if (await notNow.isVisible().catch(() => false)) {
-        await notNow.click()
-        await page.waitForTimeout(300)
+        await notNow.click();
+        await page.waitForTimeout(300);
       }
     }
-    await page.setInputFiles('#param-design_file', NESTED)
+    await page.setInputFiles('#param-design_file', NESTED);
     await page.evaluate(() => {
-      let d = document.querySelector('#param-design_file')?.closest('details')
+      let d = document.querySelector('#param-design_file')?.closest('details');
       while (d) {
-        d.open = true
-        d = d.parentElement?.closest('details')
+        d.open = true;
+        d = d.parentElement?.closest('details');
       }
-    })
+    });
     const door = page
       .locator('.svg-prep-status')
       .getByRole('button', { name: 'Open the drawing editor' })
-      .first()
-    await door.waitFor({ state: 'visible', timeout: 60000 })
-    await door.scrollIntoViewIfNeeded()
-    await door.click({ timeout: 30000 })
-    await expect(
-      page.locator('.svg-prep-result-pane svg').first()
-    ).toBeVisible({ timeout: 90000 })
+      .first();
+    await door.waitFor({ state: 'visible', timeout: 60000 });
+    await door.scrollIntoViewIfNeeded();
+    await door.click({ timeout: 30000 });
+    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible(
+      { timeout: 90000 }
+    );
   }
 
-  test('two rows, Close on the first, at the editor\'s real width', async ({
+  test("two rows, Close on the first, at the editor's real width", async ({
     page,
   }) => {
-    test.setTimeout(300000)
-    await openCharmEditor(page)
+    test.setTimeout(300000);
+    await openCharmEditor(page);
 
     const shape = await page.evaluate(() => {
       const rows = [...document.querySelectorAll('.drawing-editor-toolbar-row')]
         .filter((row) => row.getClientRects().length > 0)
-        .map((row) => Math.round(row.getBoundingClientRect().height))
-      const close = document.querySelector('.drawing-editor-close')
+        .map((row) => Math.round(row.getBoundingClientRect().height));
+      const close = document.querySelector('.drawing-editor-close');
       const header = document.querySelector(
         '.drawing-editor-toolbar-row--header'
-      )
-      const toolbar = document.querySelector('.drawing-editor-toolbar')
+      );
+      const toolbar = document.querySelector('.drawing-editor-toolbar');
       return {
         rows,
         editorWidth: Math.round(
-          document.querySelector('.drawing-editor').getBoundingClientRect().width
+          document.querySelector('.drawing-editor').getBoundingClientRect()
+            .width
         ),
         toolbarHeight: Math.round(toolbar.getBoundingClientRect().height),
         closeOnRow1:
           close.getBoundingClientRect().bottom <=
           header.getBoundingClientRect().bottom + 1,
-      }
-    })
+      };
+    });
 
     // The width a person sees, not the window's.
-    expect(shape.editorWidth).toBeLessThan(800)
-    expect(shape.rows.length).toBe(2)
-    for (const height of shape.rows) expect(height).toBeLessThan(60)
+    expect(shape.editorWidth).toBeLessThan(800);
+    expect(shape.rows.length).toBe(2);
+    for (const height of shape.rows) expect(height).toBeLessThan(60);
     // It was 170 px of header alone, plus a wrapped footer under it.
-    expect(shape.toolbarHeight).toBeLessThan(120)
-    expect(shape.closeOnRow1).toBe(true)
-  })
+    expect(shape.toolbarHeight).toBeLessThan(120);
+    expect(shape.closeOnRow1).toBe(true);
+  });
 
   test('the toolbar does not move when the Apply hint goes', async ({
     page,
   }) => {
-    test.setTimeout(300000)
-    await openCharmEditor(page)
+    test.setTimeout(300000);
+    await openCharmEditor(page);
 
     const toolbarHeight = () =>
       page.evaluate(() =>
@@ -508,7 +529,7 @@ test.describe('the toolbar on the charm host', () => {
             .querySelector('.drawing-editor-toolbar')
             .getBoundingClientRect().height
         )
-      )
+      );
 
     // The hint comes and goes as the flatten finishes and as a choice
     // changes; on a small drawing it may be gone before the editor is even
@@ -517,34 +538,36 @@ test.describe('the toolbar on the charm host', () => {
     // went, so the layout would move while a person worked.
     const setHint = (hidden) =>
       page.evaluate((h) => {
-        document.querySelector('.svg-prep-apply-hint').hidden = h
-      }, hidden)
+        document.querySelector('.svg-prep-apply-hint').hidden = h;
+      }, hidden);
 
-    await setHint(true)
-    await page.waitForTimeout(200)
-    const without = await toolbarHeight()
+    await setHint(true);
+    await page.waitForTimeout(200);
+    const without = await toolbarHeight();
 
-    await setHint(false)
-    await page.waitForTimeout(200)
-    const withHint = await toolbarHeight()
+    await setHint(false);
+    await page.waitForTimeout(200);
+    const withHint = await toolbarHeight();
 
-    expect(withHint).toBe(without)
+    expect(withHint).toBe(without);
     // And the sentence is on screen either way, in the status line.
     await expect(
       page.locator('.drawing-editor-statusline .svg-prep-apply-hint')
-    ).toHaveCount(1)
-  })
+    ).toHaveCount(1);
+  });
 
   test('the keyboard walk on the charm host: choose, Delete, Ctrl+A', async ({
     page,
   }) => {
-    test.setTimeout(300000)
-    await recordAnnouncements(page)
-    await openCharmEditor(page)
+    test.setTimeout(300000);
+    await recordAnnouncements(page);
+    await openCharmEditor(page);
 
-    const rows = page.locator('.svg-prep-object')
-    await expect.poll(() => rows.count(), { timeout: 60000 }).toBeGreaterThan(2)
-    const chosen = page.locator('.svg-prep-object--selected')
+    const rows = page.locator('.svg-prep-object');
+    await expect
+      .poll(() => rows.count(), { timeout: 60000 })
+      .toBeGreaterThan(2);
+    const chosen = page.locator('.svg-prep-object--selected');
     const roleOf = (i) =>
       page.evaluate(
         (n) =>
@@ -552,15 +575,15 @@ test.describe('the toolbar on the charm host', () => {
             .querySelectorAll('.svg-prep-object')
             [n].querySelector('input[type="radio"]:checked')?.value,
         i
-      )
+      );
 
     // Two rows, the way a person would: click, then Ctrl-click.
-    await rows.nth(0).locator('.svg-prep-object-name').click()
+    await rows.nth(0).locator('.svg-prep-object-name').click();
     await rows
       .nth(1)
       .locator('.svg-prep-object-name')
-      .click({ modifiers: ['Control'] })
-    await expect(chosen).toHaveCount(2)
+      .click({ modifiers: ['Control'] });
+    await expect(chosen).toHaveCount(2);
 
     // The picture marks both of them, not just the hover mark of one shape.
     await expect
@@ -569,39 +592,39 @@ test.describe('the toolbar on the charm host', () => {
           () => document.querySelectorAll('.svg-prep-selected-path').length
         )
       )
-      .toBeGreaterThanOrEqual(2)
+      .toBeGreaterThanOrEqual(2);
 
     // Delete sets the selection to Off, in the relief purpose too.
-    await rows.nth(1).focus()
-    let mark = await announcementMark(page)
-    await page.keyboard.press('Delete')
-    await expect.poll(() => roleOf(0)).toBe('ignore')
-    await expect.poll(() => roleOf(1)).toBe('ignore')
+    await rows.nth(1).focus();
+    let mark = await announcementMark(page);
+    await page.keyboard.press('Delete');
+    await expect.poll(() => roleOf(0)).toBe('ignore');
+    await expect.poll(() => roleOf(1)).toBe('ignore');
     // Each press says what it did once.
-    let said = await writesOf(page, mark, /^2 shapes set to /)
-    expect(said, JSON.stringify(said)).toHaveLength(1)
+    let said = await writesOf(page, mark, /^2 shapes set to /);
+    expect(said, JSON.stringify(said)).toHaveLength(1);
 
     // Ctrl+A selects every row, and not the page's text.
-    mark = await announcementMark(page)
-    await page.keyboard.press('Control+a')
-    await expect.poll(() => rows.count()).toBeGreaterThan(2)
-    await expect(chosen).toHaveCount(await rows.count())
+    mark = await announcementMark(page);
+    await page.keyboard.press('Control+a');
+    await expect.poll(() => rows.count()).toBeGreaterThan(2);
+    await expect(chosen).toHaveCount(await rows.count());
     const pageTextSelected = await page.evaluate(
       () => String(getSelection() || '').length
-    )
+    );
     expect(
       pageTextSelected,
       `Ctrl+A selected ${pageTextSelected} characters of page text`
-    ).toBeLessThan(50)
-    said = await writesOf(page, mark, /^All \d+ shapes selected\.$/)
-    expect(said, JSON.stringify(said)).toHaveLength(1)
-  })
+    ).toBeLessThan(50);
+    said = await writesOf(page, mark, /^All \d+ shapes selected\.$/);
+    expect(said, JSON.stringify(said)).toHaveLength(1);
+  });
 
   test('Ignore takes a shape out of the picture without a render', async ({
     page,
   }) => {
-    test.setTimeout(300000)
-    await openCharmEditor(page)
+    test.setTimeout(300000);
+    await openCharmEditor(page);
 
     const painted = () =>
       page.evaluate(
@@ -609,34 +632,33 @@ test.describe('the toolbar on the charm host', () => {
           document.querySelectorAll(
             '.svg-prep-result-pane .svg-prep-standin-path--raised, .svg-prep-result-pane .svg-prep-standin-path--hole'
           ).length
-      )
+      );
     // Three nested squares combine well under the budget, so the pane holds a
     // real result rather than the stand-in - which is the honest case to say
     // so about: this walk checks the picture ANSWERS, whichever it is showing.
     const before = await page.evaluate(
-      () =>
-        document.querySelectorAll('.svg-prep-result-pane svg path').length
-    )
-    expect(before).toBeGreaterThan(0)
+      () => document.querySelectorAll('.svg-prep-result-pane svg path').length
+    );
+    expect(before).toBeGreaterThan(0);
 
-    const rows = page.locator('.svg-prep-object')
-    await rows.nth(0).locator('.svg-prep-object-name').click()
-    await rows.nth(0).focus()
-    await page.keyboard.press('Delete')
+    const rows = page.locator('.svg-prep-object');
+    await rows.nth(0).locator('.svg-prep-object-name').click();
+    await rows.nth(0).focus();
+    await page.keyboard.press('Delete');
 
     await expect
       .poll(async () => {
-        const stand = await painted()
-        if (stand > 0) return stand
+        const stand = await painted();
+        if (stand > 0) return stand;
         return page.evaluate(
           () =>
             document.querySelectorAll('.svg-prep-result-pane svg path').length
-        )
+        );
       })
-      .toBeLessThan(before + 1)
+      .toBeLessThan(before + 1);
     // The row and its hit target stay: an ignored shape must be findable
     // again, both in the list and on the picture.
-    await expect(rows).toHaveCount(3)
+    await expect(rows).toHaveCount(3);
     await expect
       .poll(() =>
         page.evaluate(
@@ -646,8 +668,8 @@ test.describe('the toolbar on the charm host', () => {
             ).length
         )
       )
-      .toBe(3)
-  })
+      .toBe(3);
+  });
 
   // ── The way back into the editor
   // ─────────────────────────────────────────────
@@ -661,89 +683,91 @@ test.describe('the toolbar on the charm host', () => {
   test('after the editor closes, the file control still offers a way back in (a ready drawing sent to the editor for its size)', async ({
     page,
   }) => {
-    test.setTimeout(300000)
+    test.setTimeout(300000);
     const LOGO_TRACE = path.join(
       process.cwd(),
       'tests',
       'fixtures',
       'svg-edit',
       'create-logo-colors-trace.svg'
-    )
+    );
     await page.addInitScript(() => {
-      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
-      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
-    })
-    await page.goto('/')
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+    await page.goto('/');
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       timeout: 240000,
-    })
-    await page.selectOption('#charmVariantSelect', 'q-charm')
-    await page.click('#openCharmMakerBtn')
+    });
+    await page.selectOption('#charmVariantSelect', 'q-charm');
+    await page.click('#openCharmMakerBtn');
     await page.waitForFunction(
       () =>
         Object.keys(window.stateManager?.getState()?.parameters || {}).length >
         0,
       null,
       { timeout: 120000 }
-    )
+    );
     for (let i = 0; i < 2; i++) {
-      const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+      const notNow = page.getByRole('button', { name: 'Not now', exact: true });
       if (await notNow.isVisible().catch(() => false)) {
-        await notNow.click()
-        await page.waitForTimeout(300)
+        await notNow.click();
+        await page.waitForTimeout(300);
       }
     }
-    await page.setInputFiles('#param-design_file', LOGO_TRACE)
+    await page.setInputFiles('#param-design_file', LOGO_TRACE);
     await page.evaluate(() => {
-      let d = document.querySelector('#param-design_file')?.closest('details')
+      let d = document.querySelector('#param-design_file')?.closest('details');
       while (d) {
-        d.open = true
-        d = d.parentElement?.closest('details')
+        d.open = true;
+        d = d.parentElement?.closest('details');
       }
-    })
+    });
     // The editor opens by itself on this drawing.
-    await expect(surface(page)).toBeVisible({ timeout: 60000 })
+    await expect(surface(page)).toBeVisible({ timeout: 60000 });
     await expect
       .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
-      .toBeGreaterThan(10)
+      .toBeGreaterThan(10);
 
     // Leave without applying, the way a first look does.
-    await surface(page).locator('.drawing-editor-close').click()
-    await expect(surface(page)).toBeHidden({ timeout: 30000 })
+    await surface(page).locator('.drawing-editor-close').click();
+    await expect(surface(page)).toBeHidden({ timeout: 30000 });
 
     // The card must still say what the drawing is and offer the editor.
     const control = page.locator('.param-control--file', {
       has: page.locator('#param-design_file'),
-    })
-    const badge = control.locator('.svg-prep-status-badge')
-    await expect(badge).toBeVisible({ timeout: 30000 })
-    await expect(badge).toHaveText(/shapes/)
+    });
+    const badge = control.locator('.svg-prep-status-badge');
+    await expect(badge).toBeVisible({ timeout: 30000 });
+    await expect(badge).toHaveText(/shapes/);
     const door = control
       .locator('.svg-prep-status')
-      .getByRole('button', { name: 'Open the drawing editor' })
-    await expect(door).toBeVisible({ timeout: 30000 })
+      .getByRole('button', { name: 'Open the drawing editor' });
+    await expect(door).toBeVisible({ timeout: 30000 });
 
     // And it goes back in.
-    await door.scrollIntoViewIfNeeded()
-    await door.click()
-    await expect(surface(page)).toBeVisible({ timeout: 60000 })
+    await door.scrollIntoViewIfNeeded();
+    await door.click();
+    await expect(surface(page)).toBeVisible({ timeout: 60000 });
     await expect
       .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
-      .toBeGreaterThan(10)
+      .toBeGreaterThan(10);
 
     // Apply, and the card says the drawing was prepared, with the door still there.
-    const render = surface(page).locator('.svg-prep-render-btn')
+    const render = surface(page).locator('.svg-prep-render-btn');
     if (await render.isVisible().catch(() => false)) {
-      await render.click()
+      await render.click();
     }
-    const apply = surface(page).locator('.svg-prep-footer [data-action="apply"]')
-    await expect(apply).toBeEnabled({ timeout: 120000 })
-    await apply.click()
-    await expect(surface(page)).toBeHidden({ timeout: 30000 })
+    const apply = surface(page).locator(
+      '.svg-prep-footer [data-action="apply"]'
+    );
+    await expect(apply).toBeEnabled({ timeout: 120000 });
+    await apply.click();
+    await expect(surface(page)).toBeHidden({ timeout: 30000 });
     await expect(badge).toHaveText('Prepared in the drawing editor.', {
       timeout: 30000,
-    })
-    await expect(door).toBeVisible()
+    });
+    await expect(door).toBeVisible();
 
     // Reopen to look, and leave with Close: the applied design stays. Close
     // is not Keep original, so a look at an applied drawing does not end with
@@ -751,24 +775,24 @@ test.describe('the toolbar on the charm host', () => {
     // place of the lettering).
     const designSize = () =>
       page.evaluate(() => {
-        const v = window.stateManager?.getState()?.parameters?.design_file
-        return v && typeof v === 'object' ? v.size : null
-      })
-    const applied = await designSize()
-    expect(applied).toBeGreaterThan(0)
-    await door.scrollIntoViewIfNeeded()
-    await door.click()
-    await expect(surface(page)).toBeVisible({ timeout: 60000 })
+        const v = window.stateManager?.getState()?.parameters?.design_file;
+        return v && typeof v === 'object' ? v.size : null;
+      });
+    const applied = await designSize();
+    expect(applied).toBeGreaterThan(0);
+    await door.scrollIntoViewIfNeeded();
+    await door.click();
+    await expect(surface(page)).toBeVisible({ timeout: 60000 });
     await expect
       .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
-      .toBeGreaterThan(10)
-    await surface(page).locator('.drawing-editor-close').click()
-    await expect(surface(page)).toBeHidden({ timeout: 30000 })
-    await expect.poll(designSize).toBe(applied)
-    await expect(badge).toHaveText('Prepared in the drawing editor.')
-    await expect(door).toBeVisible()
-  })
-})
+      .toBeGreaterThan(10);
+    await surface(page).locator('.drawing-editor-close').click();
+    await expect(surface(page)).toBeHidden({ timeout: 30000 });
+    await expect.poll(designSize).toBe(applied);
+    await expect(badge).toHaveText('Prepared in the drawing editor.');
+    await expect(door).toBeVisible();
+  });
+});
 
 // ── Two previews: the drawing by itself, the charm on request ────────────────
 //
@@ -786,128 +810,132 @@ test.describe('two previews: the drawing by itself, the charm on request', () =>
     'fixtures',
     'svg-edit',
     'create-logo-colors-trace.svg'
-  )
+  );
 
   async function openLogoInTheEditor(page) {
     await page.addInitScript(() => {
-      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
-      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
-    })
-    await page.goto('/')
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+    await page.goto('/');
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       timeout: 240000,
-    })
-    await page.selectOption('#charmVariantSelect', 'q-charm')
-    await page.click('#openCharmMakerBtn')
+    });
+    await page.selectOption('#charmVariantSelect', 'q-charm');
+    await page.click('#openCharmMakerBtn');
     await page.waitForFunction(
       () =>
         Object.keys(window.stateManager?.getState()?.parameters || {}).length >
         0,
       null,
       { timeout: 120000 }
-    )
+    );
     for (let i = 0; i < 2; i++) {
-      const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+      const notNow = page.getByRole('button', { name: 'Not now', exact: true });
       if (await notNow.isVisible().catch(() => false)) {
-        await notNow.click()
-        await page.waitForTimeout(300)
+        await notNow.click();
+        await page.waitForTimeout(300);
       }
     }
-    await page.setInputFiles('#param-design_file', LOGO_TRACE)
+    await page.setInputFiles('#param-design_file', LOGO_TRACE);
     await page.evaluate(() => {
-      let d = document.querySelector('#param-design_file')?.closest('details')
+      let d = document.querySelector('#param-design_file')?.closest('details');
       while (d) {
-        d.open = true
-        d = d.parentElement?.closest('details')
+        d.open = true;
+        d = d.parentElement?.closest('details');
       }
-    })
-    await expect(surface(page)).toBeVisible({ timeout: 60000 })
+    });
+    await expect(surface(page)).toBeVisible({ timeout: 60000 });
     await expect
       .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
-      .toBeGreaterThan(10)
+      .toBeGreaterThan(10);
   }
 
   const committed = (page) =>
     page.evaluate(() => {
-      const sm = window.stateManager
-      const design = sm?.getState()?.parameters?.design_file
+      const sm = window.stateManager;
+      const design = sm?.getState()?.parameters?.design_file;
       return {
         size: design && typeof design === 'object' ? design.size : null,
         undo: sm?.history?.undoStack?.length ?? null,
         canUndo: sm?.canUndo?.() ?? null,
-      }
-    })
+      };
+    });
 
   test('the drawing combines by itself, the charm renders a draft on request, and Close leaves the design and its history alone', async ({
     page,
   }) => {
-    test.setTimeout(480000)
-    await openLogoInTheEditor(page)
-    const editor = surface(page)
-    const apply = editor.locator('.svg-prep-footer [data-action="apply"]')
+    test.setTimeout(480000);
+    await openLogoInTheEditor(page);
+    const editor = surface(page);
+    const apply = editor.locator('.svg-prep-footer [data-action="apply"]');
 
     // 1. No button in the drawing view; the first combine lands by itself.
-    await expect(editor.locator('.svg-prep-render-btn')).toBeHidden()
-    await expect(apply).toBeEnabled({ timeout: 180000 })
+    await expect(editor.locator('.svg-prep-render-btn')).toBeHidden();
+    await expect(apply).toBeEnabled({ timeout: 180000 });
 
     // 2. A change goes stale, says the combine is coming and how long, and
     //    combines again by itself.
-    const hint = editor.locator('.svg-prep-apply-hint')
+    const hint = editor.locator('.svg-prep-apply-hint');
     // A row that is raised now, so the change is a change.
     const raised = page
       .locator('.svg-prep-object', {
-        has: page.locator('.svg-prep-role-group input[value="foreground"]:checked'),
+        has: page.locator(
+          '.svg-prep-role-group input[value="foreground"]:checked'
+        ),
       })
-      .first()
-    await raised.locator('.svg-prep-role-group input[value="ignore"]').check()
-    await expect(hint).toBeVisible()
+      .first();
+    await raised.locator('.svg-prep-role-group input[value="ignore"]').check();
+    await expect(hint).toBeVisible();
     await expect(hint).toHaveText(
       /^Combining \d+ shapes, about (a second|\d+ seconds)\. Apply is ready when they are combined\.$/,
       { timeout: 10000 }
-    )
-    await expect(apply).toBeDisabled()
-    await expect(apply).toBeEnabled({ timeout: 180000 })
+    );
+    await expect(apply).toBeDisabled();
+    await expect(apply).toBeEnabled({ timeout: 180000 });
 
     // 3. What is committed, before any draft.
-    const before = await committed(page)
-    expect(before.size).toBeGreaterThan(0)
+    const before = await committed(page);
+    expect(before.size).toBeGreaterThan(0);
 
     // 4. The charm view: Render preview is there, at the target floor, and
     //    works from the keyboard.
-    await editor.locator('.drawing-editor-view-switch input[value="charm"]').check({ force: true })
-    const render = editor.locator('.drawing-editor-render-charm')
-    await expect(render).toBeVisible()
+    await editor
+      .locator('.drawing-editor-view-switch input[value="charm"]')
+      .check({ force: true });
+    const render = editor.locator('.drawing-editor-render-charm');
+    await expect(render).toBeVisible();
     await expect(render).toHaveAttribute(
       'aria-label',
       'Render the charm with the drawing as it is now'
-    )
-    const box = await render.boundingBox()
-    expect(box.height, '44px target floor').toBeGreaterThanOrEqual(44)
-    expect(box.width, '44px target floor').toBeGreaterThanOrEqual(44)
-    await render.focus()
-    await page.keyboard.press('Enter')
+    );
+    const box = await render.boundingBox();
+    expect(box.height, '44px target floor').toBeGreaterThanOrEqual(44);
+    expect(box.width, '44px target floor').toBeGreaterThanOrEqual(44);
+    await render.focus();
+    await page.keyboard.press('Enter');
 
     // 5. The badge says what is on screen is a draft, the note says which
     //    drawing it shows, and nothing was written.
-    const badge = page.locator('.preview-state-indicator')
+    const badge = page.locator('.preview-state-indicator');
     await expect(badge).toHaveText('Draft of the drawing, not yet applied', {
       timeout: 240000,
-    })
+    });
     await expect(editor.locator('.drawing-editor-draft-note')).toHaveText(
       'The charm shows your drawing as of the last Render preview, at draft quality while you edit.'
-    )
-    expect(await committed(page)).toEqual(before)
+    );
+    expect(await committed(page)).toEqual(before);
 
     // 6. Close without applying: the committed charm comes back, and still
     //    nothing was written.
-    await editor.locator('.drawing-editor-close').click()
-    await expect(editor).toBeHidden({ timeout: 30000 })
+    await editor.locator('.drawing-editor-close').click();
+    await expect(editor).toBeHidden({ timeout: 30000 });
     await expect(badge).toHaveText(/Preview ready|Preview \(cached\)/, {
       timeout: 240000,
-    })
-    expect(await committed(page)).toEqual(before)
-  })
-})
+    });
+    expect(await committed(page)).toEqual(before);
+  });
+});
 
 // ── The too-thin check, on the charm host ────────────────────────────────────
 //
@@ -923,103 +951,103 @@ const LOGO_TRACE = path.join(
   'fixtures',
   'svg-edit',
   'create-logo-colors-trace.svg'
-)
+);
 const TWO_PAPERS = path.join(
   process.cwd(),
   'tests',
   'fixtures',
   'svg-edit',
   'two-papers.svg'
-)
+);
 
 async function openCharmHost(page) {
   await page.addInitScript(() => {
-    localStorage.setItem('openscad-forge-first-visit-seen', 'true')
-    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
-  })
-  await page.goto('/')
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+  });
+  await page.goto('/');
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     timeout: 240000,
-  })
-  await page.selectOption('#charmVariantSelect', 'q-charm')
-  await page.click('#openCharmMakerBtn')
+  });
+  await page.selectOption('#charmVariantSelect', 'q-charm');
+  await page.click('#openCharmMakerBtn');
   await page.waitForFunction(
     () =>
-      Object.keys(window.stateManager?.getState()?.parameters || {}).length >
-      0,
+      Object.keys(window.stateManager?.getState()?.parameters || {}).length > 0,
     null,
     { timeout: 120000 }
-  )
+  );
   for (let i = 0; i < 2; i++) {
-    const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+    const notNow = page.getByRole('button', { name: 'Not now', exact: true });
     if (await notNow.isVisible().catch(() => false)) {
-      await notNow.click()
-      await page.waitForTimeout(300)
+      await notNow.click();
+      await page.waitForTimeout(300);
     }
   }
   // The charm's first render carries the fit box; the host must have it.
   await expect(page.locator('.preview-state-indicator')).toHaveText(
     /Preview ready|Preview \(cached\)/,
     { timeout: 240000 }
-  )
+  );
   await page.evaluate(() => {
-    let d = document.querySelector('#param-design_file')?.closest('details')
+    let d = document.querySelector('#param-design_file')?.closest('details');
     while (d) {
-      d.open = true
-      d = d.parentElement?.closest('details')
+      d.open = true;
+      d = d.parentElement?.closest('details');
     }
-  })
+  });
 }
-
 
 test.describe('the too-thin check on the charm host', () => {
   test('the notice names the too-thin shapes at the width the charm prints, Ignore those leaves them out, and one comes back', async ({
     page,
   }) => {
-    test.setTimeout(480000)
-    await openCharmHost(page)
-    await page.setInputFiles('#param-design_file', LOGO_TRACE)
-    const editor = surface(page)
-    await expect(editor).toBeVisible({ timeout: 60000 })
+    test.setTimeout(480000);
+    await openCharmHost(page);
+    await page.setInputFiles('#param-design_file', LOGO_TRACE);
+    const editor = surface(page);
+    await expect(editor).toBeVisible({ timeout: 60000 });
     await expect
       .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
-      .toBeGreaterThan(10)
+      .toBeGreaterThan(10);
 
     // The width is the charm's, not the editor's default: 11.97 mm for this
     // logo on the default charm (P0), said as 12.
-    const notice = editor.locator('.svg-prep-thin-notice')
-    await expect(notice).toBeVisible({ timeout: 30000 })
+    const notice = editor.locator('.svg-prep-thin-notice');
+    await expect(notice).toBeVisible({ timeout: 30000 });
     await expect(notice).toHaveText(
       /^\d+ shapes are thinner than 0\.5 mm at 12 mm wide and may not print\.$/
-    )
-    const count = Number((await notice.textContent()).match(/^(\d+)/)[1])
+    );
+    const count = Number((await notice.textContent()).match(/^(\d+)/)[1]);
     // A traced region is one row (111 for this logo), and 109 of the 111 are
     // under half a millimeter at 12 mm wide.
-    expect(count).toBeGreaterThan(100)
+    expect(count).toBeGreaterThan(100);
     await expect(editor.locator('.svg-prep-design-width-input')).toHaveValue(
       /^11\.9/
-    )
+    );
 
     // A too-thin row says so, read with its name.
-    const marked = editor.locator('.svg-prep-object[aria-describedby]').first()
-    await expect(marked).toBeVisible()
-    const markId = await marked.getAttribute('aria-describedby')
-    await expect(page.locator(`#${markId}`)).toContainText('too thin to print')
+    const marked = editor.locator('.svg-prep-object[aria-describedby]').first();
+    await expect(marked).toBeVisible();
+    const markId = await marked.getAttribute('aria-describedby');
+    await expect(page.locator(`#${markId}`)).toContainText('too thin to print');
 
     // Ignore those: one press, N rows to Ignore, the stand-in loses them.
     const raisedBefore = await editor
       .locator('.svg-prep-result-pane .svg-prep-standin-path--raised')
-      .count()
-    await editor.locator('[data-action="ignore-thin"]').click()
+      .count();
+    await editor.locator('[data-action="ignore-thin"]').click();
     await expect
       .poll(
         () =>
           editor
-            .locator('.svg-prep-object input[type=radio][value="ignore"]:checked')
+            .locator(
+              '.svg-prep-object input[type=radio][value="ignore"]:checked'
+            )
             .count(),
         { timeout: 30000 }
       )
-      .toBeGreaterThanOrEqual(count)
+      .toBeGreaterThanOrEqual(count);
     await expect
       .poll(
         () =>
@@ -1028,78 +1056,88 @@ test.describe('the too-thin check on the charm host', () => {
             .count(),
         { timeout: 30000 }
       )
-      .toBeLessThan(raisedBefore)
+      .toBeLessThan(raisedBefore);
 
     // One row turned back to Raised comes back.
-    const first = editor.locator('.svg-prep-object[aria-describedby]').first()
-    await first.locator('input[type=radio][value="foreground"]').check({ force: true })
-    await expect(first.locator('input[type=radio][value="foreground"]')).toBeChecked()
-    await expect(editor.locator('[data-action="undo-ignore"]')).toBeEnabled()
-  })
+    const first = editor.locator('.svg-prep-object[aria-describedby]').first();
+    await first
+      .locator('input[type=radio][value="foreground"]')
+      .check({ force: true });
+    await expect(
+      first.locator('input[type=radio][value="foreground"]')
+    ).toBeChecked();
+    await expect(editor.locator('[data-action="undo-ignore"]')).toBeEnabled();
+  });
 
   test('the whole-drawing advisory appears on the charm host, at the width the charm prints', async ({
     page,
   }) => {
-    test.setTimeout(480000)
-    await openCharmHost(page)
+    test.setTimeout(480000);
+    await openCharmHost(page);
     // A traced picture, since the advisory reads the trace's line widths: a
     // 400 px square on white, which the quick look calls quick.
     await page.evaluate(async () => {
-      const n = 400
-      const canvas = document.createElement('canvas')
-      canvas.width = n
-      canvas.height = n
-      const ctx = canvas.getContext('2d')
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, n, n)
-      ctx.fillStyle = '#000000'
-      ctx.fillRect(n * 0.25, n * 0.25, n * 0.5, n * 0.5)
-      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
-      const input = document.querySelector('#param-design_file')
-      const dt = new DataTransfer()
-      dt.items.add(new File([blob], 'square.png', { type: 'image/png' }))
-      input.files = dt.files
-      input.dispatchEvent(new Event('change', { bubbles: true }))
-    })
+      const n = 400;
+      const canvas = document.createElement('canvas');
+      canvas.width = n;
+      canvas.height = n;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, n, n);
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(n * 0.25, n * 0.25, n * 0.5, n * 0.5);
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
+      const input = document.querySelector('#param-design_file');
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], 'square.png', { type: 'image/png' }));
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     const control = page.locator('.param-control--file', {
       has: page.locator('#param-design_file'),
-    })
+    });
     // Converts by itself, or waits for Start on a slow machine.
-    const start = control.locator('.trace-progress-start')
+    const start = control.locator('.trace-progress-start');
     for (let i = 0; i < 60; i++) {
-      const info = (await control.locator('.file-info').textContent()) || ''
-      if (/converted from/.test(info)) break
-      if (/Ready to convert\./.test(info) && (await start.isVisible().catch(() => false))) {
-        await start.click()
+      const info = (await control.locator('.file-info').textContent()) || '';
+      if (/converted from/.test(info)) break;
+      if (
+        /Ready to convert\./.test(info) &&
+        (await start.isVisible().catch(() => false))
+      ) {
+        await start.click();
       }
-      await page.waitForTimeout(1000)
+      await page.waitForTimeout(1000);
     }
-    await expect(control.locator('.file-info')).toContainText('converted from', {
-      timeout: 120000,
-    })
+    await expect(control.locator('.file-info')).toContainText(
+      'converted from',
+      {
+        timeout: 120000,
+      }
+    );
     // A traced picture never opens the editor by itself; the card's door does.
     const door = control
       .locator('.svg-prep-status')
-      .getByRole('button', { name: 'Open the drawing editor' })
-    await expect(door).toBeVisible({ timeout: 30000 })
-    await door.scrollIntoViewIfNeeded()
-    await door.click()
-    const editor = surface(page)
-    await expect(editor).toBeVisible({ timeout: 60000 })
+      .getByRole('button', { name: 'Open the drawing editor' });
+    await expect(door).toBeVisible({ timeout: 30000 });
+    await door.scrollIntoViewIfNeeded();
+    await door.click();
+    const editor = surface(page);
+    await expect(editor).toBeVisible({ timeout: 60000 });
 
     // The charm host passes its line widths and width, so this sentence
     // exists here, at the charm's own width.
     // A square is height-limited in the charm's 11.97 by 9.3 mm box, so it
     // prints 9.3 mm wide, and the sentence says so.
-    const advisory = editor.locator('.svg-prep-thin-lines')
-    await expect(advisory).toBeVisible({ timeout: 30000 })
-    await expect(advisory).toHaveText(/at 9\.3 mm wide|thick enough to print/)
-    await expect(advisory).not.toContainText("the editor's default width")
+    const advisory = editor.locator('.svg-prep-thin-lines');
+    await expect(advisory).toBeVisible({ timeout: 30000 });
+    await expect(advisory).toHaveText(/at 9\.3 mm wide|thick enough to print/);
+    await expect(advisory).not.toContainText("the editor's default width");
     await expect(editor.locator('.svg-prep-design-width-input')).toHaveValue(
       /^9\.3/
-    )
-  })
-})
+    );
+  });
+});
 
 // ── Crop, on the charm host ──────────────────────────────────────────────────
 //
@@ -1112,67 +1150,71 @@ test.describe('crop on the charm host', () => {
   test('the logo trace loses its lower half: fewer shapes, raised ones left, and Undo crop brings them back', async ({
     page,
   }) => {
-    test.setTimeout(480000)
-    await recordAnnouncements(page)
-    await openCharmHost(page)
-    await page.setInputFiles('#param-design_file', LOGO_TRACE)
-    const editor = surface(page)
-    await expect(editor).toBeVisible({ timeout: 60000 })
-    const rows = page.locator('.svg-prep-object')
-    await expect.poll(() => rows.count(), { timeout: 60000 }).toBeGreaterThan(10)
-    const before = await rows.count()
+    test.setTimeout(480000);
+    await recordAnnouncements(page);
+    await openCharmHost(page);
+    await page.setInputFiles('#param-design_file', LOGO_TRACE);
+    const editor = surface(page);
+    await expect(editor).toBeVisible({ timeout: 60000 });
+    const rows = page.locator('.svg-prep-object');
+    await expect
+      .poll(() => rows.count(), { timeout: 60000 })
+      .toBeGreaterThan(10);
+    const before = await rows.count();
 
-    const cropBtn = editor.locator('.drawing-editor-crop-btn')
-    await expect(cropBtn).toBeVisible()
+    const cropBtn = editor.locator('.drawing-editor-crop-btn');
+    await expect(cropBtn).toBeVisible();
     // The charm's own render speaks its console message as the drawing
     // arrives; pressed under it, a second voice would be cut off unheard.
-    await quiet(page)
-    const mark = await announcementMark(page)
-    await cropBtn.click()
-    const view = editor.locator('.drawing-editor-crop')
-    await expect(view).toBeVisible()
+    await quiet(page);
+    const mark = await announcementMark(page);
+    await cropBtn.click();
+    const view = editor.locator('.drawing-editor-crop');
+    await expect(view).toBeVisible();
     await expect(
       view.locator('input[type="range"][data-inset="top"]')
-    ).toBeFocused()
+    ).toBeFocused();
     // The view says it is open once, on the status line.
     const said = await writesOf(
       page,
       mark,
       'Crop view open. Four sliders take an edge off the picture.'
-    )
-    expect(said, JSON.stringify(said)).toHaveLength(1)
-    await view.locator('.slider-spinbox[data-inset="bottom"]').fill('50')
+    );
+    expect(said, JSON.stringify(said)).toHaveLength(1);
+    await view.locator('.slider-spinbox[data-inset="bottom"]').fill('50');
     await expect(view.locator('.drawing-editor-crop-keeping')).toHaveText(
       'Keeping 100 % of the width and 50 % of the height.'
-    )
-    await view.locator('[data-action="save-crop"]').click()
+    );
+    await view.locator('[data-action="save-crop"]').click();
 
     await expect(editor.locator('.drawing-editor-status')).toHaveText(
       /^Cropped\. \d+ shapes?\.$/,
       { timeout: 120000 }
-    )
-    await expect.poll(() => rows.count(), { timeout: 60000 }).toBeLessThan(before)
+    );
+    await expect
+      .poll(() => rows.count(), { timeout: 60000 })
+      .toBeLessThan(before);
     const raised = await page
       .locator('.svg-prep-object input[type=radio][value="foreground"]:checked')
-      .count()
-    expect(raised).toBeGreaterThan(0)
+      .count();
+    expect(raised).toBeGreaterThan(0);
     // The charm's own width still rules the sentences: half the height makes
     // the drawing wider than the box, so it is still width-limited.
     await expect(editor.locator('.svg-prep-design-width-input')).toHaveValue(
       /^11\.9/
-    )
+    );
 
-    const undo = editor.locator('.drawing-editor-undo-crop')
-    await expect(undo).toBeVisible()
-    await undo.click()
+    const undo = editor.locator('.drawing-editor-undo-crop');
+    await expect(undo).toBeVisible();
+    await undo.click();
     await expect(editor.locator('.drawing-editor-status')).toHaveText(
       /^Crop undone\. \d+ shapes?\.$/,
       { timeout: 60000 }
-    )
-    await expect.poll(() => rows.count(), { timeout: 60000 }).toBe(before)
-    await expect(undo).toBeHidden()
-  })
-})
+    );
+    await expect.poll(() => rows.count(), { timeout: 60000 }).toBe(before);
+    await expect(undo).toBeHidden();
+  });
+});
 
 // ── Every slider row meets the 44 px floor ───────────────────────────────────
 //
@@ -1184,38 +1226,41 @@ test.describe('every slider row meets the 44 px floor', () => {
   // panel sliders first in document order, so the range is named, not found.
   const heights = (page, rangeSelector) =>
     page.evaluate((sel) => {
-      const range = document.querySelector(sel)
-      const spin = range?.closest('.slider-container')?.querySelector('.slider-spinbox')
-      const h = (el) => (el ? Math.round(el.getBoundingClientRect().height) : null)
-      return { range: h(range), spin: h(spin) }
-    }, rangeSelector)
+      const range = document.querySelector(sel);
+      const spin = range
+        ?.closest('.slider-container')
+        ?.querySelector('.slider-spinbox');
+      const h = (el) =>
+        el ? Math.round(el.getBoundingClientRect().height) : null;
+      return { range: h(range), spin: h(spin) };
+    }, rangeSelector);
 
   test('in the customizer and in the crop view, the range and the box are 44 px tall', async ({
     page,
   }) => {
-    test.setTimeout(480000)
-    await openCharmHost(page)
-    await page.locator('#param-design_scale').scrollIntoViewIfNeeded()
-    const customizer = await heights(page, '#param-design_scale')
-    expect(customizer.range, 'the customizer range').toBeGreaterThanOrEqual(44)
-    expect(customizer.spin, 'the customizer box').toBeGreaterThanOrEqual(44)
+    test.setTimeout(480000);
+    await openCharmHost(page);
+    await page.locator('#param-design_scale').scrollIntoViewIfNeeded();
+    const customizer = await heights(page, '#param-design_scale');
+    expect(customizer.range, 'the customizer range').toBeGreaterThanOrEqual(44);
+    expect(customizer.spin, 'the customizer box').toBeGreaterThanOrEqual(44);
 
-    await page.setInputFiles('#param-design_file', LOGO_TRACE)
-    const editor = surface(page)
-    await expect(editor).toBeVisible({ timeout: 60000 })
+    await page.setInputFiles('#param-design_file', LOGO_TRACE);
+    const editor = surface(page);
+    await expect(editor).toBeVisible({ timeout: 60000 });
     await expect
       .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
-      .toBeGreaterThan(10)
-    await editor.locator('.drawing-editor-crop-btn').click()
-    await expect(editor.locator('.drawing-editor-crop')).toBeVisible()
+      .toBeGreaterThan(10);
+    await editor.locator('.drawing-editor-crop-btn').click();
+    await expect(editor.locator('.drawing-editor-crop')).toBeVisible();
     const crop = await heights(
       page,
       '#drawingEditorSurface .drawing-editor-crop input[type="range"]'
-    )
-    expect(crop.range, 'the crop view range').toBeGreaterThanOrEqual(44)
-    expect(crop.spin, 'the crop view box').toBeGreaterThanOrEqual(44)
-  })
-})
+    );
+    expect(crop.range, 'the crop view range').toBeGreaterThanOrEqual(44);
+    expect(crop.spin, 'the crop view box').toBeGreaterThanOrEqual(44);
+  });
+});
 
 // ── The shapes you left out, and a view you can steer ────────────────────────
 //
@@ -1228,79 +1273,101 @@ test.describe('the shapes you left out, and a view you can steer', () => {
   test('a shape set to Ignore stays in the picture, can be chosen there, and comes back', async ({
     page,
   }) => {
-    test.setTimeout(480000)
-    await openCharmHost(page)
-    await page.setInputFiles('#param-design_file', LOGO_TRACE)
-    const editor = surface(page)
-    await expect(editor).toBeVisible({ timeout: 60000 })
-    const rows = page.locator('.svg-prep-object')
-    await expect.poll(() => rows.count(), { timeout: 60000 }).toBeGreaterThan(10)
+    test.setTimeout(480000);
+    await openCharmHost(page);
+    await page.setInputFiles('#param-design_file', LOGO_TRACE);
+    const editor = surface(page);
+    await expect(editor).toBeVisible({ timeout: 60000 });
+    const rows = page.locator('.svg-prep-object');
+    await expect
+      .poll(() => rows.count(), { timeout: 60000 })
+      .toBeGreaterThan(10);
 
     // A raised shape, chosen by its row: the first row set to Raised.
     const raisedRow = page
       .locator('.svg-prep-object', {
         has: page.locator('input[type=radio][value="foreground"]:checked'),
       })
-      .first()
-    const index = await raisedRow.getAttribute('data-index')
+      .first();
+    const index = await raisedRow.getAttribute('data-index');
     // Held by its index from here: the locator above would resolve to the
     // next raised row once this one is set to Ignore.
-    const row = page.locator(`.svg-prep-object[data-index="${index}"]`)
-    await row.locator('input[type=radio][value="ignore"]').check({ force: true })
+    const row = page.locator(`.svg-prep-object[data-index="${index}"]`);
+    await row
+      .locator('input[type=radio][value="ignore"]')
+      .check({ force: true });
 
-    const pane = editor.locator('.svg-prep-result-pane')
-    const leftOut = pane.locator(`.svg-prep-standin-path--ignore`)
-    await expect(leftOut.first()).toBeAttached({ timeout: 30000 })
+    const pane = editor.locator('.svg-prep-result-pane');
+    const leftOut = pane.locator(`.svg-prep-standin-path--ignore`);
+    await expect(leftOut.first()).toBeAttached({ timeout: 30000 });
     // Its hit path is still there, and choosing it through the picture says so.
-    const hit = pane.locator(`.svg-prep-hit-path[data-index="${index}"]`)
-    await expect(hit).toBeAttached()
-    await hit.dispatchEvent('click')
+    const hit = pane.locator(`.svg-prep-hit-path[data-index="${index}"]`);
+    await expect(hit).toBeAttached();
+    await hit.dispatchEvent('click');
     await expect(
       editor.locator('.svg-prep-live, [aria-live="polite"].sr-only').first()
-    ).toContainText(/1 of \d+ shapes selected\./, { timeout: 10000 })
+    ).toContainText(/1 of \d+ shapes selected\./, { timeout: 10000 });
     // Back to Raised from its row: it is ink again.
-    await row.locator('input[type=radio][value="foreground"]').check({ force: true })
+    await row
+      .locator('input[type=radio][value="foreground"]')
+      .check({ force: true });
     await expect
-      .poll(() => pane.locator(`.svg-prep-standin-path--ignore[data-index="${index}"]`).count(), {
-        timeout: 30000,
-      })
-      .toBe(0)
-  })
+      .poll(
+        () =>
+          pane
+            .locator(`.svg-prep-standin-path--ignore[data-index="${index}"]`)
+            .count(),
+        {
+          timeout: 30000,
+        }
+      )
+      .toBe(0);
+  });
 
   test('once zoomed, the buttons move the view', async ({ page }) => {
-    test.setTimeout(480000)
-    await openCharmHost(page)
-    await page.setInputFiles('#param-design_file', LOGO_TRACE)
-    const editor = surface(page)
-    await expect(editor).toBeVisible({ timeout: 60000 })
+    test.setTimeout(480000);
+    await openCharmHost(page);
+    await page.setInputFiles('#param-design_file', LOGO_TRACE);
+    const editor = surface(page);
+    await expect(editor).toBeVisible({ timeout: 60000 });
     await expect
       .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
-      .toBeGreaterThan(10)
-    const pane = editor.locator('.svg-prep-result-pane')
-    const zoom = pane.locator('.svg-prep-zoom-controls')
+      .toBeGreaterThan(10);
+    const pane = editor.locator('.svg-prep-result-pane');
+    const zoom = pane.locator('.svg-prep-zoom-controls');
     const vb = () =>
-      pane.locator('svg').first().evaluate((el) =>
-        el.getAttribute('viewBox').split(/[\s,]+/).map(Number)
-      )
-    await zoom.locator('.svg-prep-zoom-in').click()
-    await zoom.locator('.svg-prep-zoom-in').click()
-    const [x0, y0, w] = await vb()
-    const right = zoom.getByRole('button', { name: 'Move the result view right' })
-    await expect(right).toBeVisible()
-    await right.click()
-    const [x1] = await vb()
-    expect(x1 - x0).toBeCloseTo(w / 4, 3)
-    await zoom.getByRole('button', { name: 'Move the result view up' }).click()
-    const [, y2] = await vb()
-    expect(y2).toBeLessThan(y0)
+      pane
+        .locator('svg')
+        .first()
+        .evaluate((el) =>
+          el
+            .getAttribute('viewBox')
+            .split(/[\s,]+/)
+            .map(Number)
+        );
+    await zoom.locator('.svg-prep-zoom-in').click();
+    await zoom.locator('.svg-prep-zoom-in').click();
+    const [x0, y0, w] = await vb();
+    const right = zoom.getByRole('button', {
+      name: 'Move the result view right',
+    });
+    await expect(right).toBeVisible();
+    await right.click();
+    const [x1] = await vb();
+    expect(x1 - x0).toBeCloseTo(w / 4, 3);
+    await zoom.getByRole('button', { name: 'Move the result view up' }).click();
+    const [, y2] = await vb();
+    expect(y2).toBeLessThan(y0);
     // Every one of the seven is a 44 px target.
-    const sizes = await zoom.locator('button').evaluateAll((els) =>
-      els.map((b) => Math.round(b.getBoundingClientRect().height))
-    )
-    expect(sizes.length).toBe(7)
-    for (const h of sizes) expect(h).toBeGreaterThanOrEqual(44)
-  })
-})
+    const sizes = await zoom
+      .locator('button')
+      .evaluateAll((els) =>
+        els.map((b) => Math.round(b.getBoundingClientRect().height))
+      );
+    expect(sizes.length).toBe(7);
+    for (const h of sizes) expect(h).toBeGreaterThanOrEqual(44);
+  });
+});
 
 // ── The dot inside the figure's arm ──────────────────────────────────────────
 //
@@ -1315,108 +1382,125 @@ test.describe('the dot inside the figure', () => {
   test('the click on the dot finds one Hole row, and Ignore on it fills the figure', async ({
     page,
   }) => {
-    test.setTimeout(480000)
-    await openCharmHost(page)
-    await page.setInputFiles('#param-design_file', LOGO_TRACE)
-    const editor = surface(page)
-    await expect(editor).toBeVisible({ timeout: 60000 })
-    const rows = page.locator('.svg-prep-object')
-    await expect.poll(() => rows.count(), { timeout: 60000 }).toBe(111)
+    test.setTimeout(480000);
+    await openCharmHost(page);
+    await page.setInputFiles('#param-design_file', LOGO_TRACE);
+    const editor = surface(page);
+    await expect(editor).toBeVisible({ timeout: 60000 });
+    const rows = page.locator('.svg-prep-object');
+    await expect.poll(() => rows.count(), { timeout: 60000 }).toBe(111);
 
-    const pane = editor.locator('.svg-prep-result-pane')
+    const pane = editor.locator('.svg-prep-result-pane');
     await expect(pane.locator('.svg-prep-hit-path').first()).toBeAttached({
       timeout: 30000,
-    })
+    });
     // The hit path under the dot, in the drawing's own units.
-    const dot = await pane.locator('svg').first().evaluate((svg) => {
-      const pt = svg.createSVGPoint()
-      pt.x = 145
-      pt.y = 135
-      const hits = [...svg.querySelectorAll('.svg-prep-hit-path')].filter((p) =>
-        p.isPointInFill(pt)
-      )
-      // The last one painted is the one a click finds.
-      const top = hits[hits.length - 1]
-      return top ? { index: top.dataset.index, count: hits.length } : null
-    })
-    expect(dot).not.toBeNull()
-    const row = page.locator(`.svg-prep-object[data-index="${dot.index}"]`)
-    await expect(
-      row.locator('input[type=radio][value="hole"]')
-    ).toBeChecked()
+    const dot = await pane
+      .locator('svg')
+      .first()
+      .evaluate((svg) => {
+        const pt = svg.createSVGPoint();
+        pt.x = 145;
+        pt.y = 135;
+        const hits = [...svg.querySelectorAll('.svg-prep-hit-path')].filter(
+          (p) => p.isPointInFill(pt)
+        );
+        // The last one painted is the one a click finds.
+        const top = hits[hits.length - 1];
+        return top ? { index: top.dataset.index, count: hits.length } : null;
+      });
+    expect(dot).not.toBeNull();
+    const row = page.locator(`.svg-prep-object[data-index="${dot.index}"]`);
+    await expect(row.locator('input[type=radio][value="hole"]')).toBeChecked();
 
     const filledAtDot = () =>
-      pane.locator('svg').first().evaluate((svg) => {
-        const pt = svg.createSVGPoint()
-        pt.x = 145
-        pt.y = 135
-        return [...svg.querySelectorAll('path')]
-          .filter((p) => !p.closest('.svg-prep-hit-layer, .svg-prep-role-layer'))
-          .filter((p) => !p.classList.contains('svg-prep-standin-path--ignore'))
-          .filter((p) => p.isPointInFill(pt))
-          .map((p) => p.getAttribute('class') || 'result')
-      })
+      pane
+        .locator('svg')
+        .first()
+        .evaluate((svg) => {
+          const pt = svg.createSVGPoint();
+          pt.x = 145;
+          pt.y = 135;
+          return [...svg.querySelectorAll('path')]
+            .filter(
+              (p) => !p.closest('.svg-prep-hit-layer, .svg-prep-role-layer')
+            )
+            .filter(
+              (p) => !p.classList.contains('svg-prep-standin-path--ignore')
+            )
+            .filter((p) => p.isPointInFill(pt))
+            .map((p) => p.getAttribute('class') || 'result');
+        });
     // Before: the hole is painted as paper over the ink, or the result has
     // the hole; either way the dot is not solid ink.
-    const before = await filledAtDot()
-    expect(before.some((c) => /hole/.test(c)) || before.length === 0).toBe(true)
+    const before = await filledAtDot();
+    expect(before.some((c) => /hole/.test(c)) || before.length === 0).toBe(
+      true
+    );
 
-    await pane.locator(`.svg-prep-hit-path[data-index="${dot.index}"]`).dispatchEvent('click')
+    await pane
+      .locator(`.svg-prep-hit-path[data-index="${dot.index}"]`)
+      .dispatchEvent('click');
     await expect(
       editor.locator('.svg-prep-live, [aria-live="polite"].sr-only').first()
-    ).toContainText(/1 of 111 shapes selected\./, { timeout: 10000 })
+    ).toContainText(/1 of 111 shapes selected\./, { timeout: 10000 });
 
-    await row.locator('input[type=radio][value="ignore"]').check({ force: true })
+    await row
+      .locator('input[type=radio][value="ignore"]')
+      .check({ force: true });
     // The combined result arrives after the settle: the dot is solid ink.
     await expect
       .poll(
         async () => {
-          const classes = await filledAtDot()
-          return classes.some((c) => /raised|result/.test(c)) && !classes.some((c) => /hole/.test(c))
+          const classes = await filledAtDot();
+          return (
+            classes.some((c) => /raised|result/.test(c)) &&
+            !classes.some((c) => /hole/.test(c))
+          );
         },
         { timeout: 60000 }
       )
-      .toBe(true)
-  })
-})
+      .toBe(true);
+  });
+});
 
 test.describe('the automatic preparation that keeps nothing', () => {
   test('when the automatic pass subtracts everything, the editor opens and says so', async ({
     page,
   }) => {
-    test.setTimeout(300000)
-    await openCharmHost(page)
+    test.setTimeout(300000);
+    await openCharmHost(page);
     // Two light squares side by side with a dark bar on each: no frame, so
     // both squares are cut-outs, and subtracting them leaves nothing. The
     // old code applied that nothing under "Simplified 4 shapes for 3D
     // printing" and never opened the editor.
-    await page.setInputFiles('#param-design_file', TWO_PAPERS)
-    const editor = surface(page)
-    await expect(editor).toBeVisible({ timeout: 60000 })
+    await page.setInputFiles('#param-design_file', TWO_PAPERS);
+    const editor = surface(page);
+    await expect(editor).toBeVisible({ timeout: 60000 });
     await expect(page.locator('.svg-prep-object')).toHaveCount(4, {
       timeout: 60000,
-    })
+    });
 
     // The card says what happened.
-    const card = page.locator('.svg-prep-status').first()
-    await expect(card).toContainText('Nothing was kept', { timeout: 10000 })
+    const card = page.locator('.svg-prep-status').first();
+    await expect(card).toContainText('Nothing was kept', { timeout: 10000 });
 
     // And the design the charm holds is the drawing itself, not the empty
     // result.
     const design = await page.evaluate(() => {
-      const v = window.stateManager?.getState()?.parameters?.design_file
-      const data = v && typeof v === 'object' ? String(v.data || '') : ''
-      const comma = data.indexOf(',')
-      if (comma < 0) return data
-      const body = data.slice(comma + 1)
+      const v = window.stateManager?.getState()?.parameters?.design_file;
+      const data = v && typeof v === 'object' ? String(v.data || '') : '';
+      const comma = data.indexOf(',');
+      if (comma < 0) return data;
+      const body = data.slice(comma + 1);
       return /base64/.test(data.slice(0, comma))
         ? atob(body)
-        : decodeURIComponent(body)
-    })
-    expect(design).not.toMatch(/<path d=""/)
-    expect(design).toContain('M4 8')
-  })
-})
+        : decodeURIComponent(body);
+    });
+    expect(design).not.toMatch(/<path d=""/);
+    expect(design).toContain('M4 8');
+  });
+});
 
 // ── Crop first ───────────────────────────────────────────────────────────────
 //
@@ -1434,182 +1518,184 @@ test.describe('Crop first', () => {
    */
   async function chooseSheet(page) {
     await page.evaluate(async () => {
-      const w = 1400
-      const h = 1400
-      const canvas = document.createElement('canvas')
-      canvas.width = w
-      canvas.height = h
-      const ctx = canvas.getContext('2d')
-      const img = ctx.createImageData(w, h)
-      let seed = 777
+      const w = 1400;
+      const h = 1400;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      const img = ctx.createImageData(w, h);
+      let seed = 777;
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
-          seed = (seed * 1103515245 + 12345) & 0x7fffffff
-          const noise = ((seed >> 16) & 31) - 15
-          const base = 236 - Math.round((30 * x) / w)
-          const i = (y * w + x) * 4
-          img.data[i] = base + noise
-          img.data[i + 1] = base + noise - 3
-          img.data[i + 2] = base + noise - 8
-          img.data[i + 3] = 255
+          seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+          const noise = ((seed >> 16) & 31) - 15;
+          const base = 236 - Math.round((30 * x) / w);
+          const i = (y * w + x) * 4;
+          img.data[i] = base + noise;
+          img.data[i + 1] = base + noise - 3;
+          img.data[i + 2] = base + noise - 8;
+          img.data[i + 3] = 255;
         }
       }
-      ctx.putImageData(img, 0, 0)
+      ctx.putImageData(img, 0, 0);
       const shape = (draw, fill) => {
-        ctx.lineWidth = 12
-        ctx.strokeStyle = '#141414'
-        ctx.fillStyle = fill
-        ctx.beginPath()
-        draw()
-        ctx.closePath()
-        ctx.fill()
-        ctx.stroke()
-      }
+        ctx.lineWidth = 12;
+        ctx.strokeStyle = '#141414';
+        ctx.fillStyle = fill;
+        ctx.beginPath();
+        draw();
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      };
       const panels = [
         [0, 0],
         [700, 0],
         [0, 700],
         [700, 700],
-      ]
-      const fills = ['#c9a06a', '#6f8f5e', '#b04a3c', '#5b6b8a']
+      ];
+      const fills = ['#c9a06a', '#6f8f5e', '#b04a3c', '#5b6b8a'];
       panels.forEach(([px, py], k) => {
-        shape(() => ctx.rect(px + 80, py + 90, 220, 260), fills[k])
+        shape(() => ctx.rect(px + 80, py + 90, 220, 260), fills[k]);
         shape(
           () => ctx.arc(px + 500, py + 380, 130, 0, Math.PI * 2),
           fills[(k + 1) % 4]
-        )
-      })
-      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
+        );
+      });
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
       window.__testPicture = new File([blob], 'sheet.png', {
         type: 'image/png',
-      })
-    })
+      });
+    });
     await page.evaluate(() => {
-      const input = document.querySelector('#param-design_file')
-      const dt = new DataTransfer()
-      dt.items.add(window.__testPicture)
-      input.files = dt.files
-      input.dispatchEvent(new Event('change', { bubbles: true }))
-    })
+      const input = document.querySelector('#param-design_file');
+      const dt = new DataTransfer();
+      dt.items.add(window.__testPicture);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
   }
 
   const designName = (page) =>
     page.evaluate(() => {
-      const v = window.stateManager?.getState()?.parameters?.design_file
-      return v && typeof v === 'object' ? v.name : v || null
-    })
+      const v = window.stateManager?.getState()?.parameters?.design_file;
+      return v && typeof v === 'object' ? v.name : v || null;
+    });
 
   /** What the polite announcer said, from now on. */
   const listen = (page) =>
     page.evaluate(() => {
-      window.__heard = []
-      const node = document.getElementById('srAnnouncer')
-      if (!node) return
+      window.__heard = [];
+      const node = document.getElementById('srAnnouncer');
+      if (!node) return;
       new MutationObserver(() => {
-        const t = node.textContent.trim()
-        if (t) window.__heard.push(t)
-      }).observe(node, { childList: true, characterData: true, subtree: true })
-    })
+        const t = node.textContent.trim();
+        if (t) window.__heard.push(t);
+      }).observe(node, { childList: true, characterData: true, subtree: true });
+    });
 
   test('the sheet: Crop first opens the crop view on the photograph before anything is converted, and Save crop converts the one panel', async ({
     page,
   }) => {
-    test.setTimeout(480000)
-    await openCharmHost(page)
-    await chooseSheet(page)
-    const start = page.locator('.trace-progress-start').first()
-    const cropFirst = page.locator('.trace-progress-crop').first()
-    await expect(start).toBeVisible({ timeout: 120000 })
-    await expect(start).toHaveText('Start conversion')
+    test.setTimeout(480000);
+    await openCharmHost(page);
+    await chooseSheet(page);
+    const start = page.locator('.trace-progress-start').first();
+    const cropFirst = page.locator('.trace-progress-crop').first();
+    await expect(start).toBeVisible({ timeout: 120000 });
+    await expect(start).toHaveText('Start conversion');
     // Beside Start, with the visible words in its name; nothing converted.
-    await expect(cropFirst).toBeVisible()
-    await expect(cropFirst).toHaveText('Crop first')
+    await expect(cropFirst).toBeVisible();
+    await expect(cropFirst).toHaveText('Crop first');
     await expect(cropFirst).toHaveAttribute(
       'aria-label',
       'Crop first, before converting the picture'
-    )
-    expect(await designName(page)).toBeFalsy()
+    );
+    expect(await designName(page)).toBeFalsy();
 
-    await cropFirst.click()
-    const editor = surface(page)
-    await expect(editor).toBeVisible({ timeout: 60000 })
-    const view = editor.locator('.drawing-editor-crop')
-    await expect(view).toBeVisible()
+    await cropFirst.click();
+    const editor = surface(page);
+    await expect(editor).toBeVisible({ timeout: 60000 });
+    const view = editor.locator('.drawing-editor-crop');
+    await expect(view).toBeVisible();
     // The photograph itself is on the crop view, and its first row has focus.
     await expect(view.locator('image')).toHaveAttribute(
       'href',
       /^data:image\/png/
-    )
+    );
     await expect(
       view.locator('input[type="range"][data-inset="top"]')
-    ).toBeFocused()
+    ).toBeFocused();
     // No drawing behind it: no rows, no drawing tools, and the sentence for a
     // picture on the status line.
-    await expect(page.locator('.svg-prep-object')).toHaveCount(0)
-    await expect(editor.locator('.drawing-editor-toolbar-row--view')).toBeHidden()
+    await expect(page.locator('.svg-prep-object')).toHaveCount(0);
+    await expect(
+      editor.locator('.drawing-editor-toolbar-row--view')
+    ).toBeHidden();
     await expect(editor.locator('.drawing-editor-status')).toHaveText(
       /^Crop view open on your picture\./
-    )
-    expect(await designName(page)).toBeFalsy()
+    );
+    expect(await designName(page)).toBeFalsy();
 
     // The top-left panel: half the width, half the height.
-    await view.locator('.slider-spinbox[data-inset="right"]').fill('50')
-    await view.locator('.slider-spinbox[data-inset="bottom"]').fill('50')
+    await view.locator('.slider-spinbox[data-inset="right"]').fill('50');
+    await view.locator('.slider-spinbox[data-inset="bottom"]').fill('50');
     await expect(view.locator('.drawing-editor-crop-keeping')).toHaveText(
       'Keeping 50 % of the width and 50 % of the height.'
-    )
-    await view.locator('[data-action="save-crop"]').click()
+    );
+    await view.locator('[data-action="save-crop"]').click();
 
     // The conversion is the person's press: the dialog, then the editor on
     // the result, which says it was cropped.
     await expect(editor.locator('.drawing-editor-status')).toHaveText(
       /^Cropped\. \d+ shapes?\.$/,
       { timeout: 240000 }
-    )
-    const rows = await page.locator('.svg-prep-object').count()
-    expect(rows).toBeGreaterThanOrEqual(2)
-    expect(rows).toBeLessThan(60)
+    );
+    const rows = await page.locator('.svg-prep-object').count();
+    expect(rows).toBeGreaterThanOrEqual(2);
+    expect(rows).toBeLessThan(60);
     // The charm holds the crop's drawing, and the control says where it
     // came from.
-    await expect.poll(() => designName(page), { timeout: 60000 }).toBe(
-      'sheet.svg'
-    )
+    await expect
+      .poll(() => designName(page), { timeout: 60000 })
+      .toBe('sheet.svg');
     await expect(page.locator('.file-info').first()).toContainText(
       'converted from sheet.png'
-    )
+    );
     // The button reads Crop now: the same crop, on a converted picture.
-    await editor.locator('.drawing-editor-close').click()
-    await expect(editor).toBeHidden()
-    await expect(cropFirst).toHaveText('Crop')
-    await expect(cropFirst).toHaveAttribute('aria-label', 'Crop the picture')
-  })
+    await editor.locator('.drawing-editor-close').click();
+    await expect(editor).toBeHidden();
+    await expect(cropFirst).toHaveText('Crop');
+    await expect(cropFirst).toHaveAttribute('aria-label', 'Crop the picture');
+  });
 
   test('Escape in the crop view closes the editor, converts nothing, says so once, and puts focus back on Crop first', async ({
     page,
   }) => {
-    test.setTimeout(300000)
-    await openCharmHost(page)
-    await chooseSheet(page)
-    const cropFirst = page.locator('.trace-progress-crop').first()
-    await expect(cropFirst).toBeVisible({ timeout: 120000 })
+    test.setTimeout(300000);
+    await openCharmHost(page);
+    await chooseSheet(page);
+    const cropFirst = page.locator('.trace-progress-crop').first();
+    await expect(cropFirst).toBeVisible({ timeout: 120000 });
     // The page's own start-up announcements are over (the first preview is
     // ready); from here the listener counts.
-    await page.waitForTimeout(2000)
-    await listen(page)
+    await page.waitForTimeout(2000);
+    await listen(page);
 
-    await cropFirst.click()
-    const editor = surface(page)
+    await cropFirst.click();
+    const editor = surface(page);
     await expect(editor.locator('.drawing-editor-crop')).toBeVisible({
       timeout: 60000,
-    })
-    await page.keyboard.press('Escape')
-    await expect(editor).toBeHidden()
-    await expect(cropFirst).toBeFocused()
-    await expect(cropFirst).toHaveText('Crop first')
-    expect(await designName(page)).toBeFalsy()
+    });
+    await page.keyboard.press('Escape');
+    await expect(editor).toBeHidden();
+    await expect(cropFirst).toBeFocused();
+    await expect(cropFirst).toHaveText('Crop first');
+    expect(await designName(page)).toBeFalsy();
     await expect(page.locator('.file-info').first()).toContainText(
       'Ready to convert'
-    )
+    );
     await expect
       .poll(
         async () =>
@@ -1618,21 +1704,21 @@ test.describe('Crop first', () => {
           ).length,
         { timeout: 15000 }
       )
-      .toBe(1)
-    const heard = await page.evaluate(() => window.__heard ?? [])
+      .toBe(1);
+    const heard = await page.evaluate(() => window.__heard ?? []);
     expect(
       heard.filter((t) => t.startsWith('Converted:')),
       `heard: ${heard.join(' | ')}`
-    ).toEqual([])
-  })
+    ).toEqual([]);
+  });
 
   test('a small quick picture that started converting by itself is stopped by Crop first, and the one conversion that lands is the crop', async ({
     page,
   }) => {
-    test.setTimeout(300000)
-    await openCharmHost(page)
-    await page.waitForTimeout(2000)
-    await listen(page)
+    test.setTimeout(300000);
+    await openCharmHost(page);
+    await page.waitForTimeout(2000);
+    await listen(page);
     // The press has to land while the self-started run is under way, and that
     // window is the run itself. A CPU throttle cannot widen it: the quick look
     // measures the device, and under a throttle it calls the picture slow, so
@@ -1644,69 +1730,75 @@ test.describe('Crop first', () => {
     // run on this grid is over in under a second: read afterwards, the note
     // is empty.
     await page.evaluate(() => {
-      window.__cropPressed = false
-      window.__quickLookSaid = null
+      window.__cropPressed = false;
+      window.__quickLookSaid = null;
       // q-charm has two file controls; only the design's is watched.
       const control = document
         .querySelector('#param-design_file')
-        .closest('.param-control--file')
+        .closest('.param-control--file');
       const obs = new MutationObserver(() => {
-        const note = control.querySelector('.trace-progress-note')
+        const note = control.querySelector('.trace-progress-note');
         if (
           note &&
           !window.__quickLookSaid &&
           /Converting should take/.test(note.textContent)
         ) {
-          window.__quickLookSaid = note.textContent
+          window.__quickLookSaid = note.textContent;
         }
-        const crop = control.querySelector('.trace-progress-crop')
-        const start = control.querySelector('.trace-progress-start')
-        if (window.__cropPressed || !crop || crop.hidden || !start || !start.hidden)
-          return
-        window.__cropPressed = true
-        obs.disconnect()
-        crop.click()
-      })
+        const crop = control.querySelector('.trace-progress-crop');
+        const start = control.querySelector('.trace-progress-start');
+        if (
+          window.__cropPressed ||
+          !crop ||
+          crop.hidden ||
+          !start ||
+          !start.hidden
+        )
+          return;
+        window.__cropPressed = true;
+        obs.disconnect();
+        crop.click();
+      });
       obs.observe(document.body, {
         subtree: true,
         childList: true,
         characterData: true,
         attributes: true,
         attributeFilter: ['hidden'],
-      })
-    })
+      });
+    });
     // 450 px, a grid of 400 dots on white: under the self-start line and
     // quick, so it starts converting the moment it is chosen.
     await page.evaluate(async () => {
-      const n = 450
-      const perSide = 20
-      const canvas = document.createElement('canvas')
-      canvas.width = n
-      canvas.height = n
-      const ctx = canvas.getContext('2d')
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, n, n)
-      ctx.fillStyle = '#000000'
-      const cell = n / perSide
+      const n = 450;
+      const perSide = 20;
+      const canvas = document.createElement('canvas');
+      canvas.width = n;
+      canvas.height = n;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, n, n);
+      ctx.fillStyle = '#000000';
+      const cell = n / perSide;
       for (let row = 0; row < perSide; row++) {
         for (let col = 0; col < perSide; col++) {
-          ctx.beginPath()
-          ctx.arc((col + 0.5) * cell, (row + 0.5) * cell, 6, 0, Math.PI * 2)
-          ctx.fill()
+          ctx.beginPath();
+          ctx.arc((col + 0.5) * cell, (row + 0.5) * cell, 6, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
-      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
       window.__testPicture = new File([blob], 'dots-quick.png', {
         type: 'image/png',
-      })
-    })
+      });
+    });
     await page.evaluate(() => {
-      const input = document.querySelector('#param-design_file')
-      const dt = new DataTransfer()
-      dt.items.add(window.__testPicture)
-      input.files = dt.files
-      input.dispatchEvent(new Event('change', { bubbles: true }))
-    })
+      const input = document.querySelector('#param-design_file');
+      const dt = new DataTransfer();
+      dt.items.add(window.__testPicture);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     // The start rule is measured on the device: only a picture the quick look
     // calls quick starts by itself. On a starved CI runner the same 450 px
     // grid can be called "a few seconds", and then nothing starts and the
@@ -1719,45 +1811,49 @@ test.describe('Crop first', () => {
           page.evaluate(() => window.__cropPressed || window.__quickLookSaid),
         { timeout: 120000 }
       )
-      .toBeTruthy()
+      .toBeTruthy();
     if (!(await page.evaluate(() => window.__cropPressed))) {
-      const said = await page.evaluate(() => window.__quickLookSaid)
+      const said = await page.evaluate(() => window.__quickLookSaid);
       test.skip(
         !/under a second/.test(said || ''),
         `this machine's quick look did not call the picture quick (${said}), so the quick-look rule waits for a press and nothing starts by itself`
-      )
+      );
     }
     // The run began by itself and the press landed inside it.
     await expect
-      .poll(() => page.evaluate(() => window.__cropPressed), { timeout: 120000 })
-      .toBe(true)
-    const editor = surface(page)
-    const view = editor.locator('.drawing-editor-crop')
-    await expect(view).toBeVisible({ timeout: 60000 })
-    await expect(page.locator('.conversion-dialog:not(.hidden)')).toHaveCount(0)
+      .poll(() => page.evaluate(() => window.__cropPressed), {
+        timeout: 120000,
+      })
+      .toBe(true);
+    const editor = surface(page);
+    const view = editor.locator('.drawing-editor-crop');
+    await expect(view).toBeVisible({ timeout: 60000 });
+    await expect(page.locator('.conversion-dialog:not(.hidden)')).toHaveCount(
+      0
+    );
     // Keep the lower-right quarter: ten dots by ten.
-    await view.locator('.slider-spinbox[data-inset="top"]').fill('50')
-    await view.locator('.slider-spinbox[data-inset="left"]').fill('50')
-    await view.locator('[data-action="save-crop"]').click()
+    await view.locator('.slider-spinbox[data-inset="top"]').fill('50');
+    await view.locator('.slider-spinbox[data-inset="left"]').fill('50');
+    await view.locator('[data-action="save-crop"]').click();
     await expect(editor.locator('.drawing-editor-status')).toHaveText(
       /^Cropped\. \d+ shapes\.$/,
       { timeout: 240000 }
-    )
-    const rows = await page.locator('.svg-prep-object').count()
-    expect(rows).toBeGreaterThanOrEqual(90)
-    expect(rows).toBeLessThanOrEqual(110)
+    );
+    const rows = await page.locator('.svg-prep-object').count();
+    expect(rows).toBeGreaterThanOrEqual(90);
+    expect(rows).toBeLessThanOrEqual(110);
     // One conversion landed, the crop's: the self-started one never got to
     // say "Converted".
-    const heard = await page.evaluate(() => window.__heard ?? [])
+    const heard = await page.evaluate(() => window.__heard ?? []);
     expect(
       heard.filter((t) => t.startsWith('Converted:')),
       `heard: ${heard.join(' | ')}`
-    ).toEqual([])
-    await expect.poll(() => designName(page), { timeout: 60000 }).toBe(
-      'dots-quick.svg'
-    )
-  })
-})
+    ).toEqual([]);
+    await expect
+      .poll(() => designName(page), { timeout: 60000 })
+      .toBe('dots-quick.svg');
+  });
+});
 
 // ── The editor reopens where it was left ─────────────────────────────────────
 //
@@ -1772,193 +1868,195 @@ test.describe('Crop first', () => {
 test.describe('the editor reopens where it was left', () => {
   const designName = (page) =>
     page.evaluate(() => {
-      const v = window.stateManager?.getState()?.parameters?.design_file
-      return v && typeof v === 'object' ? v.name : v || null
-    })
+      const v = window.stateManager?.getState()?.parameters?.design_file;
+      return v && typeof v === 'object' ? v.name : v || null;
+    });
 
   test('Off, Apply, move the design, reopen: the editor opens as it was left with Apply ready at once, and no combine runs', async ({
     page,
   }) => {
-    test.setTimeout(480000)
-    await openCharmHost(page)
-    await page.setInputFiles('#param-design_file', LOGO_TRACE)
-    const editor = surface(page)
-    await expect(editor).toBeVisible({ timeout: 60000 })
-    const rows = page.locator('.svg-prep-object')
-    await expect.poll(() => rows.count(), { timeout: 60000 }).toBeGreaterThan(10)
-    const total = await rows.count()
+    test.setTimeout(480000);
+    await openCharmHost(page);
+    await page.setInputFiles('#param-design_file', LOGO_TRACE);
+    const editor = surface(page);
+    await expect(editor).toBeVisible({ timeout: 60000 });
+    const rows = page.locator('.svg-prep-object');
+    await expect
+      .poll(() => rows.count(), { timeout: 60000 })
+      .toBeGreaterThan(10);
+    const total = await rows.count();
 
     // One shape Off, then Apply once the combine has landed. The counts the
     // reopen will say are read from the rows now: the logo's wall is already
     // Off by the wall rule, so "one off" is not the whole story.
-    const off = rows.nth(1).locator('input[type="radio"][value="ignore"]')
-    await off.check()
+    const off = rows.nth(1).locator('input[type="radio"][value="ignore"]');
+    await off.check();
     const offCount = await page
       .locator('.svg-prep-object input[type="radio"][value="ignore"]:checked')
-      .count()
-    expect(offCount).toBeGreaterThanOrEqual(1)
-    const apply = editor.locator('.svg-prep-footer [data-action="apply"]')
-    await expect(apply).toBeEnabled({ timeout: 240000 })
-    await apply.click()
-    await expect(editor).toBeHidden({ timeout: 30000 })
+      .count();
+    expect(offCount).toBeGreaterThanOrEqual(1);
+    const apply = editor.locator('.svg-prep-footer [data-action="apply"]');
+    await expect(apply).toBeEnabled({ timeout: 240000 });
+    await apply.click();
+    await expect(editor).toBeHidden({ timeout: 30000 });
     const control = page.locator('.param-control--file', {
       has: page.locator('#param-design_file'),
-    })
+    });
     await expect(control.locator('.svg-prep-status-badge')).toHaveText(
       'Prepared in the drawing editor.',
       { timeout: 30000 }
-    )
+    );
 
     // Reposition on the charm: Left / right moves the design, not its size.
-    const leftRight = page.locator('#param-design_left_right')
-    await leftRight.fill('2')
-    await leftRight.dispatchEvent('change')
+    const leftRight = page.locator('#param-design_left_right');
+    await leftRight.fill('2');
+    await leftRight.dispatchEvent('change');
     await expect(page.locator('.preview-state-indicator')).toHaveText(
       /Preview ready|Preview \(cached\)/,
       { timeout: 240000 }
-    )
+    );
 
     // Reopen: no "Combining N shapes" wait (a full combine is 14.7 s at 200
     // shapes), and Apply is ready at once.
     const door = control
       .locator('.svg-prep-status')
-      .getByRole('button', { name: 'Open the drawing editor' })
-    await door.scrollIntoViewIfNeeded()
-    await door.click()
-    await expect(editor).toBeVisible({ timeout: 60000 })
+      .getByRole('button', { name: 'Open the drawing editor' });
+    await door.scrollIntoViewIfNeeded();
+    await door.click();
+    await expect(editor).toBeVisible({ timeout: 60000 });
     await expect(editor.locator('.drawing-editor-status')).toHaveText(
       /^Drawing editor open, as you left it\. \d+ shapes? on, \d+ off\.$/,
       { timeout: 10000 }
-    )
-    await expect(apply).toBeEnabled({ timeout: 3000 })
+    );
+    await expect(apply).toBeEnabled({ timeout: 3000 });
     await expect(editor.locator('.drawing-editor-status')).toHaveText(
       new RegExp(`${total - offCount} shapes on, ${offCount} off\\.$`)
-    )
+    );
     // The choice came back with the result.
     await expect(
       rows.nth(1).locator('input[type="radio"][value="ignore"]')
-    ).toBeChecked()
+    ).toBeChecked();
     // No combine is under way: the render row stays quiet.
-    await expect(editor.locator('.svg-prep-render-progress')).toBeHidden()
+    await expect(editor.locator('.svg-prep-render-progress')).toBeHidden();
 
     // The first change combines as ever: Apply waits again.
-    await rows.nth(2).locator('input[type="radio"][value="ignore"]').check()
-    await expect(apply).toBeDisabled()
-    await expect(apply).toBeEnabled({ timeout: 240000 })
-    await editor.locator('.drawing-editor-close').click()
-    await expect(editor).toBeHidden({ timeout: 30000 })
-  })
+    await rows.nth(2).locator('input[type="radio"][value="ignore"]').check();
+    await expect(apply).toBeDisabled();
+    await expect(apply).toBeEnabled({ timeout: 240000 });
+    await editor.locator('.drawing-editor-close').click();
+    await expect(editor).toBeHidden({ timeout: 30000 });
+  });
 
   test('a preset, an undo and a slider undo leave the door in place, and Convert again still works after the rebuild', async ({
     page,
   }) => {
-    test.setTimeout(480000)
-    await openCharmHost(page)
+    test.setTimeout(480000);
+    await openCharmHost(page);
     // A picture, so the control has pixels and settings to lose: 800 px is
     // above the self-start line, so Start is pressed.
     await page.evaluate(async () => {
-      const n = 800
-      const canvas = document.createElement('canvas')
-      canvas.width = n
-      canvas.height = n
-      const ctx = canvas.getContext('2d')
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, n, n)
-      ctx.fillStyle = '#000000'
-      ctx.fillRect(n * 0.2, n * 0.2, n * 0.6, n * 0.6)
-      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
-      const input = document.querySelector('#param-design_file')
-      const dt = new DataTransfer()
-      dt.items.add(new File([blob], 'square.png', { type: 'image/png' }))
-      input.files = dt.files
-      input.dispatchEvent(new Event('change', { bubbles: true }))
-    })
+      const n = 800;
+      const canvas = document.createElement('canvas');
+      canvas.width = n;
+      canvas.height = n;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, n, n);
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(n * 0.2, n * 0.2, n * 0.6, n * 0.6);
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
+      const input = document.querySelector('#param-design_file');
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], 'square.png', { type: 'image/png' }));
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     const control = () =>
       page.locator('.param-control--file', {
         has: page.locator('#param-design_file'),
-      })
-    const start = () => control().locator('.trace-progress-start')
-    await expect(start()).toBeVisible({ timeout: 120000 })
-    await expect(start()).toHaveText('Start conversion')
-    await start().click()
+      });
+    const start = () => control().locator('.trace-progress-start');
+    await expect(start()).toBeVisible({ timeout: 120000 });
+    await expect(start()).toHaveText('Start conversion');
+    await start().click();
     await expect(control().locator('.file-info')).toContainText(
       'converted from square.png',
       { timeout: 240000 }
-    )
+    );
     const door = () =>
       control()
-      .locator('.svg-prep-status')
-      .getByRole('button', { name: 'Open the drawing editor' })
-    await expect(door()).toBeVisible({ timeout: 30000 })
+        .locator('.svg-prep-status')
+        .getByRole('button', { name: 'Open the drawing editor' });
+    await expect(door()).toBeVisible({ timeout: 30000 });
     await expect(page.locator('.preview-state-indicator')).toHaveText(
       /Preview ready|Preview \(cached\)/,
       { timeout: 240000 }
-    )
+    );
 
     // A change on the charm first, then a preset that clears the design, then
     // Undo. Applying a preset records no undo step of its own, so Undo
     // restores the state from before the change that preceded it, which here
     // holds the design; the control must then show its card, its door, Start
     // and the ink panel.
-    const scale = page.locator('#param-design_scale')
-    await scale.fill('80')
-    await scale.dispatchEvent('change')
-    await page.waitForTimeout(500)
+    const scale = page.locator('#param-design_scale');
+    await scale.fill('80');
+    await scale.dispatchEvent('change');
+    await page.waitForTimeout(500);
     const presetValue = await page.evaluate(() => {
-      const sel = document.querySelector('#presetSelect')
+      const sel = document.querySelector('#presetSelect');
       const opt = [...(sel?.options || [])].find(
         (o) => o.value && !/custom|choose|select/i.test(o.value)
-      )
-      return opt ? opt.value : null
-    })
-    expect(presetValue, 'a preset to apply').toBeTruthy()
+      );
+      return opt ? opt.value : null;
+    });
+    expect(presetValue, 'a preset to apply').toBeTruthy();
     await page.evaluate((v) => {
-      const sel = document.querySelector('#presetSelect')
-      sel.value = v
-      sel.dispatchEvent(new Event('change', { bubbles: true }))
-    }, presetValue)
-    await expect.poll(() => designName(page), { timeout: 30000 }).toBeFalsy()
-    await page.locator('#undoBtn').click()
-    await expect.poll(() => designName(page), { timeout: 30000 }).toBe(
-      'square.svg'
-    )
-    await expect(door()).toBeVisible({ timeout: 30000 })
+      const sel = document.querySelector('#presetSelect');
+      sel.value = v;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }, presetValue);
+    await expect.poll(() => designName(page), { timeout: 30000 }).toBeFalsy();
+    await page.locator('#undoBtn').click();
+    await expect
+      .poll(() => designName(page), { timeout: 30000 })
+      .toBe('square.svg');
+    await expect(door()).toBeVisible({ timeout: 30000 });
     // One square is one shape, and the card calls that "SVG Ready".
     await expect(control().locator('.svg-prep-status-badge')).toHaveText(
       /shapes?|SVG Ready/
-    )
-    await expect(start()).toBeVisible()
-    await expect(start()).toHaveText('Convert again')
-    await expect(control().locator('.trace-progress-crop')).toHaveText('Crop')
-    await expect(control().locator('.ink-controls')).toBeVisible()
+    );
+    await expect(start()).toBeVisible();
+    await expect(start()).toHaveText('Convert again');
+    await expect(control().locator('.trace-progress-crop')).toHaveText('Crop');
+    await expect(control().locator('.ink-controls')).toBeVisible();
 
     // A slider change and its undo: another re-render, the door stays.
-    await scale.fill('80')
-    await scale.dispatchEvent('change')
-    await page.waitForTimeout(500)
-    await page.locator('#undoBtn').click()
-    await expect.poll(() => designName(page), { timeout: 30000 }).toBe(
-      'square.svg'
-    )
-    await expect(door()).toBeVisible({ timeout: 30000 })
+    await scale.fill('80');
+    await scale.dispatchEvent('change');
+    await page.waitForTimeout(500);
+    await page.locator('#undoBtn').click();
+    await expect
+      .poll(() => designName(page), { timeout: 30000 })
+      .toBe('square.svg');
+    await expect(door()).toBeVisible({ timeout: 30000 });
 
     // And the pixels are still there: Convert again converts again.
-    await start().click()
+    await start().click();
     await expect(control().locator('.file-info')).toContainText(
       'converted from square.png',
       { timeout: 240000 }
-    )
-    await expect(door()).toBeVisible({ timeout: 30000 })
+    );
+    await expect(door()).toBeVisible({ timeout: 30000 });
 
     // The door goes in.
-    await door().scrollIntoViewIfNeeded()
-    await door().click()
-    await expect(surface(page)).toBeVisible({ timeout: 60000 })
+    await door().scrollIntoViewIfNeeded();
+    await door().click();
+    await expect(surface(page)).toBeVisible({ timeout: 60000 });
     await expect
       .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
-      .toBeGreaterThan(0)
-  })
-})
+      .toBeGreaterThan(0);
+  });
+});
 
 // ── The offset, per ring with its own sign ───────────────────────────────────
 //
@@ -1973,15 +2071,18 @@ test.describe('the offset thickens a drawn line', () => {
   // and the units one millimeter is at the width the editor measures at.
   const measure = (page) =>
     page.evaluate(() => {
-      const root = document.querySelector('#drawingEditorSurface')
-      const svg = root.querySelector('.svg-prep-result-pane svg')
-      const d = svg.querySelector('path.svg-prep-result-ink').getAttribute('d')
-      const probe = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-      probe.setAttribute('viewBox', svg.getAttribute('viewBox'))
-      probe.style.position = 'absolute'
-      probe.style.width = '100px'
-      probe.style.height = '100px'
-      document.body.appendChild(probe)
+      const root = document.querySelector('#drawingEditorSurface');
+      const svg = root.querySelector('.svg-prep-result-pane svg');
+      const d = svg.querySelector('path.svg-prep-result-ink').getAttribute('d');
+      const probe = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'svg'
+      );
+      probe.setAttribute('viewBox', svg.getAttribute('viewBox'));
+      probe.style.position = 'absolute';
+      probe.style.width = '100px';
+      probe.style.height = '100px';
+      document.body.appendChild(probe);
       const boxes = d
         .split(/(?=[Mm])/)
         .map((sub) => sub.trim())
@@ -1990,115 +2091,115 @@ test.describe('the offset thickens a drawn line', () => {
           const path = document.createElementNS(
             'http://www.w3.org/2000/svg',
             'path'
-          )
-          path.setAttribute('d', sub)
-          probe.appendChild(path)
-          const b = path.getBBox()
-          return { x: b.x, y: b.y, w: b.width, h: b.height }
+          );
+          path.setAttribute('d', sub);
+          probe.appendChild(path);
+          const b = path.getBBox();
+          return { x: b.x, y: b.y, w: b.width, h: b.height };
         })
-        .sort((a, b) => b.w * b.h - a.w * a.h)
-      probe.remove()
-      const vbWidth = svg.viewBox.baseVal.width
+        .sort((a, b) => b.w * b.h - a.w * a.h);
+      probe.remove();
+      const vbWidth = svg.viewBox.baseVal.width;
       const widthMm = parseFloat(
         root.querySelector('.svg-prep-design-width-input').value
-      )
-      return { boxes, unitsPerMm: vbWidth / widthMm }
-    })
+      );
+      return { boxes, unitsPerMm: vbWidth / widthMm };
+    });
 
   test('+0.3 mm on both rows of a square line: the outer ring out, the inner ring in, the line 0.6 mm wider', async ({
     page,
   }) => {
-    test.setTimeout(300000)
-    await openCharmHost(page)
+    test.setTimeout(300000);
+    await openCharmHost(page);
     // A square line, 60 px thick, drawn in the test: one traced path of two
     // rings, so two rows, the inner one a Cut out by the drawing's own
     // parity.
     await page.evaluate(async () => {
-      const n = 600
-      const canvas = document.createElement('canvas')
-      canvas.width = n
-      canvas.height = n
-      const ctx = canvas.getContext('2d')
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, n, n)
-      ctx.lineWidth = 60
-      ctx.strokeStyle = '#000000'
-      ctx.strokeRect(150, 150, 300, 300)
-      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
+      const n = 600;
+      const canvas = document.createElement('canvas');
+      canvas.width = n;
+      canvas.height = n;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, n, n);
+      ctx.lineWidth = 60;
+      ctx.strokeStyle = '#000000';
+      ctx.strokeRect(150, 150, 300, 300);
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
       window.__testPicture = new File([blob], 'square-line.png', {
         type: 'image/png',
-      })
-    })
+      });
+    });
     await page.evaluate(() => {
-      const input = document.querySelector('#param-design_file')
-      const dt = new DataTransfer()
-      dt.items.add(window.__testPicture)
-      input.files = dt.files
-      input.dispatchEvent(new Event('change', { bubbles: true }))
-    })
+      const input = document.querySelector('#param-design_file');
+      const dt = new DataTransfer();
+      dt.items.add(window.__testPicture);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     const control = page.locator('.param-control--file', {
       has: page.locator('#param-design_file'),
-    })
+    });
     const door = control
       .locator('.svg-prep-status')
-      .getByRole('button', { name: 'Open the drawing editor' })
+      .getByRole('button', { name: 'Open the drawing editor' });
     // A small picture starts converting by itself on a quick machine; a slow
     // one waits for the press (a CI runner can call this 0.36 MP grid "a few
     // seconds" and offer Start, so the door never comes). The trace is the
     // same either way, so the guard presses Start when Start is what is
     // offered. Once a conversion has finished, the door and Convert again are
     // both on screen, so the wait takes the first one that is visible.
-    const start = control.locator('.trace-progress-start')
+    const start = control.locator('.trace-progress-start');
     await expect(door.or(start).filter({ visible: true }).first()).toBeVisible({
       timeout: 120000,
-    })
-    if (!(await door.isVisible())) await start.click()
-    await expect(door).toBeVisible({ timeout: 120000 })
-    await door.click()
-    const editor = surface(page)
-    await expect(editor).toBeVisible({ timeout: 60000 })
-    const rows = page.locator('.svg-prep-object')
-    await expect(rows).toHaveCount(2, { timeout: 60000 })
-    const apply = editor.locator('.svg-prep-footer [data-action="apply"]')
-    await expect(apply).toBeEnabled({ timeout: 120000 })
+    });
+    if (!(await door.isVisible())) await start.click();
+    await expect(door).toBeVisible({ timeout: 120000 });
+    await door.click();
+    const editor = surface(page);
+    await expect(editor).toBeVisible({ timeout: 60000 });
+    const rows = page.locator('.svg-prep-object');
+    await expect(rows).toHaveCount(2, { timeout: 60000 });
+    const apply = editor.locator('.svg-prep-footer [data-action="apply"]');
+    await expect(apply).toBeEnabled({ timeout: 120000 });
 
-    const before = await measure(page)
-    expect(before.boxes).toHaveLength(2)
-    const [outer0, inner0] = before.boxes
-    const band0 = (outer0.w - inner0.w) / 2
-    const mm = before.unitsPerMm
-    expect(band0).toBeGreaterThan(0)
+    const before = await measure(page);
+    expect(before.boxes).toHaveLength(2);
+    const [outer0, inner0] = before.boxes;
+    const band0 = (outer0.w - inner0.w) / 2;
+    const mm = before.unitsPerMm;
+    expect(band0).toBeGreaterThan(0);
 
     // +0.3 mm on each row, through the row's More panel.
     for (const i of [0, 1]) {
-      const row = rows.nth(i)
-      await row.locator('.svg-prep-more-btn').click()
-      const input = row.locator(`input[name="svg-prep-offset-${i}"]`)
-      await expect(input).toBeVisible()
-      await input.fill('0.3')
-      await input.dispatchEvent('input')
-      await input.dispatchEvent('change')
-      await expect(apply).toBeDisabled({ timeout: 5000 })
-      await expect(apply).toBeEnabled({ timeout: 120000 })
+      const row = rows.nth(i);
+      await row.locator('.svg-prep-more-btn').click();
+      const input = row.locator(`input[name="svg-prep-offset-${i}"]`);
+      await expect(input).toBeVisible();
+      await input.fill('0.3');
+      await input.dispatchEvent('input');
+      await input.dispatchEvent('change');
+      await expect(apply).toBeDisabled({ timeout: 5000 });
+      await expect(apply).toBeEnabled({ timeout: 120000 });
     }
 
     // The inner ring shrinks by 0.3 mm, so the band is 0.6 mm wider.
-    const after = await measure(page)
-    expect(after.boxes).toHaveLength(2)
-    const [outer1, inner1] = after.boxes
-    const tolerance = 0.06 * mm
-    expect(Math.abs(outer1.w - (outer0.w + 0.6 * mm))).toBeLessThan(tolerance)
-    expect(Math.abs(inner1.w - (inner0.w - 0.6 * mm))).toBeLessThan(tolerance)
-    const band1 = (outer1.w - inner1.w) / 2
-    expect(Math.abs(band1 - (band0 + 0.6 * mm))).toBeLessThan(tolerance)
+    const after = await measure(page);
+    expect(after.boxes).toHaveLength(2);
+    const [outer1, inner1] = after.boxes;
+    const tolerance = 0.06 * mm;
+    expect(Math.abs(outer1.w - (outer0.w + 0.6 * mm))).toBeLessThan(tolerance);
+    expect(Math.abs(inner1.w - (inner0.w - 0.6 * mm))).toBeLessThan(tolerance);
+    const band1 = (outer1.w - inner1.w) / 2;
+    expect(Math.abs(band1 - (band0 + 0.6 * mm))).toBeLessThan(tolerance);
     // The 0.05 mm step that suits a hand-drawn line.
     await expect(
       rows.nth(0).locator('input[name="svg-prep-offset-0"]')
-    ).toHaveAttribute('step', '0.05')
-    await editor.locator('.drawing-editor-close').click()
-    await expect(editor).toBeHidden({ timeout: 30000 })
-  })
-})
+    ).toHaveAttribute('step', '0.05');
+    await editor.locator('.drawing-editor-close').click();
+    await expect(editor).toBeHidden({ timeout: 30000 });
+  });
+});
 
 // ── Reset, the width box and the bulk bar say what they do ───────────────────
 //
@@ -2110,75 +2211,79 @@ test.describe('Reset puts the Layer column back and says so', () => {
   test('a layer, an offset and an Off row all go back on Reset, the sentence names all three, and the width box says where its number came from', async ({
     page,
   }) => {
-    test.setTimeout(300000)
-    await openCharmHost(page)
-    await page.setInputFiles('#param-design_file', LOGO_TRACE)
-    const editor = surface(page)
-    await expect(editor).toBeVisible({ timeout: 60000 })
-    const rows = page.locator('.svg-prep-object')
-    await expect.poll(() => rows.count(), { timeout: 60000 }).toBeGreaterThan(10)
-    const apply = editor.locator('.svg-prep-footer [data-action="apply"]')
-    await expect(apply).toBeEnabled({ timeout: 240000 })
+    test.setTimeout(300000);
+    await openCharmHost(page);
+    await page.setInputFiles('#param-design_file', LOGO_TRACE);
+    const editor = surface(page);
+    await expect(editor).toBeVisible({ timeout: 60000 });
+    const rows = page.locator('.svg-prep-object');
+    await expect
+      .poll(() => rows.count(), { timeout: 60000 })
+      .toBeGreaterThan(10);
+    const apply = editor.locator('.svg-prep-footer [data-action="apply"]');
+    await expect(apply).toBeEnabled({ timeout: 240000 });
 
     // The width box carries the charm's fit box, and says so.
-    const help = editor.locator('.svg-prep-design-width-help')
-    await expect(help).toBeVisible()
+    const help = editor.locator('.svg-prep-design-width-help');
+    await expect(help).toBeVisible();
     await expect(help).toHaveText(
       'The charm sets this from its size. Type a width only to see what would change.'
-    )
-    const widthInput = editor.locator('.svg-prep-design-width-input')
+    );
+    const widthInput = editor.locator('.svg-prep-design-width-input');
     await expect(widthInput).toHaveAttribute(
       'aria-describedby',
       await help.getAttribute('id')
-    )
+    );
     await expect(editor.locator('.svg-prep-bulk-help')).toHaveText(
       'Sizes are the box around each shape at the design width, so a long thin line measures big. ' +
         "Thinner than measures each shape's narrowest part."
-    )
+    );
 
     // A stack, an offset and an Off, on three rows.
-    const row = rows.nth(3)
-    await row.locator('.svg-prep-more-btn').click()
-    const layer = row.locator('select[name="svg-prep-layer-3"]')
-    await layer.selectOption('2')
-    await expect(layer).toHaveValue('2')
+    const row = rows.nth(3);
+    await row.locator('.svg-prep-more-btn').click();
+    const layer = row.locator('select[name="svg-prep-layer-3"]');
+    await layer.selectOption('2');
+    await expect(layer).toHaveValue('2');
     await expect(editor.locator('.svg-prep-layer-summary')).toContainText(
       'Layers show on the charm after you press Apply.'
-    )
-    const offset = row.locator('input[name="svg-prep-offset-3"]')
-    await offset.fill('0.3')
-    await offset.dispatchEvent('input')
-    await rows.nth(4).locator('input[type="radio"][value="ignore"]').check()
-    await expect(apply).toBeEnabled({ timeout: 240000 })
+    );
+    const offset = row.locator('input[name="svg-prep-offset-3"]');
+    await offset.fill('0.3');
+    await offset.dispatchEvent('input');
+    await rows.nth(4).locator('input[type="radio"][value="ignore"]').check();
+    await expect(apply).toBeEnabled({ timeout: 240000 });
 
     // Reset: the layer select goes back to 1, and the sentence names roles,
     // offsets and layers.
-    await editor.locator('.svg-prep-footer [data-action="reset"]').click()
-    await expect(layer).toHaveValue('1')
-    await expect(offset).toHaveValue('0')
+    await editor.locator('.svg-prep-footer [data-action="reset"]').click();
+    await expect(layer).toHaveValue('1');
+    await expect(offset).toHaveValue('0');
     await expect(
       rows.nth(4).locator('input[type="radio"][value="ignore"]')
-    ).not.toBeChecked()
+    ).not.toBeChecked();
     await expect(
-      editor.locator('.svg-prep-workspace [aria-live="polite"][aria-atomic="true"]')
-    ).toHaveText('Roles, offsets and layers reset.')
+      editor.locator(
+        '.svg-prep-workspace [aria-live="polite"][aria-atomic="true"]'
+      )
+    ).toHaveText('Roles, offsets and layers reset.');
     await expect(editor.locator('.svg-prep-layer-summary')).toContainText(
       'Every shape starts on layer 1.'
-    )
-    await expect(apply).toBeEnabled({ timeout: 240000 })
+    );
+    await expect(apply).toBeEnabled({ timeout: 240000 });
 
     // The editor with its two new sentences still passes the scan.
     const results = await new AxeBuilder({ page })
       .include('#drawingEditorSurface')
-      .analyze()
+      .analyze();
     expect(
       results.violations,
       JSON.stringify(results.violations, null, 2)
-    ).toEqual([])
-    await editor.locator('.drawing-editor-close').click()
-    await expect(editor).toBeHidden({ timeout: 30000 })
-  })
-})
+    ).toEqual([]);
+    await editor.locator('.drawing-editor-close').click();
+    await expect(editor).toBeHidden({ timeout: 30000 });
+  });
+});
 
 /**
  * The editor before any picture. The door is on the picture's control from
@@ -2199,87 +2304,88 @@ test.describe('the map purpose', () => {
     'examples',
     'tactile-map',
     'sample_station.svg'
-  )
+  );
 
-  test('by keyboard: Tab to the first row\'s class, Home for Wall, Shift+Tab to Apply classes, Enter; the plan comes back and is said', async ({
+  test("by keyboard: Tab to the first row's class, Home for Wall, Shift+Tab to Apply classes, Enter; the plan comes back and is said", async ({
     page,
   }) => {
-    test.setTimeout(300_000)
-    await recordAnnouncements(page)
+    test.setTimeout(300_000);
+    await recordAnnouncements(page);
     await page.addInitScript(() => {
-      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
-      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
-    })
-    await page.goto('/?example=tactile-map')
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+    await page.goto('/?example=tactile-map');
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       timeout: 240000,
-    })
+    });
     await page.waitForFunction(
       () =>
         Object.keys(window.stateManager?.getState()?.parameters || {}).length >
         0,
       null,
       { timeout: 120000 }
-    )
+    );
     // The save-project prompt comes up a moment after the parameters land
     // (the map panel loads as its own chunk first); wait for it rather than
     // glance, or it opens over the door below.
-    const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+    const notNow = page.getByRole('button', { name: 'Not now', exact: true });
     try {
-      await notNow.waitFor({ state: 'visible', timeout: 8000 })
-      await notNow.click()
-      await notNow.waitFor({ state: 'hidden', timeout: 5000 })
+      await notNow.waitFor({ state: 'visible', timeout: 8000 });
+      await notNow.click();
+      await notNow.waitFor({ state: 'hidden', timeout: 5000 });
     } catch {
       // No save-project prompt this time.
     }
-    await page.setInputFiles('#param-map_file', SAMPLE)
+    await page.setInputFiles('#param-map_file', SAMPLE);
     await page.evaluate(() => {
-      let d = document.querySelector('#param-map_file')?.closest('details')
+      let d = document.querySelector('#param-map_file')?.closest('details');
       while (d) {
-        d.open = true
-        d = d.parentElement?.closest('details')
+        d.open = true;
+        d = d.parentElement?.closest('details');
       }
-    })
+    });
     const door = page
       .locator('.svg-prep-status')
       .getByRole('button', { name: 'Open the drawing editor' })
-      .first()
-    await door.waitFor({ state: 'visible', timeout: 60000 })
-    await door.scrollIntoViewIfNeeded()
-    await door.click({ timeout: 30000 })
-    await expect(
-      page.locator('.svg-prep-result-pane svg').first()
-    ).toBeVisible({ timeout: 90000 })
+      .first();
+    await door.waitFor({ state: 'visible', timeout: 60000 });
+    await door.scrollIntoViewIfNeeded();
+    await door.click({ timeout: 30000 });
+    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible(
+      { timeout: 90000 }
+    );
 
     const rows = await page.evaluate(async () => {
-      const editor =
-        document.getElementById('drawingEditorSurface').__forgeDrawingEditor
-      const { analyzeSvg } = await import('/src/js/svg-preparer.js')
+      const editor = document.getElementById(
+        'drawingEditorSurface'
+      ).__forgeDrawingEditor;
+      const { analyzeSvg } = await import('/src/js/svg-preparer.js');
       const svg = await (
         await fetch('/examples/tactile-map/sample_station.svg')
-      ).text()
-      window.__mapPlan = null
+      ).text();
+      window.__mapPlan = null;
       editor.open(svg, analyzeSvg(svg), {
         purpose: 'map',
         onApply: (plan) => {
-          window.__mapPlan = plan
+          window.__mapPlan = plan;
         },
         onKeepOriginal: () => {},
-      })
+      });
       return document.querySelectorAll('#drawingEditorSurface .svg-prep-object')
-        .length
-    })
-    expect(rows).toBeGreaterThan(1)
+        .length;
+    });
+    expect(rows).toBeGreaterThan(1);
     await expect(
       page.locator('#drawingEditorSurface .drawing-editor').first()
-    ).toHaveAttribute('data-purpose', 'map')
+    ).toHaveAttribute('data-purpose', 'map');
     const selects = page.locator(
       '#drawingEditorSurface .drawing-editor-class-select'
-    )
-    await expect(selects).toHaveCount(rows)
+    );
+    await expect(selects).toHaveCount(rows);
     await expect(
       page.locator('#drawingEditorSurface .svg-prep-role-group').first()
-    ).toBeHidden()
+    ).toBeHidden();
     // The menu stands at the app's target floor for this pointer: 44 px on
     // touch, the desktop density's floor on a fine pointer (the role switches
     // it replaces are the same height).
@@ -2289,56 +2395,60 @@ test.describe('the map purpose', () => {
           '--size-touch-target'
         )
       )
-    )
-    expect(floor).toBeGreaterThanOrEqual(36)
-    const box = await selects.first().boundingBox()
-    expect(box.height).toBeGreaterThanOrEqual(floor)
+    );
+    expect(floor).toBeGreaterThanOrEqual(36);
+    const box = await selects.first().boundingBox();
+    expect(box.height).toBeGreaterThanOrEqual(floor);
 
     // Keyboard only, from the editor's title: Tab until the first row's menu.
     await page.evaluate(() =>
-      document.querySelector('#drawingEditorSurface .drawing-editor-title').focus()
-    )
-    let landed = false
+      document
+        .querySelector('#drawingEditorSurface .drawing-editor-title')
+        .focus()
+    );
+    let landed = false;
     for (let i = 0; i < 80 && !landed; i++) {
-      await page.keyboard.press('Tab')
+      await page.keyboard.press('Tab');
       landed = await page.evaluate(() =>
-        document.activeElement?.classList.contains('drawing-editor-class-select')
-      )
+        document.activeElement?.classList.contains(
+          'drawing-editor-class-select'
+        )
+      );
     }
-    expect(landed).toBe(true)
-    await page.keyboard.press('Home')
-    await expect(selects.first()).toHaveValue('wall')
+    expect(landed).toBe(true);
+    await page.keyboard.press('Home');
+    await expect(selects.first()).toHaveValue('wall');
 
-    const mark = await announcementMark(page)
-    let onApply = false
+    const mark = await announcementMark(page);
+    let onApply = false;
     for (let i = 0; i < 120 && !onApply; i++) {
-      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Shift+Tab');
       onApply = await page.evaluate(() =>
         document.activeElement?.classList.contains('drawing-editor-apply')
-      )
+      );
     }
-    expect(onApply).toBe(true)
-    await page.keyboard.press('Enter')
+    expect(onApply).toBe(true);
+    await page.keyboard.press('Enter');
     await expect
       .poll(
         () => page.evaluate(() => window.__mapPlan?.regions?.length ?? null),
         { timeout: 30000 }
       )
-      .toBe(rows)
-    const plan = await page.evaluate(() => window.__mapPlan)
-    expect(plan.regions[0].class).toBe('wall')
-    expect(plan.regions.filter((r) => r.class !== 'ignore')).toHaveLength(1)
-    expect(plan.regions[0].rings.length).toBeGreaterThanOrEqual(1)
+      .toBe(rows);
+    const plan = await page.evaluate(() => window.__mapPlan);
+    expect(plan.regions[0].class).toBe('wall');
+    expect(plan.regions.filter((r) => r.class !== 'ignore')).toHaveLength(1);
+    expect(plan.regions[0].rings.length).toBeGreaterThanOrEqual(1);
     // The preview the app redraws as the editor closes may be said in the
     // same message, so the sentence is looked for inside the write.
     const sentence = new RegExp(
       `Map plan updated: 1 feature, ${rows - 1} ignored\\.`
-    )
-    const writes = await writesOf(page, mark, sentence)
-    expect(writes.length).toBeGreaterThanOrEqual(1)
-    await expect(surface(page)).toBeHidden()
-  })
-})
+    );
+    const writes = await writesOf(page, mark, sentence);
+    expect(writes.length).toBeGreaterThanOrEqual(1);
+    await expect(surface(page)).toBeHidden();
+  });
+});
 
 // The map purpose's picture, through the plates panel's own door: the shapes
 // drawn on the region canvas, named under the arrow keys, and a click on a
@@ -2348,19 +2458,19 @@ test.describe('the map purpose on its canvas', () => {
   test('the door shows the drawing on the canvas; Home and ArrowRight name the shapes; a click focuses the Class menu', async ({
     page,
   }) => {
-    test.setTimeout(300_000)
+    test.setTimeout(300_000);
     await page.addInitScript(() => {
-      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
-      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
-    })
-    await page.goto('/?example=tactile-map')
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+    await page.goto('/?example=tactile-map');
     await expect(page.locator('#tactileMapPanel')).toBeVisible({
       timeout: 60000,
-    })
-    const notNow = page.locator('#saveProjectNotNow')
+    });
+    const notNow = page.locator('#saveProjectNotNow');
     try {
-      await notNow.waitFor({ state: 'visible', timeout: 5000 })
-      await notNow.click()
+      await notNow.waitFor({ state: 'visible', timeout: 5000 });
+      await notNow.click();
     } catch {
       // no prompt
     }
@@ -2369,12 +2479,12 @@ test.describe('the map purpose on its canvas', () => {
       '<rect x="10" y="10" width="60" height="30"/>' +
       '<circle cx="120" cy="50" r="15"/>' +
       '<rect x="160" y="70" width="20" height="20"/>' +
-      '</svg>'
+      '</svg>';
     await page.setInputFiles('#param-map_file', {
       name: 'three.svg',
       mimeType: 'image/svg+xml',
       buffer: Buffer.from(drawing),
-    })
+    });
     await expect
       .poll(
         () =>
@@ -2383,73 +2493,79 @@ test.describe('the map purpose on its canvas', () => {
           ),
         { timeout: 30000 }
       )
-      .toBe('three.svg')
-    await page.locator('#tactileMapEditDrawing').click()
+      .toBe('three.svg');
+    await page.locator('#tactileMapEditDrawing').click();
     await expect(
       page.locator('#drawingEditorSurface .drawing-editor').first()
-    ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 })
+    ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });
 
-    const canvas = page.locator('#drawingEditorSurface .drawing-editor-canvas')
-    await expect(canvas).toBeVisible()
-    expect((await canvas.boundingBox()).width).toBeGreaterThanOrEqual(200)
+    const canvas = page.locator('#drawingEditorSurface .drawing-editor-canvas');
+    await expect(canvas).toBeVisible();
+    expect((await canvas.boundingBox()).width).toBeGreaterThanOrEqual(200);
     const paths = page.locator(
       '#drawingEditorSurface .drawing-editor-canvas-svg [data-layer="regions"] path'
-    )
-    await expect(paths).toHaveCount(3)
+    );
+    await expect(paths).toHaveCount(3);
     await expect(
       page.locator('#drawingEditorSurface .svg-prep-previews')
-    ).toBeHidden()
+    ).toBeHidden();
 
     // The keyboard: the canvas has the focus after a click on its empty
     // ground; Home names the first shape, ArrowRight the next.
-    const svg = page.locator('#drawingEditorSurface .drawing-editor-canvas-svg')
-    await svg.click({ position: { x: 4, y: 4 } })
-    await page.keyboard.press('Home')
+    const svg = page.locator(
+      '#drawingEditorSurface .drawing-editor-canvas-svg'
+    );
+    await svg.click({ position: { x: 4, y: 4 } });
+    await page.keyboard.press('Home');
     const statusLine = page.locator(
       '#drawingEditorSurface .drawing-editor-status'
-    )
-    await expect(statusLine).toHaveText(/, no class yet\.$/)
-    const first = await statusLine.textContent()
-    await page.keyboard.press('ArrowRight')
-    await expect(statusLine).toHaveText(/, no class yet\.$/)
-    expect(await statusLine.textContent()).not.toBe(first)
+    );
+    await expect(statusLine).toHaveText(/, no class yet\.$/);
+    const first = await statusLine.textContent();
+    await page.keyboard.press('ArrowRight');
+    await expect(statusLine).toHaveText(/, no class yet\.$/);
+    expect(await statusLine.textContent()).not.toBe(first);
 
     // A click on a shape: its row's Class menu takes the focus.
-    await paths.nth(1).click({ force: true })
+    await paths.nth(1).click({ force: true });
     await expect
       .poll(() =>
         page.evaluate(() => {
-          const el = document.activeElement
+          const el = document.activeElement;
           return el?.classList.contains('drawing-editor-class-select')
             ? el.dataset.original
-            : null
+            : null;
         })
       )
-      .toBe('1')
+      .toBe('1');
 
     // The Hand tool: a drag moves the picture (the viewBox's origin shifts).
     const hand = page.locator(
       '#drawingEditorSurface .drawing-editor-tool[data-tool="hand"]'
-    )
-    await expect(hand).toBeVisible()
+    );
+    await expect(hand).toBeVisible();
     await expect(
       page.locator(
         '#drawingEditorSurface .drawing-editor-tool[data-tool="paint"]'
       )
-    ).toBeHidden()
-    await hand.click()
-    await expect(svg).toHaveAttribute('data-tool', 'hand')
-    const before = await svg.getAttribute('viewBox')
-    const box = await svg.boundingBox()
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-    await page.mouse.down()
-    await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 40, {
-      steps: 8,
-    })
-    await page.mouse.up()
-    expect(await svg.getAttribute('viewBox')).not.toBe(before)
-  })
-})
+    ).toBeHidden();
+    await hand.click();
+    await expect(svg).toHaveAttribute('data-tool', 'hand');
+    const before = await svg.getAttribute('viewBox');
+    const box = await svg.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(
+      box.x + box.width / 2 + 80,
+      box.y + box.height / 2 + 40,
+      {
+        steps: 8,
+      }
+    );
+    await page.mouse.up();
+    expect(await svg.getAttribute('viewBox')).not.toBe(before);
+  });
+});
 
 test.describe('the drawing editor without a picture', () => {
   const STAR = path.join(
@@ -2458,79 +2574,208 @@ test.describe('the drawing editor without a picture', () => {
     'examples',
     'q-charm',
     'star.svg'
-  )
+  );
 
   test('the door is there before a picture; the editor asks for one, and the one chosen opens in it', async ({
     page,
   }) => {
-    test.setTimeout(300000)
+    test.setTimeout(300000);
     await page.addInitScript(() => {
-      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
-      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
-    })
-    await page.goto('/')
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+    await page.goto('/');
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       timeout: 240000,
-    })
-    await page.selectOption('#charmVariantSelect', 'q-charm')
-    await page.click('#openCharmMakerBtn')
+    });
+    await page.selectOption('#charmVariantSelect', 'q-charm');
+    await page.click('#openCharmMakerBtn');
     await page.waitForFunction(
       () =>
         Object.keys(window.stateManager?.getState()?.parameters || {}).length >
         0,
       null,
       { timeout: 120000 }
-    )
+    );
     for (let i = 0; i < 2; i++) {
-      const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+      const notNow = page.getByRole('button', { name: 'Not now', exact: true });
       if (await notNow.isVisible().catch(() => false)) {
-        await notNow.click()
-        await page.waitForTimeout(300)
+        await notNow.click();
+        await page.waitForTimeout(300);
       }
     }
     await page.evaluate(() => {
-      let d = document.querySelector('#param-design_file')?.closest('details')
+      let d = document.querySelector('#param-design_file')?.closest('details');
       while (d) {
-        d.open = true
-        d = d.parentElement?.closest('details')
+        d.open = true;
+        d = d.parentElement?.closest('details');
       }
-    })
+    });
 
     const control = page.locator('.file-upload-container', {
       has: page.locator('#param-design_file'),
-    })
+    });
     const door = control.getByRole('button', {
       name: 'Open the drawing editor',
-    })
-    await expect(door).toBeVisible({ timeout: 60000 })
-    await door.scrollIntoViewIfNeeded()
-    await door.click()
+    });
+    await expect(door).toBeVisible({ timeout: 60000 });
+    await door.scrollIntoViewIfNeeded();
+    await door.click();
 
-    await expect(surface(page)).toBeVisible({ timeout: 60000 })
+    await expect(surface(page)).toBeVisible({ timeout: 60000 });
     await expect(surface(page).locator('.drawing-editor-empty p')).toHaveText(
       'Choose a picture to draw with: an SVG or DXF drawing, or a PNG or JPG photo.'
-    )
+    );
     // Escape closes it like any editor, and focus is back on the door.
-    await page.keyboard.press('Escape')
-    await expect(surface(page)).toBeHidden({ timeout: 30000 })
-    await expect(door).toBeFocused()
-    await door.click()
-    await expect(surface(page)).toBeVisible({ timeout: 60000 })
+    await page.keyboard.press('Escape');
+    await expect(surface(page)).toBeHidden({ timeout: 30000 });
+    await expect(door).toBeFocused();
+    await door.click();
+    await expect(surface(page)).toBeVisible({ timeout: 60000 });
     const choose = surface(page).getByRole('button', {
       name: 'Choose a picture',
-    })
-    await expect(choose).toBeVisible()
+    });
+    await expect(choose).toBeVisible();
     const [chooser] = await Promise.all([
       page.waitForEvent('filechooser'),
       choose.click(),
-    ])
-    await chooser.setFiles(STAR)
+    ]);
+    await chooser.setFiles(STAR);
 
-    await expect(
-      page.locator('.svg-prep-result-pane svg').first()
-    ).toBeVisible({ timeout: 90000 })
-    await expect(surface(page).locator('.drawing-editor-empty')).toBeHidden()
+    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible(
+      { timeout: 90000 }
+    );
+    await expect(surface(page).locator('.drawing-editor-empty')).toBeHidden();
     // With a drawing in it, the control's own door is the card's again.
-    await expect(door).toHaveCount(1)
-  })
-})
+    await expect(door).toHaveCount(1);
+  });
+});
+
+// The route tool on a draft from OpenStreetMap: Walk this by keyboard and by
+// mouse, the segments joining where they meet, and Apply handing the panel
+// one Route feature.
+test.describe('the route tool', () => {
+  const OVERPASS = readFileSync(
+    'tests/fixtures/tactile-map/overpass-20.json',
+    'utf8'
+  );
+  const PLACE = {
+    place_id: 1,
+    lat: '47.6067',
+    lon: '-122.3327',
+    type: 'library',
+    importance: 0.5,
+    display_name:
+      'The Seattle Public Library - Central Library, 1000, 4th Avenue, Seattle, King County, Washington, 98104, United States',
+  };
+
+  test('Walk this by keyboard and by mouse joins touching sidewalks; Apply gives the panel one Route feature', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+    await page.route('https://nominatim.openstreetmap.org/search*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify([PLACE]),
+      })
+    );
+    await page.route('https://overpass-api.de/api/interpreter', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: OVERPASS,
+      })
+    );
+    await page.goto('/?example=tactile-map');
+    await expect(page.locator('#tactileMapPanel')).toBeVisible({
+      timeout: 60000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 5000 });
+      await notNow.click();
+    } catch {
+      // no prompt
+    }
+    await page.locator('#tactileMapAddress').fill('1000 4th Ave, Seattle');
+    await page.locator('#tactileMapSearch').click();
+    await page.locator('#tactileMapPlace1').check();
+    await page.locator('#tactileMapGetData').click();
+    await expect(page.locator('#tactileMapAddressStatus')).toContainText(
+      'map features within 250 m',
+      { timeout: 15000 }
+    );
+    await page.locator('#tactileMapDraft').click();
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor').first()
+    ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });
+    const statusLine = page.locator(
+      '#drawingEditorSurface .drawing-editor-status'
+    );
+    const paths = page.locator(
+      '#drawingEditorSurface .drawing-editor-canvas-svg [data-layer="regions"] path'
+    );
+    await expect(paths).toHaveCount(20);
+    const region = (key) =>
+      page.locator(
+        `#drawingEditorSurface .drawing-editor-canvas-svg [data-layer="regions"] path[data-region="${key}"]`
+      );
+
+    // By keyboard: the tool, then Home on the canvas and Enter.
+    const walk = page.locator(
+      '#drawingEditorSurface .drawing-editor-tool[data-tool="route"]'
+    );
+    await expect(walk).toHaveText('Walk this');
+    await walk.focus();
+    await page.keyboard.press('Space');
+    await expect(walk).toHaveAttribute('aria-pressed', 'true');
+    await expect(statusLine).toHaveText(
+      'Click the sidewalks in the order you walk them. Each one joins the route.'
+    );
+    const svg = page.locator(
+      '#drawingEditorSurface .drawing-editor-canvas-svg'
+    );
+    await svg.click({ position: { x: 4, y: 4 } });
+    await page.keyboard.press('Home');
+    await page.keyboard.press('Enter');
+    await expect(statusLine).toHaveText(
+      /^1 segments on the route, \d+ m long\.$/
+    );
+
+    // By mouse: the connector that meets the first sidewalk's east end (the
+    // tenth sidewalk of the fixture lies past the map and is clipped away, so
+    // the connector is region 9), then the second sidewalk it reaches, which
+    // joins reversed.
+    await region(9).click({ force: true });
+    await expect(statusLine).toHaveText(
+      /^2 segments on the route, \d+ m long\.$/
+    );
+    await region(1).click({ force: true });
+    await expect(statusLine).toHaveText(
+      /^3 segments on the route, \d+ m long\.$/
+    );
+    // A sidewalk that touches nothing on the route.
+    await region(5).click({ force: true });
+    await expect(statusLine).toHaveText(
+      'That segment does not touch the route yet. Pick the one between them first.'
+    );
+
+    await page.locator('#drawingEditorSurface .drawing-editor-apply').click();
+    await expect(page.locator('#drawingEditorSurface')).toBeHidden();
+    const routes = await page.evaluate(() => {
+      const plan =
+        document.getElementById('tactileMapPanel').__forgeMapPanel.plan;
+      return plan.features
+        .filter((f) => f.class === 'route')
+        .map((f) => ({ id: f.id, on: f.on, n: f.points.length }));
+    });
+    expect(routes).toEqual([{ id: 'route-1', on: true, n: 4 }]);
+  });
+});

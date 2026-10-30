@@ -18217,7 +18217,8 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   cursor: grab;
 }
 
-.drawing-editor-canvas-svg[data-tool='marquee'] {
+.drawing-editor-canvas-svg[data-tool='marquee'],
+.drawing-editor-canvas-svg[data-tool='route'] {
   cursor: crosshair;
 }
 
