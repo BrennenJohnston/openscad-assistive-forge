@@ -117,6 +117,15 @@ export const BUILT_IN_SYMBOLS = [
     source:
       'BANA 2022 8.5.4 (landmarks) and 8.6.5 (a shape used twice differs by 25 to 30 percent): a square with a notch',
   },
+  {
+    key: 'chevron-uphill',
+    name: 'Uphill chevron',
+    pathData:
+      'M 0.1 0.9 L 0.5 0.1 L 0.9 0.9 L 0.72 0.9 L 0.5 0.42 L 0.28 0.9 Z',
+    minSizeMm: SYMBOL_MIN_SIZE_MM,
+    source:
+      'Ungar 2005 (arrows read by their point); OpenSidewalks incline as rise over run; drawn along a Steep sidewalk line every 10 mm, 6 mm across (BANA 2022 3.4.3.3 dash figures)',
+  },
 ];
 
 /** A number for a sentence: one decimal at most, no trailing zero. */

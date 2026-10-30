@@ -87,7 +87,7 @@ afterEach(() => {
 });
 
 describe('the class table', () => {
-  it('lists the fifteen classes and Ignore last, each with a kind, a name and a source', () => {
+  it('lists the sixteen classes and Ignore last, each with a kind, a name and a source', () => {
     expect(MAP_CLASS_KEYS).toEqual([
       'wall',
       'curb',
@@ -95,6 +95,7 @@ describe('the class table', () => {
       'route',
       'crossing',
       'track',
+      'steep',
       'area',
       'stairs',
       'elevator-up',
@@ -112,9 +113,14 @@ describe('the class table', () => {
       expect(row.source).toBeTruthy();
       if (row.kind === 'line') {
         expect(row.widthMm).toBeGreaterThan(0);
-        expect(['solid', 'dotted', 'dashed', 'double', 'ticks']).toContain(
-          row.style
-        );
+        expect([
+          'solid',
+          'dotted',
+          'dashed',
+          'double',
+          'ticks',
+          'chevrons',
+        ]).toContain(row.style);
       }
       if (row.kind === 'point') expect(row.symbolKey).toBeTruthy();
     }
@@ -125,6 +131,7 @@ describe('the class table', () => {
       'Route',
       'Crossing',
       'Track',
+      'Steep sidewalk',
       'Area',
       'Stairs',
       'Elevator up',

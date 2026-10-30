@@ -30,6 +30,7 @@ const KEYS = [
   'landmark-triangle',
   'you-are-here',
   'transit-stop',
+  'chevron-uphill',
 ];
 
 const fileOf = (value, name = 'symbols.json') => ({
@@ -40,7 +41,7 @@ const fileOf = (value, name = 'symbols.json') => ({
 afterEach(() => setLibrary(null));
 
 describe('the built-in symbols', () => {
-  it('are the nine shapes, each with a name and a source', () => {
+  it('are the ten shapes, each with a name and a source', () => {
     expect(BUILT_IN_SYMBOLS.map((s) => s.key)).toEqual(KEYS);
     for (const s of BUILT_IN_SYMBOLS) {
       expect(typeof s.name, s.key).toBe('string');
@@ -157,7 +158,7 @@ describe('the file door', () => {
     expect(activeLibrary()).toHaveLength(2);
     expect(activeLibrary().map((s) => s.key)).toEqual(['a', 'b']);
     setLibrary(null);
-    expect(activeLibrary()).toHaveLength(9);
+    expect(activeLibrary()).toHaveLength(10);
     expect(activeLibrary()).toBe(BUILT_IN_SYMBOLS);
   });
 });
