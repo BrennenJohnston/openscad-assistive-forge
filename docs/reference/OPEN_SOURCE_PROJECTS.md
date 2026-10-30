@@ -76,6 +76,24 @@ These projects are shipped with the application.
 
 ---
 
+## Data Sources
+
+These services and datasets are read at run time by the Tactile Map Designer's address route, each only when a person presses the control that needs it (terms read 2026-10-29).
+
+### OpenStreetMap
+
+- **Site**: https://www.openstreetmap.org/copyright
+- **License**: Open Database License (ODbL) for the data; the app shows "Map data from OpenStreetMap contributors, ODbL" with every map it builds from it
+- **Usage**: the map features around an address, through the Nominatim geocoder (https://operations.osmfoundation.org/policies/nominatim/: one request a second, no autocomplete, the application identified) and the public Overpass API (https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances: fair use, one request per press, a back-off when the server is full)
+
+### Mapzen Terrain Tiles on AWS Open Data
+
+- **Site**: https://registry.opendata.aws/terrain-tiles/
+- **License**: open data under the terms listed on the registry page (the tiles are built from public elevation sources, each credited there)
+- **Usage**: Terrarium PNG height tiles at zoom 15, read along a draft's sidewalks for the steep sidewalk marks
+
+---
+
 ## Dev / Toolchain Dependencies
 
 These projects are used during development and testing only.
