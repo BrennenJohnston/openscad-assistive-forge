@@ -505,7 +505,10 @@ jobs:
   # single link to its Nominatim usage policy. That page answers 200 from an
   # ordinary connection - measured at 12.7 seconds - so the link is good and
   # the host is the problem. Excluding it costs exactly one link; nothing else
-  # in the checked docs points at that host.
+  # in the checked docs points at that host. The LightHouse for the Blind's
+  # tactile map page (lighthouse-sf.org) timed out the same way on three
+  # pull requests in one day while answering from an ordinary connection; it
+  # is excluded on the same reasoning, one link in OPEN_SOURCE_PROJECTS.md.
   link-check:
     name: Docs Link Check
     runs-on: ubuntu-latest
@@ -528,6 +531,7 @@ jobs:
             --exclude '^https://www\.sovol\.tech'
             --exclude '^https://operations\.osmfoundation\.org'
             --exclude '^https://www\.ski\.org'
+            --exclude '^https://lighthouse-sf\.org'
             'README.md'
             'docs/README.md'
             'docs/guides/**/*.md'
