@@ -128,6 +128,10 @@ export const DEFAULT_SETTINGS = {
   doubleGapMm: 1.5,
   tickLengthMm: 6,
   tickSpacingMm: 6,
+  // A Steep sidewalk's chevrons: one every 10 mm, 6 mm across, pointing
+  // uphill (BANA 2022 3.4.3.3 keeps dashes between 6 and 10 mm).
+  chevronPitchMm: 10,
+  chevronAcrossMm: 6,
   maxSingleLineMm: 2.2,
   maxSymbols: 15,
   maxTextures: 4,
@@ -356,6 +360,31 @@ function tickedLine(points, width, tickLength, spacing) {
   return union(ticks);
 }
 
+/**
+ * A line with a chevron every `pitch` mm, `across` mm wide, each pointing
+ * to the uphill end (`uphill` 'end' or 'start'): the line at its width
+ * plus two arms per chevron, stroked at the same width, under one union.
+ * Exported for the levels test.
+ */
+export function chevronsLine(pairs, width, pitch, across, uphill = 'end') {
+  const points = toPoints(pairs);
+  const total = lengthOf(points);
+  const dir = uphill === 'start' ? -1 : 1;
+  const half = across / 2;
+  const pieces = [...strokePolyline(pairs, width)];
+  for (let s = pitch / 2; s < total; s += pitch) {
+    const p = along(points, s);
+    const nx = -p.ty;
+    const ny = p.tx;
+    const apex = [p.x + p.tx * dir * half, p.y + p.ty * dir * half];
+    const back = [p.x - p.tx * dir * half, p.y - p.ty * dir * half];
+    const left = [back[0] + nx * half, back[1] + ny * half];
+    const right = [back[0] - nx * half, back[1] - ny * half];
+    pieces.push(...strokePolyline([left, apex, right], width));
+  }
+  return union(pieces);
+}
+
 function doubleLine(pairs, width, gap) {
   const points = toPoints(pairs);
   const d = (width + gap) / 2;
@@ -466,6 +495,14 @@ export function buildLevelRings(plan, settings = {}) {
         rings = dashedLine(pts, width, s.dashMm, s.dashGapMm);
       else if (style === 'ticks')
         rings = tickedLine(pts, width, s.tickLengthMm, s.tickSpacingMm);
+      else if (style === 'chevrons')
+        rings = chevronsLine(
+          f.points,
+          width,
+          s.chevronPitchMm,
+          s.chevronAcrossMm,
+          f.uphill
+        );
       else if (style === 'double')
         rings = doubleLine(f.points, width, s.doubleGapMm);
       else rings = strokePolyline(f.points, width);
