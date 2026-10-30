@@ -16515,6 +16515,59 @@ body.tutorial-body-locked {
   min-height: var(--size-touch-target);
 }
 
+/* The address section: the field and Search on one row (the field takes
+   the room), the places found as radio rows at the touch floor. */
+.tactile-map-address-row {
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+.tactile-map-address-input {
+  flex: 1 1 12em;
+  min-width: 0;
+}
+
+.tactile-map-results .braille-panel-toggle-row label {
+  overflow-wrap: anywhere;
+}
+
+/* The landmark boxes: the size and the ring the plate radios have; the
+   Get map data and file rows wrap on a narrow sheet. */
+.tactile-map-landmarks input[type='checkbox'] {
+  flex-shrink: 0;
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  margin: 0;
+}
+
+.tactile-map-landmarks input[type='checkbox']:focus-visible {
+  outline: var(--focus-ring-width, 3px) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset, 2px);
+}
+
+.tactile-map-get-row,
+.tactile-map-file-row {
+  flex-wrap: wrap;
+}
+
+/* reset.css strips colour and underline from every anchor; the attribution
+   link takes the house link convention (.role-path-meta a), or it would read
+   as the help text around it. */
+.tactile-map-attribution a {
+  color: var(--color-accent-fg);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+  transition:
+    color var(--motion-base),
+    text-decoration-color var(--motion-base);
+}
+
+.tactile-map-attribution a:hover {
+  color: var(--color-accent-hover);
+  text-decoration-thickness: 2.5px;
+}
+
 .braille-panel {
   margin-bottom: var(--space-md);
   padding: var(--space-md);
