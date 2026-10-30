@@ -13,6 +13,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import JSZip from 'jszip';
 
 vi.mock('../../src/js/ui-generator.js', async () => {
@@ -58,6 +60,35 @@ const CONFIG = {
 const SETTLE = { timeout: 4000, interval: 25 };
 const EMPTY_STL = () => new Uint8Array(84);
 const summary = () => document.getElementById('tactileMapSummary').textContent;
+
+// The panel and everything it pulls in (the levels builder, the splitter,
+// the plan from a drawing, the symbol library) ride the app's entry chunk
+// only if the file handler imports them statically. It must not: the map
+// code loads when a map tile opens.
+describe('the panel as a lazy chunk', () => {
+  it('the file handler imports the panel with import(), never statically', () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'src', 'js', 'file-handler.js'),
+      'utf8'
+    );
+    expect(source).not.toMatch(
+      /^import\s[^;]*from\s+'\.\/tactile-map\/map-panel\.js'/m
+    );
+    expect(source).toMatch(/import\(\s*'\.\/tactile-map\/map-panel\.js'\s*\)/);
+    // And nothing else in the entry's reach imports a map module statically
+    // (the drawing editor's own import rides its lazy chunk).
+    const entryFiles = ['main.js', 'js/file-handler.js', 'js/ui-generator.js'];
+    for (const file of entryFiles) {
+      const text = fs.readFileSync(
+        path.join(process.cwd(), 'src', file),
+        'utf8'
+      );
+      expect(text, file).not.toMatch(
+        /^import\s[^;]*from\s+'[./]*\/tactile-map\//m
+      );
+    }
+  });
+});
 const status = () =>
   document.getElementById('tactileMapRenderStatus').textContent;
 const params = () => stateManager.getState().parameters || {};
