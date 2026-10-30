@@ -11,6 +11,7 @@ import AxeBuilder from '@axe-core/playwright';
 import JSZip from 'jszip';
 import { PNG } from 'pngjs';
 import { parseSTL } from '../../scripts/parity/stl-stats.mjs';
+import { skipWithoutWebGL } from './helpers/webgl.js';
 
 const ALLOWED_AXE_VIOLATIONS = [];
 const WASM_READY_TIMEOUT = 180_000;
@@ -636,6 +637,10 @@ test.describe('the Alt View', () => {
       localStorage.setItem('openscad-forge-sounds', 'false');
     });
     await openTactileMap(page);
+    await skipWithoutWebGL(
+      page,
+      'no WebGL: the Alt View draws its characters from the 3D picture'
+    );
     const panel = page.locator('#tactileMapPanel');
     await expect(panel).toBeVisible();
     await page.evaluate(() => {
