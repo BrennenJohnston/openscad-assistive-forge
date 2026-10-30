@@ -21,7 +21,7 @@
  * @property {'line'|'area'|'point'|'ignore'} kind
  * @property {number} [level] - 1 to 3; the level the feature rises to
  * @property {number} [widthMm] - A line's width in millimeters
- * @property {'solid'|'dotted'|'dashed'|'double'|'ticks'} [style] - A line's style
+ * @property {'solid'|'dotted'|'dashed'|'double'|'ticks'|'chevrons'} [style] - A line's style
  * @property {string} [symbolKey] - A point's symbol in the symbol library
  * @property {string} source - Where the shape or the figure comes from
  * @property {Array<{tag: string, values?: string[], kind: 'way'|'closed'|'node'}>} [osm]
@@ -124,6 +124,17 @@ export const MAP_CLASSES = Object.freeze([
         kind: 'way',
       },
     ],
+  },
+  {
+    key: 'steep',
+    name: 'Steep sidewalk',
+    kind: 'line',
+    level: 2,
+    widthMm: 1.5,
+    style: 'chevrons',
+    symbolKey: 'chevron-uphill',
+    source:
+      'Ungar 2005 (arrows read by their point); OpenSidewalks incline as rise over run',
   },
   {
     key: 'area',
