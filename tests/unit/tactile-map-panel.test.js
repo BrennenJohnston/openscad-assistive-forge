@@ -1058,3 +1058,141 @@ describe('the draft map button', () => {
     expect(opened).toBeNull();
   });
 });
+
+describe('the steep switch', () => {
+  const PLACE = {
+    name: 'Central Library, 1000, 4th Avenue, Seattle, Washington, United States',
+    lat: 47.6067,
+    lon: -122.3327,
+    kind: 'library',
+  };
+  const OVERPASS = JSON.parse(
+    readFileSync('tests/fixtures/tactile-map/overpass-20.json', 'utf8')
+  );
+  const trimmed = () => OVERPASS.elements.map(trimElement).filter(Boolean);
+  const M_PER_DEG_LON = 111320 * Math.cos((PLACE.lat * Math.PI) / 180);
+  /** A plane rising 10 % to the east. */
+  const slope = (lat, lon) => 100 + (lon - PLACE.lon) * M_PER_DEG_LON * 0.1;
+  const steepBox = () => document.getElementById('tactileMapSteep');
+  const gradeInput = () => document.getElementById('tactileMapGrade');
+  const addressStatus = () =>
+    document.getElementById('tactileMapAddressStatus').textContent;
+  const editor = { open: vi.fn() };
+
+  async function drafted(options = {}) {
+    mount({
+      searchPlaces: vi.fn(async () => [PLACE]),
+      pullArea: vi.fn(async () => ({ elements: trimmed(), bytes: 1, ms: 1 })),
+      getEditor: async () => editor,
+      elevationAt: slope,
+      ...options,
+    });
+    const input = document.getElementById('tactileMapAddress');
+    input.value = 'Central Library';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('tactileMapSearch').click();
+    await vi.waitFor(() =>
+      expect(
+        document.querySelectorAll('#tactileMapResults input[type="radio"]')
+      ).toHaveLength(1)
+    );
+    document.querySelector('#tactileMapResults input[type="radio"]').click();
+    document.getElementById('tactileMapGetData').click();
+    await vi.waitFor(() => expect(getMapData()).not.toBeNull());
+    document.getElementById('tactileMapDraft').click();
+    await vi.waitFor(() => expect(getMapPlan().meta.geo).toBeTruthy());
+  }
+
+  it('rests disabled until a draft exists, with the grade at 5 from 3 to 12 by 0.5', async () => {
+    mount();
+    expect(steepBox().disabled).toBe(true);
+    expect(steepBox().checked).toBe(false);
+    expect(
+      document.querySelector('label[for="tactileMapSteep"]').textContent
+    ).toBe('Mark steep sidewalks');
+    expect(document.getElementById('tactileMapSteepHelp').textContent).toBe(
+      'Chevrons along sidewalks steeper than the grade below, pointing uphill. Heights come from public terrain tiles at about 3 m per pixel, so a short steep step can be missed.'
+    );
+    expect(
+      document.querySelector('label[for="tactileMapGrade"]').textContent
+    ).toBe('Steep grade (%)');
+    expect([
+      gradeInput().min,
+      gradeInput().max,
+      gradeInput().step,
+      gradeInput().value,
+    ]).toEqual(['3', '12', '0.5', '5']);
+    expect(document.getElementById('tactileMapGradeHelp').textContent).toBe(
+      'Sidewalks steeper than this get chevrons, 3 to 12 %. 5 % is the grade where a walking surface counts as a ramp.'
+    );
+    await drafted();
+    expect(steepBox().disabled).toBe(false);
+  });
+
+  it('on, reads the heights, marks the steep runs, says so and writes the levels file; off removes them', async () => {
+    await drafted();
+    const filesBefore = files.length;
+    steepBox().checked = true;
+    steepBox().dispatchEvent(new Event('change', { bubbles: true }));
+    expect(addressStatus()).toMatch(
+      /^Reading heights along \d+ sidewalks\.\.\.$/
+    );
+    await vi.waitFor(() =>
+      expect(addressStatus()).toMatch(
+        /^\d+ steep segments marked, steeper than 5 %\.$/
+      )
+    );
+    const steep = getMapPlan().features.filter((f) => f.class === 'steep');
+    expect(steep.length).toBeGreaterThan(0);
+    expect(steep.every((f) => f.style === 'chevrons' && f.on)).toBe(true);
+    await vi.waitFor(
+      () => expect(files.length).toBeGreaterThan(filesBefore),
+      SETTLE
+    );
+    expect(announce).toHaveBeenCalledWith(addressStatus(), {
+      source: 'tactile-map',
+    });
+    steepBox().checked = false;
+    steepBox().dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(
+        getMapPlan().features.filter((f) => f.class === 'steep')
+      ).toHaveLength(0)
+    );
+  });
+
+  it('says no sidewalk is steeper on flat ground, and reads again at a new grade', async () => {
+    await drafted({ elevationAt: () => 100 });
+    steepBox().checked = true;
+    steepBox().dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(addressStatus()).toBe('No sidewalk is steeper than 5 %.')
+    );
+    gradeInput().value = '8';
+    gradeInput().dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(addressStatus()).toBe('No sidewalk is steeper than 8 %.')
+    );
+    gradeInput().value = '20';
+    gradeInput().dispatchEvent(new Event('change', { bubbles: true }));
+    expect(gradeInput().value).toBe('12');
+  });
+
+  it('says the tiles did not answer and rests the switch when the heights cannot be read', async () => {
+    await drafted({
+      elevationAt: null,
+      fetchTiles: vi.fn(async () => ({ ok: false, status: 403 })),
+    });
+    steepBox().checked = true;
+    steepBox().dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(addressStatus()).toBe(
+        'The height tiles did not answer. Steep sidewalks are not marked this time.'
+      )
+    );
+    expect(steepBox().checked).toBe(false);
+    expect(announceError).toHaveBeenCalledWith(addressStatus(), {
+      source: 'tactile-map',
+    });
+  });
+});

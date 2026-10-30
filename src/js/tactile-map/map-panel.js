@@ -234,6 +234,10 @@ class MapPanel {
     // chunk loaded on the first press) and the place last picked.
     this.searchPlaces = options.searchPlaces || null;
     this.pullArea = options.pullArea || null;
+    // A test's stand-ins: the terrain host (loadTiles' fetch) or the
+    // height reader itself.
+    this.fetchTiles = options.fetchTiles || null;
+    this.elevationAt = options.elevationAt || null;
     this.place = null;
     // The map data last pulled or loaded, for the draft: { elements, center,
     // radiusM, source, place, landmarks, bytes }.
@@ -279,6 +283,11 @@ class MapPanel {
       },
       onDraft: () => {
         this.makeDraft().catch((err) => {
+          this.sayAddress(err?.message || String(err), true);
+        });
+      },
+      onSteep: (on, gradePct) => {
+        this.markSteep(on, gradePct).catch((err) => {
           this.sayAddress(err?.message || String(err), true);
         });
       },
@@ -774,6 +783,7 @@ class MapPanel {
     this.draft = { counts, warnings: warnings.length };
     this.planWarnings = [];
     this.plate = 'whole';
+    this.address?.setDraftReady(true);
     this.schedule(0);
     this.sayAddress(
       warnings.length
@@ -821,6 +831,63 @@ class MapPanel {
       onKeepOriginal: () => {},
       onClose: () => {},
     });
+  }
+
+  /**
+   * Mark steep sidewalks: on, the terrain tiles under the draft are read
+   * (lazy chunks), every on walkway sampled, and the runs steeper than the
+   * grade become Steep sidewalk features; off, those features leave. The
+   * tiles are the map's third host; a failure says so and the switch rests.
+   */
+  async markSteep(on, gradePct) {
+    const base = {
+      ...this.plan,
+      features: this.plan.features.filter((f) => f.class !== 'steep'),
+    };
+    const sw = this.address?.refs?.steep;
+    if (!on) {
+      if (base.features.length !== this.plan.features.length) {
+        this.plan = base;
+        this.schedule(0);
+      }
+      return;
+    }
+    const geo = base.meta?.geo;
+    if (!geo?.center || !this.draft) {
+      if (sw) sw.checked = false;
+      return;
+    }
+    const walkways = base.features.filter(
+      (f) => f.kind === 'line' && f.on && f.class === 'walkway'
+    ).length;
+    this.sayAddress(ADDRESS_STRINGS.reading(walkways));
+    try {
+      const [{ tilesCovering, loadTiles, elevationSampler }, { markSteep }] =
+        await Promise.all([import('./terrain.js'), import('./steep.js')]);
+      let elevationAt = this.elevationAt;
+      if (!elevationAt) {
+        const radiusM = this.osm?.radiusM ?? 250;
+        const tiles = await loadTiles(tilesCovering(geo.center, radiusM), {
+          fetch: this.fetchTiles || undefined,
+        });
+        elevationAt = elevationSampler(tiles);
+      }
+      const { plan, steepCount } = markSteep(base, { elevationAt, gradePct });
+      this.plan = plan;
+      this.schedule(0);
+      this.sayAddress(
+        steepCount
+          ? ADDRESS_STRINGS.steepMarked(steepCount, gradePct)
+          : ADDRESS_STRINGS.steepNone(gradePct)
+      );
+    } catch (error) {
+      if (sw) sw.checked = false;
+      if (error?.code === 'no-answer') {
+        this.sayAddress(ADDRESS_STRINGS.tilesNoAnswer, true);
+      } else {
+        this.sayAddress(error?.message || String(error), true);
+      }
+    }
   }
 
   /** A sentence on the address section's status line, said once. */
