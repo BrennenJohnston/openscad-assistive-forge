@@ -12,6 +12,7 @@
  * @license GPL-3.0-or-later
  */
 
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -39,7 +40,10 @@ import {
   initMapPanel,
   destroyMapPanel,
   isMapPanelActive,
+  getMapPlace,
+  getMapData,
 } from '../../src/js/tactile-map/map-panel.js';
+import { trimElement } from '../../src/js/tactile-map/osm-geometry.js';
 import { setParameterValue } from '../../src/js/ui-generator.js';
 import { announce, announceError } from '../../src/js/announcer.js';
 import { stateManager } from '../../src/js/state.js';
@@ -690,6 +694,234 @@ describe('the drawing door', () => {
       SETTLE
     );
     expect(String(params().map_width_mm)).toBe('152');
+  });
+});
+
+describe('the map data row', () => {
+  const PLACE = {
+    name: 'Central Library, 1000, 4th Avenue, Seattle, Washington, United States',
+    lat: 47.6067,
+    lon: -122.3327,
+    kind: 'library',
+  };
+  const OVERPASS = JSON.parse(
+    readFileSync('tests/fixtures/tactile-map/overpass-20.json', 'utf8')
+  );
+  const OSM = readFileSync('tests/fixtures/tactile-map/export.osm', 'utf8');
+  const trimmed = () => OVERPASS.elements.map(trimElement).filter(Boolean);
+  const answered = (extra = {}) =>
+    vi.fn(async () => ({
+      elements: trimmed(),
+      bytes: 5363,
+      ms: 1200,
+      ...extra,
+    }));
+  const refusing = (code, waits = []) =>
+    vi.fn(async ({ onWait }) => {
+      for (const s of waits) onWait(s);
+      const error = new Error(code);
+      error.code = code;
+      throw error;
+    });
+  const addressStatus = () =>
+    document.getElementById('tactileMapAddressStatus').textContent;
+  const getData = () => document.getElementById('tactileMapGetData');
+  const radius = () => document.getElementById('tactileMapRadius');
+  const boxes = () => [
+    ...document.querySelectorAll('#tactileMapLandmarks input[type="checkbox"]'),
+  ];
+
+  async function pickPlace(options) {
+    mount({ searchPlaces: vi.fn(async () => [PLACE]), ...options });
+    const input = document.getElementById('tactileMapAddress');
+    input.value = 'Central Library';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('tactileMapSearch').click();
+    await vi.waitFor(() =>
+      expect(
+        document.querySelectorAll('#tactileMapResults input[type="radio"]')
+      ).toHaveLength(1)
+    );
+    document.querySelector('#tactileMapResults input[type="radio"]').click();
+    expect(getMapPlace()).toEqual(PLACE);
+  }
+
+  function dropFile(name, text) {
+    const fileInput = document.getElementById('tactileMapOsmFile');
+    Object.defineProperty(fileInput, 'files', {
+      value: [new File([text], name, { type: 'text/xml' })],
+      configurable: true,
+    });
+    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  it('shows the radius at 250 m from 100 to 600 by 10, six landmark boxes with Entrances and Transit stops ticked, and the attribution link', () => {
+    expect(radius().type).toBe('number');
+    expect([radius().min, radius().max, radius().step, radius().value]).toEqual(
+      ['100', '600', '10', '250']
+    );
+    expect(
+      document.querySelector('label[for="tactileMapRadius"]').textContent
+    ).toBe('Map radius (m)');
+    expect(document.getElementById('tactileMapRadiusHelp').textContent).toBe(
+      'How far from the address the map reaches, 100 to 600 m. The map is twice this wide.'
+    );
+    expect(
+      document.querySelector('#tactileMapLandmarks legend').textContent
+    ).toBe('Landmarks to show');
+    expect(
+      boxes().map((b) => [
+        document.querySelector(`label[for="${b.id}"]`).textContent,
+        b.checked,
+      ])
+    ).toEqual([
+      ['Entrances', true],
+      ['Transit stops', true],
+      ['Crossings', false],
+      ['Steps and stairs', false],
+      ['Shops', false],
+      ['Benches', false],
+    ]);
+    expect(getData().textContent).toBe('Get map data');
+    expect(getData().disabled).toBe(true);
+    expect(document.getElementById('tactileMapLoadFile').textContent).toBe(
+      'Load an OpenStreetMap file'
+    );
+    expect(document.getElementById('tactileMapOsmFile').accept).toBe(
+      '.osm,.geojson,.json,application/json,text/xml'
+    );
+    expect(document.getElementById('tactileMapFileHelp').textContent).toBe(
+      'An .osm export from openstreetmap.org, or a .geojson file. The file stays on your device.'
+    );
+    const link = document.querySelector('#tactileMapAttribution a');
+    expect(link.getAttribute('href')).toBe(
+      'https://www.openstreetmap.org/copyright'
+    );
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
+    expect(link.textContent).toContain('OpenStreetMap contributors');
+    expect(
+      document.getElementById('tactileMapAttribution').textContent
+    ).toMatch(/^Map data from OpenStreetMap contributors.*, ODbL$/);
+  });
+
+  it('Get map data waits for a place, pulls within the radius, keeps the data and says the counts', async () => {
+    const pullArea = answered();
+    await pickPlace({ pullArea });
+    expect(getData().disabled).toBe(false);
+    radius().value = '300';
+    radius().dispatchEvent(new Event('change', { bubbles: true }));
+    getData().click();
+    expect(addressStatus()).toBe(
+      `Getting map data within 300 m of ${PLACE.name}...`
+    );
+    await vi.waitFor(() =>
+      expect(addressStatus()).toBe(
+        '20 map features within 300 m: 10 walkways, 4 crossings, 3 buildings, 3 landmarks.'
+      )
+    );
+    const call = pullArea.mock.calls[0][0];
+    expect([call.lat, call.lon, call.radiusM]).toEqual([
+      PLACE.lat,
+      PLACE.lon,
+      300,
+    ]);
+    expect(typeof call.onWait).toBe('function');
+    const osm = getMapData();
+    expect(osm.elements).toHaveLength(20);
+    expect(osm.center).toEqual({ lat: PLACE.lat, lon: PLACE.lon });
+    expect(osm.radiusM).toBe(300);
+    expect(osm.source).toBe('overpass');
+    expect(osm.place).toEqual(PLACE);
+    expect(osm.landmarks).toEqual(['entrance', 'transit-stop']);
+    expect(announce).toHaveBeenCalledWith(addressStatus(), {
+      source: 'tactile-map',
+    });
+  });
+
+  it('says the wait when the server is busy, and gives up after the second wait', async () => {
+    await pickPlace({ pullArea: refusing('busy', [30, 60]) });
+    getData().click();
+    await vi.waitFor(() =>
+      expect(addressStatus()).toBe(
+        'The map server did not answer twice. Try again in a few minutes, or load an OpenStreetMap file instead.'
+      )
+    );
+    expect(announce).toHaveBeenCalledWith(
+      'The map server is busy. Trying again in 30 seconds.',
+      { source: 'tactile-map' }
+    );
+    expect(announce).toHaveBeenCalledWith(
+      'The map server is busy. Trying again in 60 seconds.',
+      { source: 'tactile-map' }
+    );
+    expect(announceError).toHaveBeenCalledWith(addressStatus(), {
+      source: 'tactile-map',
+    });
+    expect(getMapData()).toBeNull();
+    expect(getData().disabled).toBe(false);
+  });
+
+  it('says the data did not arrive when the pull fails', async () => {
+    await pickPlace({ pullArea: refusing('no-answer') });
+    getData().click();
+    await vi.waitFor(() =>
+      expect(addressStatus()).toBe(
+        'The map data did not arrive. Check your connection and try again, or load an OpenStreetMap file instead.'
+      )
+    );
+  });
+
+  it('warns over 2 MB after the counts', async () => {
+    await pickPlace({ pullArea: answered({ bytes: 2_600_000 }) });
+    getData().click();
+    await vi.waitFor(() =>
+      expect(addressStatus()).toBe(
+        '20 map features within 250 m: 10 walkways, 4 crossings, 3 buildings, 3 landmarks. 2.5 MB of map data arrived. A smaller radius makes a lighter map.'
+      )
+    );
+  });
+
+  it('the file door takes an export, centered on the picked place', async () => {
+    await pickPlace({ pullArea: answered() });
+    dropFile('export.osm', OSM);
+    await vi.waitFor(() =>
+      expect(addressStatus()).toBe('export.osm: 5 map features loaded.')
+    );
+    const osm = getMapData();
+    expect(osm.source).toBe('file');
+    expect(osm.elements).toHaveLength(5);
+    expect(osm.center).toEqual({ lat: PLACE.lat, lon: PLACE.lon });
+    expect(osm.radiusM).toBe(250);
+    expect(document.getElementById('tactileMapOsmFile').value).toBe('');
+  });
+
+  it('a wrong file says so', async () => {
+    mount();
+    dropFile('notes.txt', 'hello there');
+    await vi.waitFor(() =>
+      expect(addressStatus()).toBe(
+        'notes.txt is not an OpenStreetMap export or a GeoJSON file.'
+      )
+    );
+    expect(announceError).toHaveBeenCalledWith(addressStatus(), {
+      source: 'tactile-map',
+    });
+    expect(getMapData()).toBeNull();
+  });
+
+  it('a file with no place picked centers on the middle of the file and says so', async () => {
+    mount();
+    dropFile('export.osm', OSM);
+    await vi.waitFor(() =>
+      expect(addressStatus()).toBe(
+        'export.osm loaded; the map centers on the middle of the file. Pick an address first to center it there.'
+      )
+    );
+    const osm = getMapData();
+    expect(osm.center.lat).toBeCloseTo(47.6085, 4);
+    expect(osm.center.lon).toBeCloseTo(-122.3355, 4);
+    expect(osm.place).toBeNull();
   });
 });
 
