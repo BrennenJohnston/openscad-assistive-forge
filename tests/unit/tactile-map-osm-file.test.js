@@ -226,30 +226,37 @@ describe('a large export', () => {
   // the development machine; a browser's DOMParser reads the same text in a
   // fraction of that, measured in the phase's record). The floor catches a
   // reader that has gone quadratic, not the browser's speed.
-  it('parses 5,000 nodes and 500 ways, and says how long it took', () => {
-    const nodes = [];
-    for (let i = 1; i <= 5000; i++) {
-      nodes.push(
-        `<node id="${i}" lat="${(47.6 + i * 0.00001).toFixed(7)}" lon="${(-122.33 + i * 0.00001).toFixed(7)}" version="1"/>`
+  // jsdom's XML reader takes about 2.5 s on this file, and five times that
+  // under coverage instrumentation on the CI runner (13.9 s measured), so
+  // the floor guards against a slide into minutes, not against a slow box.
+  it(
+    'parses 5,000 nodes and 500 ways, and says how long it took',
+    { timeout: 60_000 },
+    () => {
+      const nodes = [];
+      for (let i = 1; i <= 5000; i++) {
+        nodes.push(
+          `<node id="${i}" lat="${(47.6 + i * 0.00001).toFixed(7)}" lon="${(-122.33 + i * 0.00001).toFixed(7)}" version="1"/>`
+        );
+      }
+      const ways = [];
+      for (let w = 0; w < 500; w++) {
+        const refs = [];
+        for (let k = 0; k < 10; k++) refs.push(`<nd ref="${w * 10 + k + 1}"/>`);
+        ways.push(
+          `<way id="${10000 + w}" version="1">${refs.join('')}<tag k="highway" v="footway"/><tag k="footway" v="sidewalk"/></way>`
+        );
+      }
+      const text = `<?xml version="1.0"?><osm version="0.6">${nodes.join('')}${ways.join('')}</osm>`;
+      const t0 = performance.now();
+      const elements = elementsFromText(text, 'big.osm');
+      const ms = performance.now() - t0;
+      console.log(
+        `large export: ${(text.length / 1024).toFixed(0)} KB, ${elements.length} elements in ${ms.toFixed(0)} ms`
       );
+      expect(elements).toHaveLength(500);
+      expect(elements[499].geometry).toHaveLength(10);
+      expect(ms).toBeLessThan(30000);
     }
-    const ways = [];
-    for (let w = 0; w < 500; w++) {
-      const refs = [];
-      for (let k = 0; k < 10; k++) refs.push(`<nd ref="${w * 10 + k + 1}"/>`);
-      ways.push(
-        `<way id="${10000 + w}" version="1">${refs.join('')}<tag k="highway" v="footway"/><tag k="footway" v="sidewalk"/></way>`
-      );
-    }
-    const text = `<?xml version="1.0"?><osm version="0.6">${nodes.join('')}${ways.join('')}</osm>`;
-    const t0 = performance.now();
-    const elements = elementsFromText(text, 'big.osm');
-    const ms = performance.now() - t0;
-    console.log(
-      `large export: ${(text.length / 1024).toFixed(0)} KB, ${elements.length} elements in ${ms.toFixed(0)} ms`
-    );
-    expect(elements).toHaveLength(500);
-    expect(elements[499].geometry).toHaveLength(10);
-    expect(ms).toBeLessThan(10000);
-  });
+  );
 });
