@@ -24,7 +24,27 @@
  * @property {'solid'|'dotted'|'dashed'|'double'|'ticks'} [style] - A line's style
  * @property {string} [symbolKey] - A point's symbol in the symbol library
  * @property {string} source - Where the shape or the figure comes from
+ * @property {Array<{tag: string, values?: string[], kind: 'way'|'closed'|'node'}>} [osm]
+ *   - The OpenStreetMap tags that read as this class (plan-from-osm.js);
+ *   `kind` is the element: an open way, a closed way, or a node
  */
+
+/**
+ * A road's width when its way carries no `width` tag, in meters: typical
+ * figures I inferred for the draft (a curb line each side of the
+ * centerline), not a survey. A tagged width always wins.
+ */
+export const ROAD_WIDTHS_M = Object.freeze({
+  motorway: 14,
+  trunk: 12,
+  primary: 10,
+  secondary: 9,
+  tertiary: 8,
+  unclassified: 7,
+  residential: 6,
+  living_street: 5,
+  service: 4,
+});
 
 /** The classes, in the order a menu offers them: lines, the area, the points, then Ignore. */
 export const MAP_CLASSES = Object.freeze([
@@ -45,6 +65,8 @@ export const MAP_CLASSES = Object.freeze([
     widthMm: 1.0,
     style: 'solid',
     source: 'BANA 2022 line styles: a thin solid line',
+    // A road: its centerline offset half its width each side (ROAD_WIDTHS_M).
+    osm: [{ tag: 'highway', values: Object.keys(ROAD_WIDTHS_M), kind: 'way' }],
   },
   {
     key: 'walkway',
@@ -54,6 +76,15 @@ export const MAP_CLASSES = Object.freeze([
     widthMm: 1.5,
     style: 'solid',
     source: 'BANA 2022 8.6.7: a path a finger traces comfortably',
+    osm: [
+      { tag: 'footway', values: ['sidewalk'], kind: 'way' },
+      {
+        tag: 'highway',
+        values: ['footway', 'pedestrian', 'steps'],
+        kind: 'way',
+      },
+      { tag: 'highway', values: ['path'], kind: 'way' },
+    ],
   },
   {
     key: 'route',
@@ -73,6 +104,10 @@ export const MAP_CLASSES = Object.freeze([
     widthMm: 1.5,
     style: 'ticks',
     source: 'BANA 2022 line styles: short cross-ticks',
+    osm: [
+      { tag: 'footway', values: ['crossing'], kind: 'way' },
+      { tag: 'highway', values: ['crossing'], kind: 'node' },
+    ],
   },
   {
     key: 'track',
@@ -82,6 +117,13 @@ export const MAP_CLASSES = Object.freeze([
     widthMm: 1.0,
     style: 'double',
     source: 'Jehoel 2006: a double line reads as two with a gap over 1.3 mm',
+    osm: [
+      {
+        tag: 'railway',
+        values: ['rail', 'light_rail', 'tram', 'subway'],
+        kind: 'way',
+      },
+    ],
   },
   {
     key: 'area',
@@ -89,6 +131,10 @@ export const MAP_CLASSES = Object.freeze([
     kind: 'area',
     level: 1,
     source: 'BANA 2022 3.4.3.1: a plain raised area; textures only on request',
+    osm: [
+      { tag: 'building', kind: 'closed' },
+      { tag: 'leisure', values: ['park', 'garden', 'pitch'], kind: 'closed' },
+    ],
   },
   {
     key: 'stairs',
@@ -97,6 +143,8 @@ export const MAP_CLASSES = Object.freeze([
     level: 2,
     symbolKey: 'stairs',
     source: 'Ungar 2005 (three bars); BANA 2022',
+    // A steps way: a stairs point at its middle and a walkway line.
+    osm: [{ tag: 'highway', values: ['steps'], kind: 'way' }],
   },
   {
     key: 'elevator-up',
@@ -121,6 +169,7 @@ export const MAP_CLASSES = Object.freeze([
     level: 2,
     symbolKey: 'entrance',
     source: 'ISO 19028: a half-circle for a way in and its direction',
+    osm: [{ tag: 'entrance', kind: 'node' }],
   },
   {
     key: 'landmark',
@@ -129,6 +178,11 @@ export const MAP_CLASSES = Object.freeze([
     level: 2,
     symbolKey: 'landmark-circle',
     source: 'BANA 2022 8.6.5; Jehoel 2009: 5.0 to 6.4 mm identifies a symbol',
+    // Shops and benches when their box is ticked; other amenities with a name.
+    osm: [
+      { tag: 'shop', kind: 'node' },
+      { tag: 'amenity', kind: 'node' },
+    ],
   },
   {
     key: 'you-are-here',
@@ -145,6 +199,19 @@ export const MAP_CLASSES = Object.freeze([
     level: 2,
     symbolKey: 'transit-stop',
     source: 'BANA 2022 8.5.4: a filled square with a notch',
+    osm: [
+      {
+        tag: 'public_transport',
+        values: ['platform', 'stop_position'],
+        kind: 'node',
+      },
+      { tag: 'highway', values: ['bus_stop'], kind: 'node' },
+      {
+        tag: 'railway',
+        values: ['tram_stop', 'station', 'halt'],
+        kind: 'node',
+      },
+    ],
   },
   {
     key: 'text',
