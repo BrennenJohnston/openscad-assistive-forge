@@ -210,6 +210,7 @@ export const EDITOR_STRINGS = Object.freeze({
     paint: 'Paint',
     remove: 'Remove',
     hand: 'Hand',
+    route: 'Walk this',
   }),
   /** The tool group's name and the key hint read to a screen reader. A11Y. */
   toolsLabel: 'Tools',
@@ -307,6 +308,23 @@ export const EDITOR_STRINGS = Object.freeze({
   /** Said as the plan leaves the editor. A11Y (two shapes). */
   mapApplied: (n, m) =>
     `Map plan updated: ${count(n, 'feature', 'features')}, ${m} ignored.`,
+  /** A draft's Class menu: its last entry switches the feature off. */
+  offOption: 'Off',
+  /** Said as a draft leaves the editor. A11Y. */
+  draftApplied: (on, off) =>
+    `Draft map updated: ${on} features on, ${off} off.`,
+  /** The route tool picked: how it works. A11Y. */
+  routeHelp:
+    'Click the sidewalks in the order you walk them. Each one joins the route.',
+  /** After a segment joins the route. A11Y. */
+  routeJoined: (n, m) => `${n} segments on the route, ${m} m long.`,
+  /** A segment that does not touch the route's end. A11Y. */
+  routeNoFit:
+    'That segment does not touch the route yet. Pick the one between them first.',
+  /** The button that empties the route. */
+  clearRoute: 'Clear route',
+  /** After Clear route. A11Y. */
+  routeCleared: 'Route cleared.',
   /** After Undo takes a class back. A11Y. */
   classReverted: (name, cls) => `Class of ${name} back to ${cls}.`,
   /** The command label, heard again on redo. */

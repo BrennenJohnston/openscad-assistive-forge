@@ -202,11 +202,7 @@ describe('the map purpose', () => {
     expect(surface.querySelector('.svg-prep-bulk-bar').hidden).toBe(true);
     expect(surface.querySelector('.drawing-editor-zoom').hidden).toBe(false);
     await vi.waitFor(() => expect(regionPaths()).toHaveLength(3));
-    expect(regionPaths().map((p) => p.dataset.region)).toEqual([
-      '0',
-      '1',
-      '2',
-    ]);
+    expect(regionPaths().map((p) => p.dataset.region)).toEqual(['0', '1', '2']);
     const svg = surface.querySelector('.drawing-editor-canvas-svg');
     expect(
       document.getElementById(svg.getAttribute('aria-labelledby')).textContent
@@ -239,7 +235,7 @@ describe('the map purpose', () => {
     expect(document.activeElement).toBe(selectOf(1));
   });
 
-  it('offers the Select and Hand tools and no paint tools; Hand pans the canvas, V comes back to Select', async () => {
+  it('offers the Select, Hand and Walk this tools and no paint tools; Hand pans the canvas, V comes back to Select', async () => {
     openMap();
     await vi.waitFor(() => expect(regionPaths()).toHaveLength(3));
     const tools = surface.querySelector('.drawing-editor-tools');
@@ -251,7 +247,7 @@ describe('the map purpose', () => {
     const shown = [...tools.querySelectorAll('.drawing-editor-tool')]
       .filter((b) => !b.hidden)
       .map((b) => b.dataset.tool);
-    expect(shown).toEqual(['select', 'hand']);
+    expect(shown).toEqual(['select', 'hand', 'route']);
     const svg = surface.querySelector('.drawing-editor-canvas-svg');
     expect(svg.dataset.tool).toBe('select');
     tools.querySelector('[data-tool="hand"]').click();
@@ -259,7 +255,9 @@ describe('the map purpose', () => {
     expect(
       tools.querySelector('[data-tool="hand"]').getAttribute('aria-pressed')
     ).toBe('true');
-    svg.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', bubbles: true }));
+    svg.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'v', bubbles: true })
+    );
     expect(svg.dataset.tool).toBe('select');
   });
 
@@ -383,5 +381,139 @@ describe('the map purpose', () => {
     }
     expect(applyButton().hidden).toBe(true);
     expect(editor.getMapClasses()).toBeNull();
+  });
+});
+
+describe('the route tool', () => {
+  /** Three line features at the three rows: 0 meets 1, 2 stands apart. */
+  const FEATURES = [
+    {
+      id: 'a',
+      class: 'walkway',
+      kind: 'line',
+      points: [
+        [0, 0],
+        [10, 0],
+      ],
+      on: true,
+    },
+    {
+      id: 'b',
+      class: 'walkway',
+      kind: 'line',
+      points: [
+        [20, 0],
+        [10, 0],
+      ],
+      on: false,
+    },
+    {
+      id: 'c',
+      class: 'walkway',
+      kind: 'line',
+      points: [
+        [40, 0],
+        [50, 0],
+      ],
+      on: false,
+    },
+  ];
+  const routeBtn = () =>
+    surface.querySelector('.drawing-editor-tool[data-tool="route"]');
+  const clearBtn = () => surface.querySelector('.drawing-editor-clear-route');
+  const svgEl = () => surface.querySelector('.drawing-editor-canvas-svg');
+  const key = (k) =>
+    svgEl().dispatchEvent(
+      new KeyboardEvent('keydown', { key: k, bubbles: true })
+    );
+  const undoButton = () =>
+    surface.querySelector('.drawing-editor-history [data-action="undo"]');
+  const regionPaths = () => [
+    ...surface.querySelectorAll(
+      '.drawing-editor-canvas-svg [data-layer="regions"] path'
+    ),
+  ];
+
+  async function openDraft() {
+    openMap({
+      draft: true,
+      initialClasses: { 0: 'walkway' },
+      features: FEATURES,
+      mmPerM: 0.5,
+    });
+    await vi.waitFor(() => expect(regionPaths()).toHaveLength(3));
+  }
+
+  it('offers Walk this and Clear route in the map purpose only, pressed when picked, with its help sentence', async () => {
+    await openDraft();
+    expect(routeBtn().hidden).toBe(false);
+    expect(clearBtn().hidden).toBe(false);
+    expect(routeBtn().textContent).toBe('Walk this');
+    expect(clearBtn().textContent).toBe('Clear route');
+    expect(routeBtn().getAttribute('aria-pressed')).toBe('false');
+    routeBtn().click();
+    expect(routeBtn().getAttribute('aria-pressed')).toBe('true');
+    expect(svgEl().dataset.tool).toBe('route');
+    expect(status()).toBe(
+      'Click the sidewalks in the order you walk them. Each one joins the route.'
+    );
+    key('v');
+    expect(routeBtn().getAttribute('aria-pressed')).toBe('false');
+    key('w');
+    expect(svgEl().dataset.tool).toBe('route');
+    editor.close();
+    editor.open(THREE, analyzeSvg(THREE), {
+      purpose: 'relief',
+      onApply: vi.fn(),
+      onKeepOriginal: vi.fn(),
+    });
+    expect(routeBtn().hidden).toBe(true);
+    expect(clearBtn().hidden).toBe(true);
+  });
+
+  it('picks two touching shapes onto the route, undoably, says the length, and refuses one that touches neither', async () => {
+    await openDraft();
+    routeBtn().click();
+    key('Home');
+    key('Enter');
+    expect(selectOf(0).value).toBe('route');
+    expect(status()).toBe('1 segments on the route, 20 m long.');
+    key('ArrowRight');
+    key('Enter');
+    expect(selectOf(1).value).toBe('route');
+    expect(status()).toBe('2 segments on the route, 40 m long.');
+    key('ArrowRight');
+    key('Enter');
+    expect(selectOf(2).value).toBe('ignore');
+    expect(status()).toBe(
+      'That segment does not touch the route yet. Pick the one between them first.'
+    );
+    expect(undoButton().disabled).toBe(false);
+    undoButton().click();
+    expect(selectOf(1).value).toBe('ignore');
+    expect(selectOf(0).value).toBe('route');
+  });
+
+  it('Clear route puts every picked shape back to its class and says so', async () => {
+    await openDraft();
+    routeBtn().click();
+    key('Home');
+    key('Enter');
+    key('ArrowRight');
+    key('Enter');
+    clearBtn().click();
+    expect(selectOf(0).value).toBe('walkway');
+    expect(selectOf(1).value).toBe('ignore');
+    expect(status()).toBe('Route cleared.');
+  });
+
+  it('only classes a shape of a plain drawing, which has no points', async () => {
+    openMap();
+    await vi.waitFor(() => expect(regionPaths()).toHaveLength(3));
+    routeBtn().click();
+    key('Home');
+    key('Enter');
+    expect(selectOf(0).value).toBe('route');
+    expect(status()).toBe('1 segments on the route, 0 m long.');
   });
 });

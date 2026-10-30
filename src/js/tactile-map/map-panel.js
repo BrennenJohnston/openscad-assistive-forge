@@ -57,7 +57,7 @@ import {
   plateLevelsSvg,
 } from './plate-tiling.js';
 import { loadSymbolLibraryFile, setLibrary } from './symbol-library.js';
-import { createAddressSection } from './address-section.js';
+import { ADDRESS_STRINGS, createAddressSection } from './address-section.js';
 import {
   archiveEntries,
   levelHeights,
@@ -206,6 +206,11 @@ export function getMapData() {
   return panel?.osm ?? null;
 }
 
+/** @returns {object|null} The panel's plan (for tests) */
+export function getMapPlan() {
+  return panel?.plan ?? null;
+}
+
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -236,6 +241,7 @@ class MapPanel {
     // The map data last pulled or loaded, for the draft: { elements, center,
     // radiusM, source, place, landmarks, bytes }.
     this.osm = null;
+    this.draft = null;
     this.address = null;
     // The drawing the door works on: the picture last seen in the file
     // control that was not a levels file of this panel's own, with the
@@ -274,6 +280,11 @@ class MapPanel {
       onData: (osm) => {
         this.osm = osm;
       },
+      onDraft: () => {
+        this.makeDraft().catch((err) => {
+          this.sayAddress(err?.message || String(err), true);
+        });
+      },
     });
     parametersContainer.parentNode.insertBefore(
       this.address.el,
@@ -289,6 +300,9 @@ class MapPanel {
       attributeFilter: ['data-ui-variant'],
     });
     this.syncAltView();
+    // The panel on its element, as the editor is on its surface, so a page
+    // test can read the plan without a global.
+    this.el.__forgeMapPanel = this;
     this.lastTape = this.tapeWidth();
     this.lastCue = this.northCue();
     this.unsubscribe = stateManager.subscribe(() => {
@@ -743,6 +757,82 @@ class MapPanel {
     });
     const elements = elementsFromText(text, file.name);
     return { elements, center: centerOf(elements) };
+  }
+
+  /**
+   * Make a draft map: the map data through the draft builder (a lazy chunk)
+   * into this panel's plan, said in one sentence, then the editor opens on
+   * it so the person chooses what stays. Nothing near the address is a
+   * sentence and no change.
+   */
+  async makeDraft() {
+    const osm = this.osm;
+    if (!osm) return;
+    const { draftPlan, NEAR_M } = await import('./plan-from-osm.js');
+    const { plan, counts } = draftPlan({
+      elements: osm.elements,
+      center: osm.center,
+      radiusM: osm.radiusM,
+      landmarks: osm.landmarks,
+      size: { w: this.plan.size.w, h: this.plan.size.h },
+      place: osm.place,
+    });
+    if (!plan.features.some((f) => f.class === 'walkway' && f.on)) {
+      this.sayAddress(ADDRESS_STRINGS.nothingNear(NEAR_M), true);
+      return;
+    }
+    const { warnings } = buildLevelRings(plan);
+    this.plan = plan;
+    this.draft = { counts, warnings: warnings.length };
+    this.planWarnings = [];
+    this.plate = 'whole';
+    this.schedule(0);
+    this.sayAddress(
+      warnings.length
+        ? ADDRESS_STRINGS.draftReady(counts.on, counts.total, warnings.length)
+        : ADDRESS_STRINGS.draftReadyClean(counts.on, counts.total)
+    );
+    await this.openDraft();
+  }
+
+  /**
+   * The draft in the editor's map purpose: one shape per feature at its
+   * index, the on ones with their class and the off ones as Off; Apply
+   * lays the rows back over the plan by index and the plates follow.
+   */
+  async openDraft() {
+    const editor = await this.getEditor();
+    if (!editor || typeof editor.open !== 'function') {
+      this.sayAddress('The drawing editor is not on this page.', true);
+      return;
+    }
+    const { drawingFromPlan, applyRowsToPlan } =
+      await import('./plan-drawing.js');
+    const { joinRoute } = await import('./route.js');
+    const { analyzeSvg } = await import('../svg-preparer.js');
+    const svg = drawingFromPlan(this.plan);
+    const initialClasses = Object.fromEntries(
+      this.plan.features.map((f, i) => [i, f.on ? f.class : 'ignore'])
+    );
+    const place =
+      this.plan.meta?.title || this.osm?.place?.name || 'the address';
+    editor.open(svg, analyzeSvg(svg), {
+      purpose: 'map',
+      draft: true,
+      sourceName: ADDRESS_STRINGS.draftName(place),
+      initialClasses,
+      features: this.plan.features,
+      mmPerM: this.plan.meta?.geo?.mmPerM ?? null,
+      onApply: (result) => {
+        const applied = applyRowsToPlan(this.plan, result?.regions || []);
+        // The route's segments that meet become one Route line.
+        this.plan = { ...applied, features: joinRoute(applied.features) };
+        this.plate = 'whole';
+        this.schedule(0);
+      },
+      onKeepOriginal: () => {},
+      onClose: () => {},
+    });
   }
 
   /** A sentence on the address section's status line, said once. */

@@ -42,6 +42,7 @@ import {
   isMapPanelActive,
   getMapPlace,
   getMapData,
+  getMapPlan,
 } from '../../src/js/tactile-map/map-panel.js';
 import { trimElement } from '../../src/js/tactile-map/osm-geometry.js';
 import { setParameterValue } from '../../src/js/ui-generator.js';
@@ -817,7 +818,7 @@ describe('the map data row', () => {
     );
     await vi.waitFor(() =>
       expect(addressStatus()).toBe(
-        '20 map features within 300 m: 10 walkways, 4 crossings, 3 buildings, 3 landmarks.'
+        '21 map features within 300 m: 11 walkways, 4 crossings, 3 buildings, 3 landmarks.'
       )
     );
     const call = pullArea.mock.calls[0][0];
@@ -828,7 +829,7 @@ describe('the map data row', () => {
     ]);
     expect(typeof call.onWait).toBe('function');
     const osm = getMapData();
-    expect(osm.elements).toHaveLength(20);
+    expect(osm.elements).toHaveLength(21);
     expect(osm.center).toEqual({ lat: PLACE.lat, lon: PLACE.lon });
     expect(osm.radiusM).toBe(300);
     expect(osm.source).toBe('overpass');
@@ -877,7 +878,7 @@ describe('the map data row', () => {
     getData().click();
     await vi.waitFor(() =>
       expect(addressStatus()).toBe(
-        '20 map features within 250 m: 10 walkways, 4 crossings, 3 buildings, 3 landmarks. 2.5 MB of map data arrived. A smaller radius makes a lighter map.'
+        '21 map features within 250 m: 11 walkways, 4 crossings, 3 buildings, 3 landmarks. 2.5 MB of map data arrived. A smaller radius makes a lighter map.'
       )
     );
   });
@@ -922,6 +923,139 @@ describe('the map data row', () => {
     expect(osm.center.lat).toBeCloseTo(47.6085, 4);
     expect(osm.center.lon).toBeCloseTo(-122.3355, 4);
     expect(osm.place).toBeNull();
+  });
+});
+
+describe('the draft map button', () => {
+  const PLACE = {
+    name: 'Central Library, 1000, 4th Avenue, Seattle, Washington, United States',
+    lat: 47.6067,
+    lon: -122.3327,
+    kind: 'library',
+  };
+  const OVERPASS = JSON.parse(
+    readFileSync('tests/fixtures/tactile-map/overpass-20.json', 'utf8')
+  );
+  const trimmed = () => OVERPASS.elements.map(trimElement).filter(Boolean);
+  const draftBtn = () => document.getElementById('tactileMapDraft');
+  const addressStatus = () =>
+    document.getElementById('tactileMapAddressStatus').textContent;
+
+  let opened;
+  const editor = {
+    open: vi.fn((svg, analysis, options) => {
+      opened = { svg, analysis, options };
+    }),
+  };
+
+  async function pullData(elements = trimmed()) {
+    opened = null;
+    mount({
+      searchPlaces: vi.fn(async () => [PLACE]),
+      pullArea: vi.fn(async () => ({ elements, bytes: 5363, ms: 1 })),
+      getEditor: async () => editor,
+    });
+    const input = document.getElementById('tactileMapAddress');
+    input.value = 'Central Library';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('tactileMapSearch').click();
+    await vi.waitFor(() =>
+      expect(
+        document.querySelectorAll('#tactileMapResults input[type="radio"]')
+      ).toHaveLength(1)
+    );
+    document.querySelector('#tactileMapResults input[type="radio"]').click();
+    document.getElementById('tactileMapGetData').click();
+    await vi.waitFor(() => expect(getMapData()).not.toBeNull());
+  }
+
+  it('stands after the file door, disabled until map data exists', () => {
+    mount();
+    expect(draftBtn().textContent).toBe('Make a draft map');
+    expect(draftBtn().disabled).toBe(true);
+    const order = [
+      ...document.querySelectorAll('#tactileMapAddressSection > *'),
+    ].map((n) => n.id);
+    expect(order.indexOf('tactileMapFileHelp')).toBeLessThan(
+      order.indexOf(draftBtn().parentNode.id || 'tactileMapDraftRow')
+    );
+  });
+
+  it('drafts the plan from the data, says how much is on, and opens the editor as a draft', async () => {
+    await pullData();
+    expect(draftBtn().disabled).toBe(false);
+    draftBtn().click();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    expect(addressStatus()).toMatch(
+      /^Draft map ready: \d+ of 20 features on; (\d+ warnings|no warnings)\. Open the drawing editor to choose what stays\.$/
+    );
+    expect(announce).toHaveBeenCalledWith(addressStatus(), {
+      source: 'tactile-map',
+    });
+    expect(opened.options.purpose).toBe('map');
+    expect(opened.options.draft).toBe(true);
+    expect(opened.options.sourceName).toBe('Draft map of Central Library');
+    expect(opened.svg).toContain('data-feature="you-are-here"');
+    expect(opened.analysis.elements).toHaveLength(20);
+    const classes = opened.options.initialClasses;
+    expect(Object.keys(classes)).toHaveLength(20);
+    const plan = getMapPlan();
+    plan.features.forEach((f, i) => {
+      expect(classes[i]).toBe(f.on ? f.class : 'ignore');
+    });
+    expect(classes[19]).toBe('you-are-here');
+    expect(opened.options.features).toBe(plan.features);
+    expect(plan.meta.title).toBe('Central Library');
+  });
+
+  it('takes the rows back by index: a feature off keeps its class, one on takes the class, and the plan is rebuilt', async () => {
+    await pullData();
+    draftBtn().click();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    const before = JSON.parse(JSON.stringify(getMapPlan()));
+    const filesBefore = files.length;
+    const regions = before.features.map((f, index) => ({
+      index,
+      class: f.on ? f.class : 'ignore',
+    }));
+    const onIndex = before.features.findIndex((f) => f.on && f.kind === 'line');
+    const offIndex = before.features.findIndex(
+      (f) => !f.on && f.kind === 'area'
+    );
+    regions[onIndex].class = 'ignore';
+    regions[offIndex].class = 'area';
+    opened.options.onApply({ regions, svg: opened.svg });
+    const after = getMapPlan();
+    expect(after.features[onIndex].on).toBe(false);
+    expect(after.features[onIndex].class).toBe(before.features[onIndex].class);
+    expect(after.features[offIndex].on).toBe(true);
+    expect(after.features[offIndex].class).toBe('area');
+    after.features.forEach((f, i) => {
+      expect(f.points ?? f.ring ?? f.at).toEqual(
+        before.features[i].points ??
+          before.features[i].ring ??
+          before.features[i].at
+      );
+    });
+    await vi.waitFor(
+      () => expect(files.length).toBeGreaterThan(filesBefore),
+      SETTLE
+    );
+  });
+
+  it('says there is nothing near when no sidewalk lies within reach', async () => {
+    const far = trimmed().filter((e) => e.type === 'way' && e.tags.building);
+    await pullData(far);
+    draftBtn().click();
+    await vi.waitFor(() =>
+      expect(addressStatus()).toBe(
+        'No sidewalks within 30 m of the address. Try a larger radius or another address.'
+      )
+    );
+    expect(announceError).toHaveBeenCalledWith(addressStatus(), {
+      source: 'tactile-map',
+    });
+    expect(opened).toBeNull();
   });
 });
 

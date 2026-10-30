@@ -61,6 +61,7 @@ import { readDrawingBox } from '../image-crop.js';
 import { createCommandStack } from './undo.js';
 import { createRegionCanvas, TOOLS } from './canvas.js';
 import { MAP_CLASSES } from '../tactile-map/map-classes.js';
+import { fitsRoute, routeLengthM } from '../tactile-map/route.js';
 
 /** The color engine, loaded once, on the first stencil open. */
 let enginePromise = null;
@@ -191,6 +192,15 @@ export function createDrawingEditor({
     toolsGroup.appendChild(el);
   }
 
+  // The map purpose's route: Walk this is a tool (above); Clear route empties
+  // what it picked.
+  const clearRouteBtn = button(
+    S.clearRoute,
+    'btn btn-secondary drawing-editor-clear-route',
+    'clear-route'
+  );
+  clearRouteBtn.hidden = true;
+
   const paintSelect = document.createElement('select');
   paintSelect.className = 'drawing-editor-paint-select';
   paintSelect.setAttribute('aria-label', S.paintColourLabel);
@@ -254,7 +264,7 @@ export function createDrawingEditor({
   // row. At a 1280 px window the toolbar's real width is 692 px (the editor
   // shares the window with the customizer) and the groups sum to 1,705 px, so
   // two rows cannot hold them: three named rows, none of which wraps.
-  stencilTools.append(toolsGroup, paintGroup);
+  stencilTools.append(toolsGroup, clearRouteBtn, paintGroup);
   stencilTools.hidden = true;
   viewGroup.hidden = true;
   zoomGroup.hidden = true;
@@ -793,7 +803,8 @@ export function createDrawingEditor({
       // Enter or a double click goes to its row's Class menu.
       onClick: (key, shift) => {
         if (purpose === 'map') {
-          focusMapRow(key);
+          if (canvas.getTool() === 'route') routePick(key);
+          else focusMapRow(key);
           return;
         }
         if (shift) toggleSelected(key);
@@ -823,7 +834,8 @@ export function createDrawingEditor({
         purpose === 'map' ? describeMapHighlight(key) : describeHighlight(key),
       onToggle: (key) => {
         if (purpose === 'map') {
-          focusMapRow(key);
+          if (canvas.getTool() === 'route') routePick(key);
+          else focusMapRow(key);
           return;
         }
         toggleSelected(key);
@@ -860,6 +872,14 @@ export function createDrawingEditor({
   // one that survives a delete), and the elements the drawing was read into.
   const mapClasses = new Map();
   let mapElements = [];
+  // A draft (a plan from OpenStreetMap): the Class menu's last entry reads
+  // Off and Apply says how many features are on.
+  let isDraft = false;
+  // The route under the Walk this tool: the shapes picked, in walking order,
+  // with their points (from the host's features), and the class each had
+  // before, for Clear route.
+  let route = [];
+  const routePrev = new Map();
   /** 'drawing' or 'charm'. Back to the drawing on every open. */
   let view = 'drawing';
   /** Whether the drawer was open when the charm view closed it. */
@@ -1080,6 +1100,7 @@ export function createDrawingEditor({
       openedSentence,
       initialPlan: savedPlan,
       initialClasses: savedClasses = null,
+      draft = false,
       startInCropView = false,
       pictureHref = null,
       pictureBox = null,
@@ -1094,6 +1115,7 @@ export function createDrawingEditor({
           ? 'map'
           : 'relief';
     root.dataset.purpose = purpose;
+    isDraft = purpose === 'map' && draft === true;
     // Every open starts on the drawing. A re-trace calls open() on an
     // editor that is already up, and coming back to a charm view of a drawing
     // that has just changed underneath it would be showing the old charm.
@@ -1156,6 +1178,8 @@ export function createDrawingEditor({
       if (purpose === 'map') {
         mapElements = analysis?.elements || [];
         mapClasses.clear();
+        route = [];
+        routePrev.clear();
         seedClasses(savedClasses);
         ensureClassSelects();
         setCount('regions', mapElements.length);
@@ -1344,8 +1368,11 @@ export function createDrawingEditor({
     stencilTools.hidden = !(stencil || map);
     paintGroup.hidden = map;
     for (const [id, el] of toolButtons) {
-      el.hidden = map && id !== 'select' && id !== 'hand';
+      el.hidden = map
+        ? id !== 'select' && id !== 'hand' && id !== 'route'
+        : id === 'route';
     }
+    clearRouteBtn.hidden = !map;
     viewGroup.hidden = !stencil;
     // The region canvas is the picture of the two purposes that work on
     // shapes one by one: the stencil paints them, the map classes them.
@@ -1968,7 +1995,9 @@ export function createDrawingEditor({
   }
 
   const className = (key) =>
-    MAP_CLASSES.find((c) => c.key === key)?.name || key;
+    isDraft && key === 'ignore'
+      ? S.offOption
+      : MAP_CLASSES.find((c) => c.key === key)?.name || key;
 
   /** A saved set of classes, by original index, laid back over the shapes. */
   function seedClasses(saved) {
@@ -2003,7 +2032,7 @@ export function createDrawingEditor({
         for (const c of MAP_CLASSES) {
           const opt = document.createElement('option');
           opt.value = c.key;
-          opt.textContent = c.name;
+          opt.textContent = className(c.key);
           select.appendChild(opt);
         }
         select.addEventListener('change', () => {
@@ -2179,6 +2208,63 @@ export function createDrawingEditor({
   }
 
   /**
+   * A shape picked with the route tool: it joins the route when one of its
+   * ends lies at the route's end (the host's feature points decide; a plain
+   * drawing's shapes have none and only take the class), its row goes to
+   * Route through the undoable class change, and the status says how long
+   * the route is.
+   */
+  function routePick(key) {
+    const orig = Number(key);
+    if (route.some((r) => r.orig === orig)) {
+      say(S.routeNoFit);
+      return;
+    }
+    const feature = callbacks.features?.[orig];
+    const points = Array.isArray(feature?.points) ? feature.points : null;
+    if (feature && !points) {
+      // A draft's area or symbol is not a segment to walk.
+      say(S.routeNoFit);
+      return;
+    }
+    let fitted = [];
+    if (points) {
+      fitted = fitsRoute(
+        route.map((r) => r.points),
+        points
+      );
+      if (!fitted) {
+        say(S.routeNoFit);
+        return;
+      }
+    }
+    if (!routePrev.has(orig))
+      routePrev.set(orig, mapClasses.get(orig) || 'ignore');
+    setClass(orig, 'route');
+    route.push({ orig, points: fitted });
+    const meters = Math.round(
+      routeLengthM(
+        route.map((r) => r.points),
+        Number(callbacks.mmPerM) || 0
+      )
+    );
+    say(S.routeJoined(route.length, meters));
+  }
+
+  /** Every route row back to the class it had; each step one Undo can take back. */
+  function clearRoute() {
+    for (const [orig, before] of routePrev) setClass(orig, before);
+    route = [];
+    routePrev.clear();
+    say(S.routeCleared);
+  }
+
+  /** The sentence for a tool picked: the route tool says how it works. */
+  function sayTool(id) {
+    say(id === 'route' ? S.routeHelp : S.toolChosen(S.tools[id]));
+  }
+
+  /**
    * Hand the host every surviving shape with its class and its rings, in
    * the drawing's own units, and say what the plan holds as the editor goes.
    */
@@ -2198,7 +2284,9 @@ export function createDrawingEditor({
       };
     });
     const n = regions.filter((r) => r.class !== 'ignore').length;
-    const sentence = S.mapApplied(n, regions.length - n);
+    const sentence = isDraft
+      ? S.draftApplied(n, regions.length - n)
+      : S.mapApplied(n, regions.length - n);
     status.textContent = sentence;
     finish('onApply', { regions, svg: currentSvg });
     // Said by the host's announcer under a source of its own, after the
@@ -2591,9 +2679,10 @@ export function createDrawingEditor({
   for (const [id, el] of toolButtons) {
     el.addEventListener('click', () => {
       setTool(id);
-      say(S.toolChosen(S.tools[id]));
+      sayTool(id);
     });
   }
+  clearRouteBtn.addEventListener('click', () => clearRoute());
   paintSelectionBtn.addEventListener('click', () => {
     if (selected.size === 0) {
       say(S.nothingSelected);
@@ -2692,12 +2781,14 @@ export function createDrawingEditor({
           else canvas.fit();
           return;
         }
-        const tool = { v: 'select', h: 'hand' }[event.key.toLowerCase()];
+        const tool = { v: 'select', h: 'hand', w: 'route' }[
+          event.key.toLowerCase()
+        ];
         if (tool) {
           event.preventDefault();
           event.stopPropagation();
           setTool(tool);
-          say(S.toolChosen(S.tools[tool]));
+          sayTool(tool);
           return;
         }
       }
@@ -2778,7 +2869,7 @@ export function createDrawingEditor({
       event.preventDefault();
       event.stopPropagation();
       setTool(tool.id);
-      say(S.toolChosen(S.tools[tool.id]));
+      sayTool(tool.id);
     }
   });
 
