@@ -198,6 +198,11 @@ export function getMapPlace() {
   return panel?.place ?? null;
 }
 
+/** @returns {object|null} The map data last pulled or loaded (for tests) */
+export function getMapData() {
+  return panel?.osm ?? null;
+}
+
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -223,7 +228,11 @@ class MapPanel {
     // The address section: its geocoder (a test's stub, else the lazy
     // chunk loaded on the first press) and the place last picked.
     this.searchPlaces = options.searchPlaces || null;
+    this.pullArea = options.pullArea || null;
     this.place = null;
+    // The map data last pulled or loaded, for the draft: { elements, center,
+    // radiusM, source, place, landmarks, bytes }.
+    this.osm = null;
     this.address = null;
     // The drawing the door works on: the picture last seen in the file
     // control that was not a levels file of this panel's own, with the
@@ -253,9 +262,14 @@ class MapPanel {
     // The address section stands first: a map begins with where it is.
     this.address = createAddressSection({
       searchPlaces: (query) => this.geocode(query),
+      pullArea: (where) => this.pull(where),
+      readOsmFile: (file) => this.readOsmFile(file),
       say: (text, failed) => this.sayAddress(text, failed),
       onPlace: (place) => {
         this.place = place;
+      },
+      onData: (osm) => {
+        this.osm = osm;
       },
     });
     parametersContainer.parentNode.insertBefore(
@@ -691,6 +705,32 @@ class MapPanel {
       this.searchPlaces = searchPlaces;
     }
     return this.searchPlaces(query);
+  }
+
+  /** The Overpass pull: a stub when a test handed one in, else the lazy chunk. */
+  async pull(where) {
+    if (!this.pullArea) {
+      const { pullArea } = await import('./overpass.js');
+      this.pullArea = pullArea;
+    }
+    return this.pullArea(where);
+  }
+
+  /**
+   * A dropped export read on the device: its elements and the middle of
+   * them. The reader module is a lazy chunk too.
+   */
+  async readOsmFile(file) {
+    const { elementsFromText, centerOf } = await import('./osm-file.js');
+    const text = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () =>
+        reject(reader.error || new Error(`${file.name} could not be read.`));
+      reader.readAsText(file);
+    });
+    const elements = elementsFromText(text, file.name);
+    return { elements, center: centerOf(elements) };
   }
 
   /** A sentence on the address section's status line, said once. */

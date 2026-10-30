@@ -226,3 +226,117 @@ test.describe('Tactile Map tile', () => {
     ).toEqual([]);
   });
 });
+
+test.describe('the map data row', () => {
+  const OVERPASS = readFileSync(
+    'tests/fixtures/tactile-map/overpass-20.json',
+    'utf8'
+  );
+  const OSM = readFileSync('tests/fixtures/tactile-map/export.osm');
+  const PLACE = {
+    place_id: 1,
+    lat: '47.6067142',
+    lon: '-122.3326983',
+    type: 'library',
+    importance: 0.5,
+    display_name:
+      'The Seattle Public Library - Central Library, 1000, 4th Avenue, Seattle, King County, Washington, 98104, United States',
+  };
+
+  test('shows the radius and the landmarks at the floor, pulls through a routed Overpass answer, and the file door takes an export', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    let pulled = null;
+    await page.route('https://nominatim.openstreetmap.org/search*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify([PLACE]),
+      })
+    );
+    await page.route('https://overpass-api.de/api/interpreter', (route) => {
+      pulled = route.request().postData();
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: OVERPASS,
+      });
+    });
+    await openTactileMap(page);
+
+    const radius = page.locator('#tactileMapRadius');
+    await expect(radius).toHaveAttribute('min', '100');
+    await expect(radius).toHaveAttribute('max', '600');
+    await expect(radius).toHaveAttribute('step', '10');
+    await expect(radius).toHaveValue('250');
+    const boxes = page.locator('#tactileMapLandmarks input[type="checkbox"]');
+    await expect(boxes).toHaveCount(6);
+    await expect(page.locator('#tactileMapLandmark-entrances')).toBeChecked();
+    await expect(page.locator('#tactileMapLandmark-transit')).toBeChecked();
+    await expect(page.locator('#tactileMapLandmark-shops')).not.toBeChecked();
+    const getData = page.locator('#tactileMapGetData');
+    await expect(getData).toBeDisabled();
+
+    // The floor for this pointer: 44 px on touch, the desktop density on a mouse.
+    const floor = await page.evaluate(() =>
+      parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue(
+          '--size-touch-target'
+        )
+      )
+    );
+    expect((await radius.boundingBox()).height).toBeGreaterThanOrEqual(floor);
+    for (const row of await page
+      .locator('#tactileMapLandmarks .braille-panel-toggle-row')
+      .all()) {
+      expect((await row.boundingBox()).height).toBeGreaterThanOrEqual(floor);
+    }
+    expect((await getData.boundingBox()).height).toBeGreaterThanOrEqual(floor);
+    expect(
+      (await page.locator('#tactileMapLoadFile').boundingBox()).height
+    ).toBeGreaterThanOrEqual(floor);
+
+    const link = page.locator('#tactileMapAttribution a');
+    await expect(link).toHaveAttribute(
+      'href',
+      'https://www.openstreetmap.org/copyright'
+    );
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(page.locator('#tactileMapAttribution')).toContainText(
+      'Map data from OpenStreetMap contributors'
+    );
+
+    await page.locator('#tactileMapAddress').fill('1000 4th Ave, Seattle');
+    await page.locator('#tactileMapSearch').click();
+    await page.locator('#tactileMapPlace1').check();
+    await expect(getData).toBeEnabled();
+    await getData.click();
+    const status = page.locator('#tactileMapAddressStatus');
+    await expect(status).toHaveText(
+      '20 map features within 250 m: 10 walkways, 4 crossings, 3 buildings, 3 landmarks.',
+      { timeout: 15000 }
+    );
+    expect(pulled).toContain('around%3A250%2C47.6067142%2C-122.3326983');
+
+    await page.setInputFiles('#tactileMapOsmFile', {
+      name: 'export.osm',
+      mimeType: 'text/xml',
+      buffer: OSM,
+    });
+    await expect(status).toHaveText('export.osm: 5 map features loaded.', {
+      timeout: 15000,
+    });
+
+    const results = await new AxeBuilder({ page }).analyze();
+    const violations = results.violations.filter(
+      (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)
+    );
+    expect(
+      violations,
+      violations.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`).join('\n')
+    ).toEqual([]);
+  });
+});
