@@ -860,6 +860,9 @@ export function createDrawingEditor({
   // one that survives a delete), and the elements the drawing was read into.
   const mapClasses = new Map();
   let mapElements = [];
+  // A draft (a plan from OpenStreetMap): the Class menu's last entry reads
+  // Off and Apply says how many features are on.
+  let isDraft = false;
   /** 'drawing' or 'charm'. Back to the drawing on every open. */
   let view = 'drawing';
   /** Whether the drawer was open when the charm view closed it. */
@@ -1080,6 +1083,7 @@ export function createDrawingEditor({
       openedSentence,
       initialPlan: savedPlan,
       initialClasses: savedClasses = null,
+      draft = false,
       startInCropView = false,
       pictureHref = null,
       pictureBox = null,
@@ -1094,6 +1098,7 @@ export function createDrawingEditor({
           ? 'map'
           : 'relief';
     root.dataset.purpose = purpose;
+    isDraft = purpose === 'map' && draft === true;
     // Every open starts on the drawing. A re-trace calls open() on an
     // editor that is already up, and coming back to a charm view of a drawing
     // that has just changed underneath it would be showing the old charm.
@@ -1968,7 +1973,9 @@ export function createDrawingEditor({
   }
 
   const className = (key) =>
-    MAP_CLASSES.find((c) => c.key === key)?.name || key;
+    isDraft && key === 'ignore'
+      ? S.offOption
+      : MAP_CLASSES.find((c) => c.key === key)?.name || key;
 
   /** A saved set of classes, by original index, laid back over the shapes. */
   function seedClasses(saved) {
@@ -2003,7 +2010,7 @@ export function createDrawingEditor({
         for (const c of MAP_CLASSES) {
           const opt = document.createElement('option');
           opt.value = c.key;
-          opt.textContent = c.name;
+          opt.textContent = className(c.key);
           select.appendChild(opt);
         }
         select.addEventListener('change', () => {
@@ -2198,7 +2205,9 @@ export function createDrawingEditor({
       };
     });
     const n = regions.filter((r) => r.class !== 'ignore').length;
-    const sentence = S.mapApplied(n, regions.length - n);
+    const sentence = isDraft
+      ? S.draftApplied(n, regions.length - n)
+      : S.mapApplied(n, regions.length - n);
     status.textContent = sentence;
     finish('onApply', { regions, svg: currentSvg });
     // Said by the host's announcer under a source of its own, after the

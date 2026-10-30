@@ -88,7 +88,7 @@ export const BUILTIN_SYMBOLS = {
  * Symbols as a map by key, whether they came as a map or as the library's
  * array of { key, ... }.
  */
-function symbolMap(symbols) {
+export function symbolMap(symbols) {
   if (Array.isArray(symbols)) {
     const map = {};
     for (const s of symbols) if (s && s.key) map[s.key] = s;
@@ -366,7 +366,7 @@ function doubleLine(pairs, width, gap) {
 }
 
 /** A symbol's ring at a size, centered on a point. */
-function symbolRings(shape, size, at) {
+export function symbolRings(shape, size, at) {
   const [cx, cy] = at;
   return shapeRings(shape).map((ring) =>
     ring.map((p) => pt(cx - size / 2 + p.x * size, cy - size / 2 + p.y * size))

@@ -75,6 +75,18 @@ export const ADDRESS_STRINGS = Object.freeze({
   /** A11Y: the pull's size warning. */
   big: (mb) =>
     `${mb} MB of map data arrived. A smaller radius makes a lighter map.`,
+  draft: 'Make a draft map',
+  /** A11Y: the status line after a draft, with warnings. */
+  draftReady: (on, total, w) =>
+    `Draft map ready: ${on} of ${total} features on; ${w} warnings. Open the drawing editor to choose what stays.`,
+  /** A11Y: the same, no warnings. */
+  draftReadyClean: (on, total) =>
+    `Draft map ready: ${on} of ${total} features on; no warnings. Open the drawing editor to choose what stays.`,
+  /** A11Y: nothing near the address. */
+  nothingNear: (d) =>
+    `No sidewalks within ${d} m of the address. Try a larger radius or another address.`,
+  /** The draft's name in the editor's header. */
+  draftName: (place) => `Draft map of ${place}`,
 });
 
 export const ATTRIBUTION_URL = 'https://www.openstreetmap.org/copyright';
@@ -147,6 +159,7 @@ function el(tag, className, text) {
  * @param {(text: string, failed?: boolean) => void} args.say - writes the status line and announces once
  * @param {(place: object) => void} [args.onPlace]
  * @param {(osm: object) => void} [args.onData]
+ * @param {() => void} [args.onDraft] - Make a draft map pressed (enabled once data exists)
  * @returns {{ el: HTMLElement, refs: object, getPlace: () => object|null, getData: () => object|null, destroy: () => void }}
  */
 export function createAddressSection({
@@ -156,6 +169,7 @@ export function createAddressSection({
   say,
   onPlace,
   onData,
+  onDraft,
 }) {
   const S = ADDRESS_STRINGS;
   const section = el(
@@ -279,6 +293,15 @@ export function createAddressSection({
   fileHelp.id = 'tactileMapFileHelp';
   section.appendChild(fileHelp);
 
+  const draftRow = el('div', 'braille-translate-row tactile-map-draft-row');
+  draftRow.id = 'tactileMapDraftRow';
+  const draft = el('button', 'btn btn-primary braille-translate-btn', S.draft);
+  draft.type = 'button';
+  draft.id = 'tactileMapDraft';
+  draft.disabled = true;
+  draftRow.appendChild(draft);
+  section.appendChild(draftRow);
+
   const attribution = el(
     'p',
     'braille-panel-help tactile-map-attribution',
@@ -384,6 +407,7 @@ export function createAddressSection({
 
   function keep(data) {
     osm = data;
+    draft.disabled = !osm;
     onData?.(osm);
   }
 
@@ -463,6 +487,9 @@ export function createAddressSection({
   getData.addEventListener('click', () => {
     pull();
   });
+  draft.addEventListener('click', () => {
+    if (osm) onDraft?.();
+  });
   loadFile.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', () => {
     const chosen = fileInput.files && fileInput.files[0];
@@ -480,6 +507,7 @@ export function createAddressSection({
       getData,
       loadFile,
       fileInput,
+      draft,
       attribution,
       status,
     },
