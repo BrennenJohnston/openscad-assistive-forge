@@ -354,6 +354,132 @@ test.describe('the map data row', () => {
   });
 });
 
+test.describe('the draft map', () => {
+  const OVERPASS = readFileSync(
+    'tests/fixtures/tactile-map/overpass-20.json',
+    'utf8'
+  );
+  const PLACE = {
+    place_id: 1,
+    lat: '47.6067',
+    lon: '-122.3327',
+    type: 'library',
+    importance: 0.5,
+    display_name:
+      'The Seattle Public Library - Central Library, 1000, 4th Avenue, Seattle, King County, Washington, 98104, United States',
+  };
+
+  test('opens in the editor as a draft, one row switched Off, Apply updates the plan', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await page.route('https://nominatim.openstreetmap.org/search*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify([PLACE]),
+      })
+    );
+    await page.route('https://overpass-api.de/api/interpreter', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: OVERPASS,
+      })
+    );
+    await openTactileMap(page);
+    const draft = page.locator('#tactileMapDraft');
+    await expect(draft).toHaveText('Make a draft map');
+    await expect(draft).toBeDisabled();
+
+    await page.locator('#tactileMapAddress').fill('1000 4th Ave, Seattle');
+    await page.locator('#tactileMapSearch').click();
+    await page.locator('#tactileMapPlace1').check();
+    await page.locator('#tactileMapGetData').click();
+    const status = page.locator('#tactileMapAddressStatus');
+    await expect(status).toContainText('20 map features within 250 m', {
+      timeout: 15000,
+    });
+    await expect(draft).toBeEnabled();
+    await draft.click();
+    await expect(status).toContainText('Draft map ready: ', { timeout: 15000 });
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor').first()
+    ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });
+    const selects = page.locator(
+      '#drawingEditorSurface .drawing-editor-class-select'
+    );
+    await expect(selects).toHaveCount(19);
+    // The last entry of a draft's Class menu reads Off, not Ignore.
+    await expect(selects.first().locator('option').last()).toHaveText('Off');
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor-canvas')
+    ).toBeVisible();
+    await expect(page.locator('#tactileMapSummary')).toContainText('plates', {
+      timeout: 10000,
+    });
+    // The levels file the draft wrote; Apply must write another.
+    const levelsBefore = await page.evaluate(
+      () => window.stateManager?.getState()?.parameters?.map_file?.data
+    );
+    expect(levelsBefore).toContain('data:');
+
+    // The first on walkway goes Off; the first building comes on as an area.
+    const onIndex = await selects.evaluateAll((list) =>
+      list.findIndex((s) => s.value === 'walkway')
+    );
+    const offIndex = await selects.evaluateAll((list) =>
+      list.findIndex((s) => s.value === 'ignore')
+    );
+    expect(onIndex).toBeGreaterThanOrEqual(0);
+    expect(offIndex).toBeGreaterThanOrEqual(0);
+    await selects.nth(onIndex).selectOption('ignore');
+    await selects.nth(offIndex).selectOption('area');
+    // What the polite announcer says from here on (the editor spec's listener).
+    await page.evaluate(() => {
+      window.__heard = [];
+      const node = document.getElementById('srAnnouncer');
+      if (!node) return;
+      new MutationObserver(() => {
+        const t = node.textContent.trim();
+        if (t) window.__heard.push(t);
+      }).observe(node, { childList: true, characterData: true, subtree: true });
+    });
+    await page.locator('#drawingEditorSurface .drawing-editor-apply').click();
+    await expect(page.locator('#drawingEditorSurface')).toBeHidden();
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => window.stateManager?.getState()?.parameters?.map_file?.data
+          ),
+        { timeout: 30000 }
+      )
+      .not.toBe(levelsBefore);
+    expect(
+      await page.evaluate(
+        () => window.stateManager?.getState()?.parameters?.map_file?.name
+      )
+    ).toBe('levels_whole.svg');
+    await expect
+      .poll(() => page.evaluate(() => (window.__heard || []).join(' | ')), {
+        timeout: 15000,
+      })
+      .toMatch(/Draft map updated: \d+ features on, \d+ off\./);
+
+    const results = await new AxeBuilder({ page }).analyze();
+    const violations = results.violations.filter(
+      (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)
+    );
+    expect(
+      violations,
+      violations.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`).join('\n')
+    ).toEqual([]);
+  });
+});
+
 // The Tactile Map Designer is not part of the Alt View: with the Alt View
 // on, its panel hides and says so once, and its card leaves the welcome
 // screen; off again, the panel returns.
