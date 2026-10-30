@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import JSZip from 'jszip';
+import { PNG } from 'pngjs';
 import { parseSTL } from '../../scripts/parity/stl-stats.mjs';
 import { skipWithoutWebGL } from './helpers/webgl.js';
 
@@ -469,6 +470,144 @@ test.describe('the draft map', () => {
         timeout: 15000,
       })
       .toMatch(/Draft map updated: \d+ features on, \d+ off\./);
+
+    const results = await new AxeBuilder({ page }).analyze();
+    const violations = results.violations.filter(
+      (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)
+    );
+    expect(
+      violations,
+      violations.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`).join('\n')
+    ).toEqual([]);
+  });
+});
+
+test.describe('steep sidewalks', () => {
+  const OVERPASS = readFileSync(
+    'tests/fixtures/tactile-map/overpass-20.json',
+    'utf8'
+  );
+  const PLACE = {
+    place_id: 1,
+    lat: '47.6067',
+    lon: '-122.3327',
+    type: 'library',
+    importance: 0.5,
+    display_name:
+      'The Seattle Public Library - Central Library, 1000, 4th Avenue, Seattle, King County, Washington, 98104, United States',
+  };
+
+  /** A Terrarium tile of a plane rising 1 m per pixel to the east (about 30 %). */
+  function planeTile() {
+    const png = new PNG({ width: 256, height: 256 });
+    for (let y = 0; y < 256; y += 1) {
+      for (let x = 0; x < 256; x += 1) {
+        const v = 100 + x + 32768;
+        const whole = Math.floor(v);
+        const i = (y * 256 + x) * 4;
+        png.data[i] = Math.floor(whole / 256);
+        png.data[i + 1] = whole % 256;
+        png.data[i + 2] = Math.round((v - whole) * 256);
+        png.data[i + 3] = 255;
+      }
+    }
+    return PNG.sync.write(png);
+  }
+
+  test('the switch and the grade at the floor; on, a routed tile marks steep runs into the levels file', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const tile = planeTile();
+    let tilesAsked = 0;
+    await page.route('https://nominatim.openstreetmap.org/search*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify([PLACE]),
+      })
+    );
+    await page.route('https://overpass-api.de/api/interpreter', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: OVERPASS,
+      })
+    );
+    await page.route(
+      'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/**',
+      (route) => {
+        tilesAsked += 1;
+        return route.fulfill({
+          status: 200,
+          contentType: 'image/png',
+          headers: { 'access-control-allow-origin': '*' },
+          body: tile,
+        });
+      }
+    );
+    await openTactileMap(page);
+    const steep = page.locator('#tactileMapSteep');
+    const grade = page.locator('#tactileMapGrade');
+    await expect(steep).toBeDisabled();
+    await expect(grade).toHaveValue('5');
+    await expect(grade).toHaveAttribute('min', '3');
+    await expect(grade).toHaveAttribute('max', '12');
+    const floor = await page.evaluate(() =>
+      parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue(
+          '--size-touch-target'
+        )
+      )
+    );
+    expect(
+      (await page.locator('.tactile-map-steep-row').boundingBox()).height
+    ).toBeGreaterThanOrEqual(floor);
+    expect((await grade.boundingBox()).height).toBeGreaterThanOrEqual(floor);
+
+    await page.locator('#tactileMapAddress').fill('1000 4th Ave, Seattle');
+    await page.locator('#tactileMapSearch').click();
+    await page.locator('#tactileMapPlace1').check();
+    await page.locator('#tactileMapGetData').click();
+    const status = page.locator('#tactileMapAddressStatus');
+    await expect(status).toContainText('map features within 250 m', {
+      timeout: 15000,
+    });
+    await page.locator('#tactileMapDraft').click();
+    await expect(status).toContainText('Draft map ready', { timeout: 15000 });
+    await page.locator('#drawingEditorSurface .drawing-editor-close').click();
+    await expect(page.locator('#drawingEditorSurface')).toBeHidden();
+    const levelsBefore = await page.evaluate(
+      () => window.stateManager?.getState()?.parameters?.map_file?.data
+    );
+    await expect(steep).toBeEnabled();
+    await steep.check();
+    await expect(status).toHaveText(
+      /^\d+ steep segments marked, steeper than 5 %\.$/,
+      {
+        timeout: 30000,
+      }
+    );
+    expect(tilesAsked).toBeGreaterThan(0);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => window.stateManager?.getState()?.parameters?.map_file?.data
+          ),
+        { timeout: 30000 }
+      )
+      .not.toBe(levelsBefore);
+    const steepCount = await page.evaluate(
+      () =>
+        document
+          .getElementById('tactileMapPanel')
+          .__forgeMapPanel.plan.features.filter((f) => f.class === 'steep')
+          .length
+    );
+    expect(steepCount).toBeGreaterThan(0);
 
     const results = await new AxeBuilder({ page }).analyze();
     const violations = results.violations.filter(
