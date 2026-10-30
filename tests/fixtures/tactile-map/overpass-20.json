@@ -187,6 +187,25 @@
   },
   {
    "type": "way",
+   "id": 110,
+   "tags": {
+    "highway": "footway",
+    "footway": "sidewalk",
+    "name": "East Connector"
+   },
+   "geometry": [
+    {
+     "lat": 47.6067,
+     "lon": -122.3317
+    },
+    {
+     "lat": 47.606899999999996,
+     "lon": -122.3317
+    }
+   ]
+  },
+  {
+   "type": "way",
    "id": 200,
    "tags": {
     "building": "yes",

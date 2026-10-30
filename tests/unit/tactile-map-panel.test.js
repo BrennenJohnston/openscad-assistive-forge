@@ -818,7 +818,7 @@ describe('the map data row', () => {
     );
     await vi.waitFor(() =>
       expect(addressStatus()).toBe(
-        '20 map features within 300 m: 10 walkways, 4 crossings, 3 buildings, 3 landmarks.'
+        '21 map features within 300 m: 11 walkways, 4 crossings, 3 buildings, 3 landmarks.'
       )
     );
     const call = pullArea.mock.calls[0][0];
@@ -829,7 +829,7 @@ describe('the map data row', () => {
     ]);
     expect(typeof call.onWait).toBe('function');
     const osm = getMapData();
-    expect(osm.elements).toHaveLength(20);
+    expect(osm.elements).toHaveLength(21);
     expect(osm.center).toEqual({ lat: PLACE.lat, lon: PLACE.lon });
     expect(osm.radiusM).toBe(300);
     expect(osm.source).toBe('overpass');
@@ -878,7 +878,7 @@ describe('the map data row', () => {
     getData().click();
     await vi.waitFor(() =>
       expect(addressStatus()).toBe(
-        '20 map features within 250 m: 10 walkways, 4 crossings, 3 buildings, 3 landmarks. 2.5 MB of map data arrived. A smaller radius makes a lighter map.'
+        '21 map features within 250 m: 11 walkways, 4 crossings, 3 buildings, 3 landmarks. 2.5 MB of map data arrived. A smaller radius makes a lighter map.'
       )
     );
   });
@@ -987,7 +987,7 @@ describe('the draft map button', () => {
     draftBtn().click();
     await vi.waitFor(() => expect(opened).not.toBeNull());
     expect(addressStatus()).toMatch(
-      /^Draft map ready: \d+ of 19 features on; (\d+ warnings|no warnings)\. Open the drawing editor to choose what stays\.$/
+      /^Draft map ready: \d+ of 20 features on; (\d+ warnings|no warnings)\. Open the drawing editor to choose what stays\.$/
     );
     expect(announce).toHaveBeenCalledWith(addressStatus(), {
       source: 'tactile-map',
@@ -996,14 +996,14 @@ describe('the draft map button', () => {
     expect(opened.options.draft).toBe(true);
     expect(opened.options.sourceName).toBe('Draft map of Central Library');
     expect(opened.svg).toContain('data-feature="you-are-here"');
-    expect(opened.analysis.elements).toHaveLength(19);
+    expect(opened.analysis.elements).toHaveLength(20);
     const classes = opened.options.initialClasses;
-    expect(Object.keys(classes)).toHaveLength(19);
+    expect(Object.keys(classes)).toHaveLength(20);
     const plan = getMapPlan();
     plan.features.forEach((f, i) => {
       expect(classes[i]).toBe(f.on ? f.class : 'ignore');
     });
-    expect(classes[18]).toBe('you-are-here');
+    expect(classes[19]).toBe('you-are-here');
     expect(opened.options.features).toBe(plan.features);
     expect(plan.meta.title).toBe('Central Library');
   });

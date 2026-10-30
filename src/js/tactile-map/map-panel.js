@@ -300,6 +300,9 @@ class MapPanel {
       attributeFilter: ['data-ui-variant'],
     });
     this.syncAltView();
+    // The panel on its element, as the editor is on its surface, so a page
+    // test can read the plan without a global.
+    this.el.__forgeMapPanel = this;
     this.lastTape = this.tapeWidth();
     this.lastCue = this.northCue();
     this.unsubscribe = stateManager.subscribe(() => {
@@ -805,6 +808,7 @@ class MapPanel {
     }
     const { drawingFromPlan, applyRowsToPlan } =
       await import('./plan-drawing.js');
+    const { joinRoute } = await import('./route.js');
     const { analyzeSvg } = await import('../svg-preparer.js');
     const svg = drawingFromPlan(this.plan);
     const initialClasses = Object.fromEntries(
@@ -818,8 +822,11 @@ class MapPanel {
       sourceName: ADDRESS_STRINGS.draftName(place),
       initialClasses,
       features: this.plan.features,
+      mmPerM: this.plan.meta?.geo?.mmPerM ?? null,
       onApply: (result) => {
-        this.plan = applyRowsToPlan(this.plan, result?.regions || []);
+        const applied = applyRowsToPlan(this.plan, result?.regions || []);
+        // The route's segments that meet become one Route line.
+        this.plan = { ...applied, features: joinRoute(applied.features) };
         this.plate = 'whole';
         this.schedule(0);
       },

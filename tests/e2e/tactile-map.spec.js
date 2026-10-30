@@ -329,7 +329,7 @@ test.describe('the map data row', () => {
     await getData.click();
     const status = page.locator('#tactileMapAddressStatus');
     await expect(status).toHaveText(
-      '20 map features within 250 m: 10 walkways, 4 crossings, 3 buildings, 3 landmarks.',
+      '21 map features within 250 m: 11 walkways, 4 crossings, 3 buildings, 3 landmarks.',
       { timeout: 15000 }
     );
     expect(pulled).toContain('around%3A250%2C47.6067142%2C-122.3326983');
@@ -399,7 +399,7 @@ test.describe('the draft map', () => {
     await page.locator('#tactileMapPlace1').check();
     await page.locator('#tactileMapGetData').click();
     const status = page.locator('#tactileMapAddressStatus');
-    await expect(status).toContainText('20 map features within 250 m', {
+    await expect(status).toContainText('21 map features within 250 m', {
       timeout: 15000,
     });
     await expect(draft).toBeEnabled();
@@ -411,7 +411,7 @@ test.describe('the draft map', () => {
     const selects = page.locator(
       '#drawingEditorSurface .drawing-editor-class-select'
     );
-    await expect(selects).toHaveCount(19);
+    await expect(selects).toHaveCount(20);
     // The last entry of a draft's Class menu reads Off, not Ignore.
     await expect(selects.first().locator('option').last()).toHaveText('Off');
     await expect(
