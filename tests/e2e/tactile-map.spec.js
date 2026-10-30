@@ -184,6 +184,19 @@ test.describe('Tactile Map tile', () => {
     await expect(
       page.locator('#drawingEditorSurface .drawing-editor').first()
     ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });
+    // The drawing is on the editor's own canvas, one region per shape; the
+    // relief purpose's preview panes stay away.
+    const canvas = page.locator('#drawingEditorSurface .drawing-editor-canvas');
+    await expect(canvas).toBeVisible();
+    expect((await canvas.boundingBox()).width).toBeGreaterThanOrEqual(200);
+    await expect(
+      page.locator(
+        '#drawingEditorSurface .drawing-editor-canvas-svg [data-layer="regions"] path'
+      )
+    ).toHaveCount(2);
+    await expect(
+      page.locator('#drawingEditorSurface .svg-prep-previews')
+    ).toBeHidden();
     const selects = page.locator(
       '#drawingEditorSurface .drawing-editor-class-select'
     );

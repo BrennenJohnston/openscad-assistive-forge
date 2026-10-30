@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The drawing editor's map purpose shows the drawing again, with pan, zoom
+  and a keyboard walk between shapes.
 - In the Alt View, reaching the end of a list is the last sound a scroll
   makes: no line's tick follows it any more.
 
