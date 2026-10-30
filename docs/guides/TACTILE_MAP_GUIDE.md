@@ -47,7 +47,20 @@ Every map is a plan: a list of features in millimeters, each with a class and a 
 
 ### An address
 
-A later version will draft a map of a street address from OpenStreetMap data, walkways and crossings included, for you to edit the same way. Until then, a drawing is the way in.
+The **Map from an address** section stands above the plates section. It drafts a map of a street address from OpenStreetMap, for you to edit the same way as a drawing.
+
+1. Type a street address, an intersection or the name of a place in **Address or place** and press **Search**. Nothing is sent until you press. Up to five places come back as a list; pick the one you meant. The search goes to OpenStreetMap's Nominatim service, one request a second at most, and the app does not offer suggestions as you type, because that service forbids it.
+2. Set the **Map radius (m)**, 100 to 600 m, at 250 m to start: how far from the address the map reaches, so the map is twice that wide. At 250 m on a 480 mm plate set, one meter on the ground is about one millimeter on the map, and a 1.5 mm walkway line stands for 1.6 m of sidewalk. A smaller radius gives more millimeters to the meter and a lighter pull; 600 m downtown can be several megabytes.
+3. Tick the **Landmarks to show** you want in the draft: Entrances and Transit stops start ticked; Crossings, Steps and stairs, Shops and Benches start off. Press **Get map data**. One request goes to the Overpass service for everything within the radius, and the status line says how many features came back: walkways, crossings, buildings and landmarks. The public server is shared and sometimes full; when it refuses, the app waits 30 seconds and asks once more, then 60, then tells you to try later or load a file instead.
+4. Press **Make a draft map**. The data becomes a plan with north up and opens in the drawing editor's map purpose, one shape per feature. Everything starts off except the sidewalks within 30 m of the address, the crossings they end on, the landmarks you ticked and the **You are here** point in the middle: a draft is a list of what is there, and you choose what a reader needs. Switch a shape on by giving it a class; switch it off with the Class menu's last entry, **Off**. Buildings arrive as off areas and roads as off pairs of curb lines, because a block of raised buildings is a field a finger must cross; turn on the ones that help. Press **Apply classes** and the plates section rebuilds from what you kept; the editor says how many features are on and off.
+
+**Walk this** is a tool in the editor's toolbar for the route: pick it (the key is W), then click the sidewalks in the order you walk them. Each one joins the route where its end meets the route's end, and the status says how many segments are on the route and how long it is in meters. A segment that touches nothing on the route yet is refused, so pick the one between them first. **Clear route** puts every picked segment back. When you apply, the segments that meet become one Route line, the dotted line a finger follows.
+
+**Mark steep sidewalks** reads heights along every sidewalk you kept and marks the runs steeper than the **Steep grade (%)** with chevrons pointing uphill, so a reader knows before the hill. The grade is 3 to 12 % and starts at 5 %, the grade where a walking surface counts as a ramp. The heights come from public terrain tiles at about 3 m per pixel, read every 10 m and smoothed over 30 m: a long hill shows; a short steep step, a curb ramp or a stair does not. Switching it off removes the chevrons.
+
+**Load an OpenStreetMap file** is the other way in: an `.osm` export from openstreetmap.org (the Export button, a small box around your address) or a `.geojson` file, read on your device and never sent anywhere. It is for a busy server, for working offline, and for a map you want to build again later from the same data. With an address picked the file centers on it; without one, on the middle of the file.
+
+What leaves your device, and when, is under Privacy. The data is OpenStreetMap's, under the Open Database License, and the map carries the line "Map data from OpenStreetMap contributors, ODbL"; the terms are under Sources.
 
 ## The classes
 
@@ -59,6 +72,7 @@ A later version will draft a map of a street address from OpenStreetMap data, wa
 | Route                      | the way to walk                        | symbol | dots 1.5 mm across, 3 mm apart                                   | BANA 2022 dashed primary lines; the dotted route of my printed maps |
 | Crossing                   | a street crossing                      | symbol | a line 1.5 mm wide with short cross-ticks, 6 mm long, 6 mm apart | BANA 2022 line styles                                               |
 | Track                      | rails                                  | floor  | two lines 1.0 mm wide with a 1.5 mm gap                          | Jehoel 2006: a double line reads as two when the gap is over 1.3 mm |
+| Steep sidewalk             | a sidewalk run steeper than your grade | symbol | a line 1.5 mm wide with a chevron every 10 mm, 6 mm across, pointing uphill | Ungar 2005: arrows are read by their point; OpenSidewalks: incline as rise over run |
 | Area                       | a platform, a building, water          | floor  | a plain raised area                                              | BANA 2022 3.4.3.1                                                   |
 | Stairs                     | a staircase                            | symbol | three bars, 10 mm                                                | Ungar 2005; BANA 2022                                               |
 | Elevator up, Elevator down | an elevator, read as up or down        | symbol | a solid triangle, 10 mm, apex up or down                         | Ungar 2005; Gual 2012                                               |
@@ -152,9 +166,26 @@ The sentences give the real numbers; the ones above are examples.
 
 Everything runs on your device: the drawing's conversion and tracing, the plan, the rendering and the zip. Nothing is uploaded.
 
+A map from an address is the one part that talks to anyone, and only when you press:
+
+- **Search** sends the words you typed to OpenStreetMap's Nominatim service (nominatim.openstreetmap.org), with the app's web address as the referer and nothing else: no account, no email, no location of yours.
+- **Get map data** sends the picked place's coordinates and the radius to the Overpass service (overpass-api.de) and receives the map data.
+- **Mark steep sidewalks** fetches up to four terrain tiles from AWS Open Data (s3.amazonaws.com), each a 256 by 256 pixel picture of heights named by its tile number, which says what square kilometer the map is in and nothing more.
+
+Each of those hosts sees your connection's address, as any web request does. A file you load through **Load an OpenStreetMap file** stays on your device. The drawing route and the plates never leave it.
+
 ## Sources
 
-Read on 2026-10-26, except ADA 703, read on 2026-10-01.
+Read on 2026-10-26, except ADA 703, read on 2026-10-01, and the data sources, read on 2026-10-29.
+
+The map data and the terrain heights:
+
+- OpenStreetMap contributors, https://www.openstreetmap.org/copyright: the map data, under the Open Database License (ODbL).
+- The Nominatim usage policy, https://operations.osmfoundation.org/policies/nominatim/: the terms the search keeps to.
+- The Overpass API's public instances and their usage page, https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances: the terms the pull keeps to.
+- The Mapzen terrain tiles on AWS Open Data, https://registry.opendata.aws/terrain-tiles/: Terrarium PNG tiles of heights, built from public elevation data under open terms listed on that page; the app reads zoom 15 at about 3 m per pixel. The incline figure and the rise-over-run definition follow the OpenSidewalks schema, https://sidewalks.washington.edu/opensidewalks/.
+
+The research behind the figures:
 
 - Braille Authority of North America, Guidelines and Standards for Tactile Graphics, 2022 edition (sections 3.4.3 on lines, areas and point symbols; 5.9 on keys; 8.1, 8.5 and 8.6 on maps), https://www.brailleauthority.org/
 - Wabinski, Moscicka and Touya, "Guidelines for standardizing the design of tactile maps: a review of research and best practice", The Cartographic Journal, 2024, which carries the ISO 19028 figures (10 mm point symbols, 0.3 to 1.5 mm heights) and Bris 2001
