@@ -10805,7 +10805,8 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 .charm-variant-select {
   flex: 1;
-  min-height: 36px;
+  /* The touch floor: 44 px under a finger, the desktop density on a mouse. */
+  min-height: var(--size-touch-target);
   padding: var(--space-xs) var(--space-sm);
   font-size: var(--font-size-sm);
   border: 1px solid var(--color-border);
