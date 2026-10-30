@@ -16531,16 +16531,30 @@ body.tutorial-body-locked {
   overflow-wrap: anywhere;
 }
 
-/* The landmark boxes: the size and the ring the plate radios have; the
-   Get map data and file rows wrap on a narrow sheet. */
-.tactile-map-landmarks input[type='checkbox'] {
+/* The landmark boxes and the steep switch: the size and the ring the plate
+   radios have, the row at the touch floor; the Get map data and file rows
+   wrap on a narrow sheet. */
+.tactile-map-steep-row {
+  min-height: var(--size-touch-target);
+}
+
+.tactile-map-steep-row label {
+  flex: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
+.tactile-map-landmarks input[type='checkbox'],
+.tactile-map-steep-row input[type='checkbox'] {
   flex-shrink: 0;
   width: var(--size-icon-md);
   height: var(--size-icon-md);
   margin: 0;
 }
 
-.tactile-map-landmarks input[type='checkbox']:focus-visible {
+.tactile-map-landmarks input[type='checkbox']:focus-visible,
+.tactile-map-steep-row input[type='checkbox']:focus-visible {
   outline: var(--focus-ring-width, 3px) solid var(--color-focus);
   outline-offset: var(--focus-ring-offset, 2px);
 }

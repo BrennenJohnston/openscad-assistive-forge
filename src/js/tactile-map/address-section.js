@@ -87,7 +87,24 @@ export const ADDRESS_STRINGS = Object.freeze({
     `No sidewalks within ${d} m of the address. Try a larger radius or another address.`,
   /** The draft's name in the editor's header. */
   draftName: (place) => `Draft map of ${place}`,
+  steepLabel: 'Mark steep sidewalks',
+  steepHelp:
+    'Chevrons along sidewalks steeper than the grade below, pointing uphill. Heights come from public terrain tiles at about 3 m per pixel, so a short steep step can be missed.',
+  gradeLabel: 'Steep grade (%)',
+  gradeHelp:
+    'Sidewalks steeper than this get chevrons, 3 to 12 %. 5 % is the grade where a walking surface counts as a ramp.',
+  /** A11Y: the status line while the tiles load. */
+  reading: (n) => `Reading heights along ${n} sidewalks...`,
+  /** A11Y: after, with steep segments. */
+  steepMarked: (n, g) => `${n} steep segments marked, steeper than ${g} %.`,
+  /** A11Y: the same, none. */
+  steepNone: (g) => `No sidewalk is steeper than ${g} %.`,
+  /** A11Y: the tiles did not answer. */
+  tilesNoAnswer:
+    'The height tiles did not answer. Steep sidewalks are not marked this time.',
 });
+
+export const GRADE = Object.freeze({ min: 3, max: 12, step: 0.5, value: 5 });
 
 export const ATTRIBUTION_URL = 'https://www.openstreetmap.org/copyright';
 export const RADIUS = Object.freeze({
@@ -160,6 +177,7 @@ function el(tag, className, text) {
  * @param {(place: object) => void} [args.onPlace]
  * @param {(osm: object) => void} [args.onData]
  * @param {() => void} [args.onDraft] - Make a draft map pressed (enabled once data exists)
+ * @param {(on: boolean, gradePct: number) => void} [args.onSteep] - the switch moved (enabled once a draft exists)
  * @returns {{ el: HTMLElement, refs: object, getPlace: () => object|null, getData: () => object|null, destroy: () => void }}
  */
 export function createAddressSection({
@@ -170,6 +188,7 @@ export function createAddressSection({
   onPlace,
   onData,
   onDraft,
+  onSteep,
 }) {
   const S = ADDRESS_STRINGS;
   const section = el(
@@ -301,6 +320,41 @@ export function createAddressSection({
   draft.disabled = true;
   draftRow.appendChild(draft);
   section.appendChild(draftRow);
+
+  const steepRow = el('div', 'braille-panel-toggle-row tactile-map-steep-row');
+  const steep = document.createElement('input');
+  steep.type = 'checkbox';
+  steep.id = 'tactileMapSteep';
+  steep.disabled = true;
+  steep.setAttribute('aria-describedby', 'tactileMapSteepHelp');
+  const steepLabel = el('label', '', S.steepLabel);
+  steepLabel.htmlFor = steep.id;
+  steepRow.appendChild(steep);
+  steepRow.appendChild(steepLabel);
+  section.appendChild(steepRow);
+  const steepHelp = el('p', 'braille-panel-help', S.steepHelp);
+  steepHelp.id = 'tactileMapSteepHelp';
+  section.appendChild(steepHelp);
+
+  const gradeRow = el('div', 'braille-panel-field-row tactile-map-grade-row');
+  const gradeLabel = el('label', '', S.gradeLabel);
+  gradeLabel.htmlFor = 'tactileMapGrade';
+  const grade = document.createElement('input');
+  grade.type = 'number';
+  grade.id = 'tactileMapGrade';
+  grade.className = 'braille-panel-number';
+  grade.min = String(GRADE.min);
+  grade.max = String(GRADE.max);
+  grade.step = String(GRADE.step);
+  grade.value = String(GRADE.value);
+  grade.inputMode = 'decimal';
+  grade.setAttribute('aria-describedby', 'tactileMapGradeHelp');
+  gradeRow.appendChild(gradeLabel);
+  gradeRow.appendChild(grade);
+  section.appendChild(gradeRow);
+  const gradeHelp = el('p', 'braille-panel-help', S.gradeHelp);
+  gradeHelp.id = 'tactileMapGradeHelp';
+  section.appendChild(gradeHelp);
 
   const attribution = el(
     'p',
@@ -490,6 +544,19 @@ export function createAddressSection({
   draft.addEventListener('click', () => {
     if (osm) onDraft?.();
   });
+  /** The grade the input holds, kept inside its range. */
+  function gradePct() {
+    const n = Number(grade.value);
+    if (!Number.isFinite(n)) return GRADE.value;
+    return Math.min(GRADE.max, Math.max(GRADE.min, n));
+  }
+  steep.addEventListener('change', () => {
+    onSteep?.(steep.checked, gradePct());
+  });
+  grade.addEventListener('change', () => {
+    grade.value = String(gradePct());
+    if (steep.checked) onSteep?.(true, gradePct());
+  });
   loadFile.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', () => {
     const chosen = fileInput.files && fileInput.files[0];
@@ -508,11 +575,18 @@ export function createAddressSection({
       loadFile,
       fileInput,
       draft,
+      steep,
+      grade,
       attribution,
       status,
     },
     getPlace: () => place,
     getData: () => osm,
+    /** A draft exists: the switch may be used; off: the switch rests and clears. */
+    setDraftReady(ready) {
+      steep.disabled = !ready;
+      if (!ready) steep.checked = false;
+    },
     destroy() {
       section.remove();
     },
