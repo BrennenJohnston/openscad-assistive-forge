@@ -4252,10 +4252,13 @@ select:focus:not(:focus-visible) {
   border-color: var(--color-border);
 }
 
+/* A solid ring, as the buttons wear: the translucent halo read 1.79:1 in
+   the light look and 2.93:1 in the dark one against the page. */
 select:focus-visible {
-  outline: none;
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
   border-color: var(--color-accent);
-  box-shadow: var(--focus-ring);
+  box-shadow: none;
 }
 
 /* Toggle Switch */
