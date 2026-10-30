@@ -57,6 +57,7 @@ import {
   plateLevelsSvg,
 } from './plate-tiling.js';
 import { loadSymbolLibraryFile, setLibrary } from './symbol-library.js';
+import { createAddressSection } from './address-section.js';
 import {
   archiveEntries,
   levelHeights,
@@ -192,6 +193,11 @@ export function isMapPanelActive() {
   return panel !== null;
 }
 
+/** @returns {object|null} The place picked in the address section (for tests) */
+export function getMapPlace() {
+  return panel?.place ?? null;
+}
+
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -214,6 +220,11 @@ class MapPanel {
       options.render || renderThroughEngine(options.getAutoPreviewController);
     this.download = options.download || downloadFile;
     this.getEditor = options.getEditor || sharedDrawingEditor;
+    // The address section: its geocoder (a test's stub, else the lazy
+    // chunk loaded on the first press) and the place last picked.
+    this.searchPlaces = options.searchPlaces || null;
+    this.place = null;
+    this.address = null;
     // The drawing the door works on: the picture last seen in the file
     // control that was not a levels file of this panel's own, with the
     // classes and the regions the editor last applied.
@@ -239,6 +250,18 @@ class MapPanel {
       return;
     }
     this.el = this.build();
+    // The address section stands first: a map begins with where it is.
+    this.address = createAddressSection({
+      searchPlaces: (query) => this.geocode(query),
+      say: (text, failed) => this.sayAddress(text, failed),
+      onPlace: (place) => {
+        this.place = place;
+      },
+    });
+    parametersContainer.parentNode.insertBefore(
+      this.address.el,
+      parametersContainer
+    );
     parametersContainer.parentNode.insertBefore(this.el, parametersContainer);
     this.lastTape = this.tapeWidth();
     this.lastCue = this.northCue();
@@ -661,6 +684,22 @@ class MapPanel {
     return section;
   }
 
+  /** The geocoder: a stub when a test handed one in, else the lazy chunk. */
+  async geocode(query) {
+    if (!this.searchPlaces) {
+      const { searchPlaces } = await import('./geocode.js');
+      this.searchPlaces = searchPlaces;
+    }
+    return this.searchPlaces(query);
+  }
+
+  /** A sentence on the address section's status line, said once. */
+  sayAddress(text, failed = false) {
+    const line = this.address?.refs?.status;
+    if (line) line.textContent = text;
+    (failed ? announceError : announce)(text, { source: SOURCE });
+  }
+
   /** Show a sentence under the buttons and say it once through the announcer. */
   say(text, failed = false) {
     if (this.refs.renderStatus) this.refs.renderStatus.textContent = text;
@@ -918,5 +957,7 @@ class MapPanel {
     }
     if (this.el?.parentNode) this.el.parentNode.removeChild(this.el);
     this.el = null;
+    this.address?.destroy();
+    this.address = null;
   }
 }

@@ -16511,6 +16511,22 @@ body.tutorial-body-locked {
   min-height: var(--size-touch-target);
 }
 
+/* The address section: the field and Search on one row (the field takes
+   the room), the places found as radio rows at the touch floor. */
+.tactile-map-address-row {
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+.tactile-map-address-input {
+  flex: 1 1 12em;
+  min-width: 0;
+}
+
+.tactile-map-results .braille-panel-toggle-row label {
+  overflow-wrap: anywhere;
+}
+
 .braille-panel {
   margin-bottom: var(--space-md);
   padding: var(--space-md);
