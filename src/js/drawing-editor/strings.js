@@ -307,6 +307,11 @@ export const EDITOR_STRINGS = Object.freeze({
   /** Said as the plan leaves the editor. A11Y (two shapes). */
   mapApplied: (n, m) =>
     `Map plan updated: ${count(n, 'feature', 'features')}, ${m} ignored.`,
+  /** A draft's Class menu: its last entry switches the feature off. */
+  offOption: 'Off',
+  /** Said as a draft leaves the editor. A11Y. */
+  draftApplied: (on, off) =>
+    `Draft map updated: ${on} features on, ${off} off.`,
   /** After Undo takes a class back. A11Y. */
   classReverted: (name, cls) => `Class of ${name} back to ${cls}.`,
   /** The command label, heard again on redo. */
