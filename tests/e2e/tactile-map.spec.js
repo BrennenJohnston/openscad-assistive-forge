@@ -353,3 +353,89 @@ test.describe('the map data row', () => {
     ).toEqual([]);
   });
 });
+
+// The Tactile Map Designer is not part of the Alt View: with the Alt View
+// on, its panel hides and says so once, and its card leaves the welcome
+// screen; off again, the panel returns.
+test.describe('the Alt View', () => {
+  test('hides the panel with one sentence, hides the welcome card, and brings the panel back', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+      localStorage.setItem(
+        'openscad-forge-alt-unlock',
+        JSON.stringify({ entries: 3, permanent: true, pendingBreak: false })
+      );
+      localStorage.setItem('openscad-forge-sounds', 'false');
+    });
+    await openTactileMap(page);
+    const panel = page.locator('#tactileMapPanel');
+    await expect(panel).toBeVisible();
+    await page.evaluate(() => {
+      window.__heard = [];
+      const node = document.getElementById('srAnnouncer');
+      if (!node) return;
+      new MutationObserver(() => {
+        const t = node.textContent.trim();
+        if (t) window.__heard.push(t);
+      }).observe(node, { childList: true, characterData: true, subtree: true });
+    });
+    const key = page.locator('#_hfmToggle');
+    await key.waitFor({ state: 'attached', timeout: 30000 });
+    await key.click();
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-ui-variant',
+      'mono',
+      {
+        timeout: 15000,
+      }
+    );
+    await expect(panel).toBeHidden();
+    await expect
+      .poll(() => page.evaluate(() => (window.__heard || []).join(' | ')), {
+        timeout: 15000,
+      })
+      .toContain(
+        'The Tactile Map Designer is not available in the Alt View. Its controls return when the Alt View is off.'
+      );
+    // The tile's own controls stay (its groups, closed as they open).
+    await expect(page.locator('#parametersContainer')).toBeVisible();
+    await expect(panel).toHaveAttribute('hidden', '');
+
+    await key.click();
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-ui-variant',
+      'mono',
+      {
+        timeout: 15000,
+      }
+    );
+    await expect(panel).toBeVisible();
+    await expect(panel).not.toHaveAttribute('hidden', '');
+
+    await key.click();
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-ui-variant',
+      'mono',
+      {
+        timeout: 15000,
+      }
+    );
+    await page.locator('#clearFileBtn').click();
+    await page
+      .getByRole('alertdialog', { name: 'Go back to the Main Page?' })
+      .getByRole('button', { name: 'Confirm' })
+      .click();
+    await expect(page.locator('#welcomeScreen')).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(
+      page.locator('.role-path-card[data-tutorial-target="tactile-map"]')
+    ).toBeHidden();
+    await expect(
+      page.locator('.role-path-card[data-tutorial-target="braille-card"]')
+    ).toBeVisible();
+  });
+});
