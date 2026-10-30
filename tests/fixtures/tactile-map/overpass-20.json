@@ -1,0 +1,355 @@
+{
+ "version": 0.6,
+ "generator": "Overpass API",
+ "osm3s": {
+  "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+ },
+ "elements": [
+  {
+   "type": "way",
+   "id": 100,
+   "tags": {
+    "highway": "footway",
+    "footway": "sidewalk"
+   },
+   "geometry": [
+    {
+     "lat": 47.6067,
+     "lon": -122.33370000000001
+    },
+    {
+     "lat": 47.6067,
+     "lon": -122.3317
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 101,
+   "tags": {
+    "highway": "footway",
+    "footway": "sidewalk"
+   },
+   "geometry": [
+    {
+     "lat": 47.606899999999996,
+     "lon": -122.33370000000001
+    },
+    {
+     "lat": 47.606899999999996,
+     "lon": -122.3317
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 102,
+   "tags": {
+    "highway": "footway",
+    "footway": "sidewalk"
+   },
+   "geometry": [
+    {
+     "lat": 47.607099999999996,
+     "lon": -122.33370000000001
+    },
+    {
+     "lat": 47.607099999999996,
+     "lon": -122.3317
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 103,
+   "tags": {
+    "highway": "footway",
+    "footway": "sidewalk"
+   },
+   "geometry": [
+    {
+     "lat": 47.607299999999995,
+     "lon": -122.33370000000001
+    },
+    {
+     "lat": 47.607299999999995,
+     "lon": -122.3317
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 104,
+   "tags": {
+    "highway": "footway",
+    "footway": "sidewalk"
+   },
+   "geometry": [
+    {
+     "lat": 47.607499999999995,
+     "lon": -122.33370000000001
+    },
+    {
+     "lat": 47.607499999999995,
+     "lon": -122.3317
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 105,
+   "tags": {
+    "highway": "footway",
+    "footway": "sidewalk"
+   },
+   "geometry": [
+    {
+     "lat": 47.607699999999994,
+     "lon": -122.33370000000001
+    },
+    {
+     "lat": 47.607699999999994,
+     "lon": -122.3317
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 106,
+   "tags": {
+    "highway": "footway",
+    "footway": "sidewalk"
+   },
+   "geometry": [
+    {
+     "lat": 47.607899999999994,
+     "lon": -122.33370000000001
+    },
+    {
+     "lat": 47.607899999999994,
+     "lon": -122.3317
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 107,
+   "tags": {
+    "highway": "footway",
+    "footway": "sidewalk"
+   },
+   "geometry": [
+    {
+     "lat": 47.60809999999999,
+     "lon": -122.33370000000001
+    },
+    {
+     "lat": 47.60809999999999,
+     "lon": -122.3317
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 108,
+   "tags": {
+    "highway": "footway",
+    "footway": "sidewalk"
+   },
+   "geometry": [
+    {
+     "lat": 47.6083,
+     "lon": -122.33370000000001
+    },
+    {
+     "lat": 47.6083,
+     "lon": -122.3317
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 109,
+   "tags": {
+    "highway": "footway",
+    "footway": "sidewalk"
+   },
+   "geometry": [
+    {
+     "lat": 47.6085,
+     "lon": -122.33370000000001
+    },
+    {
+     "lat": 47.6085,
+     "lon": -122.3317
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 200,
+   "tags": {
+    "building": "yes",
+    "name": "Block 1"
+   },
+   "geometry": [
+    {
+     "lat": 47.6057,
+     "lon": -122.3335
+    },
+    {
+     "lat": 47.6057,
+     "lon": -122.333
+    },
+    {
+     "lat": 47.606,
+     "lon": -122.333
+    },
+    {
+     "lat": 47.606,
+     "lon": -122.3335
+    },
+    {
+     "lat": 47.6057,
+     "lon": -122.3335
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 201,
+   "tags": {
+    "building": "yes",
+    "name": "Block 2"
+   },
+   "geometry": [
+    {
+     "lat": 47.6053,
+     "lon": -122.3335
+    },
+    {
+     "lat": 47.6053,
+     "lon": -122.333
+    },
+    {
+     "lat": 47.6056,
+     "lon": -122.333
+    },
+    {
+     "lat": 47.6056,
+     "lon": -122.3335
+    },
+    {
+     "lat": 47.6053,
+     "lon": -122.3335
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 202,
+   "tags": {
+    "building": "yes",
+    "name": "Block 3"
+   },
+   "geometry": [
+    {
+     "lat": 47.6049,
+     "lon": -122.3335
+    },
+    {
+     "lat": 47.6049,
+     "lon": -122.333
+    },
+    {
+     "lat": 47.6052,
+     "lon": -122.333
+    },
+    {
+     "lat": 47.6052,
+     "lon": -122.3335
+    },
+    {
+     "lat": 47.6049,
+     "lon": -122.3335
+    }
+   ]
+  },
+  {
+   "type": "node",
+   "id": 300,
+   "lat": 47.6067,
+   "lon": -122.3315,
+   "tags": {
+    "highway": "crossing",
+    "crossing": "marked",
+    "tactile_paving": "no"
+   }
+  },
+  {
+   "type": "node",
+   "id": 301,
+   "lat": 47.607,
+   "lon": -122.3315,
+   "tags": {
+    "highway": "crossing",
+    "crossing": "marked",
+    "tactile_paving": "yes"
+   }
+  },
+  {
+   "type": "node",
+   "id": 302,
+   "lat": 47.607299999999995,
+   "lon": -122.3315,
+   "tags": {
+    "highway": "crossing",
+    "crossing": "marked",
+    "tactile_paving": "no"
+   }
+  },
+  {
+   "type": "node",
+   "id": 303,
+   "lat": 47.6076,
+   "lon": -122.3315,
+   "tags": {
+    "highway": "crossing",
+    "crossing": "marked",
+    "tactile_paving": "yes"
+   }
+  },
+  {
+   "type": "node",
+   "id": 400,
+   "lat": 47.6068,
+   "lon": -122.333,
+   "tags": {
+    "entrance": "main",
+    "wheelchair": "yes"
+   }
+  },
+  {
+   "type": "node",
+   "id": 401,
+   "lat": 47.6072,
+   "lon": -122.3318,
+   "tags": {
+    "highway": "bus_stop",
+    "public_transport": "platform",
+    "bus": "yes",
+    "name": "4th Ave & Madison St"
+   }
+  },
+  {
+   "type": "node",
+   "id": 402,
+   "lat": 47.6065,
+   "lon": -122.3323,
+   "tags": {
+    "shop": "bakery",
+    "name": "Corner Bakery"
+   }
+  }
+ ]
+}

@@ -15,6 +15,7 @@
 import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { skipWithoutWebGL } from './helpers/webgl.js';
 import { parseSTL } from '../../scripts/parity/stl-stats.mjs';
 import {
   recordAnnouncements,
@@ -1859,6 +1860,10 @@ test.describe('the Alt View', () => {
       localStorage.setItem('openscad-forge-sounds', 'false');
     });
     await openBrailleCard(page);
+    await skipWithoutWebGL(
+      page,
+      'no WebGL: the Alt View draws its characters from the 3D picture'
+    );
     const panel = page.locator('#braillePanel');
     await expect(panel).toBeVisible();
     await page.evaluate(() => {

@@ -57,6 +57,7 @@ import {
   plateLevelsSvg,
 } from './plate-tiling.js';
 import { loadSymbolLibraryFile, setLibrary } from './symbol-library.js';
+import { createAddressSection } from './address-section.js';
 import {
   archiveEntries,
   levelHeights,
@@ -74,6 +75,9 @@ const SOURCE = 'tactile-map';
 const PLATE_TIMEOUT_MS = 60_000;
 const ENGINE_NOT_READY =
   'The OpenSCAD engine has not initialized yet. Please wait or refresh the page.';
+/** A11Y: said once when the Alt View comes on with this panel mounted. */
+export const ALT_VIEW_SENTENCE =
+  'The Tactile Map Designer is not available in the Alt View. Its controls return when the Alt View is off.';
 
 let panel = null;
 
@@ -192,6 +196,16 @@ export function isMapPanelActive() {
   return panel !== null;
 }
 
+/** @returns {object|null} The place picked in the address section (for tests) */
+export function getMapPlace() {
+  return panel?.place ?? null;
+}
+
+/** @returns {object|null} The map data last pulled or loaded (for tests) */
+export function getMapData() {
+  return panel?.osm ?? null;
+}
+
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -214,6 +228,15 @@ class MapPanel {
       options.render || renderThroughEngine(options.getAutoPreviewController);
     this.download = options.download || downloadFile;
     this.getEditor = options.getEditor || sharedDrawingEditor;
+    // The address section: its geocoder (a test's stub, else the lazy
+    // chunk loaded on the first press) and the place last picked.
+    this.searchPlaces = options.searchPlaces || null;
+    this.pullArea = options.pullArea || null;
+    this.place = null;
+    // The map data last pulled or loaded, for the draft: { elements, center,
+    // radiusM, source, place, landmarks, bytes }.
+    this.osm = null;
+    this.address = null;
     // The drawing the door works on: the picture last seen in the file
     // control that was not a levels file of this panel's own, with the
     // classes and the regions the editor last applied.
@@ -239,7 +262,33 @@ class MapPanel {
       return;
     }
     this.el = this.build();
+    // The address section stands first: a map begins with where it is.
+    this.address = createAddressSection({
+      searchPlaces: (query) => this.geocode(query),
+      pullArea: (where) => this.pull(where),
+      readOsmFile: (file) => this.readOsmFile(file),
+      say: (text, failed) => this.sayAddress(text, failed),
+      onPlace: (place) => {
+        this.place = place;
+      },
+      onData: (osm) => {
+        this.osm = osm;
+      },
+    });
+    parametersContainer.parentNode.insertBefore(
+      this.address.el,
+      parametersContainer
+    );
     parametersContainer.parentNode.insertBefore(this.el, parametersContainer);
+    // The Tactile Map Designer steps aside in the Alt View: its sections
+    // hide and it says so once; the tile's own controls stay.
+    this.altOff = null;
+    this.altObserver = new MutationObserver(() => this.syncAltView());
+    this.altObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-ui-variant'],
+    });
+    this.syncAltView();
     this.lastTape = this.tapeWidth();
     this.lastCue = this.northCue();
     this.unsubscribe = stateManager.subscribe(() => {
@@ -661,6 +710,48 @@ class MapPanel {
     return section;
   }
 
+  /** The geocoder: a stub when a test handed one in, else the lazy chunk. */
+  async geocode(query) {
+    if (!this.searchPlaces) {
+      const { searchPlaces } = await import('./geocode.js');
+      this.searchPlaces = searchPlaces;
+    }
+    return this.searchPlaces(query);
+  }
+
+  /** The Overpass pull: a stub when a test handed one in, else the lazy chunk. */
+  async pull(where) {
+    if (!this.pullArea) {
+      const { pullArea } = await import('./overpass.js');
+      this.pullArea = pullArea;
+    }
+    return this.pullArea(where);
+  }
+
+  /**
+   * A dropped export read on the device: its elements and the middle of
+   * them. The reader module is a lazy chunk too.
+   */
+  async readOsmFile(file) {
+    const { elementsFromText, centerOf } = await import('./osm-file.js');
+    const text = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () =>
+        reject(reader.error || new Error(`${file.name} could not be read.`));
+      reader.readAsText(file);
+    });
+    const elements = elementsFromText(text, file.name);
+    return { elements, center: centerOf(elements) };
+  }
+
+  /** A sentence on the address section's status line, said once. */
+  sayAddress(text, failed = false) {
+    const line = this.address?.refs?.status;
+    if (line) line.textContent = text;
+    (failed ? announceError : announce)(text, { source: SOURCE });
+  }
+
   /** Show a sentence under the buttons and say it once through the announcer. */
   say(text, failed = false) {
     if (this.refs.renderStatus) this.refs.renderStatus.textContent = text;
@@ -910,13 +1001,32 @@ class MapPanel {
     }
   }
 
+  /** The panel's sections, hidden together under the Alt View. */
+  sections() {
+    return [this.el, this.address?.el].filter(Boolean);
+  }
+
+  /** Hide or show the panel as the Alt View goes on or off; say it once. */
+  syncAltView() {
+    const off =
+      document.documentElement.getAttribute('data-ui-variant') === 'mono';
+    if (off === this.altOff) return;
+    this.altOff = off;
+    for (const el of this.sections()) el.hidden = off;
+    if (off) announce(ALT_VIEW_SENTENCE, { source: SOURCE });
+  }
+
   destroy() {
     clearTimeout(this.timer);
+    this.altObserver?.disconnect();
+    this.altObserver = null;
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
     }
     if (this.el?.parentNode) this.el.parentNode.removeChild(this.el);
     this.el = null;
+    this.address?.destroy();
+    this.address = null;
   }
 }

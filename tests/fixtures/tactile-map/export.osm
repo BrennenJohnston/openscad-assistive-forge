@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="CGImap 0.9.4">
+  <bounds minlat="47.6060" minlon="-122.3380" maxlat="47.6110" maxlon="-122.3330"/>
+  <node id="1" lat="47.6070" lon="-122.3370" version="1"/>
+  <node id="2" lat="47.6075" lon="-122.3365" version="1"/>
+  <node id="3" lat="47.6080" lon="-122.3360" version="1"/>
+  <node id="4" lat="47.6085" lon="-122.3355" version="1"/>
+  <node id="5" lat="47.6090" lon="-122.3350" version="1"/>
+  <node id="6" lat="47.6095" lon="-122.3345" version="1"/>
+  <node id="7" lat="47.6100" lon="-122.3340" version="1"/>
+  <node id="11" lat="47.6072" lon="-122.3368" version="1">
+    <tag k="highway" v="crossing"/>
+    <tag k="crossing" v="marked"/>
+    <tag k="source" v="survey"/>
+  </node>
+  <node id="12" lat="47.6082" lon="-122.3358" version="1">
+    <tag k="entrance" v="main"/>
+  </node>
+  <node id="13" lat="47.6092" lon="-122.3348" version="1">
+    <tag k="highway" v="bus_stop"/>
+    <tag k="name" v="4th Ave &amp; Pike St"/>
+  </node>
+  <node id="14" lat="47.6099" lon="-122.3341" version="1">
+    <tag k="note" v="nothing a map reads"/>
+  </node>
+  <way id="100" version="3">
+    <nd ref="1"/><nd ref="2"/><nd ref="3"/><nd ref="4"/>
+    <tag k="highway" v="footway"/>
+    <tag k="footway" v="sidewalk"/>
+    <tag k="created_by" v="JOSM"/>
+  </way>
+  <way id="101" version="2">
+    <nd ref="4"/><nd ref="5"/><nd ref="6"/><nd ref="7"/>
+    <tag k="highway" v="footway"/>
+    <tag k="footway" v="sidewalk"/>
+  </way>
+  <way id="102" version="1">
+    <nd ref="1"/><nd ref="7"/>
+    <tag k="note" v="a way nobody classes"/>
+  </way>
+</osm>
