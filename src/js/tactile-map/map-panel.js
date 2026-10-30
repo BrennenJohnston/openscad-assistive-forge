@@ -74,6 +74,9 @@ const SOURCE = 'tactile-map';
 const PLATE_TIMEOUT_MS = 60_000;
 const ENGINE_NOT_READY =
   'The OpenSCAD engine has not initialized yet. Please wait or refresh the page.';
+/** A11Y: said once when the Alt View comes on with this panel mounted. */
+export const ALT_VIEW_SENTENCE =
+  'The Tactile Map Designer is not available in the Alt View. Its controls return when the Alt View is off.';
 
 let panel = null;
 
@@ -240,6 +243,15 @@ class MapPanel {
     }
     this.el = this.build();
     parametersContainer.parentNode.insertBefore(this.el, parametersContainer);
+    // The Tactile Map Designer steps aside in the Alt View: its sections
+    // hide and it says so once; the tile's own controls stay.
+    this.altOff = null;
+    this.altObserver = new MutationObserver(() => this.syncAltView());
+    this.altObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-ui-variant'],
+    });
+    this.syncAltView();
     this.lastTape = this.tapeWidth();
     this.lastCue = this.northCue();
     this.unsubscribe = stateManager.subscribe(() => {
@@ -910,8 +922,25 @@ class MapPanel {
     }
   }
 
+  /** The panel's sections, hidden together under the Alt View. */
+  sections() {
+    return [this.el, this.address?.el].filter(Boolean);
+  }
+
+  /** Hide or show the panel as the Alt View goes on or off; say it once. */
+  syncAltView() {
+    const off =
+      document.documentElement.getAttribute('data-ui-variant') === 'mono';
+    if (off === this.altOff) return;
+    this.altOff = off;
+    for (const el of this.sections()) el.hidden = off;
+    if (off) announce(ALT_VIEW_SENTENCE, { source: SOURCE });
+  }
+
   destroy() {
     clearTimeout(this.timer);
+    this.altObserver?.disconnect();
+    this.altObserver = null;
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;

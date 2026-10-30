@@ -692,3 +692,41 @@ describe('the drawing door', () => {
     expect(String(params().map_width_mm)).toBe('152');
   });
 });
+
+describe('the Alt View', () => {
+  const root = document.documentElement;
+  const SENTENCE =
+    'The Tactile Map Designer is not available in the Alt View. Its controls return when the Alt View is off.';
+
+  afterEach(() => {
+    root.removeAttribute('data-ui-variant');
+  });
+
+  it('hides the panel and says so once when the Alt View comes on, and shows it again when it goes off', async () => {
+    mount();
+    const panel = document.getElementById('tactileMapPanel');
+    expect(panel.hidden).toBe(false);
+    root.setAttribute('data-ui-variant', 'mono');
+    await vi.waitFor(() => expect(panel.hidden).toBe(true));
+    expect(announce).toHaveBeenCalledWith(SENTENCE, { source: 'tactile-map' });
+    const said = announce.mock.calls.filter((c) => c[0] === SENTENCE).length;
+    expect(said).toBe(1);
+    root.removeAttribute('data-ui-variant');
+    await vi.waitFor(() => expect(panel.hidden).toBe(false));
+    expect(announce.mock.calls.filter((c) => c[0] === SENTENCE).length).toBe(1);
+  });
+
+  it('mounts hidden when the Alt View is already on, and leaves no observer behind', async () => {
+    root.setAttribute('data-ui-variant', 'mono');
+    mount();
+    const panel = document.getElementById('tactileMapPanel');
+    expect(panel.hidden).toBe(true);
+    expect(announce).toHaveBeenCalledWith(SENTENCE, { source: 'tactile-map' });
+    destroyMapPanel();
+    announce.mockClear();
+    root.removeAttribute('data-ui-variant');
+    root.setAttribute('data-ui-variant', 'mono');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(announce).not.toHaveBeenCalled();
+  });
+});
