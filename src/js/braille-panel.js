@@ -230,6 +230,10 @@ function firstFilenameWord(text) {
   return '';
 }
 
+/** A11Y: said once when the Alt View comes on with a braille designer open. */
+export const ALT_VIEW_SENTENCE =
+  'The braille designer is not available in the Alt View. Its controls return when the Alt View is off.';
+
 class BraillePanel {
   constructor(config) {
     this.config = config;
@@ -298,6 +302,15 @@ class BraillePanel {
 
     this.el = this.build();
     parametersContainer.parentNode.insertBefore(this.el, parametersContainer);
+    // The braille designers step aside in the Alt View: the panel hides and
+    // says so once; the tile's own controls stay.
+    this.altOff = null;
+    this.altObserver = new MutationObserver(() => this.syncAltView());
+    this.altObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-ui-variant'],
+    });
+    this.syncAltView();
 
     this.watchGeometryParams();
     this.syncSizePresetFromParams();
@@ -2641,8 +2654,20 @@ class BraillePanel {
       `(ADA 703.3.2 places braille in one block below the text).`;
   }
 
+  /** Hide or show the panel as the Alt View goes on or off; say it once. */
+  syncAltView() {
+    const off =
+      document.documentElement.getAttribute('data-ui-variant') === 'mono';
+    if (off === this.altOff) return;
+    this.altOff = off;
+    if (this.el) this.el.hidden = off;
+    if (off) stateManager.announceChange(ALT_VIEW_SENTENCE);
+  }
+
   destroy() {
     this.destroyed = true;
+    this.altObserver?.disconnect();
+    this.altObserver = null;
     clearTimeout(this.debounceTimer);
     this.layoutSeq++;
     if (this.unsubscribe) {

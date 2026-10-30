@@ -214,7 +214,9 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
         new Promise((resolve) => {
           finishLoading = () =>
             resolve({
-              tables: [{ file: 'en-ueb-g1.ctb', label: 'English (UEB) Grade 1' }],
+              tables: [
+                { file: 'en-ueb-g1.ctb', label: 'English (UEB) Grade 1' },
+              ],
               defaultTable: 'en-ueb-g1.ctb',
             });
         })
@@ -297,9 +299,9 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
         word('hi')
       );
     }, SETTLE);
-    expect(
-      document.getElementById('brailleFieldStatus').textContent
-    ).toContain('Filled from your text');
+    expect(document.getElementById('brailleFieldStatus').textContent).toContain(
+      'Filled from your text'
+    );
   });
 
   it('clears a pristine (translation-mirroring) editor when the text changes', async () => {
@@ -318,9 +320,9 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
       expect(params().Line_1).toBe(word('bye'));
     });
     expect(document.getElementById('brailleFieldInput').value).toBe('');
-    expect(
-      document.getElementById('brailleFieldStatus').textContent
-    ).toContain('cleared because the text changed');
+    expect(document.getElementById('brailleFieldStatus').textContent).toContain(
+      'cleared because the text changed'
+    );
   });
 
   it('keeps hand-edited braille as the authority when the text changes', async () => {
@@ -857,14 +859,11 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
     });
 
     document.getElementById('brailleFieldFromText').click();
-    await vi.waitFor(
-      () => {
-        expect(document.getElementById('brailleFieldInput').value).toBe(
-          word('hello')
-        );
-      },
-      SETTLE
-    );
+    await vi.waitFor(() => {
+      expect(document.getElementById('brailleFieldInput').value).toBe(
+        word('hello')
+      );
+    }, SETTLE);
 
     // Editing one cell must reach the model untouched by translation.
     await typeBraille(`${word('hello')}\u283F`, () => {
@@ -874,23 +873,17 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
 
   it('clears the editor when the text changes while it is pristine', async () => {
     document.getElementById('brailleFieldFromText').click();
-    await vi.waitFor(
-      () => {
-        expect(document.getElementById('brailleFieldInput').value).not.toBe('');
-      },
-      SETTLE
-    );
+    await vi.waitFor(() => {
+      expect(document.getElementById('brailleFieldInput').value).not.toBe('');
+    }, SETTLE);
 
     await typeText('exit', () => {
       expect(document.getElementById('brailleFieldInput').value).toBe('');
     });
     // Back to translating the text box.
-    await vi.waitFor(
-      () => {
-        expect(params().Line_1).toBe(word('exit'));
-      },
-      SETTLE
-    );
+    await vi.waitFor(() => {
+      expect(params().Line_1).toBe(word('exit'));
+    }, SETTLE);
   });
 
   it('"Convert braille ASCII" puts the cells on the braille plate only', async () => {
@@ -924,10 +917,14 @@ describe('braille panel — when the engine fails', () => {
   it('shows no braille for text it could not translate', async () => {
     const rows = () =>
       document.querySelectorAll('#braillePreview .braille-preview-braille');
-    await typeText('hello', () => expect(rows()[0]?.textContent).toBe(word('hello')));
+    await typeText('hello', () =>
+      expect(rows()[0]?.textContent).toBe(word('hello'))
+    );
 
     translateText.mockRejectedValueOnce(
-      new Error('liblouis could not translate this text with en-ueb-g1.ctb (test)')
+      new Error(
+        'liblouis could not translate this text with en-ueb-g1.ctb (test)'
+      )
     );
     await typeText('world', () =>
       expect(document.getElementById('brailleErrors').textContent).toContain(
@@ -947,7 +944,9 @@ describe('braille panel — the preview as a screen reader reads it', () => {
     // lang="und" was read as "und (not supported)" before every line.
     const rows = () =>
       document.querySelectorAll('#braillePreview .braille-preview-braille');
-    await typeText('hello', () => expect(rows()[0]?.textContent).toBe(word('hello')));
+    await typeText('hello', () =>
+      expect(rows()[0]?.textContent).toBe(word('hello'))
+    );
     expect(rows()[0].hasAttribute('lang')).toBe(false);
   });
 });
@@ -958,7 +957,9 @@ describe('braille panel — characters with no braille', () => {
 
   it('says the characters are left out of the braille', async () => {
     const warnings = () => document.getElementById('brailleWarnings');
-    await typeText('ab \u2603', () => expect(warnings().textContent).not.toBe(''));
+    await typeText('ab \u2603', () =>
+      expect(warnings().textContent).not.toBe('')
+    );
     expect(warnings().textContent).toContain(
       'Some characters could not be translated to braille (in: "\u2603"). ' +
         'They are left out of the braille.'
@@ -1257,5 +1258,41 @@ describe('braille panel — the message boxes', () => {
     writes.push(...observer.takeRecords());
     observer.disconnect();
     expect(writes).toHaveLength(0);
+  });
+});
+
+describe('braille panel — the Alt View', () => {
+  const root = document.documentElement;
+  const SENTENCE =
+    'The braille designer is not available in the Alt View. Its controls return when the Alt View is off.';
+  let said;
+
+  beforeEach(() => {
+    said = vi.spyOn(stateManager, 'announceChange');
+    mountCardPanel();
+  });
+  afterEach(() => {
+    destroyBraillePanel();
+    root.removeAttribute('data-ui-variant');
+    said.mockRestore();
+  });
+
+  it('hides the panel and says so once when the Alt View comes on, and shows it again when it goes off', async () => {
+    const panel = document.getElementById('braillePanel');
+    expect(panel.hidden).toBe(false);
+    root.setAttribute('data-ui-variant', 'mono');
+    await vi.waitFor(() => expect(panel.hidden).toBe(true));
+    expect(said).toHaveBeenCalledWith(SENTENCE);
+    root.removeAttribute('data-ui-variant');
+    await vi.waitFor(() => expect(panel.hidden).toBe(false));
+    expect(said.mock.calls.filter((c) => c[0] === SENTENCE)).toHaveLength(1);
+  });
+
+  it('mounts hidden when the Alt View is already on', () => {
+    destroyBraillePanel();
+    root.setAttribute('data-ui-variant', 'mono');
+    mountCardPanel();
+    expect(document.getElementById('braillePanel').hidden).toBe(true);
+    expect(said).toHaveBeenCalledWith(SENTENCE);
   });
 });

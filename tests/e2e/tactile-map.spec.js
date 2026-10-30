@@ -440,7 +440,7 @@ test.describe('the Alt View', () => {
       page.locator('.role-path-card[data-tutorial-target="tactile-map"]')
     ).toBeHidden();
     await expect(
-      page.locator('.role-path-card[data-tutorial-target="braille-card"]')
+      page.locator('.role-path-card[data-tutorial-target="beginners-card"]')
     ).toBeVisible();
   });
 });

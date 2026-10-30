@@ -1061,10 +1061,15 @@ body[data-ui-mode='classic'] {
    values (e.g. :root[data-theme='dark'] .param-panel) at equal specificity
    because variant.css loads later in the cascade. */
 /* The pre-installed projects are not part of the Alt View: the Tactile Map
-   Designer's card leaves the welcome screen while it is on (its panel hides
-   itself the same way, src/js/tactile-map/map-panel.js). */
+   Designer's, the charm customizer's and the braille card maker's cards
+   leave the welcome screen while it is on (their panels hide themselves the
+   same way, src/js/tactile-map/map-panel.js and src/js/braille-panel.js). */
 :root[data-ui-variant='mono']
-  .role-path-card[data-tutorial-target='tactile-map'] {
+  .role-path-card[data-tutorial-target='tactile-map'],
+:root[data-ui-variant='mono']
+  .role-path-card[data-tutorial-target='charm-card'],
+:root[data-ui-variant='mono']
+  .role-path-card[data-tutorial-target='braille-card'] {
   display: none;
 }
 
