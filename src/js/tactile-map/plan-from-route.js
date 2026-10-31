@@ -8,11 +8,14 @@
  * entrance at the destination door; the paths that meet the walk as short
  * stubs, so a finger feels each junction it passes; the streets it crosses
  * as curbs near each crossing; and the landmarks the person ticked that lie
- * near the walk. Nothing that is on comes within ROUTE_GAP_MM of the route,
- * so a curb never runs beside it where a finger would take the two for one.
- * Everything else is drawn too, switched Off, one choice away in the editor.
+ * near the walk, each set beside the route and clear of every other symbol,
+ * so of two bus stops facing each other across a street one is on. Nothing
+ * that is on comes within ROUTE_GAP_MM of the route, so a curb never runs
+ * beside it where a finger would take the two for one. Everything else is
+ * drawn too, switched Off, one choice away in the editor.
  *
- * The map is fitted to the walk and the two buildings, north up.
+ * The map is fitted to the walk and the two buildings, north up, and the
+ * plate to the map: the side the walk does not fill shrinks.
  *
  * No DOM here: the panel imports this file lazily.
  *
@@ -22,6 +25,7 @@ import { draftPlan } from './plan-from-osm.js';
 import { projectLatLon, toMm } from './osm-geometry.js';
 import { pointKey, walkBetween } from './walk-graph.js';
 import { DEFAULT_SETTINGS } from './levels-svg.js';
+import { PLATE_MIN_MM } from './plate-tiling.js';
 
 /** The least gap between the route and anything else that is on, in mm. */
 export const ROUTE_GAP_MM = 3;
@@ -35,6 +39,8 @@ export const CURB_WINDOW_M = 25;
 export const MARGIN_M = 30;
 
 const DENSIFY_MM = 0.5;
+/** How far a landmark may be moved to stand clear of the route, in mm. */
+const MAX_SHIFT_MM = 15;
 const MIN_PIECE_MM = 2;
 const SIMPLIFY_MM = 0.2;
 const POINT_CLASSES_NEAR = new Set(['landmark', 'transit-stop']);
@@ -102,6 +108,52 @@ function simplify(points, epsilon) {
 
 const lengthOf = (pts) =>
   pts.reduce((sum, p, i) => (i ? sum + dist(pts[i - 1], p) : sum), 0);
+
+/** The gap from a point to a symbol's square, `half` mm from its centre. */
+const toSquare = (p, at, half) =>
+  Math.hypot(
+    Math.max(0, Math.abs(p[0] - at[0]) - half),
+    Math.max(0, Math.abs(p[1] - at[1]) - half)
+  );
+
+/**
+ * Where a symbol stands clear of the route: where it is, or moved straight
+ * away from the route's nearest point, on its own side, the least that
+ * clears it; null when MAX_SHIFT_MM does not.
+ */
+function besideRoute(at, route, isClear) {
+  if (isClear(at)) return at;
+  let best = null;
+  for (let i = 1; i < route.length; i += 1) {
+    const a = route[i - 1];
+    const b = route[i];
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const len = Math.hypot(dx, dy);
+    if (len === 0) continue;
+    const t = Math.max(
+      0,
+      Math.min(1, ((at[0] - a[0]) * dx + (at[1] - a[1]) * dy) / (len * len))
+    );
+    const q = [a[0] + t * dx, a[1] + t * dy];
+    const d = dist(at, q);
+    if (!best || d < best.d) {
+      const n = [-dy / len, dx / len];
+      const side =
+        Math.sign((at[0] - q[0]) * n[0] + (at[1] - q[1]) * n[1]) || 1;
+      best = { d, q, n: [n[0] * side, n[1] * side] };
+    }
+  }
+  if (!best) return null;
+  for (let s = best.d; s <= best.d + MAX_SHIFT_MM; s += DENSIFY_MM / 2) {
+    const p = [
+      round3(best.q[0] + best.n[0] * s),
+      round3(best.q[1] + best.n[1] * s),
+    ];
+    if (isClear(p)) return p;
+  }
+  return null;
+}
 
 /** Runs of consecutive points that pass the test, each at least MIN_PIECE_MM long. */
 function runs(points, keep) {
@@ -188,15 +240,21 @@ export function draftRoutePlan({
   const spanE = 2 * Math.abs(east) + 2 * MARGIN_M;
   const spanN = 2 * Math.abs(north) + 2 * MARGIN_M;
   const k = Math.min(size.w / spanE, size.h / spanN);
+  // The plate at that scale: the side the walk does not fill shrinks to it,
+  // never below the smallest map the model takes.
+  const plate = {
+    w: Math.min(size.w, Math.max(PLATE_MIN_MM.w, Math.ceil(spanE * k))),
+    h: Math.min(size.h, Math.max(PLATE_MIN_MM.h, Math.ceil(spanN * k))),
+  };
   const mm = (p) =>
-    toMm(projectLatLon(p.lat, p.lon, center), size, k).map(round3);
+    toMm(projectLatLon(p.lat, p.lon, center), plate, k).map(round3);
 
   const base = draftPlan({
     elements,
     center,
-    radiusM: size.w / (2 * k),
+    radiusM: plate.w / (2 * k),
     landmarks,
-    size,
+    size: plate,
     place: null,
   }).plan;
 
@@ -206,13 +264,20 @@ export function draftRoutePlan({
   const near = (p, max) => toPolyline(p, route) <= max;
 
   const features = [];
+  // Ticked landmarks near the walk: placed once the route's own symbols are.
+  const nearby = [];
   for (const f of base.features) {
     if (f.id === 'you-are-here') continue;
-    const ticked = f.on && POINT_CLASSES_NEAR.has(f.class);
-    features.push({
-      ...f,
-      on: ticked && f.kind === 'point' && near(f.at, CORRIDOR_M * k),
-    });
+    const copy = { ...f, on: false };
+    if (
+      f.on &&
+      f.kind === 'point' &&
+      POINT_CLASSES_NEAR.has(f.class) &&
+      near(f.at, CORRIDOR_M * k)
+    ) {
+      nearby.push(copy);
+    }
+    features.push(copy);
   }
 
   const switchOn = (test) => {
@@ -354,6 +419,43 @@ export function draftRoutePlan({
     },
     ...extra
   );
+
+  // The ticked landmarks, nearest the walk first: each beside the route, its
+  // edge ROUTE_GAP_MM from the route's, and on only when clear of every
+  // symbol already on and, where it really stands, of every landmark kept:
+  // of a pair facing each other across a street, the nearer that can stand
+  // clear (one inside a bend of the route may not).
+  const half = DEFAULT_SETTINGS.symbolSizeMm / 2;
+  const routeEdge =
+    (DEFAULT_SETTINGS.classes.route?.width ?? 0) / 2 + ROUTE_GAP_MM;
+  const dense = densify(route, DENSIFY_MM / 2);
+  const clearOfRoute = (at) =>
+    dense.every((p) => toSquare(p, at, half) >= routeEdge);
+  const onPlate = ([x, y]) =>
+    x >= half && x <= plate.w - half && y >= half && y <= plate.h - half;
+  const symbols = features.filter((f) => f.on && f.kind === 'point');
+  const crowding = (list, at) =>
+    list.some(
+      (q) => Math.max(Math.abs(q[0] - at[0]), Math.abs(q[1] - at[1])) < clear
+    );
+  const kept = [];
+  nearby.sort((a, b) => toPolyline(a.at, route) - toPolyline(b.at, route));
+  for (const f of nearby) {
+    if (crowding(kept, f.at)) continue;
+    const at = besideRoute(f.at, route, clearOfRoute);
+    if (!at || !onPlate(at)) continue;
+    if (
+      crowding(
+        symbols.map((s) => s.at),
+        at
+      )
+    )
+      continue;
+    kept.push(f.at);
+    f.at = at;
+    f.on = true;
+    symbols.push(f);
+  }
 
   const plan = {
     ...base,

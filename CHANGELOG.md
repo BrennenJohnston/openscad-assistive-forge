@@ -25,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   uphill chevrons, from public terrain tiles.
 - Tactile Map Designer: a route map. Type where the walk starts and where
   it ends, and the draft raises the walk between them from door to door,
-  with its crossings and steps, and only what the walk needs switched on.
+  with its crossings and steps, and only what the walk needs switched on,
+  on a plate fitted to the walk.
 
 ### Fixed
 

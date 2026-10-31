@@ -92,8 +92,8 @@ export const ADDRESS_STRINGS = Object.freeze({
   draft: 'Make a draft map',
   routeDraft: 'Make a route map',
   /** A11Y: the status line after a route draft. */
-  routeReady: (m, from, to, crossings, steps) =>
-    `Route map ready: a ${m} m walk from ${from} to ${to}, ${crossings === 1 ? '1 crossing' : `${crossings} crossings`} and ${steps === 1 ? '1 flight of steps' : `${steps} flights of steps`} on the way. Open the drawing editor to check it.`,
+  routeReady: (m, from, to, crossings, steps, w, h) =>
+    `Route map ready: a ${m} m walk from ${from} to ${to}, ${crossings === 1 ? '1 crossing' : `${crossings} crossings`} and ${steps === 1 ? '1 flight of steps' : `${steps} flights of steps`} on the way. The map is ${w} x ${h} mm, fitted to the walk. Open the drawing editor to check it.`,
   /** A11Y: no walk joins the two places. */
   noWalk: (from, to) =>
     `No walking route joins ${from} and ${to} in this map data. Try other places, or load an OpenStreetMap file of the area.`,

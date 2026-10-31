@@ -226,12 +226,20 @@ describe('Make a route map', () => {
         'Husky Union Building',
         'Bill & Melinda Gates Center',
         1,
-        1
+        1,
+        172,
+        360
       )
     );
     expect(addressStatus()).toBe(
-      'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. Open the drawing editor to check it.'
+      'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk. Open the drawing editor to check it.'
     );
+    // The model is told the fitted size.
+    await vi.waitFor(() => {
+      const p = stateManager.getState().parameters;
+      expect(Number(p.map_width_mm)).toBe(172);
+      expect(Number(p.map_height_mm)).toBe(360);
+    }, SETTLE);
     const plan = getMapPlan();
     expect(plan.features.filter((f) => f.class === 'route')).toHaveLength(1);
     expect(opened.options.purpose).toBe('map');

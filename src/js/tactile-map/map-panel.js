@@ -861,7 +861,9 @@ class MapPanel {
         from,
         to,
         counts.crossings,
-        counts.steps
+        counts.steps,
+        plan.size.w,
+        plan.size.h
       )
     );
     await this.openDraft();
