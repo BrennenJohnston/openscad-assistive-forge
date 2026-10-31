@@ -75,12 +75,28 @@ describe('buildQuery', () => {
       expect(q).toContain(sel + ';');
     }
   });
+
+  it('asks for the same classes inside a box, for a map between two places', () => {
+    const q = buildQuery({
+      box: { south: 47.652, west: -122.307, north: 47.6562, east: -122.303 },
+    });
+    expect(q.startsWith('[out:json][timeout:60];(')).toBe(true);
+    for (const sel of [
+      'way(47.652,-122.307,47.6562,-122.303)[highway]',
+      'way(47.652,-122.307,47.6562,-122.303)[building]',
+      'node(47.652,-122.307,47.6562,-122.303)[entrance]',
+      'node(47.652,-122.307,47.6562,-122.303)[highway=crossing]',
+    ]) {
+      expect(q).toContain(sel + ';');
+    }
+    expect(q).not.toContain('around:');
+  });
 });
 
 describe('pullArea', () => {
   const where = { lat: 47.6, lon: -122.33, radiusM: 250 };
 
-  it('posts the query form-encoded as a simple request and resolves the trimmed elements with the pull\'s size, time and attribution', async () => {
+  it("posts the query form-encoded as a simple request and resolves the trimmed elements with the pull's size, time and attribution", async () => {
     const fetch = fetchSequence(reply(200, ELEMENTS));
     const wait = vi.fn(async () => {});
     const result = await pullArea({ ...where, fetch, wait });
@@ -132,8 +148,8 @@ describe('pullArea', () => {
     expect(onWait.mock.calls.map((c) => c[0])).toEqual([30, 60]);
   });
 
-  it('treats 406 and 504 as the server refusing, like 429 and 502', async () => {
-    for (const status of [406, 504]) {
+  it('treats 406, 503 and 504 as the server refusing, like 429 and 502', async () => {
+    for (const status of [406, 503, 504]) {
       const fetch = fetchSequence(reply(status, 'no'), reply(200, ELEMENTS));
       const wait = vi.fn(async () => {});
       const result = await pullArea({ ...where, fetch, wait });
@@ -142,18 +158,66 @@ describe('pullArea', () => {
     }
   });
 
-  it('says no-answer when the network fails, without waiting', async () => {
+  // An overloaded server's error page can carry no cross-site header, and
+  // then the browser reports only "Failed to fetch": that is the server
+  // refusing too (MEASURED on 2026-10-30, a 503 for over an hour).
+  it('counts a request that gets no answer as the server refusing: waits, tries again, and gives up as busy', async () => {
     const fetch = vi.fn(async () => {
       throw new TypeError('Failed to fetch');
     });
     const wait = vi.fn(async () => {});
-    await expect(pullArea({ ...where, fetch, wait })).rejects.toMatchObject({
-      code: 'no-answer',
+    const onWait = vi.fn();
+    await expect(
+      pullArea({ ...where, fetch, wait, onWait, online: () => true })
+    ).rejects.toMatchObject({ code: 'busy' });
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(onWait.mock.calls.map((c) => c[0])).toEqual([30, 60]);
+  });
+
+  it('a request with no answer that then succeeds resolves the elements', async () => {
+    let n = 0;
+    const fetch = vi.fn(async () => {
+      if (n++ === 0) throw new TypeError('Failed to fetch');
+      return reply(200, ELEMENTS);
     });
+    const wait = vi.fn(async () => {});
+    const result = await pullArea({
+      ...where,
+      fetch,
+      wait,
+      online: () => true,
+    });
+    expect(wait).toHaveBeenCalledWith(30000);
+    expect(result.elements).toHaveLength(2);
+  });
+
+  it('says no-answer at once when the device is offline, without waiting', async () => {
+    const fetch = vi.fn(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    const wait = vi.fn(async () => {});
+    await expect(
+      pullArea({ ...where, fetch, wait, online: () => false })
+    ).rejects.toMatchObject({ code: 'no-answer' });
+    expect(fetch).toHaveBeenCalledTimes(1);
     expect(wait).not.toHaveBeenCalled();
   });
 
-  it('names the data\'s source and its page', () => {
+  it('posts the box query when given a box', async () => {
+    const fetch = fetchSequence(reply(200, ELEMENTS));
+    const box = {
+      south: 47.652,
+      west: -122.307,
+      north: 47.6562,
+      east: -122.303,
+    };
+    await pullArea({ box, fetch, wait: vi.fn() });
+    expect(decodeURIComponent(fetch.mock.calls[0][1].body.slice(5))).toBe(
+      buildQuery({ box })
+    );
+  });
+
+  it("names the data's source and its page", () => {
     expect(ATTRIBUTION).toBe('Map data from OpenStreetMap contributors, ODbL');
     expect(ATTRIBUTION_URL).toBe('https://www.openstreetmap.org/copyright');
   });

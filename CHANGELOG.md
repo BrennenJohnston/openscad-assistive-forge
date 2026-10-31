@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a keyboard walk between shapes.
 - The drawing editor paints a map's shapes in the charm customizer's layer
   colors by level, readable on the dark theme, with Off shapes hatched.
+- The Tactile Map Designer waits and tries again when the map server gives
+  no answer, and then says how to export the area as a file instead.
 - The welcome cards' Tool menus are 44 px tall on a touch screen, the same
   floor as the buttons beside them.
 - A menu focused by keyboard shows a solid ring in every look, where the

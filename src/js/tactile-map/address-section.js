@@ -54,10 +54,10 @@ export const ADDRESS_STRINGS = Object.freeze({
   /** A11Y: the status line after a pull. */
   got: (n, r, w, c, b, l) =>
     `${n} map features within ${r} m: ${w} walkways, ${c} crossings, ${b} buildings, ${l} landmarks.`,
-  /** A11Y: the server refused; a back-off runs. */
+  /** A11Y: the server refused, or gave no answer; a back-off runs. */
   busyWait: (s) => `The map server is busy. Trying again in ${s} seconds.`,
   /** A11Y: the second back-off failed too. */
-  busy: 'The map server did not answer twice. Try again in a few minutes, or load an OpenStreetMap file instead.',
+  busy: 'The map server is still busy. Try again in a few minutes, or export the area from openstreetmap.org and load it with Load an OpenStreetMap file.',
   /** A11Y: the pull did not answer. */
   noData:
     'The map data did not arrive. Check your connection and try again, or load an OpenStreetMap file instead.',
