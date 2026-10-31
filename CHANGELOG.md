@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file you drop in.
 - Tactile Map Designer: sidewalks steeper than a grade you set can carry
   uphill chevrons, from public terrain tiles.
+- Tactile Map Designer: a route map. Type where the walk starts and where
+  it ends, and the draft raises the walk between them from door to door,
+  with its crossings and steps, and only what the walk needs switched on.
 
 ### Fixed
 

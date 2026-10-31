@@ -251,6 +251,9 @@ class MapPanel {
     // control that was not a levels file of this panel's own, with the
     // classes and the regions the editor last applied.
     this.drawing = null;
+    // 'draft' when the plan came from the map data, 'drawing' when from a
+    // drawing's classes; Edit drawing as a map reopens that source.
+    this.source = null;
     this.lastPictureData = null;
     this.drawingWidthMm = null;
     this.planWarnings = [];
@@ -364,6 +367,7 @@ class MapPanel {
       classes: null,
       regions: null,
     };
+    this.source = 'drawing';
     const declared = this.drawing.box?.widthMm;
     if (declared > 0) {
       this.drawingWidthMm = declared;
@@ -381,10 +385,21 @@ class MapPanel {
    */
   async openDrawing() {
     this.adoptPicture();
+    // A draft reopens as the draft, with the classes it has now.
+    if (this.source === 'draft') {
+      await this.openDraft();
+      return;
+    }
     if (!this.drawing) {
       const picture = this.currentPicture();
       if (!picture) {
         this.sayDrawing('Choose a drawing for the map file first.', true);
+        return;
+      }
+      // The panel's own levels file is this plan drawn: open the plan, with
+      // its classes, not its shapes all at Ignore.
+      if (isLevelsFile(picture.svg)) {
+        await this.openDraft();
         return;
       }
       this.drawing = {
@@ -424,6 +439,7 @@ class MapPanel {
     this.drawing.classes = Object.fromEntries(
       regions.map((r) => [r.index, r.class])
     );
+    this.source = 'drawing';
     this.rebuildFromDrawing();
   }
 
@@ -777,6 +793,10 @@ class MapPanel {
   async makeDraft() {
     const osm = this.osm;
     if (!osm) return;
+    if (osm.to) {
+      await this.makeRouteDraft(osm);
+      return;
+    }
     const { draftPlan, NEAR_M } = await import('./plan-from-osm.js');
     const { plan, counts } = draftPlan({
       elements: osm.elements,
@@ -793,6 +813,7 @@ class MapPanel {
     const { warnings } = buildLevelRings(plan);
     this.plan = plan;
     this.draft = { counts, warnings: warnings.length };
+    this.source = 'draft';
     this.planWarnings = [];
     this.plate = 'whole';
     this.address?.setDraftReady(true);
@@ -801,6 +822,47 @@ class MapPanel {
       warnings.length
         ? ADDRESS_STRINGS.draftReady(counts.on, counts.total, warnings.length)
         : ADDRESS_STRINGS.draftReadyClean(counts.on, counts.total)
+    );
+    await this.openDraft();
+  }
+
+  /**
+   * Make a route map: the walk between the two places (a lazy chunk) as
+   * this panel's plan, said in one sentence with its length, crossings and
+   * steps, then the editor opens on it. No walk is a sentence and no change.
+   */
+  async makeRouteDraft(osm) {
+    const short = (p) => (p?.name || '').split(',')[0].trim();
+    const from = short(osm.place);
+    const to = short(osm.to);
+    const { draftRoutePlan } = await import('./plan-from-route.js');
+    const { plan, counts } = draftRoutePlan({
+      elements: osm.elements,
+      from: osm.place,
+      to: osm.to,
+      size: { w: this.plan.size.w, h: this.plan.size.h },
+      landmarks: osm.landmarks,
+    });
+    if (!plan) {
+      this.sayAddress(ADDRESS_STRINGS.noWalk(from, to), true);
+      return;
+    }
+    const { warnings } = buildLevelRings(plan);
+    this.plan = plan;
+    this.draft = { counts, warnings: warnings.length };
+    this.source = 'draft';
+    this.planWarnings = [];
+    this.plate = 'whole';
+    this.address?.setDraftReady(true);
+    this.schedule(0);
+    this.sayAddress(
+      ADDRESS_STRINGS.routeReady(
+        Math.round(counts.lengthM),
+        from,
+        to,
+        counts.crossings,
+        counts.steps
+      )
     );
     await this.openDraft();
   }
@@ -826,10 +888,13 @@ class MapPanel {
     );
     const place =
       this.plan.meta?.title || this.osm?.place?.name || 'the address';
+    const route = this.plan.meta?.route;
     editor.open(svg, analyzeSvg(svg), {
       purpose: 'map',
       draft: true,
-      sourceName: ADDRESS_STRINGS.draftName(place),
+      sourceName: route
+        ? ADDRESS_STRINGS.routeName(route.from, route.to)
+        : ADDRESS_STRINGS.draftName(place),
       initialClasses,
       features: this.plan.features,
       mmPerM: this.plan.meta?.geo?.mmPerM ?? null,
@@ -1103,13 +1168,16 @@ class MapPanel {
       layout.plateH < PLATE_MIN_MM.h - 1e-9;
     this.layout = tooSmall ? null : layout;
     const n = layout.plates.length;
+    // Plate sizes in tenths of a millimeter at most.
+    const pw = Math.round(layout.plateW * 10) / 10;
+    const ph = Math.round(layout.plateH * 10) / 10;
     let sentence;
     if (tooSmall) {
-      sentence = `A ${bed.w} x ${bed.d} mm bed cuts this map into plates of ${layout.plateW} x ${layout.plateH} mm, under the ${PLATE_MIN_MM.w} x ${PLATE_MIN_MM.h} mm minimum. Choose a larger bed.`;
+      sentence = `A ${bed.w} x ${bed.d} mm bed cuts this map into plates of ${pw} x ${ph} mm, under the ${PLATE_MIN_MM.w} x ${PLATE_MIN_MM.h} mm minimum. Choose a larger bed.`;
     } else if (n === 1) {
-      sentence = `One plate of ${layout.plateW} x ${layout.plateH} mm; the whole map fits.`;
+      sentence = `One plate of ${pw} x ${ph} mm; the whole map fits.`;
     } else {
-      sentence = `${n} plates of ${layout.plateW} x ${layout.plateH} mm, ${layout.plates[0].id} to ${layout.plates[n - 1].id}.`;
+      sentence = `${n} plates of ${pw} x ${ph} mm, ${layout.plates[0].id} to ${layout.plates[n - 1].id}.`;
     }
     if (this.refs.summary.textContent !== sentence)
       this.refs.summary.textContent = sentence;
