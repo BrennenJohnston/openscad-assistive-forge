@@ -845,7 +845,7 @@ describe('the map data row', () => {
     getData().click();
     await vi.waitFor(() =>
       expect(addressStatus()).toBe(
-        'The map server did not answer twice. Try again in a few minutes, or load an OpenStreetMap file instead.'
+        'The map server is still busy. Try again in a few minutes, or export the area from openstreetmap.org and load it with Load an OpenStreetMap file.'
       )
     );
     expect(announce).toHaveBeenCalledWith(
