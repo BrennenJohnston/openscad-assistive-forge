@@ -14,7 +14,7 @@ import { MAP_CLASSES } from './map-classes.js';
 const classWord = (key) =>
   MAP_CLASSES.find((c) => c.key === key)?.name || 'Shape';
 
-/** A point that stands for the feature: its place, its middle, or its box's centre. */
+/** A point that stands for the feature: its place, its middle, or its box's center. */
 function anchorOf(f) {
   if (Array.isArray(f.at)) return f.at;
   const pts = f.points || f.ring;
