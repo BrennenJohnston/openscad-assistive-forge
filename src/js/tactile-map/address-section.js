@@ -44,13 +44,27 @@ export const ADDRESS_STRINGS = Object.freeze({
   rate: 'One search a second; try again in a moment.',
   /** A11Y: nothing typed. */
   empty: 'Type an address or a place first.',
+  toLabel: 'To (optional)',
+  toHelp:
+    'Pick a destination and the draft follows the walk between the two places.',
+  /** A11Y: the destinations group's name. */
+  toFound: 'Destinations found',
+  /** A11Y: after a destination is picked. */
+  toPicked: (name) =>
+    `${name} picked as the destination. Get the map data for the walk between the two places.`,
   radiusLabel: 'Map radius (m)',
   radiusHelp:
     'How far from the address the map reaches, 100 to 600 m. The map is twice this wide.',
+  radiusRouteHelp:
+    'The map covers both places and the walk between them, so the radius is not used.',
   landmarks: 'Landmarks to show',
   getData: 'Get map data',
   /** A11Y: the status line while a pull runs. */
   getting: (r, place) => `Getting map data within ${r} m of ${place}...`,
+  /** A11Y: the status line while a pull for two places runs. */
+  gettingRoute: (from, to) => `Getting map data around ${from} and ${to}...`,
+  /** A11Y: the status line after a pull for two places. */
+  gotRoute: (n, from, to) => `${n} map features around ${from} and ${to}.`,
   /** A11Y: the status line after a pull. */
   got: (n, r, w, c, b, l) =>
     `${n} map features within ${r} m: ${w} walkways, ${c} crossings, ${b} buildings, ${l} landmarks.`,
@@ -76,6 +90,15 @@ export const ADDRESS_STRINGS = Object.freeze({
   big: (mb) =>
     `${mb} MB of map data arrived. A smaller radius makes a lighter map.`,
   draft: 'Make a draft map',
+  routeDraft: 'Make a route map',
+  /** A11Y: the status line after a route draft. */
+  routeReady: (m, from, to, crossings, steps, w, h) =>
+    `Route map ready: a ${m} m walk from ${from} to ${to}, ${crossings === 1 ? '1 crossing' : `${crossings} crossings`} and ${steps === 1 ? '1 flight of steps' : `${steps} flights of steps`} on the way. The map is ${w} x ${h} mm, fitted to the walk. Open the drawing editor to check it.`,
+  /** A11Y: no walk joins the two places. */
+  noWalk: (from, to) =>
+    `No walking route joins ${from} and ${to} in this map data. Try other places, or load an OpenStreetMap file of the area.`,
+  /** The route draft's name in the editor's header. */
+  routeName: (from, to) => `Route map from ${from} to ${to}`,
   /** A11Y: the status line after a draft, with warnings. */
   draftReady: (on, total, w) =>
     `Draft map ready: ${on} of ${total} features on; ${w} warnings. Open the drawing editor to choose what stays.`,
@@ -235,6 +258,38 @@ export function createAddressSection({
   results.appendChild(el('legend', '', S.found));
   section.appendChild(results);
 
+  const toLabel = el('label', 'braille-panel-label', S.toLabel);
+  toLabel.htmlFor = 'tactileMapTo';
+  toLabel.id = 'tactileMapToLabel';
+  section.appendChild(toLabel);
+  const toHelp = el('p', 'braille-panel-help', S.toHelp);
+  toHelp.id = 'tactileMapToHelp';
+  section.appendChild(toHelp);
+  const toRow = el('div', 'braille-translate-row tactile-map-address-row');
+  toRow.id = 'tactileMapToRow';
+  const toInput = document.createElement('input');
+  toInput.type = 'search';
+  toInput.id = 'tactileMapTo';
+  toInput.className = 'braille-panel-number tactile-map-address-input';
+  toInput.setAttribute('autocomplete', 'off');
+  toInput.setAttribute('aria-describedby', 'tactileMapToHelp');
+  toInput.enterKeyHint = 'search';
+  const toButton = el(
+    'button',
+    'btn btn-secondary braille-translate-btn',
+    S.search
+  );
+  toButton.type = 'button';
+  toButton.id = 'tactileMapToSearch';
+  toRow.appendChild(toInput);
+  toRow.appendChild(toButton);
+  section.appendChild(toRow);
+  const toResults = el('fieldset', 'braille-panel-choice tactile-map-results');
+  toResults.id = 'tactileMapToResults';
+  toResults.hidden = true;
+  toResults.appendChild(el('legend', '', S.toFound));
+  section.appendChild(toResults);
+
   const radiusRow = el('div', 'braille-panel-field-row tactile-map-radius-row');
   const radiusLabel = el('label', '', S.radiusLabel);
   radiusLabel.htmlFor = 'tactileMapRadius';
@@ -377,13 +432,17 @@ export function createAddressSection({
   section.appendChild(status);
 
   let place = null;
+  let dest = null;
   let osm = null;
   let running = false;
   let pulling = false;
 
-  function clearResults() {
-    results.hidden = true;
-    for (const node of [...results.children]) {
+  /** A place's own name: the first part of the geocoder's long one. */
+  const short = (p) => (p?.name || '').split(',')[0].trim();
+
+  function clearList(list) {
+    list.hidden = true;
+    for (const node of [...list.children]) {
       if (node.tagName !== 'LEGEND') node.remove();
     }
   }
@@ -394,60 +453,118 @@ export function createAddressSection({
     if (place) onPlace?.(place);
   }
 
-  function showResults(places) {
-    clearResults();
+  /**
+   * The destination: with one, the map covers the walk between the two
+   * places; data pulled for another destination is let go, a file kept.
+   */
+  function setDest(p) {
+    dest = p;
+    radiusHelp.textContent = dest ? S.radiusRouteHelp : S.radiusHelp;
+    draft.textContent = dest ? S.routeDraft : S.draft;
+    if (osm?.source === 'file') {
+      keep({ ...osm, to: dest });
+    } else if (osm) {
+      osm = null;
+      draft.disabled = true;
+      onData?.(null);
+    }
+  }
+
+  function showList(list, places, { name, prefix, onPick }) {
+    clearList(list);
     places.forEach((p, i) => {
       const line = el('div', 'braille-panel-toggle-row');
       const radio = document.createElement('input');
       radio.type = 'radio';
-      radio.name = 'tactileMapPlace';
-      radio.id = `tactileMapPlace${i + 1}`;
+      radio.name = name;
+      radio.id = `${prefix}${i + 1}`;
       radio.value = String(i);
       radio.addEventListener('change', () => {
-        if (!radio.checked) return;
-        setPlace(p);
-        say(S.picked(p.name));
+        if (radio.checked) onPick(p);
       });
       const text = el('label', '', p.name);
       text.htmlFor = radio.id;
       line.appendChild(radio);
       line.appendChild(text);
-      results.appendChild(line);
+      list.appendChild(line);
     });
-    results.hidden = places.length === 0;
+    list.hidden = places.length === 0;
     status.textContent = '';
-    results.querySelector('input[type="radio"]')?.focus();
+    list.querySelector('input[type="radio"]')?.focus();
   }
 
-  async function search() {
+  const FROM = {
+    field: input,
+    press: button,
+    list: results,
+    name: 'tactileMapPlace',
+    prefix: 'tactileMapPlace',
+    onPick: (p) => {
+      setPlace(p);
+      say(S.picked(p.name));
+    },
+    onNone: () => setPlace(null),
+  };
+  const TO = {
+    field: toInput,
+    press: toButton,
+    list: toResults,
+    name: 'tactileMapToPlace',
+    prefix: 'tactileMapToPlace',
+    onPick: (p) => {
+      setDest(p);
+      say(S.toPicked(short(p)));
+    },
+    onNone: () => setDest(null),
+  };
+
+  async function search(which = FROM) {
     if (running) return;
-    const q = input.value.trim();
+    const q = which.field.value.trim();
     if (!q) {
       say(S.empty, true);
-      input.focus();
+      which.field.focus();
       return;
     }
     running = true;
-    button.disabled = true;
+    which.press.disabled = true;
     say(S.searching(q));
     try {
       const places = await searchPlaces(q);
       if (!places || places.length === 0) {
-        clearResults();
-        setPlace(null);
+        clearList(which.list);
+        which.onNone();
         say(S.none(q), true);
       } else {
-        showResults(places);
+        showList(which.list, places, which);
       }
     } catch (error) {
-      clearResults();
+      clearList(which.list);
       if (error?.code === 'rate') say(S.rate, true);
       else if (error?.code === 'empty') say(S.empty, true);
       else say(S.noAnswer, true);
     } finally {
       running = false;
-      button.disabled = false;
+      which.press.disabled = false;
     }
+  }
+
+  /** The box around both places, with room for the walk between them. */
+  function boxAround(a, b) {
+    const lat = (a.lat + b.lat) / 2;
+    const apartM = Math.hypot(
+      (a.lat - b.lat) * 110540,
+      (a.lon - b.lon) * 111320 * Math.cos((lat * Math.PI) / 180)
+    );
+    const marginM = Math.max(150, apartM / 4);
+    const dLat = marginM / 110540;
+    const dLon = marginM / (111320 * Math.cos((lat * Math.PI) / 180));
+    return {
+      south: Math.min(a.lat, b.lat) - dLat,
+      west: Math.min(a.lon, b.lon) - dLon,
+      north: Math.max(a.lat, b.lat) + dLat,
+      east: Math.max(a.lon, b.lon) + dLon,
+    };
   }
 
   /** The radius the input holds, kept inside its range. */
@@ -475,10 +592,48 @@ export function createAddressSection({
     say(text);
   }
 
+  async function pullRoute() {
+    const at = place;
+    const to = dest;
+    const box = boxAround(at, to);
+    say(S.gettingRoute(short(at), short(to)));
+    const { elements, bytes } = await pullArea({
+      box,
+      onWait: (s) => say(S.busyWait(s)),
+    });
+    keep({
+      elements,
+      center: { lat: (at.lat + to.lat) / 2, lon: (at.lon + to.lon) / 2 },
+      radiusM: null,
+      box,
+      source: 'overpass',
+      place: at,
+      to,
+      landmarks: ticked(),
+      bytes,
+    });
+    let text = S.gotRoute(countFeatures(elements).n, short(at), short(to));
+    if (bytes > BIG_BYTES) {
+      text += ' ' + S.big((bytes / (1024 * 1024)).toFixed(1));
+    }
+    say(text);
+  }
+
   async function pull() {
     if (pulling || !place) return;
     pulling = true;
     getData.disabled = true;
+    if (dest) {
+      try {
+        await pullRoute();
+      } catch (error) {
+        say(error?.code === 'busy' ? S.busy : S.noData, true);
+      } finally {
+        pulling = false;
+        getData.disabled = !place;
+      }
+      return;
+    }
     const r = radiusM();
     const at = place;
     say(S.getting(r, at.name));
@@ -518,6 +673,7 @@ export function createAddressSection({
         radiusM: radiusM(),
         source: 'file',
         place: at,
+        to: dest,
         landmarks: ticked(),
         bytes: file.size,
       });
@@ -536,6 +692,23 @@ export function createAddressSection({
     if (event.key === 'Enter') {
       event.preventDefault();
       search();
+    }
+  });
+  toButton.addEventListener('click', () => {
+    search(TO);
+  });
+  toInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      search(TO);
+    }
+  });
+  // An emptied destination (typed away, or the field's own clear button)
+  // makes the map a one-place map again.
+  toInput.addEventListener('input', () => {
+    if (toInput.value.trim() === '' && dest) {
+      clearList(toResults);
+      setDest(null);
     }
   });
   getData.addEventListener('click', () => {
@@ -569,6 +742,9 @@ export function createAddressSection({
       input,
       button,
       results,
+      toInput,
+      toButton,
+      toResults,
       radius,
       landmarks,
       getData,
@@ -581,6 +757,7 @@ export function createAddressSection({
       status,
     },
     getPlace: () => place,
+    getDest: () => dest,
     getData: () => osm,
     /** A draft exists: the switch may be used; off: the switch rests and clears. */
     setDraftReady(ready) {
