@@ -303,7 +303,7 @@ describe('the clutter checks', () => {
     const close = warnings.filter((w) => w.code === 'too-close');
     expect(close).toHaveLength(1);
     expect(close[0].text).toBe(
-      'a and b are 2 mm apart, closer than the 3 mm minimum. Move one or turn one off.'
+      'Landmark and Landmark (2) are 2 mm apart, closer than the 3 mm minimum. Move one or turn one off.'
     );
   });
 
@@ -345,7 +345,7 @@ describe('the clutter checks', () => {
     const { warnings } = buildLevelsSvg(plan);
     const wide = warnings.find((w) => w.code === 'line-too-wide');
     expect(wide.text).toBe(
-      'thick is 2.4 mm wide; lines wider than 2.2 mm read as two lines. Use 2.2 mm or a double line.'
+      'Wall is 2.4 mm wide; lines wider than 2.2 mm read as two lines. Use 2.2 mm or a double line.'
     );
     const map = warnings.find((w) => w.code === 'too-wide');
     expect(map.text).toBe(

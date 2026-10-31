@@ -39,6 +39,7 @@ import {
 } from '../ring-geometry.js';
 import { activeLibrary } from './symbol-library.js';
 import { levelsByClass } from './map-classes.js';
+import { featureNames } from './feature-names.js';
 
 /** How lines are stroked (the plan allowed offsetRing first; see above). */
 export const STROKE_METHOD = 'segments-and-discs';
@@ -446,7 +447,9 @@ function distanceRectRings(r, rings) {
 /** A number for a sentence: one decimal at most, no trailing zero. */
 const say = (n) => String(Math.round(n * 10) / 10);
 
-const nameOf = (f) => f.name || f.id;
+// The names the editor's rows show (feature-names.js), set for each build.
+let names = new Map();
+const nameOf = (f) => names.get(f.id) || f.name || f.id;
 
 // ---------------------------------------------------------------------------
 // The builder
@@ -463,6 +466,8 @@ const nameOf = (f) => f.name || f.id;
  */
 export function buildLevelRings(plan, settings = {}) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
+  const list = plan.features || [];
+  names = new Map(featureNames(list).map((name, i) => [list[i].id, name]));
   const classes = s.classes || LEVELS_BY_CLASS;
   const symbols = symbolMap(s.symbols || activeLibrary());
   const w = plan.size.w;

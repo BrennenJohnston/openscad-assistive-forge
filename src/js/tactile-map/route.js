@@ -39,6 +39,30 @@ export function fitsRoute(route, candidate, toleranceMm = ROUTE_TOLERANCE_MM) {
 }
 
 /**
+ * Where a candidate joins the route: at its end (as fitsRoute), or at its
+ * start, turned so that its last point meets the route's first. An empty
+ * route takes anything at its end, as it is.
+ *
+ * @param {Array<Array<[number, number]>>} route
+ * @param {Array<[number, number]>} candidate
+ * @param {number} [toleranceMm]
+ * @returns {{at: 'end'|'start', points: Array<[number, number]>}|null}
+ */
+export function fitRoute(route, candidate, toleranceMm = ROUTE_TOLERANCE_MM) {
+  const atEnd = fitsRoute(route, candidate, toleranceMm);
+  if (atEnd) return { at: 'end', points: atEnd };
+  if (!isPoints(candidate) || !route || route.length === 0) return null;
+  const start = route[0][0];
+  if (dist(candidate[candidate.length - 1], start) <= toleranceMm) {
+    return { at: 'start', points: candidate };
+  }
+  if (dist(candidate[0], start) <= toleranceMm) {
+    return { at: 'start', points: [...candidate].reverse() };
+  }
+  return null;
+}
+
+/**
  * The route's length in meters.
  *
  * @param {Array<Array<[number, number]>>} route
@@ -92,9 +116,13 @@ export function joinRoute(features, toleranceMm = ROUTE_TOLERANCE_MM) {
       grew = false;
       for (const j of pool) {
         if (taken.has(j)) continue;
-        const fitted = fitsRoute([points], features[j].points, toleranceMm);
+        const fitted = fitRoute([points], features[j].points, toleranceMm);
+        if (fitted?.at === 'end') {
+          points = points.concat(fitted.points.slice(1));
+        } else if (fitted?.at === 'start') {
+          points = fitted.points.slice(0, -1).concat(points);
+        }
         if (fitted) {
-          points = points.concat(fitted.slice(1));
           taken.add(j);
           grew = true;
         }

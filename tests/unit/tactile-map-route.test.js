@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   fitsRoute,
+  fitRoute,
   routeLengthM,
   joinRoute,
   ROUTE_TOLERANCE_MM,
@@ -56,6 +57,76 @@ describe('fitsRoute', () => {
   it('refuses a shape without points', () => {
     expect(fitsRoute([], null)).toBeNull();
     expect(fitsRoute([], [[1, 1]])).toBeNull();
+  });
+});
+
+describe('fitRoute', () => {
+  const route = [
+    [
+      [10, 0],
+      [20, 0],
+    ],
+  ];
+
+  it('joins at the end as fitsRoute does', () => {
+    expect(
+      fitRoute(route, [
+        [20, 0],
+        [30, 0],
+      ])
+    ).toEqual({
+      at: 'end',
+      points: [
+        [20, 0],
+        [30, 0],
+      ],
+    });
+  });
+
+  it("joins at the start a piece that meets the route's first point, turned to end there", () => {
+    const want = {
+      at: 'start',
+      points: [
+        [0, 0],
+        [10, 0],
+      ],
+    };
+    expect(
+      fitRoute(route, [
+        [0, 0],
+        [10, 0],
+      ])
+    ).toEqual(want);
+    expect(
+      fitRoute(route, [
+        [10, 0],
+        [0, 0],
+      ])
+    ).toEqual(want);
+  });
+
+  it('refuses a piece that meets neither end, and takes anything onto an empty route', () => {
+    expect(
+      fitRoute(route, [
+        [40, 0],
+        [50, 0],
+      ])
+    ).toBeNull();
+    expect(
+      fitRoute(
+        [],
+        [
+          [1, 1],
+          [2, 2],
+        ]
+      )
+    ).toEqual({
+      at: 'end',
+      points: [
+        [1, 1],
+        [2, 2],
+      ],
+    });
   });
 });
 
@@ -119,6 +190,38 @@ describe('joinRoute', () => {
     expect(features[1].points).toEqual([
       [0, 0],
       [10, 0],
+    ]);
+  });
+
+  it('merges a piece that meets the start of a chain as well as its end', () => {
+    const features = [
+      {
+        id: 'r1',
+        class: 'route',
+        kind: 'line',
+        points: [
+          [10, 0],
+          [20, 0],
+        ],
+        on: true,
+      },
+      {
+        id: 'r2',
+        class: 'route',
+        kind: 'line',
+        points: [
+          [10, 0],
+          [0, 0],
+        ],
+        on: true,
+      },
+    ];
+    const out = joinRoute(features);
+    expect(out).toHaveLength(1);
+    expect(out[0].points).toEqual([
+      [0, 0],
+      [10, 0],
+      [20, 0],
     ]);
   });
 

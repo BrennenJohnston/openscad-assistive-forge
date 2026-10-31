@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dark and light looks drew a faint halo.
 - In the Alt View, reaching the end of a list is the last sound a scroll
   makes: no line's tick follows it any more.
+- A draft map's shapes are named by their street or building in the drawing
+  editor, and the warnings use the same names, never a map data code.
+- Walk this joins a sidewalk at either end of the route, so the first one
+  picked may point either way.
 
 ## [5.7.2] - 2026-10-26
 

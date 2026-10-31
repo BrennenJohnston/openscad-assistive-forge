@@ -61,7 +61,7 @@ import { readDrawingBox } from '../image-crop.js';
 import { createCommandStack } from './undo.js';
 import { createRegionCanvas, TOOLS } from './canvas.js';
 import { MAP_CLASSES } from '../tactile-map/map-classes.js';
-import { fitsRoute, routeLengthM } from '../tactile-map/route.js';
+import { fitRoute, routeLengthM } from '../tactile-map/route.js';
 
 /** The color engine, loaded once, on the first stencil open. */
 let enginePromise = null;
@@ -2262,9 +2262,9 @@ export function createDrawingEditor({
       say(S.routeNoFit);
       return;
     }
-    let fitted = [];
+    let fitted = { at: 'end', points: [] };
     if (points) {
-      fitted = fitsRoute(
+      fitted = fitRoute(
         route.map((r) => r.points),
         points
       );
@@ -2276,7 +2276,8 @@ export function createDrawingEditor({
     if (!routePrev.has(orig))
       routePrev.set(orig, mapClasses.get(orig) || 'ignore');
     setClass(orig, 'route');
-    route.push({ orig, points: fitted });
+    if (fitted.at === 'start') route.unshift({ orig, points: fitted.points });
+    else route.push({ orig, points: fitted.points });
     const meters = Math.round(
       routeLengthM(
         route.map((r) => r.points),
