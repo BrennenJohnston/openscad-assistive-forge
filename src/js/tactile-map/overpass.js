@@ -30,7 +30,7 @@ export const TIMEOUT_MS = 70000;
 /** The waits between tries after a refusal, in milliseconds. */
 export const BACKOFF_MS = Object.freeze([30000, 60000]);
 /** The statuses that mean "not now": the server is full or throttling. */
-const REFUSALS = new Set([429, 502, 504, 406]);
+const REFUSALS = new Set([429, 502, 503, 504, 406]);
 
 const WAY_TAGS = ['highway', 'building', 'railway', 'leisure', 'amenity'];
 const NODE_TAGS = [
@@ -55,8 +55,12 @@ function fail(code, message) {
  * @param {{lat: number, lon: number, radiusM: number}} where
  * @returns {string}
  */
-export function buildQuery({ lat, lon, radiusM }) {
-  const around = `around:${radiusM},${lat},${lon}`;
+export function buildQuery({ lat, lon, radiusM, box }) {
+  // A box (south, west, north, east) for a map between two places; a radius
+  // around one place otherwise.
+  const around = box
+    ? `${box.south},${box.west},${box.north},${box.east}`
+    : `around:${radiusM},${lat},${lon}`;
   const ways = WAY_TAGS.map((t) => `way(${around})[${t}];`).join('');
   const nodes = NODE_TAGS.map((t) => `node(${around})[${t}];`).join('');
   return `[out:json][timeout:${QUERY_TIMEOUT_S}];(${ways}${nodes});out tags geom;`;
@@ -81,12 +85,15 @@ export async function pullArea({
   lat,
   lon,
   radiusM,
+  box,
   fetch: fetchImpl = globalThis.fetch,
   wait = defaultWait,
   onWait = () => {},
   signal,
+  online = () => globalThis.navigator?.onLine !== false,
 } = {}) {
-  const body = 'data=' + encodeURIComponent(buildQuery({ lat, lon, radiusM }));
+  const body =
+    'data=' + encodeURIComponent(buildQuery({ lat, lon, radiusM, box }));
   const started = Date.now();
   for (let attempt = 0; ; attempt += 1) {
     const controller = new AbortController();
@@ -107,20 +114,26 @@ export async function pullArea({
       });
       text = await response.text();
     } catch (error) {
-      throw fail(
-        'no-answer',
-        `The map data did not arrive: ${error?.message || error}`
-      );
+      // No answer at all. Offline, or stopped by the person: say so now.
+      // Otherwise an overloaded server's error page without a cross-site
+      // header looks exactly like this, so it is a refusal, waited out.
+      if (signal?.aborted || !online()) {
+        throw fail(
+          'no-answer',
+          `The map data did not arrive: ${error?.message || error}`
+        );
+      }
+      response = null;
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener?.('abort', onOuterAbort);
     }
 
-    if (REFUSALS.has(response.status)) {
+    if (response === null || REFUSALS.has(response.status)) {
       if (attempt >= BACKOFF_MS.length) {
         throw fail(
           'busy',
-          `The map server refused ${attempt + 1} times (${response.status}).`
+          `The map server refused ${attempt + 1} times (${response ? response.status : 'no answer'}).`
         );
       }
       const ms = BACKOFF_MS[attempt];
