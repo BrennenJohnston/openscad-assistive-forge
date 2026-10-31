@@ -317,7 +317,8 @@ export const EDITOR_STRINGS = Object.freeze({
   routeHelp:
     'Click the sidewalks in the order you walk them. Each one joins the route.',
   /** After a segment joins the route. A11Y. */
-  routeJoined: (n, m) => `${n} segments on the route, ${m} m long.`,
+  routeJoined: (n, m) =>
+    `${n} ${n === 1 ? 'segment' : 'segments'} on the route, ${m} m long.`,
   /** A segment that does not touch the route's end. A11Y. */
   routeNoFit:
     'That segment does not touch the route yet. Pick the one between them first.',

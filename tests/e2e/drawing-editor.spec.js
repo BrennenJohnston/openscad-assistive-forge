@@ -2870,7 +2870,7 @@ test.describe('the route tool', () => {
     await page.keyboard.press('Home');
     await page.keyboard.press('Enter');
     await expect(statusLine).toHaveText(
-      /^1 segments on the route, \d+ m long\.$/
+      /^1 segment on the route, \d+ m long\.$/
     );
 
     // By mouse: the connector that meets the first sidewalk's east end (the

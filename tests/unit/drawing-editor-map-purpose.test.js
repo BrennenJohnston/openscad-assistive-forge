@@ -534,7 +534,7 @@ describe('the route tool', () => {
     key('Home');
     key('Enter');
     expect(selectOf(0).value).toBe('route');
-    expect(status()).toBe('1 segments on the route, 20 m long.');
+    expect(status()).toBe('1 segment on the route, 20 m long.');
     key('ArrowRight');
     key('Enter');
     expect(selectOf(1).value).toBe('route');
@@ -549,6 +549,37 @@ describe('the route tool', () => {
     undoButton().click();
     expect(selectOf(1).value).toBe('ignore');
     expect(selectOf(0).value).toBe('route');
+  });
+
+  it("joins a pick that meets the route's start, so the first piece may point either way", async () => {
+    openMap({
+      draft: true,
+      initialClasses: { 0: 'walkway' },
+      features: [
+        FEATURES[0],
+        {
+          id: 'd',
+          class: 'walkway',
+          kind: 'line',
+          points: [
+            [-10, 0],
+            [0, 0],
+          ],
+          on: false,
+        },
+        FEATURES[2],
+      ],
+      mmPerM: 0.5,
+    });
+    await vi.waitFor(() => expect(regionPaths()).toHaveLength(3));
+    routeBtn().click();
+    key('Home');
+    key('Enter');
+    expect(status()).toBe('1 segment on the route, 20 m long.');
+    key('ArrowRight');
+    key('Enter');
+    expect(selectOf(1).value).toBe('route');
+    expect(status()).toBe('2 segments on the route, 40 m long.');
   });
 
   it('Clear route puts every picked shape back to its class and says so', async () => {
@@ -571,6 +602,6 @@ describe('the route tool', () => {
     key('Home');
     key('Enter');
     expect(selectOf(0).value).toBe('route');
-    expect(status()).toBe('1 segments on the route, 0 m long.');
+    expect(status()).toBe('1 segment on the route, 0 m long.');
   });
 });
