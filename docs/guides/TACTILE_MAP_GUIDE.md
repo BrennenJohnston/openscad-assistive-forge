@@ -54,11 +54,32 @@ The **Map from an address** section stands above the plates section. It drafts a
 3. Tick the **Landmarks to show** you want in the draft: Entrances and Transit stops start ticked; Crossings, Steps and stairs, Shops and Benches start off. Press **Get map data**. One request goes to the Overpass service for everything within the radius, and the status line says how many features came back: walkways, crossings, buildings and landmarks. The public server is shared and sometimes full; when it refuses, the app waits 30 seconds and asks once more, then 60, then tells you to try later or load a file instead.
 4. Press **Make a draft map**. The data becomes a plan with north up and opens in the drawing editor's map purpose, one shape per feature. Everything starts off except the sidewalks within 30 m of the address, the crossings they end on, the landmarks you ticked and the **You are here** point in the middle: a draft is a list of what is there, and you choose what a reader needs. Switch a shape on by giving it a class; switch it off with the Class menu's last entry, **Off**. Buildings arrive as off areas and roads as off pairs of curb lines, because a block of raised buildings is a field a finger must cross; turn on the ones that help. Press **Apply classes** and the plates section rebuilds from what you kept; the editor says how many features are on and off.
 
-**Walk this** is a tool in the editor's toolbar for the route: pick it (the key is W), then click the sidewalks in the order you walk them. Each one joins the route where its end meets the route's end, and the status says how many segments are on the route and how long it is in meters. A segment that touches nothing on the route yet is refused, so pick the one between them first. **Clear route** puts every picked segment back. When you apply, the segments that meet become one Route line, the dotted line a finger follows.
+**Walk this** is a tool in the editor's toolbar for the route: pick it (the key is W), then click the sidewalks in the order you walk them. Each one joins the route where one of its ends meets either end of the route, so the first two may be picked in either direction, and the status says how many segments are on the route and how long it is in meters. A segment that touches nothing on the route yet is refused, so pick the one between them first. **Clear route** puts every picked segment back. When you apply, the segments that meet become one Route line, the dotted line a finger follows.
 
 **Mark steep sidewalks** reads heights along every sidewalk you kept and marks the runs steeper than the **Steep grade (%)** with chevrons pointing uphill, so a reader knows before the hill. The grade is 3 to 12 % and starts at 5 %, the grade where a walking surface counts as a ramp. The heights come from public terrain tiles at about 3 m per pixel, read every 10 m and smoothed over 30 m: a long hill shows; a short steep step, a curb ramp or a stair does not. Switching it off removes the chevrons.
 
 **Load an OpenStreetMap file** is the other way in: an `.osm` export from openstreetmap.org (the Export button, a small box around your address) or a `.geojson` file, read on your device and never sent anywhere. It is for a busy server, for working offline, and for a map you want to build again later from the same data. With an address picked the file centers on it; without one, on the middle of the file.
+
+#### A route map
+
+Give the section a second place and it maps the walk between two places instead of the ground around one.
+
+1. Pick the start in **Address or place** as above. Type the destination in **To (optional)**, press its **Search** and pick it under **Destinations found**. The radius is not used: the map covers both places and the walk between them.
+2. Press **Get map data**. The request asks for a box around both places with at least 150 m to spare beyond them.
+3. Press **Make a route map**. The app finds the shortest walk on the ways people walk, from a door of the first building to a door of the second (its main entrance when the data marks one). Where the data has no sidewalk the walk may follow a street, counted at three times its length so that a sidewalk wins whenever there is one. Steps are allowed and marked: they are often the shortest way, and a reader should know they are there.
+4. The draft switches on what the walk needs:
+   - the walk as one dotted Route line from door to door, so no short piece of path is lost;
+   - the crossings and the flights of steps on it;
+   - the two buildings, **You are here** at the start door and an **Entrance** at the destination door;
+   - each path that meets the walk, as its first 15 m, so a finger feels every junction it passes;
+   - the curbs of each street the walk crosses, for 25 m each side of the crossing;
+   - the landmarks you ticked within 25 m of the walk, each set beside the route; of two that face each other across a street, one: the nearer, unless it has no room 3 mm clear of the route.
+
+   Nothing that is on comes within 3 mm of the route, so a finger never takes a curb for the route. Everything else in the data is drawn too, switched off, one choice away in the editor.
+5. The map is fitted to the walk and the two buildings, north up, with 30 m of ground around them, at the largest scale your map size allows, and the plate is cut to fit: a walk that runs north and south on a 480 x 360 mm setting keeps the height and narrows the plate. The status line says how long the walk is, how many crossings and flights of steps are on it, and the map's size.
+6. The editor opens on the draft. Its shapes are named by their street or building, or by their class and the nearest named place ("Stairs near Husky Union Building"). Change what your reader needs and press **Apply classes**; **Edit drawing as a map** reopens it later with your classes.
+
+The raised title stays empty for you to write: two full place names are usually longer than the plate, and a short title ("HUB TO GATES") reads faster. When no walk joins the two places in the data, the status line says so; try other places, or load an OpenStreetMap file of the area.
 
 What leaves your device, and when, is under Privacy. The data is OpenStreetMap's, under the Open Database License, and the map carries the line "Map data from OpenStreetMap contributors, ODbL"; the terms are under Sources.
 
@@ -169,7 +190,7 @@ Everything runs on your device: the drawing's conversion and tracing, the plan, 
 A map from an address is the one part that talks to anyone, and only when you press:
 
 - **Search** sends the words you typed to OpenStreetMap's Nominatim service (nominatim.openstreetmap.org), with the app's web address as the referer and nothing else: no account, no email, no location of yours.
-- **Get map data** sends the picked place's coordinates and the radius to the Overpass service (overpass-api.de) and receives the map data.
+- **Get map data** sends the picked place's coordinates and the radius, or for a route map the four edges of a box around both places, to the Overpass service (overpass-api.de) and receives the map data.
 - **Mark steep sidewalks** fetches up to four terrain tiles from AWS Open Data (s3.amazonaws.com), each a 256 by 256 pixel picture of heights named by its tile number, which says what square kilometer the map is in and nothing more.
 
 Each of those hosts sees your connection's address, as any web request does. A file you load through **Load an OpenStreetMap file** stays on your device. The drawing route and the plates never leave it.
