@@ -46,6 +46,9 @@ export const KEPT_TAGS = Object.freeze([
   'steps',
   'handrail',
   'wheelchair',
+  // Who may walk a way: a path is walkable unless one of these says no.
+  'foot',
+  'access',
 ]);
 
 /**
