@@ -48,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   editor, and the warnings use the same names, never a map data code.
 - Walk this joins a sidewalk at either end of the route, so the first one
   picked may point either way.
+- The map from an address section says each status once, where a screen
+  reader heard every sentence twice, and closing the drawing editor puts
+  focus back on the button that opened it.
 
 ## [5.7.2] - 2026-10-26
 
