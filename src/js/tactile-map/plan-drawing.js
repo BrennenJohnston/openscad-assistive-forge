@@ -18,6 +18,7 @@
 
 import { ringsToPathData, union } from '../ring-geometry.js';
 import { activeLibrary } from './symbol-library.js';
+import { featureNames } from './feature-names.js';
 import {
   BUILTIN_SYMBOLS,
   DEFAULT_SETTINGS,
@@ -89,13 +90,14 @@ export function drawingFromPlan(plan, settings = {}) {
   const symbols = symbolMap(s.symbols || activeLibrary());
   const w = plan.size.w;
   const h = plan.size.h;
-  const paths = (plan.features || []).map((f) => {
+  const names = featureNames(plan.features || []);
+  const paths = (plan.features || []).map((f, i) => {
     const rings = ringsOf(f, s, symbols).filter((r) => r && r.length >= 3);
     const d = ringsToPathData(rings);
     const fillRule = f.kind === 'area' ? ' fill-rule="evenodd"' : '';
     return (
       `<path data-feature="${escapeAttr(f.id)}" data-colour="draft"` +
-      `${fillRule} d="${d}"/>`
+      ` data-name="${escapeAttr(names[i])}"${fillRule} d="${d}"/>`
     );
   });
   return (

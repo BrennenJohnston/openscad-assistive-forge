@@ -147,6 +147,10 @@ const AUTO_FULLSCREEN_MAX_WIDTH = 768;
  * @returns {string}
  */
 export function describeElement(element, index) {
+  // A drawing that names its shapes (a draft map names each by its street
+  // or building) is read by those names.
+  const named = element.getAttribute && element.getAttribute('data-name');
+  if (named) return named;
   const tag = element.tagName.toLowerCase();
   const attr = (name) => element.getAttribute(name);
   const n = index + 1;
