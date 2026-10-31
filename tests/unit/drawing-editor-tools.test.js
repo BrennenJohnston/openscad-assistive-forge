@@ -265,6 +265,22 @@ describe('the region canvas', () => {
     expect(on.onEmptyClick).toHaveBeenCalledWith(false);
   });
 
+  it("a click on a shape's edge picks the shape: a dashed Off line's gaps fall through to its edge", () => {
+    canvas.setState({ looks: { a: 'off-line', b: 'level-1-line' } });
+    const edgeA = canvas.svg.querySelector(
+      '[data-layer="edges"] [data-edge="a"]'
+    );
+    pointer(edgeA, 'pointerdown', 10, 50);
+    pointer(edgeA, 'pointerup', 10, 50);
+    expect(on.onClick).toHaveBeenLastCalledWith('a', false);
+    pointer(edgeA, 'pointerover', 10, 50);
+    expect(
+      canvas.svg
+        .querySelector('[data-layer="regions"] [data-region="a"]')
+        .classList.contains('is-hover')
+    ).toBe(true);
+  });
+
   it('marquee: a drag reports the regions wholly inside it, and Escape cancels one', () => {
     canvas.setTool('marquee');
     // The viewBox is 0..40 padded by 4% each side, on 400 px: about 9.3 px
@@ -357,6 +373,72 @@ describe('the region canvas', () => {
     expect(a.style.getPropertyValue('--region-fill')).toBe('#ff0000');
     expect(a.classList.contains('is-removed')).toBe(true);
     expect(b.classList.contains('is-selected')).toBe(true);
+  });
+
+  it('draws a shape left Off under the painted ones and a higher level over a lower one, and puts the order back without looks', () => {
+    const order = () =>
+      [...canvas.svg.querySelectorAll('[data-layer="regions"] path')].map(
+        (p) => p.dataset.region
+      );
+    const edgeOrder = () =>
+      [...canvas.svg.querySelectorAll('[data-layer="edges"] path')].map(
+        (p) => p.dataset.edge
+      );
+    expect(order()).toEqual(['a', 'b']);
+    // The Off hatch of a shape drawn later must not lie over a painted one.
+    canvas.setState({ looks: { a: 'level-1-area', b: 'off-area' } });
+    expect(order()).toEqual(['b', 'a']);
+    expect(edgeOrder()).toEqual(['b', 'a']);
+    canvas.setState({ looks: { a: 'level-3-line', b: 'level-2-area' } });
+    expect(order()).toEqual(['b', 'a']);
+    canvas.setState({ looks: { a: 'level-1-area', b: 'level-1-line' } });
+    expect(order()).toEqual(['a', 'b']);
+    canvas.setState({ looks: { a: 'level-2-area', b: 'off-area' } });
+    canvas.setState({});
+    expect(order()).toEqual(['a', 'b']);
+  });
+
+  it('paints a look onto each path and onto its edge underneath, and hatches an Off area', () => {
+    canvas.setState({
+      fills: { a: 'var(--drawing-editor-level-1)' },
+      looks: { a: 'level-1-area', b: 'off-area' },
+    });
+    const a = canvas.svg.querySelector(
+      '[data-layer="regions"] [data-region="a"]'
+    );
+    const b = canvas.svg.querySelector(
+      '[data-layer="regions"] [data-region="b"]'
+    );
+    const edgeA = canvas.svg.querySelector(
+      '[data-layer="edges"] [data-edge="a"]'
+    );
+    expect(a.dataset.look).toBe('level-1-area');
+    expect(edgeA.dataset.look).toBe('level-1-area');
+    expect(edgeA.getAttribute('d')).toBe(a.getAttribute('d'));
+    expect(b.style.getPropertyValue('--region-fill')).toMatch(
+      /^url\(#.+-off\)$/
+    );
+    // The edges sit under the regions, out of the reading order.
+    const layers = [...canvas.svg.children].map((n) =>
+      n.getAttribute('data-layer')
+    );
+    expect(layers.indexOf('edges')).toBeGreaterThan(-1);
+    expect(layers.indexOf('edges')).toBeLessThan(layers.indexOf('regions'));
+    expect(
+      canvas.svg
+        .querySelector('[data-layer="edges"]')
+        .getAttribute('aria-hidden')
+    ).toBe('true');
+    // A canvas that paints looks draws every shape itself: the dimmed art
+    // underneath would only show through an Off hatch as a dark patch.
+    const art = canvas.svg.querySelector('[data-layer="art"]');
+    expect(art.getAttribute('display')).toBe('none');
+    // A plain state takes every look away again, and the art comes back.
+    canvas.setState({});
+    expect(art.getAttribute('display')).toBeNull();
+    expect(a.dataset.look).toBeUndefined();
+    expect(edgeA.dataset.look).toBeUndefined();
+    expect(b.style.getPropertyValue('--region-fill')).toBe('');
   });
 });
 

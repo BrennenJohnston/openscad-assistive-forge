@@ -15,6 +15,7 @@
 import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { PNG } from 'pngjs';
 import path from 'node:path';
 import {
   recordAnnouncements,
@@ -2564,6 +2565,129 @@ test.describe('the map purpose on its canvas', () => {
     );
     await page.mouse.up();
     expect(await svg.getAttribute('viewBox')).not.toBe(before);
+  });
+});
+
+// The map purpose paints in the charm customizer's colors: a shape takes its
+// class's level (floor blue, symbol orange, top yellow-green) with a light edge
+// that reads on the dark ground, and a shape with no class is hatched. Before
+// the fix every shape was a thin gray outline, its filled areas 1.08:1 against
+// the ground in Forge dark. Read from the pixels, not from computed styles.
+test.describe('the map purpose in color', () => {
+  const lum = ([r, g, b]) => {
+    const f = (v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const contrast = (a, b) => {
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const near = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+  test("in Forge dark each class takes its level's color with an edge that reads on the ground, a shape with no class is hatched, and a legend names the looks", async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+      localStorage.setItem('openscad-forge-theme', 'dark');
+    });
+    await page.goto('/?example=tactile-map');
+    await expect(page.locator('#tactileMapPanel')).toBeVisible({
+      timeout: 60000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 5000 });
+      await notNow.click();
+    } catch {
+      // no prompt
+    }
+    const drawing =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="200mm" height="100mm" viewBox="0 0 200 100">' +
+      '<rect x="10" y="10" width="60" height="30"/>' +
+      '<rect x="100" y="35" width="40" height="30"/>' +
+      '<rect x="160" y="70" width="20" height="20"/>' +
+      '</svg>';
+    await page.setInputFiles('#param-map_file', {
+      name: 'three.svg',
+      mimeType: 'image/svg+xml',
+      buffer: Buffer.from(drawing),
+    });
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => window.stateManager?.getState()?.parameters?.map_file?.name
+          ),
+        { timeout: 30000 }
+      )
+      .toBe('three.svg');
+    await page.locator('#tactileMapEditDrawing').click();
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor').first()
+    ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });
+    const paths = page.locator(
+      '#drawingEditorSurface .drawing-editor-canvas-svg [data-layer="regions"] path'
+    );
+    await expect(paths).toHaveCount(3);
+    // By key: the canvas stacks the shapes by level, so their order on the
+    // page is not the drawing's.
+    const region = (key) =>
+      page.locator(
+        `#drawingEditorSurface .drawing-editor-canvas-svg [data-layer="regions"] path[data-region="${key}"]`
+      );
+    const classOf = (i) =>
+      page.locator(
+        `#drawingEditorSurface .drawing-editor-class-select[data-original="${i}"]`
+      );
+    await classOf(0).selectOption('area');
+    await classOf(1).selectOption('landmark');
+
+    const svg = page.locator(
+      '#drawingEditorSurface .drawing-editor-canvas-svg'
+    );
+    await page.mouse.move(0, 0);
+    const box = await svg.boundingBox();
+    const png = PNG.sync.read(await svg.screenshot());
+    const scale = png.width / box.width;
+    const at = (cssX, cssY) => {
+      const x = Math.round((cssX - box.x) * scale);
+      const y = Math.round((cssY - box.y) * scale);
+      const i = (png.width * y + x) * 4;
+      return [png.data[i], png.data[i + 1], png.data[i + 2]];
+    };
+    const ground = at(box.x + 3, box.y + 3);
+
+    for (const [key, hue] of [
+      [0, [0x1f, 0x5f, 0xa8]],
+      [1, [0xe0, 0x7a, 0x1f]],
+    ]) {
+      const r = await region(key).boundingBox();
+      const cy = r.y + r.height / 2;
+      const inside = at(r.x + r.width / 2, cy);
+      expect(near(inside, hue), `shape ${key} inside ${inside}`).toBeLessThan(
+        40
+      );
+      // Across the shape's left side, from the ground into the fill: some
+      // pixel on the way stands at 3:1 or more against the ground.
+      let best = 1;
+      for (let x = r.x - 6; x <= r.x + 3; x += 1 / scale) {
+        best = Math.max(best, contrast(at(x, cy), ground));
+      }
+      expect(best, `shape ${key} edge`).toBeGreaterThanOrEqual(3);
+    }
+
+    await expect(region(2)).toHaveAttribute('data-look', 'off-area');
+    const legend = page.locator(
+      '#drawingEditorSurface .drawing-editor-map-legend'
+    );
+    await expect(legend).toBeVisible();
+    await expect(legend.locator('li')).toHaveCount(4);
   });
 });
 

@@ -179,11 +179,23 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   hatchLine.setAttribute('y2', '6');
   hatchLine.setAttribute('class', 'drawing-editor-hatch-line');
   hatch.appendChild(hatchLine);
-  defs.appendChild(hatch);
+  // The map purpose's Off hatch: the same stripes, drawn stronger, as the
+  // charm customizer draws a shape turned off.
+  const offId = `${labelId}-off`;
+  const off = hatch.cloneNode(true);
+  off.id = offId;
+  off.firstChild.setAttribute('class', 'drawing-editor-off-line');
+  defs.append(hatch, off);
 
   const artLayer = document.createElementNS(SVG_NS, 'g');
   artLayer.setAttribute('data-layer', 'art');
   artLayer.setAttribute('aria-hidden', 'true');
+  // Each region's edge, drawn under it: a light stroke a little wider than
+  // the shape, so a shape in a dark layer color still reads on the dark
+  // ground. Shown only for a region that carries a look.
+  const edgeLayer = document.createElementNS(SVG_NS, 'g');
+  edgeLayer.setAttribute('data-layer', 'edges');
+  edgeLayer.setAttribute('aria-hidden', 'true');
   const regionLayer = document.createElementNS(SVG_NS, 'g');
   regionLayer.setAttribute('data-layer', 'regions');
   const plateLayer = document.createElementNS(SVG_NS, 'g');
@@ -203,7 +215,15 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   marquee.setAttribute('class', 'drawing-editor-marquee');
   marquee.setAttribute('aria-hidden', 'true');
   marquee.setAttribute('visibility', 'hidden');
-  svg.append(defs, artLayer, regionLayer, plateLayer, highlightLayer, marquee);
+  svg.append(
+    defs,
+    artLayer,
+    edgeLayer,
+    regionLayer,
+    plateLayer,
+    highlightLayer,
+    marquee
+  );
   svg.dataset.view = 'plan';
 
   root.append(help, svg);
@@ -216,6 +236,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   let highlighted = null;
   let drag = null;
   const pathByKey = new Map();
+  const edgeByKey = new Map();
 
   /** Whether the person asked for less motion; read each time it matters. */
   const reduceMotion = () =>
@@ -247,7 +268,9 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   function setDrawing(svgString, list, bbox) {
     regions = list;
     pathByKey.clear();
+    edgeByKey.clear();
     while (artLayer.firstChild) artLayer.removeChild(artLayer.firstChild);
+    while (edgeLayer.firstChild) edgeLayer.removeChild(edgeLayer.firstChild);
     while (regionLayer.firstChild)
       regionLayer.removeChild(regionLayer.firstChild);
 
@@ -274,6 +297,13 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
       path.dataset.region = r.key;
       regionLayer.appendChild(path);
       pathByKey.set(r.key, path);
+      const edge = document.createElementNS(SVG_NS, 'path');
+      edge.setAttribute('d', r.d);
+      edge.setAttribute('class', 'drawing-editor-region-edge');
+      edge.setAttribute('fill-rule', 'evenodd');
+      edge.dataset.edge = r.key;
+      edgeLayer.appendChild(edge);
+      edgeByKey.set(r.key, edge);
     }
     clearHighlight();
     showPlate(null);
@@ -302,18 +332,68 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
    * @param {Object<string, string>} state.fills - key -> css color, or ''
    * @param {Set<string>} state.selected
    * @param {Set<string>} state.removed
+   * @param {Object<string, string>} [state.looks] - key -> a look the
+   *   stylesheet draws (the map purpose's `level-1-area`, `level-3-line`,
+   *   `off-area`, `off-line`); an Off area takes the Off hatch
    */
-  function setState({ fills = {}, selected = new Set(), removed = new Set() }) {
+  function setState({
+    fills = {},
+    selected = new Set(),
+    removed = new Set(),
+    looks = {},
+  }) {
     for (const [key, path] of pathByKey) {
-      const fill = fills[key];
+      const look = looks[key];
+      const fill =
+        fills[key] || (look === 'off-area' ? `url(#${offId})` : undefined);
       if (fill) path.style.setProperty('--region-fill', fill);
       else path.style.removeProperty('--region-fill');
+      const edge = edgeByKey.get(key);
+      if (look) {
+        path.dataset.look = look;
+        if (edge) edge.dataset.look = look;
+      } else {
+        delete path.dataset.look;
+        if (edge) delete edge.dataset.look;
+      }
       path.classList.toggle('is-selected', selected.has(key));
       path.classList.toggle('is-removed', removed.has(key));
       if (removed.has(key)) path.setAttribute('fill', `url(#${hatchId})`);
       else path.removeAttribute('fill');
       path.classList.toggle('is-highlighted', key === highlighted);
       path.setAttribute('aria-hidden', 'true');
+    }
+    stackByLook(looks);
+    // A canvas that paints looks draws every shape itself; the dimmed art
+    // underneath would only darken the ground inside an Off hatch.
+    if (Object.keys(looks).length > 0) artLayer.setAttribute('display', 'none');
+    else artLayer.removeAttribute('display');
+  }
+
+  /**
+   * Paint in the order the print stacks: a shape left Off at the bottom,
+   * then the floor, the symbol level and the top, a line over an area of its
+   * own level; the drawing's order within each. Without looks the drawing's
+   * order stands, so an Off hatch never lies over a painted shape.
+   */
+  function stackByLook(looks) {
+    const rank = (key) => {
+      const look = looks[key] || '';
+      const level = /^level-(\d)-(area|line)$/.exec(look);
+      if (!level) return 0;
+      return Number(level[1]) + (level[2] === 'line' ? 0.5 : 0);
+    };
+    const wanted = regions
+      .map((r, i) => [r.key, i])
+      .sort((x, y) => rank(x[0]) - rank(y[0]) || x[1] - y[1])
+      .map(([key]) => key);
+    const current = [...regionLayer.children].map((p) => p.dataset.region);
+    if (wanted.every((key, i) => key === current[i])) return;
+    for (const key of wanted) {
+      const path = pathByKey.get(key);
+      if (path) regionLayer.appendChild(path);
+      const edge = edgeByKey.get(key);
+      if (edge) edgeLayer.appendChild(edge);
     }
   }
 
@@ -443,8 +523,12 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
     marquee.setAttribute('visibility', 'hidden');
   }
 
-  const regionKeyOf = (target) =>
-    target?.closest?.('[data-region]')?.dataset.region ?? null;
+  // A shape's edge, under it, answers for it: a click in a dashed line's gap
+  // or just beside a thin line still finds the shape.
+  const regionKeyOf = (target) => {
+    const el = target?.closest?.('[data-region], [data-edge]');
+    return el?.dataset.region ?? el?.dataset.edge ?? null;
+  };
 
   function onPointerDown(event) {
     if (event.button !== 0) return;

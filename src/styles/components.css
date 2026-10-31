@@ -18282,6 +18282,83 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   stroke-width: 2px;
 }
 
+/* The map purpose paints as the charm customizer does: a shape in its
+   level's layer color (floor, symbol, top), a line class as a line in it,
+   and a light edge under every painted shape so the darkest of the three
+   still reads on the dark ground. A shape with no class, or Off, is
+   hatched with a dashed edge: there, and not on the map. */
+.drawing-editor-region-edge {
+  display: none;
+  fill: none;
+  stroke: var(--color-text-primary);
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+/* A shape's edge is also where it takes a click: a click in a dashed
+   line's gap, or just beside a thin line, still finds the shape. */
+.drawing-editor-region-edge[data-look] {
+  pointer-events: stroke;
+}
+
+.drawing-editor-region-edge[data-look^='off-'] {
+  display: inline;
+  stroke: transparent;
+  stroke-width: 9px;
+}
+
+.drawing-editor-region-edge[data-look$='-area'][data-look^='level-'] {
+  display: inline;
+  stroke-width: 3px;
+}
+
+.drawing-editor-region-edge[data-look$='-line'][data-look^='level-'] {
+  display: inline;
+  stroke-width: 6px;
+}
+
+.drawing-editor-region[data-look$='-area'][data-look^='level-'] {
+  stroke: none;
+}
+
+.drawing-editor-region[data-look$='-line'][data-look^='level-'] {
+  fill: none;
+  stroke: var(--region-fill);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.drawing-editor-region[data-look^='off-'] {
+  stroke: var(--color-text-secondary);
+  stroke-width: 1.5px;
+  stroke-dasharray: 4 3;
+}
+
+.drawing-editor-region[data-look='off-line'] {
+  fill: none;
+}
+
+.drawing-editor-off-line {
+  stroke: var(--color-text-secondary);
+  stroke-width: 1px;
+  stroke-opacity: 0.8;
+}
+
+/* Under the pointer: an area takes the text color's outline, a line
+   thickens; Off keeps its dashes in the text color. */
+.drawing-editor-region[data-look].is-hover {
+  stroke: var(--color-text-primary);
+  stroke-width: 4px;
+}
+
+.drawing-editor-region[data-look$='-line'][data-look^='level-'].is-hover {
+  stroke: var(--region-fill);
+  stroke-width: 5px;
+}
+
 /* The keyboard highlight: two strokes drawn over the regions, the outer in
    the page's text colour and the inner in its background colour. That pair
    is black and white in the light theme and white and black in the dark
@@ -18431,6 +18508,33 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 
 .drawing-editor-legend [data-kind='plate'] .drawing-editor-legend-chip {
   background: var(--color-accent);
+}
+
+/* The map legend's chips: the three level colors with the light edge the
+   canvas draws, and the Off hatch with its dashed edge. */
+.drawing-editor-map-legend [data-kind^='level-'] .drawing-editor-legend-chip {
+  border: 1px solid var(--color-text-primary);
+}
+
+.drawing-editor-map-legend [data-kind='level-1'] .drawing-editor-legend-chip {
+  background: var(--drawing-editor-level-1);
+}
+
+.drawing-editor-map-legend [data-kind='level-2'] .drawing-editor-legend-chip {
+  background: var(--drawing-editor-level-2);
+}
+
+.drawing-editor-map-legend [data-kind='level-3'] .drawing-editor-legend-chip {
+  background: var(--drawing-editor-level-3);
+}
+
+.drawing-editor-map-legend [data-kind='off'] .drawing-editor-legend-chip {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent 0 3px,
+    var(--color-text-secondary) 3px 4px
+  );
+  border: 1px dashed var(--color-text-secondary);
 }
 
 .drawing-editor-marquee {
