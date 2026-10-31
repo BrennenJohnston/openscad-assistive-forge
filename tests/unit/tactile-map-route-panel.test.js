@@ -29,6 +29,7 @@ vi.mock('../../src/js/announcer.js', () => ({
   announce: vi.fn(),
   announceChange: vi.fn(),
   announceError: vi.fn(),
+  withdrawAnnouncement: vi.fn(),
 }));
 
 import {
@@ -316,6 +317,46 @@ describe('Edit drawing as a map', () => {
     await vi.waitFor(() => expect(opened).not.toBeNull(), SETTLE);
     const classes = Object.values(opened.options.initialClasses);
     expect(classes.some((c) => c !== 'ignore')).toBe(true);
+  });
+});
+
+describe('focus after the editor', () => {
+  async function routeDraft() {
+    mount();
+    await pickFrom();
+    await pickTo();
+    $('tactileMapGetData').click();
+    await vi.waitFor(() => expect(getMapData()?.to).toEqual(GATES), SETTLE);
+    $('tactileMapDraft').click();
+    await vi.waitFor(() => expect(opened).not.toBeNull(), SETTLE);
+  }
+
+  it('goes back to Make a route map when the editor closes, and to Edit drawing as a map after it reopened the draft', async () => {
+    await routeDraft();
+    expect(document.activeElement).not.toBe($('tactileMapDraft'));
+    opened.options.onClose();
+    expect(document.activeElement).toBe($('tactileMapDraft'));
+    opened = null;
+    $('tactileMapEditDrawing').click();
+    await vi.waitFor(() => expect(opened).not.toBeNull(), SETTLE);
+    opened.options.onClose();
+    expect(document.activeElement).toBe($('tactileMapEditDrawing'));
+  });
+
+  it('goes back to the button that opened the editor after Apply classes and after Keep original too', async () => {
+    await routeDraft();
+    const regions = getMapPlan().features.map((f, index) => ({
+      index,
+      class: f.on ? f.class : 'ignore',
+    }));
+    opened.options.onApply({ regions, svg: opened.svg });
+    expect(document.activeElement).toBe($('tactileMapDraft'));
+    document.activeElement.blur();
+    opened = null;
+    $('tactileMapEditDrawing').click();
+    await vi.waitFor(() => expect(opened).not.toBeNull(), SETTLE);
+    opened.options.onKeepOriginal();
+    expect(document.activeElement).toBe($('tactileMapEditDrawing'));
   });
 });
 

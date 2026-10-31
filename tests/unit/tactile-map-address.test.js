@@ -24,6 +24,7 @@ vi.mock('../../src/js/announcer.js', () => ({
   announce: vi.fn(),
   announceChange: vi.fn(),
   announceError: vi.fn(),
+  withdrawAnnouncement: vi.fn(),
 }));
 
 import {
@@ -31,7 +32,11 @@ import {
   destroyMapPanel,
   getMapPlace,
 } from '../../src/js/tactile-map/map-panel.js';
-import { announce, announceError } from '../../src/js/announcer.js';
+import {
+  announce,
+  announceError,
+  withdrawAnnouncement,
+} from '../../src/js/announcer.js';
 import { stateManager } from '../../src/js/state.js';
 import { sampleStationPlan } from '../../src/js/tactile-map/plan.js';
 
@@ -140,9 +145,19 @@ describe('the address section', () => {
     expect(input().getAttribute('autocomplete')).toBe('off');
     expect(searchBtn().textContent).toBe('Search');
     expect(results().hidden).toBe(true);
-    expect(
-      document.getElementById('tactileMapAddressStatus').getAttribute('role')
-    ).toBe('status');
+    // Shown, not a live region: the panel says each sentence once through
+    // the announcer; a live region beside it made NVDA say each one twice.
+    const line = document.getElementById('tactileMapAddressStatus');
+    expect(line.getAttribute('role')).toBeNull();
+    expect(line.getAttribute('aria-live')).toBeNull();
+  });
+
+  it('takes back a waiting "Searching..." when the places come back, so it is never said after them', async () => {
+    mount(vi.fn(async () => PLACES));
+    type('1000 4th Ave, Seattle, WA');
+    searchBtn().click();
+    await vi.waitFor(() => expect(radios()).toHaveLength(5));
+    expect(withdrawAnnouncement).toHaveBeenCalledWith('tactile-map');
   });
 
   it('searches on the press, says so, lists the places as radios and focuses the first', async () => {

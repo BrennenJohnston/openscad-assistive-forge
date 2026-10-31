@@ -34,6 +34,7 @@ vi.mock('../../src/js/announcer.js', () => ({
   announce: vi.fn(),
   announceChange: vi.fn(),
   announceError: vi.fn(),
+  withdrawAnnouncement: vi.fn(),
 }));
 
 import {

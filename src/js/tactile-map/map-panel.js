@@ -38,7 +38,12 @@
 
 import { stateManager } from '../state.js';
 import { setParameterValue } from '../ui-generator.js';
-import { announce, announceChange, announceError } from '../announcer.js';
+import {
+  announce,
+  announceChange,
+  announceError,
+  withdrawAnnouncement,
+} from '../announcer.js';
 import { dataUrlToText } from '../svg-text-encoding.js';
 import { sampleStationPlan } from './plan.js';
 import {
@@ -163,6 +168,14 @@ async function sharedDrawingEditor() {
   return editor;
 }
 
+/**
+ * Focus back on the button that opened the drawing editor, as the editor
+ * closes over the preview, which keeps no focus of its own to return.
+ */
+function backTo(button) {
+  if (button?.isConnected && !button.disabled) button.focus();
+}
+
 /** Whether an SVG is a levels file this panel wrote, by its groups. */
 function isLevelsFile(svg) {
   return /<g id="level1"/.test(svg) && /<g id="channels"/.test(svg);
@@ -281,6 +294,7 @@ class MapPanel {
       pullArea: (where) => this.pull(where),
       readOsmFile: (file) => this.readOsmFile(file),
       say: (text, failed) => this.sayAddress(text, failed),
+      unsay: () => withdrawAnnouncement(SOURCE),
       onPlace: (place) => {
         this.place = place;
       },
@@ -385,9 +399,10 @@ class MapPanel {
    */
   async openDrawing() {
     this.adoptPicture();
+    const opener = this.refs.editDrawing;
     // A draft reopens as the draft, with the classes it has now.
     if (this.source === 'draft') {
-      await this.openDraft();
+      await this.openDraft(opener);
       return;
     }
     if (!this.drawing) {
@@ -399,7 +414,7 @@ class MapPanel {
       // The panel's own levels file is this plan drawn: open the plan, with
       // its classes, not its shapes all at Ignore.
       if (isLevelsFile(picture.svg)) {
-        await this.openDraft();
+        await this.openDraft(opener);
         return;
       }
       this.drawing = {
@@ -425,9 +440,12 @@ class MapPanel {
       purpose: 'map',
       sourceName: drawing.name,
       initialClasses: drawing.classes,
-      onApply: (result) => this.takeRegions(result),
-      onKeepOriginal: () => {},
-      onClose: () => {},
+      onApply: (result) => {
+        this.takeRegions(result);
+        backTo(opener);
+      },
+      onKeepOriginal: () => backTo(opener),
+      onClose: () => backTo(opener),
     });
   }
 
@@ -641,6 +659,7 @@ class MapPanel {
     );
     door.type = 'button';
     door.id = 'tactileMapEditDrawing';
+    this.refs.editDrawing = door;
     door.addEventListener('click', () => {
       this.openDrawing().catch((err) => {
         this.sayDrawing(err?.message || String(err), true);
@@ -873,8 +892,9 @@ class MapPanel {
    * The draft in the editor's map purpose: one shape per feature at its
    * index, the on ones with their class and the off ones as Off; Apply
    * lays the rows back over the plan by index and the plates follow.
+   * Focus goes back to `opener`, the button that opened it, as it closes.
    */
-  async openDraft() {
+  async openDraft(opener = this.address?.refs?.draft) {
     const editor = await this.getEditor();
     if (!editor || typeof editor.open !== 'function') {
       this.sayAddress('The drawing editor is not on this page.', true);
@@ -906,9 +926,10 @@ class MapPanel {
         this.plan = { ...applied, features: joinRoute(applied.features) };
         this.plate = 'whole';
         this.schedule(0);
+        backTo(opener);
       },
-      onKeepOriginal: () => {},
-      onClose: () => {},
+      onKeepOriginal: () => backTo(opener),
+      onClose: () => backTo(opener),
     });
   }
 

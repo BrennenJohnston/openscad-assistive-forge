@@ -199,6 +199,7 @@ function el(tag, className, text) {
  * @param {(text: string, failed?: boolean) => void} args.say - writes the status line and announces once
  * @param {(place: object) => void} [args.onPlace]
  * @param {(osm: object) => void} [args.onData]
+ * @param {() => void} [args.unsay] - take back a sentence still waiting to be said
  * @param {() => void} [args.onDraft] - Make a draft map pressed (enabled once data exists)
  * @param {(on: boolean, gradePct: number) => void} [args.onSteep] - the switch moved (enabled once a draft exists)
  * @returns {{ el: HTMLElement, refs: object, getPlace: () => object|null, getData: () => object|null, destroy: () => void }}
@@ -208,6 +209,7 @@ export function createAddressSection({
   pullArea,
   readOsmFile,
   say,
+  unsay = () => {},
   onPlace,
   onData,
   onDraft,
@@ -426,9 +428,10 @@ export function createAddressSection({
   attribution.appendChild(document.createTextNode(S.attribution[2]));
   section.appendChild(attribution);
 
+  // Shown, not a live region: the panel says each sentence once through the
+  // announcer, as it does for the plates line.
   const status = el('p', 'braille-panel-help');
   status.id = 'tactileMapAddressStatus';
-  status.setAttribute('role', 'status');
   section.appendChild(status);
 
   let place = null;
@@ -537,6 +540,9 @@ export function createAddressSection({
         say(S.none(q), true);
       } else {
         showList(which.list, places, which);
+        // The places are said as focus reaches them; a "Searching..." still
+        // waiting would be said after them.
+        unsay();
       }
     } catch (error) {
       clearList(which.list);

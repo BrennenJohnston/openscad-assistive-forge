@@ -175,10 +175,9 @@ test('a route map from the Husky Union Building to the Bill & Melinda Gates Cent
   await expect(page.locator('#tactileMapWarnings li')).toHaveCount(0);
 
   // The model takes the fitted size and renders with no warning.
-  await page
-    .locator('#drawingEditorSurface')
-    .getByRole('button', { name: 'Close' })
-    .click();
+  // Escape leaves the editor, and focus goes back to the button that opened it.
+  await page.keyboard.press('Escape');
+  await expect(draft).toBeFocused();
   await expect(page.locator('#param-map_width_mm-spinbox')).toHaveValue('172', {
     timeout: 10000,
   });
