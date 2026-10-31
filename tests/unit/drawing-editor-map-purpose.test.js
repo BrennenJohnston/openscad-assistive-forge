@@ -200,6 +200,12 @@ describe('the map purpose', () => {
       '.drawing-editor-canvas-svg [data-layer="regions"] path'
     ),
   ];
+  // A shape's region by its key: the canvas stacks the regions by level, so
+  // their order on the page is not the drawing's.
+  const regionAt = (i) =>
+    surface.querySelector(
+      `.drawing-editor-canvas-svg [data-layer="regions"] [data-region="${i}"]`
+    );
 
   it('shows the drawing on the region canvas, one region per shape in order, with the relief panes and bulk tools hidden and the zoom buttons shown', async () => {
     openMap();
@@ -223,10 +229,9 @@ describe('the map purpose', () => {
     openMap();
     await vi.waitFor(() => expect(regionPaths()).toHaveLength(3));
     choose(0, 'wall');
-    expect(regionPaths()[0].style.getPropertyValue('--region-fill')).not.toBe(
-      ''
-    );
-    expect(regionPaths()[1].style.getPropertyValue('--region-fill')).toBe('');
+    expect(regionAt(0).style.getPropertyValue('--region-fill')).not.toBe('');
+    // A shape with no class yet is hatched, there and not on the map.
+    expect(regionAt(1).dataset.look).toBe('off-area');
     const svg = surface.querySelector('.drawing-editor-canvas-svg');
     svg.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Home', bubbles: true })
@@ -240,6 +245,48 @@ describe('the map purpose', () => {
       new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
     );
     expect(document.activeElement).toBe(selectOf(1));
+  });
+
+  it("paints each class by its level in the charm customizer's layer colors, a line class as a line, a shape with no class hatched, and names the four looks in a legend", async () => {
+    openMap();
+    await vi.waitFor(() => expect(regionPaths()).toHaveLength(3));
+    choose(0, 'wall');
+    choose(1, 'area');
+    const [a, b, c] = [0, 1, 2].map(regionAt);
+    expect(a.dataset.look).toBe('level-3-line');
+    expect(a.style.getPropertyValue('--region-fill')).toBe(
+      'var(--drawing-editor-level-3)'
+    );
+    expect(b.dataset.look).toBe('level-1-area');
+    expect(b.style.getPropertyValue('--region-fill')).toBe(
+      'var(--drawing-editor-level-1)'
+    );
+    expect(c.dataset.look).toBe('off-area');
+    choose(1, 'landmark');
+    expect(b.dataset.look).toBe('level-2-area');
+    expect(b.style.getPropertyValue('--region-fill')).toBe(
+      'var(--drawing-editor-level-2)'
+    );
+    // Off on a row is the hatch again.
+    choose(1, 'ignore');
+    expect(b.dataset.look).toBe('off-area');
+
+    const legend = surface.querySelector('.drawing-editor-map-legend');
+    expect(legend.hidden).toBe(false);
+    expect(legend.getAttribute('aria-label')).toBe(S.mapLegendLabel);
+    expect(
+      [...legend.querySelectorAll('li')].map((li) => [
+        li.dataset.kind,
+        li.textContent,
+      ])
+    ).toEqual([
+      ['level-1', S.mapLegendFloor],
+      ['level-2', S.mapLegendSymbol],
+      ['level-3', S.mapLegendTop],
+      ['off', S.mapLegendOff],
+    ]);
+    // The stencil's legend stays away.
+    expect(surface.querySelector('.drawing-editor-legend').hidden).toBe(true);
   });
 
   it('offers the Select, Hand and Walk this tools and no paint tools; Hand pans the canvas, V comes back to Select', async () => {
@@ -388,6 +435,9 @@ describe('the map purpose', () => {
     }
     expect(applyButton().hidden).toBe(true);
     expect(editor.getMapClasses()).toBeNull();
+    expect(surface.querySelector('.drawing-editor-map-legend').hidden).toBe(
+      true
+    );
   });
 });
 

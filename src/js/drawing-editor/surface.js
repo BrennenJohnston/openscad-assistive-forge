@@ -622,6 +622,27 @@ export function createDrawingEditor({
   }
   legend.hidden = true;
 
+  // The map purpose's legend: a shape takes its level's color, as a charm's
+  // shape takes its layer's, and a shape left off is hatched.
+  const mapLegend = document.createElement('ul');
+  mapLegend.className = 'drawing-editor-legend drawing-editor-map-legend';
+  mapLegend.setAttribute('aria-label', S.mapLegendLabel);
+  for (const [kind, text] of [
+    ['level-1', S.mapLegendFloor],
+    ['level-2', S.mapLegendSymbol],
+    ['level-3', S.mapLegendTop],
+    ['off', S.mapLegendOff],
+  ]) {
+    const li = document.createElement('li');
+    li.dataset.kind = kind;
+    const chip = document.createElement('span');
+    chip.className = 'drawing-editor-legend-chip';
+    chip.setAttribute('aria-hidden', 'true');
+    li.append(chip, document.createTextNode(text));
+    mapLegend.appendChild(li);
+  }
+  mapLegend.hidden = true;
+
   body.append(stage, cropPanel.element, panel);
   // Two rows that never depend on state.
   //
@@ -860,7 +881,7 @@ export function createDrawingEditor({
     },
   });
   canvas.root.hidden = true;
-  stage.appendChild(legend);
+  stage.append(legend, mapLegend);
 
   let isOpen = false;
   /** Open before any picture: the empty state on screen. */
@@ -1386,6 +1407,7 @@ export function createDrawingEditor({
       canvasHelp.textContent = map ? S.mapCanvasHelp : S.canvasHelp;
     }
     legend.hidden = !stencil;
+    mapLegend.hidden = !map;
     applyBtn.hidden = !(stencil || map);
     applyBtn.textContent = map ? S.applyClasses : S.applyColours;
     // The word follows the purpose too. A region is a thing the stencil lane
@@ -2138,18 +2160,31 @@ export function createDrawingEditor({
     paintMapCanvas();
   }
 
-  /** Classed shapes tinted, deleted rows hatched, the rest the drawing's own. */
+  /**
+   * Each shape in its class's level color, the charm customizer's layer
+   * colors (floor, symbol, top), a line class drawn as a line; a shape with
+   * no class, or Off, hatched; a deleted row hatched as before.
+   */
   function paintMapCanvas() {
     if (purpose !== 'map') return;
     const fills = {};
-    for (const [orig, key] of mapClasses) {
-      if (key !== 'ignore') {
-        fills[String(orig)] =
-          'var(--drawing-editor-map-tint, var(--drawing-editor-base-tint))';
-      }
-    }
+    const looks = {};
     const removed = new Set(workspace.getDeletedIndices().map(String));
-    canvas.setState({ fills, selected: new Set(), removed });
+    mapElements.forEach((_, i) => {
+      const key = String(i);
+      if (removed.has(key)) return;
+      const cls = mapClasses.get(i);
+      const def = cls ? MAP_CLASSES.find((c) => c.key === cls) : null;
+      if (def?.level) {
+        const shape = def.kind === 'line' ? 'line' : 'area';
+        looks[key] = `level-${def.level}-${shape}`;
+        fills[key] = `var(--drawing-editor-level-${def.level})`;
+      } else {
+        looks[key] =
+          callbacks.features?.[i]?.kind === 'line' ? 'off-line' : 'off-area';
+      }
+    });
+    canvas.setState({ fills, selected: new Set(), removed, looks });
   }
 
   /** A live row's canvas key: the shape's original index. */

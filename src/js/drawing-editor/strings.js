@@ -398,6 +398,15 @@ export const EDITOR_STRINGS = Object.freeze({
   legendRemoved: 'Removed',
   legendUnpainted: 'Unpainted (the wall)',
   legendPlate: 'This plate cuts here',
+  /**
+   * The map purpose's legend: the charm customizer's layer colors, one per
+   * level of the map, and the hatch for a shape left off. A11Y.
+   */
+  mapLegendLabel: 'What the colors on the map mean',
+  mapLegendFloor: 'Floor level',
+  mapLegendSymbol: 'Symbol level',
+  mapLegendTop: 'Top level',
+  mapLegendOff: 'Off, not on the map',
   /** After a plate's largest few loose pieces, the rest, counted. */
   moreIslands: (plate, n) =>
     `And ${count(n, 'more loose piece', 'more loose pieces')} on plate ${plate}, all smaller.`,

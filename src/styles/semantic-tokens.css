@@ -197,6 +197,14 @@
   --svg-prep-layer-2: #e07a1f;
   --svg-prep-layer-3: #a6c72b;
   --svg-prep-off-ink: #666666;
+
+  /* The same three layer colors, true in every theme, for the drawing
+     surfaces that are not inverted: the map purpose's canvas paints a
+     shape by its level in them (floor, symbol, top), so a map and a charm
+     read alike. No other block redefines them. */
+  --drawing-editor-level-1: #1f5fa8;
+  --drawing-editor-level-2: #e07a1f;
+  --drawing-editor-level-3: #a6c72b;
 }
 
 /* ============================================================================
