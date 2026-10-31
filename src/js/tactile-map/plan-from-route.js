@@ -109,7 +109,7 @@ function simplify(points, epsilon) {
 const lengthOf = (pts) =>
   pts.reduce((sum, p, i) => (i ? sum + dist(pts[i - 1], p) : sum), 0);
 
-/** The gap from a point to a symbol's square, `half` mm from its centre. */
+/** The gap from a point to a symbol's square, `half` mm from its center. */
 const toSquare = (p, at, half) =>
   Math.hypot(
     Math.max(0, Math.abs(p[0] - at[0]) - half),
@@ -348,12 +348,12 @@ export function draftRoutePlan({
       crossingPoints.has(pointKey(p.lat, p.lon))
     );
     if (shared.length === 0 || !road.tags?.highway) continue;
-    const centres = shared.map(mm);
+    const centers = shared.map(mm);
     for (const f of features) {
       if (f.class !== 'curb' || !idMatches(f, road.id)) continue;
       runs(densify(f.points, DENSIFY_MM), (p) => {
         return (
-          centres.some((c) => dist(c, p) <= windowMm) &&
+          centers.some((c) => dist(c, p) <= windowMm) &&
           toPolyline(p, route) >= ROUTE_GAP_MM
         );
       }).forEach((r, i) => {

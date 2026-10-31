@@ -60,7 +60,7 @@ function toSegment(p, a, b) {
 }
 const toLine = (p, pts) =>
   Math.min(...pts.slice(1).map((q, i) => toSegment(p, pts[i], q)));
-/** The gap from a point to a symbol's square, `half` mm from its centre. */
+/** The gap from a point to a symbol's square, `half` mm from its center. */
 const toSquare = (p, at, half) =>
   Math.hypot(
     Math.max(0, Math.abs(p[0] - at[0]) - half),
