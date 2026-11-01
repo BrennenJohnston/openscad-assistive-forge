@@ -1282,7 +1282,10 @@ describe('braille panel — the Alt View', () => {
     expect(panel.hidden).toBe(false);
     root.setAttribute('data-ui-variant', 'mono');
     await vi.waitFor(() => expect(panel.hidden).toBe(true));
-    expect(said).toHaveBeenCalledWith(SENTENCE);
+    // Under its own source, after the usual wait: the Alt View's own
+    // sentence, said in the same moment, joins it instead of replacing it
+    // (NVDA heard only "Alt View on." when both named no source).
+    expect(said).toHaveBeenCalledWith(SENTENCE, true, { source: 'braille' });
     root.removeAttribute('data-ui-variant');
     await vi.waitFor(() => expect(panel.hidden).toBe(false));
     expect(said.mock.calls.filter((c) => c[0] === SENTENCE)).toHaveLength(1);
@@ -1293,6 +1296,6 @@ describe('braille panel — the Alt View', () => {
     root.setAttribute('data-ui-variant', 'mono');
     mountCardPanel();
     expect(document.getElementById('braillePanel').hidden).toBe(true);
-    expect(said).toHaveBeenCalledWith(SENTENCE);
+    expect(said).toHaveBeenCalledWith(SENTENCE, true, { source: 'braille' });
   });
 });

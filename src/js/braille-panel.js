@@ -2661,7 +2661,12 @@ class BraillePanel {
     if (off === this.altOff) return;
     this.altOff = off;
     if (this.el) this.el.hidden = off;
-    if (off) stateManager.announceChange(ALT_VIEW_SENTENCE);
+    // Its own source, after the usual wait: the Alt View says its own
+    // sentence in the same moment, and one that named no source replaced it.
+    if (off)
+      stateManager.announceChange(ALT_VIEW_SENTENCE, true, {
+        source: 'braille',
+      });
   }
 
   destroy() {
