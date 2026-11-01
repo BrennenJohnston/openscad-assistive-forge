@@ -126,14 +126,17 @@ export function createSteps({
   function show(index, { focus = true } = {}) {
     current = Math.max(0, Math.min(names.length - 1, index));
     reached = Math.max(reached, current);
+    heading.textContent = S.heading(current + 1, names.length, names[current]);
+    // The heading takes focus before Next hides on the last step and before
+    // the list's buttons are rebuilt: a focused control that disappears
+    // drops focus to the page, and a screen reader says the document first.
+    if (focus) heading.focus();
     sections.forEach((s, i) => {
       s.hidden = i !== current;
     });
-    heading.textContent = S.heading(current + 1, names.length, names[current]);
     renderList();
     refresh();
     onShow(current);
-    if (focus) heading.focus();
   }
 
   back.addEventListener('click', () => {
