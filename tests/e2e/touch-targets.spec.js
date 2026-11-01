@@ -10,6 +10,7 @@
  * @license GPL-3.0-or-later
  */
 import { test, expect } from '@playwright/test';
+import { PNG } from 'pngjs';
 import { skipWithoutWebGL } from './helpers/webgl.js';
 
 test.describe.configure({ timeout: 180_000 });
@@ -79,6 +80,61 @@ test('the Customizer’s help and reset buttons', async ({ page }) => {
   });
   await expectAtLeast(page, '.param-help-button', 'a help button');
   await expectAtLeast(page, '.param-reset-btn', 'a reset button');
+});
+
+// The round mark is 20 px across inside its 44 px target: the padding and
+// background-clip draw it so. A background shorthand after the clip resets
+// the clip, and the color fills the whole target over the label beside it.
+test('the help mark is drawn 20 px across inside its target, at rest, under the mouse and open', async ({
+  page,
+}) => {
+  await openBox(page);
+  await page.locator('#paramDetailLevel').selectOption('hide');
+  await page.evaluate(() => {
+    document
+      .querySelectorAll('#parametersContainer details')
+      .forEach((d) => (d.open = true));
+  });
+  const button = page.locator('.param-help-button').first();
+  await button.scrollIntoViewIfNeeded();
+  // From the first pixel of the mark's color to the last, across its middle.
+  const markWidth = async () => {
+    const color = await button.evaluate(
+      (b) => getComputedStyle(b).backgroundColor
+    );
+    const [r, g, b] = color.match(/\d+/g).map(Number);
+    const png = PNG.sync.read(
+      await button.screenshot({ animations: 'disabled' })
+    );
+    const y = Math.floor(png.height / 2);
+    const hits = [];
+    for (let x = 0; x < png.width; x += 1) {
+      const i = (y * png.width + x) * 4;
+      const d =
+        Math.abs(png.data[i] - r) +
+        Math.abs(png.data[i + 1] - g) +
+        Math.abs(png.data[i + 2] - b);
+      if (d < 30) hits.push(x);
+    }
+    return hits.length ? hits[hits.length - 1] - hits[0] + 1 : 0;
+  };
+  const atRest = await markWidth();
+  expect(
+    atRest,
+    `at rest the mark is ${atRest} px across`
+  ).toBeGreaterThanOrEqual(18);
+  expect(atRest, `at rest the mark is ${atRest} px across`).toBeLessThanOrEqual(
+    22
+  );
+  await button.hover();
+  const hovered = await markWidth();
+  expect(hovered, `under the mouse it is ${hovered} px`).toBeLessThanOrEqual(
+    24
+  );
+  await button.click();
+  await expect(button).toHaveAttribute('aria-expanded', 'true');
+  const open = await markWidth();
+  expect(open, `open it is ${open} px`).toBeLessThanOrEqual(24);
 });
 
 test('the Customizer’s one reset-all button, full size, still asks first', async ({
