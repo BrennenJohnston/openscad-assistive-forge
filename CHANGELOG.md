@@ -7,51 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.8.0] - 2026-11-01
+
 ### Added
 
-- Tactile Map Designer: a tactile map tile with up to three raised levels,
-  research-sized symbols, a raised title, a north cue and channels for
-  braille label tape, with a guide and a symbols page.
+- The Tactile Map Designer: a tactile map tile with up to three raised
+  levels, research-sized symbols, a raised title, a north cue and channels
+  for braille label tape, with a guide and a symbols page.
 - Tactile maps split into plates for your print bed, each named by touch;
   one button renders every plate and downloads them as one zip with the
   plan, the levels files, a layout picture and a README.
 - The drawing editor turns a line drawing, a DXF or a traced photo into a
-  tactile map plan: a class on every shape, lines found down their middle,
-  areas with what is drawn inside them, drawn words raised.
-- Tactile Map Designer: type an address and get a draft map of the
-  sidewalks and landmarks you choose, from OpenStreetMap, live or from a
-  file you drop in.
-- Tactile Map Designer: sidewalks steeper than a grade you set can carry
-  uphill chevrons, from public terrain tiles.
-- Tactile Map Designer: a route map. Type where the walk starts and where
-  it ends, and the draft raises the walk between them from door to door,
-  with its crossings and steps, and only what the walk needs switched on,
-  on a plate fitted to the walk.
+  tactile map plan: a class on every shape, painted in the charm
+  customizer's layer colors, with pan, zoom and a keyboard walk between
+  shapes.
+- Type an address and the Tactile Map Designer drafts a map of the
+  sidewalks and landmarks you choose from OpenStreetMap, live or from a
+  file, its shapes named by their street or building.
+- Sidewalks steeper than a grade you set can carry uphill chevrons, from
+  public terrain tiles.
+- A route map: type where a walk starts and where it ends, and the draft
+  raises the walk from door to door with its crossings and steps, on a
+  plate fitted to the walk.
 
 ### Fixed
 
-- The drawing editor's map purpose shows the drawing again, with pan, zoom
-  and a keyboard walk between shapes.
-- The drawing editor paints a map's shapes in the charm customizer's layer
-  colors by level, readable on the dark theme, with Off shapes hatched.
-- The Tactile Map Designer waits and tries again when the map server gives
-  no answer, and then says how to export the area as a file instead.
-- A draft map keeps paths marked open to people on foot, which it used to
-  drop.
 - The welcome cards' Tool menus are 44 px tall on a touch screen, the same
   floor as the buttons beside them.
 - A menu focused by keyboard shows a solid ring in every look, where the
   dark and light looks drew a faint halo.
 - In the Alt View, reaching the end of a list is the last sound a scroll
   makes: no line's tick follows it any more.
-- A draft map's shapes are named by their street or building in the drawing
-  editor, and the warnings use the same names, never a map data code.
-- Walk this joins a sidewalk at either end of the route, so the first one
-  picked may point either way.
-- The map from an address section says each status once, where a screen
-  reader heard every sentence twice, and no longer asks you to open the
-  drawing editor as it opens; closing the editor puts focus back on the
-  button that opened it.
 - On a phone held sideways the drawing editor scrolls to its picture, which
   its toolbar used to cut to a strip.
 
