@@ -7,6 +7,7 @@
  * @license GPL-3.0-or-later
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
 
 vi.mock('../../src/js/ui-generator.js', async () => {
   const { stateManager } = await import('../../src/js/state.js');
@@ -31,7 +32,9 @@ import {
   initMapPanel,
   destroyMapPanel,
   getMapPlace,
+  getMapPlan,
 } from '../../src/js/tactile-map/map-panel.js';
+import { trimElement } from '../../src/js/tactile-map/osm-geometry.js';
 import {
   announce,
   announceError,
@@ -195,7 +198,7 @@ describe('the address section', () => {
     radios()[1].click();
     expect(getMapPlace()).toEqual(PLACES[1]);
     expect(status()).toBe(
-      `${PLACES[1].name} picked. Choose a radius and the landmarks, then get the map data.`
+      `${PLACES[1].name} picked. Choose a radius and the landmarks, then get the map data. The preview shows an empty plate until you make a draft map.`
     );
   });
 
@@ -338,5 +341,170 @@ describe('the pull, sentence by sentence', () => {
     ]);
     expect(announceError.mock.calls.map((c) => c[0])).toEqual([END]);
     expect(getData().disabled).toBe(false);
+  });
+});
+
+describe('the waiting plate and the status box', () => {
+  const PLACE = PLACES[0];
+  const getData = () => document.getElementById('tactileMapGetData');
+  const draft = () => document.getElementById('tactileMapDraft');
+  const box = () => document.getElementById('tactileMapAddressStatus');
+  const reason = () => document.getElementById('tactileMapDraftReason');
+  const params = () => stateManager.getState().parameters;
+  const DATA = { elements: [], bytes: 10, ms: 1, host: "VK Maps' server" };
+
+  function mountWith(extra = {}) {
+    destroyMapPanel();
+    initMapPanel(
+      { ...CONFIG, titleParam: 'title_text' },
+      {
+        plan: sampleStationPlan(),
+        setFile: vi.fn(() => true),
+        render: vi.fn(async () => new Uint8Array(84)),
+        download: vi.fn(),
+        searchPlaces: vi.fn(async () => [PLACE]),
+        ...extra,
+      }
+    );
+  }
+
+  async function pickFirst() {
+    type('1000 4th Ave, Seattle, WA');
+    searchBtn().click();
+    await vi.waitFor(() => expect(radios()).toHaveLength(1));
+    radios()[0].click();
+  }
+
+  it('is a box directly under the draft button, shown and not live, and hidden while empty', () => {
+    mountWith();
+    expect(box().classList.contains('tactile-map-status-box')).toBe(true);
+    expect(box().previousElementSibling.id).toBe('tactileMapDraftRow');
+    expect(box().getAttribute('role')).toBeNull();
+    expect(box().getAttribute('aria-live')).toBeNull();
+    expect(box().textContent).toBe('');
+  });
+
+  it('replaces the sample station with an empty plate of the same size the moment a place is picked, titled NO MAP YET, and says so with the pick', async () => {
+    mountWith();
+    expect(getMapPlan().features.length).toBeGreaterThan(0);
+    await pickFirst();
+    const plan = getMapPlan();
+    expect(plan.features).toEqual([]);
+    expect(plan.size).toEqual({ w: 480, h: 360 });
+    expect(plan.meta.waiting).toBe(true);
+    expect(plan.meta.title).toBe('NO MAP YET');
+    expect(params().title_text).toBe('NO MAP YET');
+    expect(box().textContent).toBe(
+      `${PLACE.name} picked. Choose a radius and the landmarks, then get the map data. The preview shows an empty plate until you make a draft map.`
+    );
+    expect(announce).toHaveBeenLastCalledWith(box().textContent, {
+      source: 'tactile-map',
+    });
+  });
+
+  it('keeps Make a draft map disabled with its reason beside it until data arrives, then drops the reason', async () => {
+    mountWith({ pullArea: vi.fn(async () => DATA) });
+    expect(draft().disabled).toBe(true);
+    expect(draft().getAttribute('aria-describedby')).toBe(
+      'tactileMapDraftReason'
+    );
+    expect(reason().textContent).toBe('Get the map data first.');
+    expect(reason().hidden).toBe(false);
+    await pickFirst();
+    getData().click();
+    await vi.waitFor(() => expect(draft().disabled).toBe(false));
+    expect(draft().hasAttribute('aria-describedby')).toBe(false);
+    expect(reason().hidden).toBe(true);
+  });
+
+  it('shows a failed pull as a failure: the box marked failed, the failure first, Make still disabled with its reason', async () => {
+    const busy = Object.assign(new Error('busy'), { code: 'busy' });
+    mountWith({
+      pullArea: vi.fn(async () => {
+        throw busy;
+      }),
+    });
+    await pickFirst();
+    getData().click();
+    await vi.waitFor(() =>
+      expect(box().classList.contains('is-failed')).toBe(true)
+    );
+    expect(box().textContent.startsWith('No map server answered.')).toBe(true);
+    expect(draft().disabled).toBe(true);
+    expect(draft().getAttribute('aria-describedby')).toBe(
+      'tactileMapDraftReason'
+    );
+    expect(reason().hidden).toBe(false);
+    // The next sentence that is not a failure clears the mark.
+    type('1000 4th Ave, Seattle, WA');
+    searchBtn().click();
+    await vi.waitFor(() =>
+      expect(box().classList.contains('is-failed')).toBe(false)
+    );
+  });
+
+  it('Edit drawing as a map on the empty plate says what to do instead of opening the editor', async () => {
+    const editor = { open: vi.fn() };
+    mountWith({ getEditor: async () => editor });
+    await pickFirst();
+    document.getElementById('tactileMapEditDrawing').click();
+    await vi.waitFor(() =>
+      expect(
+        document.getElementById('tactileMapDrawingStatus').textContent
+      ).toBe(
+        'No map yet. Make a draft map first, or choose a drawing for the map file.'
+      )
+    );
+    expect(editor.open).not.toHaveBeenCalled();
+  });
+
+  it('clears the NO MAP YET title when a draft is made, and keeps a title the person typed', async () => {
+    const elements = JSON.parse(
+      readFileSync('tests/fixtures/tactile-map/overpass-20.json', 'utf8')
+    ).elements.map(trimElement);
+    const editor = { open: vi.fn() };
+    const pullArea = vi.fn(async () => ({ ...DATA, elements }));
+    mountWith({ pullArea, getEditor: async () => editor });
+    await pickFirst();
+    expect(params().title_text).toBe('NO MAP YET');
+    getData().click();
+    await vi.waitFor(() => expect(draft().disabled).toBe(false));
+    draft().click();
+    await vi.waitFor(() => expect(editor.open).toHaveBeenCalled());
+    expect(params().title_text).toBe('');
+    expect(getMapPlan().meta.waiting).toBeFalsy();
+
+    // A title typed while waiting stays through the draft.
+    mountWith({ pullArea, getEditor: async () => editor });
+    await pickFirst();
+    stateManager.setState({
+      parameters: { ...params(), title_text: 'Gates Center' },
+    });
+    getData().click();
+    await vi.waitFor(() => expect(draft().disabled).toBe(false));
+    draft().click();
+    await vi.waitFor(() => expect(editor.open).toHaveBeenCalledTimes(2));
+    expect(params().title_text).toBe('Gates Center');
+  });
+
+  it('never replaces a draft already made when another place is picked', async () => {
+    const elements = JSON.parse(
+      readFileSync('tests/fixtures/tactile-map/overpass-20.json', 'utf8')
+    ).elements.map(trimElement);
+    const editor = { open: vi.fn() };
+    mountWith({
+      pullArea: vi.fn(async () => ({ ...DATA, elements })),
+      getEditor: async () => editor,
+    });
+    await pickFirst();
+    getData().click();
+    await vi.waitFor(() => expect(draft().disabled).toBe(false));
+    draft().click();
+    await vi.waitFor(() => expect(editor.open).toHaveBeenCalled());
+    const drafted = getMapPlan();
+    expect(drafted.features.length).toBeGreaterThan(0);
+    await pickFirst();
+    expect(getMapPlan()).toBe(drafted);
+    expect(params().title_text).toBe('');
   });
 });

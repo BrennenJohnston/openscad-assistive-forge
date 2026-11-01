@@ -46,6 +46,13 @@ export const ADDRESS_STRINGS = Object.freeze({
   /** A11Y: after a pick. */
   picked: (name) =>
     `${name} picked. Choose a radius and the landmarks, then get the map data.`,
+  /** A11Y: said after the pick while the preview shows the empty plate. */
+  waiting: 'The preview shows an empty plate until you make a draft map.',
+  /** Beside Make a draft map while it waits for data. */
+  needData: 'Get the map data first.',
+  /** A11Y: Edit drawing as a map pressed on the empty plate. */
+  waitingDoor:
+    'No map yet. Make a draft map first, or choose a drawing for the map file.',
   /** A11Y: the search did not answer. */
   noAnswer:
     'The address search did not answer. Check your connection and try again, or load an OpenStreetMap file instead.',
@@ -209,7 +216,8 @@ function el(tag, className, text) {
  * @param {(where: {lat: number, lon: number, radiusM: number, onWait: Function}) => Promise<{elements: object[], bytes: number}>} args.pullArea
  * @param {(file: File) => Promise<{elements: object[], center: {lat: number, lon: number}|null}>} args.readOsmFile
  * @param {(text: string, failed?: boolean) => void} args.say - writes the status line and announces once
- * @param {(place: object) => void} [args.onPlace]
+ * @param {(place: object) => boolean} [args.onPlace] - true when the preview
+ *   now shows the empty plate, so the pick says so
  * @param {(osm: object) => void} [args.onData]
  * @param {() => void} [args.unsay] - take back a sentence still waiting to be said
  * @param {() => void} [args.onDraft] - Make a draft map pressed (enabled once data exists)
@@ -386,9 +394,31 @@ export function createAddressSection({
   const draft = el('button', 'btn btn-primary braille-translate-btn', S.draft);
   draft.type = 'button';
   draft.id = 'tactileMapDraft';
-  draft.disabled = true;
   draftRow.appendChild(draft);
+  const draftReason = el(
+    'span',
+    'braille-panel-help tactile-map-draft-reason',
+    S.needData
+  );
+  draftReason.id = 'tactileMapDraftReason';
+  draftRow.appendChild(draftReason);
   section.appendChild(draftRow);
+
+  // A box directly under the buttons, where a person looks after a press.
+  // Shown, not a live region: the panel says each sentence once through the
+  // announcer, as it does for the plates line.
+  const status = el('p', 'braille-panel-help tactile-map-status-box');
+  status.id = 'tactileMapAddressStatus';
+  section.appendChild(status);
+
+  /** Make a draft map waits for data, with its reason beside it. */
+  function setDraftEnabled(on) {
+    draft.disabled = !on;
+    draftReason.hidden = on;
+    if (on) draft.removeAttribute('aria-describedby');
+    else draft.setAttribute('aria-describedby', draftReason.id);
+  }
+  setDraftEnabled(false);
 
   const steepRow = el('div', 'braille-panel-toggle-row tactile-map-steep-row');
   const steep = document.createElement('input');
@@ -440,12 +470,6 @@ export function createAddressSection({
   attribution.appendChild(document.createTextNode(S.attribution[2]));
   section.appendChild(attribution);
 
-  // Shown, not a live region: the panel says each sentence once through the
-  // announcer, as it does for the plates line.
-  const status = el('p', 'braille-panel-help');
-  status.id = 'tactileMapAddressStatus';
-  section.appendChild(status);
-
   let place = null;
   let dest = null;
   let osm = null;
@@ -462,10 +486,11 @@ export function createAddressSection({
     }
   }
 
+  /** @returns {boolean} whether the preview now shows the empty plate */
   function setPlace(p) {
     place = p;
     getData.disabled = !place || pulling;
-    if (place) onPlace?.(place);
+    return place ? Boolean(onPlace?.(place)) : false;
   }
 
   /**
@@ -480,7 +505,7 @@ export function createAddressSection({
       keep({ ...osm, to: dest });
     } else if (osm) {
       osm = null;
-      draft.disabled = true;
+      setDraftEnabled(false);
       onData?.(null);
     }
   }
@@ -515,8 +540,8 @@ export function createAddressSection({
     name: 'tactileMapPlace',
     prefix: 'tactileMapPlace',
     onPick: (p) => {
-      setPlace(p);
-      say(S.picked(p.name));
+      const waiting = setPlace(p);
+      say(waiting ? `${S.picked(p.name)} ${S.waiting}` : S.picked(p.name));
     },
     onNone: () => setPlace(null),
   };
@@ -596,7 +621,7 @@ export function createAddressSection({
 
   function keep(data) {
     osm = data;
-    draft.disabled = !osm;
+    setDraftEnabled(Boolean(osm));
     onData?.(osm);
   }
 
@@ -777,6 +802,7 @@ export function createAddressSection({
       loadFile,
       fileInput,
       draft,
+      draftReason,
       steep,
       grade,
       attribution,

@@ -128,7 +128,90 @@ test.describe('the address section', () => {
 
     await page.keyboard.press('ArrowDown');
     await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
-      `${NOMINATIM[1].display_name} picked. Choose a radius and the landmarks, then get the map data.`
+      `${NOMINATIM[1].display_name} picked. Choose a radius and the landmarks, then get the map data. The preview shows an empty plate until you make a draft map.`
+    );
+  });
+
+  test('a pull every server refuses shows the failure in the box, keeps Make a draft map waiting with its reason, and the preview holds the empty NO MAP YET plate', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.route('https://nominatim.openstreetmap.org/search*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(NOMINATIM),
+      })
+    );
+    // Both servers refuse, as the main one refuses the published site. The
+    // pull's real 30 s and 60 s waits run: the app's render limits use the
+    // same values, so the page's timers are left alone.
+    const asked = [];
+    for (const url of [
+      'https://overpass-api.de/api/interpreter',
+      'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+    ]) {
+      await page.route(url, (route) => {
+        asked.push(url);
+        return route.fulfill({
+          status: 406,
+          headers: { 'access-control-allow-origin': '*' },
+          body: 'Not Acceptable',
+        });
+      });
+    }
+    await openTactileMap(page);
+    await expect(page.locator('#echoMessages')).toContainText(
+      'Finished map',
+      { timeout: 120000 }
+    );
+
+    await page.locator('#tactileMapAddress').fill('1000 4th Ave, Seattle, WA');
+    await page.locator('#tactileMapSearch').click();
+    await page
+      .locator('#tactileMapResults input[type="radio"]')
+      .first()
+      .check();
+    await expect(page.locator('#param-title_text')).toHaveValue('NO MAP YET');
+
+    const draft = page.locator('#tactileMapDraft');
+    const reason = page.locator('#tactileMapDraftReason');
+    await expect(draft).toBeDisabled();
+    await expect(draft).toHaveAttribute(
+      'aria-describedby',
+      'tactileMapDraftReason'
+    );
+    await expect(reason).toBeVisible();
+    await expect(reason).toHaveText('Get the map data first.');
+
+    await page.locator('#tactileMapGetData').click();
+    const box = page.locator('#tactileMapAddressStatus');
+    await expect(box).toHaveText(
+      'No map server answered. Try again in a few minutes, or export the area from openstreetmap.org and use the file instead.',
+      { timeout: 150000 }
+    );
+    await expect(box).toBeVisible();
+    await expect(box).toHaveClass(/is-failed/);
+    expect(asked.filter((u) => u.includes('maps.mail.ru')).length).toBe(3);
+    expect(asked.filter((u) => u.includes('overpass-api.de')).length).toBe(3);
+    await expect(draft).toBeDisabled();
+    await expect(reason).toBeVisible();
+
+    // The preview renders the empty plate: the map file has no features and
+    // the model's echo says it finished.
+    const levels = await page.evaluate(
+      () =>
+        document.getElementById('tactileMapPanel').__forgeMapPanel.plan
+    );
+    expect(levels.features).toEqual([]);
+    expect(levels.meta.title).toBe('NO MAP YET');
+    await expect(page.locator('.preview-state-indicator')).toHaveClass(
+      /state-current/,
+      { timeout: 120000 }
+    );
+    await expect(page.locator('#echoMessages')).toContainText(
+      'Finished map: 480 x 360 mm'
     );
   });
 

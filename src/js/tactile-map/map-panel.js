@@ -45,7 +45,7 @@ import {
   withdrawAnnouncement,
 } from '../announcer.js';
 import { dataUrlToText } from '../svg-text-encoding.js';
-import { sampleStationPlan } from './plan.js';
+import { WAITING_TITLE, sampleStationPlan, waitingPlan } from './plan.js';
 import {
   drawingBox,
   filledOutlines,
@@ -297,9 +297,11 @@ class MapPanel {
       unsay: () => withdrawAnnouncement(SOURCE),
       onPlace: (place) => {
         this.place = place;
+        return this.wait();
       },
       onData: (osm) => {
         this.osm = osm;
+        if (osm) this.wait();
       },
       onDraft: () => {
         this.makeDraft().catch((err) => {
@@ -342,6 +344,42 @@ class MapPanel {
       this.adoptPicture();
     });
     this.schedule(0);
+  }
+
+  /**
+   * A place or a map file came in: the sample station (or a drawing's plan)
+   * gives way to the empty plate titled NO MAP YET, at the map's own size,
+   * until a draft is made. A draft already made is never replaced; a pick
+   * after one keeps it until the next draft.
+   *
+   * @returns {boolean} whether the preview shows the empty plate now
+   */
+  wait() {
+    if (this.source === 'draft') return false;
+    if (this.plan.meta?.waiting) return true;
+    this.plan = waitingPlan(this.plan.size.w, this.plan.size.h);
+    this.planWarnings = [];
+    this.plate = 'whole';
+    // The sample's drawing goes with it: the door opens a drawing chosen
+    // from here on, or says what to do.
+    this.drawing = null;
+    this.source = null;
+    this.setTitle(WAITING_TITLE);
+    this.schedule(0);
+    return true;
+  }
+
+  /** The tile's raised title, when the manifest names its parameter. */
+  setTitle(text) {
+    if (this.config.titleParam) setParameterValue(this.config.titleParam, text);
+  }
+
+  /** A draft replaced the empty plate: NO MAP YET leaves, a typed title stays. */
+  leaveWaiting() {
+    const key = this.config.titleParam;
+    if (!key) return;
+    if (stateManager.getState()?.parameters?.[key] === WAITING_TITLE)
+      this.setTitle('');
   }
 
   /**
@@ -400,6 +438,10 @@ class MapPanel {
   async openDrawing() {
     this.adoptPicture();
     const opener = this.refs.editDrawing;
+    if (!this.drawing && this.plan.meta?.waiting) {
+      this.sayDrawing(ADDRESS_STRINGS.waitingDoor);
+      return;
+    }
     // A draft reopens as the draft, with the classes it has now.
     if (this.source === 'draft') {
       await this.openDraft(opener);
@@ -835,6 +877,7 @@ class MapPanel {
     this.source = 'draft';
     this.planWarnings = [];
     this.plate = 'whole';
+    this.leaveWaiting();
     this.address?.setDraftReady(true);
     this.schedule(0);
     this.sayAddress(
@@ -872,6 +915,7 @@ class MapPanel {
     this.source = 'draft';
     this.planWarnings = [];
     this.plate = 'whole';
+    this.leaveWaiting();
     this.address?.setDraftReady(true);
     this.schedule(0);
     this.sayAddress(
@@ -990,10 +1034,16 @@ class MapPanel {
     }
   }
 
-  /** A sentence on the address section's status line, said once. */
+  /**
+   * A sentence in the address section's status box, said once; a failure
+   * marks the box until the next sentence.
+   */
   sayAddress(text, failed = false) {
     const line = this.address?.refs?.status;
-    if (line) line.textContent = text;
+    if (line) {
+      line.textContent = text;
+      line.classList.toggle('is-failed', failed);
+    }
     (failed ? announceError : announce)(text, { source: SOURCE });
   }
 
