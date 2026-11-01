@@ -34,6 +34,7 @@ vi.mock('../../src/js/announcer.js', () => ({
   announce: vi.fn(),
   announceChange: vi.fn(),
   announceError: vi.fn(),
+  withdrawAnnouncement: vi.fn(),
 }));
 
 import {
@@ -987,7 +988,7 @@ describe('the draft map button', () => {
     draftBtn().click();
     await vi.waitFor(() => expect(opened).not.toBeNull());
     expect(addressStatus()).toMatch(
-      /^Draft map ready: \d+ of 20 features on; (\d+ warnings|no warnings)\. Open the drawing editor to choose what stays\.$/
+      /^Draft map ready: \d+ of 20 features on; (\d+ warnings|no warnings)\. Choose what stays\.$/
     );
     expect(announce).toHaveBeenCalledWith(addressStatus(), {
       source: 'tactile-map',

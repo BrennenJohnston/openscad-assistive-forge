@@ -93,7 +93,7 @@ export const ADDRESS_STRINGS = Object.freeze({
   routeDraft: 'Make a route map',
   /** A11Y: the status line after a route draft. */
   routeReady: (m, from, to, crossings, steps, w, h) =>
-    `Route map ready: a ${m} m walk from ${from} to ${to}, ${crossings === 1 ? '1 crossing' : `${crossings} crossings`} and ${steps === 1 ? '1 flight of steps' : `${steps} flights of steps`} on the way. The map is ${w} x ${h} mm, fitted to the walk. Open the drawing editor to check it.`,
+    `Route map ready: a ${m} m walk from ${from} to ${to}, ${crossings === 1 ? '1 crossing' : `${crossings} crossings`} and ${steps === 1 ? '1 flight of steps' : `${steps} flights of steps`} on the way. The map is ${w} x ${h} mm, fitted to the walk.`,
   /** A11Y: no walk joins the two places. */
   noWalk: (from, to) =>
     `No walking route joins ${from} and ${to} in this map data. Try other places, or load an OpenStreetMap file of the area.`,
@@ -101,10 +101,10 @@ export const ADDRESS_STRINGS = Object.freeze({
   routeName: (from, to) => `Route map from ${from} to ${to}`,
   /** A11Y: the status line after a draft, with warnings. */
   draftReady: (on, total, w) =>
-    `Draft map ready: ${on} of ${total} features on; ${w} warnings. Open the drawing editor to choose what stays.`,
+    `Draft map ready: ${on} of ${total} features on; ${w} warnings. Choose what stays.`,
   /** A11Y: the same, no warnings. */
   draftReadyClean: (on, total) =>
-    `Draft map ready: ${on} of ${total} features on; no warnings. Open the drawing editor to choose what stays.`,
+    `Draft map ready: ${on} of ${total} features on; no warnings. Choose what stays.`,
   /** A11Y: nothing near the address. */
   nothingNear: (d) =>
     `No sidewalks within ${d} m of the address. Try a larger radius or another address.`,
@@ -199,6 +199,7 @@ function el(tag, className, text) {
  * @param {(text: string, failed?: boolean) => void} args.say - writes the status line and announces once
  * @param {(place: object) => void} [args.onPlace]
  * @param {(osm: object) => void} [args.onData]
+ * @param {() => void} [args.unsay] - take back a sentence still waiting to be said
  * @param {() => void} [args.onDraft] - Make a draft map pressed (enabled once data exists)
  * @param {(on: boolean, gradePct: number) => void} [args.onSteep] - the switch moved (enabled once a draft exists)
  * @returns {{ el: HTMLElement, refs: object, getPlace: () => object|null, getData: () => object|null, destroy: () => void }}
@@ -208,6 +209,7 @@ export function createAddressSection({
   pullArea,
   readOsmFile,
   say,
+  unsay = () => {},
   onPlace,
   onData,
   onDraft,
@@ -426,9 +428,10 @@ export function createAddressSection({
   attribution.appendChild(document.createTextNode(S.attribution[2]));
   section.appendChild(attribution);
 
+  // Shown, not a live region: the panel says each sentence once through the
+  // announcer, as it does for the plates line.
   const status = el('p', 'braille-panel-help');
   status.id = 'tactileMapAddressStatus';
-  status.setAttribute('role', 'status');
   section.appendChild(status);
 
   let place = null;
@@ -537,6 +540,9 @@ export function createAddressSection({
         say(S.none(q), true);
       } else {
         showList(which.list, places, which);
+        // The places are said as focus reaches them; a "Searching..." still
+        // waiting would be said after them.
+        unsay();
       }
     } catch (error) {
       clearList(which.list);
