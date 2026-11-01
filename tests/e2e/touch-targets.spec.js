@@ -85,7 +85,7 @@ test('the Customizer’s help and reset buttons', async ({ page }) => {
 // The round mark is 20 px across inside its 44 px target: the padding and
 // background-clip draw it so. A background shorthand after the clip resets
 // the clip, and the color fills the whole target over the label beside it.
-test('the help mark is drawn 20 px across inside its target, at rest, under the mouse and open', async ({
+test('the help mark is a 20 px circle inside its target, at rest, under the mouse and open', async ({
   page,
 }) => {
   await openBox(page);
@@ -97,35 +97,43 @@ test('the help mark is drawn 20 px across inside its target, at rest, under the 
   });
   const button = page.locator('.param-help-button').first();
   await button.scrollIntoViewIfNeeded();
-  // From the first pixel of the mark's color to the last, across its middle.
+  // The mark's chord 7 px above its center, clear of the "?" glyph: from the
+  // center outward while the pixels are not the ground, which is read at the
+  // target's corner (the round mark never reaches it, so no browser's color
+  // management matters). A 20 px circle is 14.3 px across there; a 44 px
+  // one, 41.7.
   const markWidth = async () => {
-    const color = await button.evaluate(
-      (b) => getComputedStyle(b).backgroundColor
-    );
-    const [r, g, b] = color.match(/\d+/g).map(Number);
     const png = PNG.sync.read(
       await button.screenshot({ animations: 'disabled' })
     );
-    const y = Math.floor(png.height / 2);
-    const hits = [];
-    for (let x = 0; x < png.width; x += 1) {
+    const scale = png.width / (await button.boundingBox()).width;
+    const at = (x, y) => {
       const i = (y * png.width + x) * 4;
-      const d =
-        Math.abs(png.data[i] - r) +
-        Math.abs(png.data[i + 1] - g) +
-        Math.abs(png.data[i + 2] - b);
-      if (d < 30) hits.push(x);
-    }
-    return hits.length ? hits[hits.length - 1] - hits[0] + 1 : 0;
+      return [png.data[i], png.data[i + 1], png.data[i + 2]];
+    };
+    const ground = at(0, 0);
+    const off = (x, y) => {
+      const [r, g, b] = at(x, y);
+      return (
+        Math.abs(r - ground[0]) +
+          Math.abs(g - ground[1]) +
+          Math.abs(b - ground[2]) >
+        60
+      );
+    };
+    const y = Math.floor(png.height / 2) - Math.round(7 * scale);
+    const middle = Math.floor(png.width / 2);
+    let left = middle;
+    let right = middle;
+    while (left > 0 && off(left - 1, y)) left -= 1;
+    while (right < png.width - 1 && off(right + 1, y)) right += 1;
+    return off(middle, y) ? Math.round((right - left + 1) / scale) : 0;
   };
   const atRest = await markWidth();
-  expect(
-    atRest,
-    `at rest the mark is ${atRest} px across`
-  ).toBeGreaterThanOrEqual(18);
-  expect(atRest, `at rest the mark is ${atRest} px across`).toBeLessThanOrEqual(
-    22
+  expect(atRest, `at rest the chord is ${atRest} px`).toBeGreaterThanOrEqual(
+    11
   );
+  expect(atRest, `at rest the chord is ${atRest} px`).toBeLessThanOrEqual(17);
   await button.hover();
   const hovered = await markWidth();
   expect(hovered, `under the mouse it is ${hovered} px`).toBeLessThanOrEqual(
@@ -134,7 +142,7 @@ test('the help mark is drawn 20 px across inside its target, at rest, under the 
   await button.click();
   await expect(button).toHaveAttribute('aria-expanded', 'true');
   const open = await markWidth();
-  expect(open, `open it is ${open} px`).toBeLessThanOrEqual(24);
+  expect(open, `open it is ${open} px`).toBeLessThanOrEqual(17);
 });
 
 test('the Customizer’s one reset-all button, full size, still asks first', async ({
