@@ -94,7 +94,9 @@ export const ADDRESS_STRINGS = Object.freeze({
   /** A11Y: the pull did not answer. */
   noData:
     'The map data did not arrive. Check your connection and try again, or load an OpenStreetMap file instead.',
-  attribution: ['Map data from ', 'OpenStreetMap contributors', ', ODbL'],
+  attribution: ['Map data from ', 'OpenStreetMap contributors', ', ODbL.'],
+  /** The map tiles' service asks for its own credit, with its link. */
+  tilesCredit: [' Tiles by ', 'OSM US', '.'],
   loadFile: 'Load an OpenStreetMap file',
   fileHelp:
     'An .osm export from openstreetmap.org, or a .geojson file. The file stays on your device.',
@@ -149,6 +151,7 @@ export const ADDRESS_STRINGS = Object.freeze({
 export const GRADE = Object.freeze({ min: 3, max: 12, step: 0.5, value: 5 });
 
 export const ATTRIBUTION_URL = 'https://www.openstreetmap.org/copyright';
+export const TILES_CREDIT_URL = 'https://tiles.openstreetmap.us';
 export const RADIUS = Object.freeze({
   min: 100,
   max: 600,
@@ -461,13 +464,19 @@ export function createAddressSection({
     S.attribution[0]
   );
   attribution.id = 'tactileMapAttribution';
-  const link = el('a', '', S.attribution[1]);
-  link.href = ATTRIBUTION_URL;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
-  link.appendChild(el('span', 'sr-only', ' (opens in new tab)'));
-  attribution.appendChild(link);
+  const outLink = (text, href) => {
+    const a = el('a', '', text);
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.appendChild(el('span', 'sr-only', ' (opens in new tab)'));
+    return a;
+  };
+  attribution.appendChild(outLink(S.attribution[1], ATTRIBUTION_URL));
   attribution.appendChild(document.createTextNode(S.attribution[2]));
+  attribution.appendChild(document.createTextNode(S.tilesCredit[0]));
+  attribution.appendChild(outLink(S.tilesCredit[1], TILES_CREDIT_URL));
+  attribution.appendChild(document.createTextNode(S.tilesCredit[2]));
   section.appendChild(attribution);
 
   let place = null;

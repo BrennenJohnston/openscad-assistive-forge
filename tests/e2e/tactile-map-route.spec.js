@@ -77,6 +77,10 @@ test.beforeEach(async ({ page }) => {
       answer(JSON.stringify([/gates/i.test(q) ? GATES : HUB]))
     );
   });
+  // The map tiles refuse, so the pull reaches the routed Overpass answer.
+  await page.route('https://tiles.openstreetmap.us/**', (route) =>
+    route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*' }, body: '' })
+  );
   await page.route('https://overpass-api.de/api/interpreter', (route) =>
     route.fulfill(answer(OVERPASS))
   );

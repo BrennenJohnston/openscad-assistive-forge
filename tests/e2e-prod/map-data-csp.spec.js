@@ -4,14 +4,16 @@ import { test, expect } from '@playwright/test';
 // The map data hosts under the SHIPPED headers.
 //
 // A map from an address reaches the hosts the browser must be allowed to
-// contact: Nominatim for the address, two Overpass servers for the map data
-// (the main one first, VK Maps' when the main one refuses the site), and the
-// terrain tiles on S3 for the slopes. The dev server serves no
+// contact: Nominatim for the address, OpenStreetMap US's map tiles for the
+// map data and two Overpass servers when the tiles fail (the main one first,
+// VK Maps' when the main one refuses the site), and the terrain tiles on S3
+// for the slopes. The dev server serves no
 // Content-Security-Policy, so only this lane can say the deployed site lets
 // those requests leave the browser, and that nothing else in the policy
 // moved when the hosts were added.
 
 const HOSTS = [
+  'https://tiles.openstreetmap.us',
   'https://overpass-api.de',
   'https://maps.mail.ru',
   'https://nominatim.openstreetmap.org',

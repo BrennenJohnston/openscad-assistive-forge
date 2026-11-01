@@ -802,9 +802,17 @@ describe('the map data row', () => {
     expect(link.getAttribute('target')).toBe('_blank');
     expect(link.getAttribute('rel')).toContain('noopener');
     expect(link.textContent).toContain('OpenStreetMap contributors');
+    // The map tiles' service asks for its own credit, with its link.
+    const links = [...document.querySelectorAll('#tactileMapAttribution a')];
+    expect(links).toHaveLength(2);
+    expect(links[1].getAttribute('href')).toBe('https://tiles.openstreetmap.us');
+    expect(links[1].getAttribute('target')).toBe('_blank');
+    expect(links[1].getAttribute('rel')).toContain('noopener');
     expect(
       document.getElementById('tactileMapAttribution').textContent
-    ).toMatch(/^Map data from OpenStreetMap contributors.*, ODbL$/);
+    ).toBe(
+      'Map data from OpenStreetMap contributors (opens in new tab), ODbL. Tiles by OSM US (opens in new tab).'
+    );
   });
 
   it('Get map data waits for a place, pulls within the radius, keeps the data and says the counts', async () => {

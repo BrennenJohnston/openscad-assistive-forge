@@ -819,11 +819,14 @@ class MapPanel {
     return this.searchPlaces(query);
   }
 
-  /** The Overpass pull: a stub when a test handed one in, else the lazy chunk. */
+  /**
+   * The map data pull: a stub when a test handed one in, else the lazy
+   * chunk that asks the map tiles first and the Overpass servers after.
+   */
   async pull(where) {
     if (!this.pullArea) {
-      const { pullArea } = await import('./overpass.js');
-      this.pullArea = pullArea;
+      const { pullMapData } = await import('./map-data.js');
+      this.pullArea = pullMapData;
     }
     return this.pullArea(where);
   }
