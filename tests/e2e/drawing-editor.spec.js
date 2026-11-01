@@ -2317,7 +2317,9 @@ test.describe('the map purpose', () => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
-    await page.goto('/?example=tactile-map&type=drawing');
+    // On a place map the Map file control, and its own door, stay in the
+    // Customizer; a map from a drawing holds it in its first step.
+    await page.goto('/?example=tactile-map&type=place');
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       timeout: 240000,
     });
@@ -2754,6 +2756,10 @@ test.describe('a map from your drawing, step by step', () => {
         { timeout: 30000 }
       )
       .toBe('station.svg');
+    // One door into the editor, step 3's: the control's own stays out.
+    await expect(
+      one.getByRole('button', { name: 'Open the drawing editor' })
+    ).toHaveCount(0);
 
     await next.click();
     await expect(heading).toHaveText("Step 2 of 5: The drawing's real width");

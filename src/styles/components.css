@@ -16503,6 +16503,14 @@ body.tutorial-body-locked {
   display: none;
 }
 
+/* A map from a drawing has one door into the editor, step 3's Edit drawing
+   as a map: the Map file control's own doors stay out of its step 1. The
+   photo's Crop first, beside Start, stays. */
+.tactile-map-file-slot .svg-prep-edit-btn,
+.tactile-map-file-slot .svg-prep-empty-door {
+  display: none;
+}
+
 .tactile-map-symbols,
 .tactile-map-drawing-row,
 .tactile-map-actions {
