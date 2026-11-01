@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The Customizer's help mark is a 20 px circle again, beside its label, not a
+  44 px disc over the end of it, when the descriptions are behind help marks.
+
 ## [5.8.0] - 2026-11-01
 
 ### Added
