@@ -54,6 +54,7 @@ import {
 import {
   detectIncludeUse,
   detectRequiredCompanionFiles,
+  setModelInputVariables,
 } from './companion-files-controller.js';
 import { getErrorLogPanel, ERROR_LOG_TYPE } from './error-log-panel.js';
 import * as SharedImageStore from './shared-image-store.js';
@@ -125,6 +126,7 @@ function findExampleKeyByFileName(fileName) {
 async function restoreGalleryFromManifest(exampleKey) {
   pendingBrailleConfig = null;
   pendingMapConfig = null;
+  setModelInputVariables([]);
   const example = EXAMPLE_DEFINITIONS[exampleKey];
   if (!example?.manifest) return;
 
@@ -136,6 +138,8 @@ async function restoreGalleryFromManifest(exampleKey) {
     const tactileMap = manifestData.tactileMap;
     if (tactileMap?.mapFileParam) {
       pendingMapConfig = tactileMap;
+      // The map file is the model's input, not a picture to lay over it.
+      setModelInputVariables([tactileMap.mapFileParam]);
       // Start fetching the panel's chunk now, while the tile's own files
       // load, so the mount below finds it ready and the controls settle in
       // the same breath as before.
@@ -637,6 +641,7 @@ export function initFileHandler({
       currentExampleKey = null;
       pendingBrailleConfig = null;
       pendingMapConfig = null;
+      setModelInputVariables([]);
     }
 
     const rawFileName =

@@ -60,6 +60,30 @@ test.describe('Tactile Map tile', () => {
     await expect(radios).toHaveCount(5);
   });
 
+  test('lays no picture of its own map file over the preview: the map file is the model, not a reference', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await openTactileMap(page);
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await expect(page.locator('.preview-state-indicator')).toHaveClass(
+      /state-current/,
+      { timeout: PREVIEW_TIMEOUT }
+    );
+    // The reference picture was switched on a moment after the files list
+    // drew, once its image had loaded.
+    await page.waitForTimeout(2000);
+    await expect(page.locator('#overlayToggle')).not.toBeChecked();
+    expect(
+      await page.evaluate(() =>
+        Boolean(window.previewManager?.referenceOverlay?.visible)
+      )
+    ).toBe(false);
+  });
+
   test('the preview renders the whole map, then plate A1 at 240 x 180', async ({
     page,
   }) => {
@@ -707,5 +731,44 @@ test.describe('the Alt View', () => {
     await expect(
       page.locator('.role-path-card[data-tutorial-target="beginners-card"]')
     ).toBeVisible();
+  });
+});
+
+test.describe('the drawing editor on a phone held sideways', () => {
+  // A mouse context: a touch one at this size never shows the map panel.
+  test.use({ viewport: { width: 844, height: 390 } });
+
+  test('scrolls to its picture instead of cutting it to a strip', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await openTactileMap(page);
+    await page.locator('#tactileMapEditDrawing').click();
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor')
+    ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });
+    const canvas = page.locator(
+      '#drawingEditorSurface .drawing-editor-canvas-svg'
+    );
+    await canvas.evaluate((n) => n.scrollIntoView({ block: 'nearest' }));
+    // How much of the picture shows: inside the editor, above the messages
+    // bar laid along the preview's foot, inside the window.
+    const seen = await page.evaluate(() => {
+      const e = document
+        .querySelector('#drawingEditorSurface .drawing-editor')
+        .getBoundingClientRect();
+      const c = document
+        .querySelector('#drawingEditorSurface .drawing-editor-canvas-svg')
+        .getBoundingClientRect();
+      const bar = document.getElementById('echoDrawer');
+      const floor = bar?.offsetParent
+        ? bar.getBoundingClientRect().top
+        : innerHeight;
+      return (
+        Math.min(e.bottom, c.bottom, floor, innerHeight) -
+        Math.max(e.top, c.top)
+      );
+    });
+    expect(seen).toBeGreaterThanOrEqual(150);
   });
 });

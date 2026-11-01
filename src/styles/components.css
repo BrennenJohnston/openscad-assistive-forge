@@ -17752,6 +17752,18 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   gap: var(--space-sm);
 }
 
+/* A preview pane shorter than the toolbar and a usable picture (a phone held
+   sideways leaves the editor 247 px, and the map purpose's toolbar takes 163
+   of them) scrolls the editor instead of cutting the picture to a strip. The
+   charm view stays see-through over the model, with nothing to scroll. */
+.drawing-editor:not([data-view='charm']) {
+  overflow-y: auto;
+}
+
+.drawing-editor:not([data-view='charm']) .drawing-editor-body {
+  min-height: 200px;
+}
+
 .drawing-editor-stage {
   flex: 1 1 auto;
   min-width: 0;

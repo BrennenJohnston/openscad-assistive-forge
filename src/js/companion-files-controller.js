@@ -119,6 +119,36 @@ export function detectRequiredCompanionFiles(scadContent) {
   };
 }
 
+// The variables that name a file the model itself reads, never a picture to
+// lay over it: a tile's own input, named as its manifest is read.
+let modelInputVariables = [];
+
+/**
+ * Name the variables whose file is the model's own input, so the reference
+ * picture never starts on one; an empty list for a project with none.
+ * @param {string[]} [names]
+ */
+export function setModelInputVariables(names = []) {
+  modelInputVariables = [...names];
+}
+
+/**
+ * The pictures a project names in its variables that may be laid over the
+ * preview as a reference, in the order they appear; never a model input.
+ * @param {Object|null} requiredFiles - From detectRequiredCompanionFiles
+ * @param {string[]} [inputs] - Variables whose file is the model's input
+ * @returns {Array<{path: string, variableName: string}>}
+ */
+export function overlayCandidates(requiredFiles, inputs = modelInputVariables) {
+  const OVERLAY_EXTS = ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp'];
+  return (requiredFiles?.files || []).filter(
+    (f) =>
+      f.type === 'variable' &&
+      !inputs.includes(f.variableName) &&
+      OVERLAY_EXTS.some((ext) => f.path.toLowerCase().endsWith(ext))
+  );
+}
+
 /**
  * Get icon for file type.
  * @param {string} ext - File extension
@@ -624,12 +654,7 @@ export function initCompanionFilesController({
 
     let screenshotFile = null;
     if (requiredFiles && requiredFiles.files) {
-      const OVERLAY_EXTS = ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp'];
-      const overlayVars = requiredFiles.files.filter(
-        (f) =>
-          f.type === 'variable' &&
-          OVERLAY_EXTS.some((ext) => f.path.toLowerCase().endsWith(ext))
-      );
+      const overlayVars = overlayCandidates(requiredFiles);
       if (overlayVars.length > 0) {
         const preferred =
           overlayVars.find((v) => v.variableName === 'screenshot_file') ||
