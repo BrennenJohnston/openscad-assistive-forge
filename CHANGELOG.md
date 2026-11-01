@@ -52,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reader heard every sentence twice, and no longer asks you to open the
   drawing editor as it opens; closing the editor puts focus back on the
   button that opened it.
+- On a phone held sideways the drawing editor scrolls to its picture, which
+  its toolbar used to cut to a strip.
 
 ## [5.7.2] - 2026-10-26
 
