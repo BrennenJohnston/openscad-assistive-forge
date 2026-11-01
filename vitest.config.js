@@ -17,6 +17,7 @@ export default defineConfig({
       '**/dist/**',
       '**/e2e/**',  // Playwright E2E tests
       '**/e2e-prod/**',  // Playwright production-parity tests
+      '**/e2e-live/**',  // Playwright live-service tests on a deployed site
       '**/visual/**',  // Playwright visual regression tests
       '**/.{idea,git,cache,output,temp}/**'
     ],

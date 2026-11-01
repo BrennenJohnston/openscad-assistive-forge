@@ -35,6 +35,7 @@ PW_BASE_URL=http://localhost:5173 npx playwright test --project=chromium
 | `tests/unit/*.test.js` | Vitest | `npm run test:run` |
 | `tests/e2e/*.spec.js` | Playwright against the dev server | `npm run test:e2e` |
 | `tests/e2e-prod/*.spec.js` | Playwright against the **built** app under the deployed Content Security Policy | `npm run test:e2e:prod` |
+| `tests/e2e-live/*.spec.js` | Playwright against a **deployed** site and the real outside services, in Chrome | `PW_LIVE_URL=<site> npm run test:e2e:live` |
 | `tests/visual/*.visual.spec.js` | Screenshot comparison, baselines per platform | `npm run test:visual` |
 | `scripts/parity/` | Geometry comparison against desktop OpenSCAD | `npm run parity` |
 | `tests/fixtures/` | Models and data the tests use | -- |
@@ -42,6 +43,18 @@ PW_BASE_URL=http://localhost:5173 npx playwright test --project=chromium
 The production lane exists because styling that works in the dev server can be
 refused by the real policy. Anything touching CSS, the editor, or the Content
 Security Policy should run `npm run test:e2e:prod` as well.
+
+The live lane exists because every other lane answers the map tools' outside
+services (the address search, the map data servers) from fixtures, and a map
+tool that was green on fixtures once could not get data on the published
+site. It makes a place map and a route map on foot on the site named by
+`PW_LIVE_URL` (a branch preview such as
+`https://<branch>.openscad-assistive-forge.pages.dev`), in an installed Chrome
+window, with nothing routed; a pull that ends without data is a red. A run
+takes a few minutes, because a pull can ask two servers and wait 30 seconds
+before asking again. The services are shared, so the lane runs by hand
+before a change to the map tools is merged and in the release gate, never on
+every push.
 
 The engine choice is covered by `tests/e2e/engine-choice.spec.js` and `tests/e2e/engine-fault-ladder.spec.js`, and in the production lane by `engine-cache.spec.js`, where the service worker keeps a downloaded engine through an update.
 

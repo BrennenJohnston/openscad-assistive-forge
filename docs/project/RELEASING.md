@@ -27,6 +27,15 @@ pull request and nothing to merge back.
    a release candidate" in `docs/developing/TESTING.md`). Anything wrong is
    fixed before the release. When the release closes a set of fixes from a
    walk, that section's full comparison runs too.
+5. Run the live lane against `develop`'s preview and keep its output:
+
+   ```bash
+   PW_LIVE_URL=https://develop.openscad-assistive-forge.pages.dev npm run test:e2e:live
+   ```
+
+   It makes a map with the real address search and map data servers from
+   the deployed site. A red holds the release: the published map tools
+   would not get their data.
 
 ### Braille tools
 
