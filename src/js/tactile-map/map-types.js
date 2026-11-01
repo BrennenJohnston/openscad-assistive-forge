@@ -68,9 +68,11 @@ export const WORKFLOW_STRINGS = Object.freeze({
   needBoth: 'Pick both places first.',
   /** A11Y: beside Next on the Make the map step. */
   needMap: 'Make the map first.',
-  /** The drawing workflow's first step, until the file control joins it. */
+  /** A11Y: beside Next on a map from a drawing's first step, with no file. */
+  needDrawing: 'Choose a drawing first.',
+  /** The drawing workflow's first step, above the tile's Map file control. */
   drawingChoose:
-    'The sample station drawing is loaded. To use your own, choose it with the Map file control below the steps: an SVG, a DXF, or a photo to trace.',
+    'Choose an SVG or a DXF drawing, or a photo to trace. Until you choose one, the map uses the sample station.',
   /** The drawing workflow's fourth step. */
   drawingApply:
     'Press Apply classes in the editor. The plates in the next step follow what you applied.',

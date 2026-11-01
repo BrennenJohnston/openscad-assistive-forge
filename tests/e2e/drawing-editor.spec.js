@@ -2694,6 +2694,106 @@ test.describe('the map purpose in color', () => {
   });
 });
 
+// A map from a drawing as its steps ask for it: the tile's own Map file
+// control in the first step, the drawing's real width in the second, the
+// classes in the editor in the third, and the plates after.
+test.describe('a map from your drawing, step by step', () => {
+  test('the drawing chosen in step 1, its width typed in step 2, its shapes classed in step 3, and the plates follow', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+    await page.goto('/?example=tactile-map');
+    await expect(page.locator('#tactileMapChooser')).toBeVisible({
+      timeout: 60000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 6000 });
+      await notNow.click();
+      await notNow.waitFor({ state: 'hidden', timeout: 5000 });
+    } catch {
+      // No save-project prompt this time.
+    }
+    await page.locator('#tactileMapType-drawing').check();
+    await page.locator('#tactileMapChooserNext').click();
+    const heading = page.locator('#tactileMapSteps-heading');
+    const next = page.locator('#tactileMapSteps-next');
+    await expect(heading).toHaveText('Step 1 of 5: Choose the drawing');
+
+    // The tile's own control stands in the step, and only there.
+    const one = page.locator('#tactileMapSteps-step-1');
+    await expect(
+      one.getByRole('button', { name: 'Choose file for Map file' })
+    ).toBeVisible();
+    await expect(page.locator('#param-map_file')).toHaveCount(1);
+    await expect(
+      page.locator('#parametersContainer #param-map_file')
+    ).toHaveCount(0);
+    // A drawing at 340 x 240 mm whose shapes, a 300 x 2 mm bar and a
+    // 20 x 20 mm square at the far corner, span 300 x 200 mm.
+    const drawing =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="340mm" height="240mm" viewBox="0 0 340 240">' +
+      '<rect x="20" y="20" width="300" height="2"/>' +
+      '<rect x="300" y="200" width="20" height="20"/>' +
+      '</svg>';
+    await one.locator('#param-map_file').setInputFiles({
+      name: 'station.svg',
+      mimeType: 'image/svg+xml',
+      buffer: Buffer.from(drawing),
+    });
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => window.stateManager?.getState()?.parameters?.map_file?.name
+          ),
+        { timeout: 30000 }
+      )
+      .toBe('station.svg');
+
+    await next.click();
+    await expect(heading).toHaveText("Step 2 of 5: The drawing's real width");
+    const width = page.locator('#tactileMapDrawingWidth');
+    await expect(width).toHaveValue('340');
+    // Half as wide: the shapes span 150 x 100 mm, the map 1 mm (half a
+    // wall) around them.
+    await width.fill('170');
+    await width.blur();
+
+    await next.click();
+    await expect(heading).toHaveText('Step 3 of 5: Class the shapes');
+    await page.locator('#tactileMapEditDrawing').click();
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor').first()
+    ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });
+    const selects = page.locator(
+      '#drawingEditorSurface .drawing-editor-class-select'
+    );
+    await expect(selects).toHaveCount(2);
+    await selects.nth(0).selectOption('wall');
+    await selects.nth(1).selectOption('area');
+    await page.locator('#drawingEditorSurface .drawing-editor-apply').click();
+    await expect(page.locator('#drawingEditorSurface')).toBeHidden();
+
+    await next.click();
+    await expect(heading).toHaveText('Step 4 of 5: Apply classes');
+    await next.click();
+    await expect(heading).toHaveText('Step 5 of 5: Check and print');
+    await expect(page.locator('#tactileMapSummary')).toHaveText(
+      'One plate of 152 x 102 mm; the whole map fits.',
+      { timeout: 10000 }
+    );
+    await expect(page.locator('#param-map_width_mm-spinbox')).toHaveValue(
+      '152',
+      { timeout: 10000 }
+    );
+  });
+});
+
 test.describe('the drawing editor without a picture', () => {
   const STAR = path.join(
     process.cwd(),
@@ -2814,7 +2914,11 @@ test.describe('the route tool', () => {
     );
     // The map tiles refuse, so the pull reaches the routed Overpass answer.
     await page.route('https://tiles.openstreetmap.us/**', (route) =>
-      route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*' }, body: '' })
+      route.fulfill({
+        status: 503,
+        headers: { 'access-control-allow-origin': '*' },
+        body: '',
+      })
     );
     await page.route('https://overpass-api.de/api/interpreter', (route) =>
       route.fulfill({

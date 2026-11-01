@@ -22,12 +22,13 @@ On the welcome screen choose the **Tactile Map Designer** card and press **Open 
 
 ### A drawing you upload or trace
 
-Choose your drawing for the **Map file**: an SVG, a DXF (converted on your device), or a photo saved as PNG or JPG, which the app traces into shapes. The drawing editor can crop a photo or a drawing first, through the Map file's own **Open the drawing editor** button.
+Choose **A map from your drawing**. It has five steps:
 
-1. **Drawing width (mm)** fills itself from the file when the file says how wide it is (a DXF in millimeters, an SVG with a width in mm, cm or inches); otherwise it starts at the map's width. Type the real width of the drawing, and the map is built at that scale. When you change it, the app says what one drawing unit is in millimeters.
-2. Press **Edit drawing as a map**. The drawing editor opens with every shape of the drawing as a row, and each row has a **Class** menu. Every row starts at Ignore.
-3. Set a class on each shape that belongs on the map. A row's shape lights up on the picture when its row is focused; Undo and Redo on the toolbar take a class change back and forward, and Ctrl+Z and Ctrl+Y do the same. On the picture each shape takes its level's color, the colors the charm customizer gives its layers: blue for the floor level, orange for the symbol level, yellow-green for the top level, each with a light edge. A shape with no class, or Off, is hatched with a dashed edge, and the legend under the picture names all four.
-4. Press **Apply classes**. The editor closes, the app says how many features the plan now holds and how many shapes were ignored, the plates section rebuilds its summary, and the preview shows the map.
+1. **Choose the drawing.** The model's **Map file** control stands in this step. Choose an SVG, a DXF (converted on your device), or a photo saved as PNG or JPG, which the app traces into shapes. Until you choose one, the map uses the sample station. The Map file's own **Open the drawing editor** button can crop a photo or a drawing first.
+2. **The drawing's real width.** **Drawing width (mm)** fills itself from the file when the file says how wide it is (a DXF in millimeters, an SVG with a width in mm, cm or inches); otherwise it starts at the map's width. Type the real width of the drawing, and the map is built at that scale. When you change it, the app says what one drawing unit is in millimeters.
+3. **Class the shapes.** Press **Edit drawing as a map**. The drawing editor opens with every shape of the drawing as a row, and each row has a **Class** menu. Every row starts at Ignore. Set a class on each shape that belongs on the map. A row's shape lights up on the picture when its row is focused; Undo and Redo on the toolbar take a class change back and forward, and Ctrl+Z and Ctrl+Y do the same. On the picture each shape takes its level's color, the colors the charm customizer gives its layers: blue for the floor level, orange for the symbol level, yellow-green for the top level, each with a light edge. A shape with no class, or Off, is hatched with a dashed edge, and the legend under the picture names all four.
+4. **Apply classes.** Press **Apply classes** in the editor. The editor closes, the app says how many features the plan now holds and how many shapes were ignored, the plates rebuild their summary, and the preview shows the map.
+5. **Check and print.** The print bed, the plates and the render button, as described under [Plates](#plates).
 
 What a class does to a shape:
 

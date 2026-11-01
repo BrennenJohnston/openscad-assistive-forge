@@ -296,6 +296,13 @@ class MapPanel {
     this.refs = {};
     this.el = null;
     this.unsubscribe = null;
+    // The tile's own Map file control while a map from a drawing holds it
+    // in its first step, the marker left where the Customizer built it, and
+    // the step's slot it stands in.
+    this.heldFile = null;
+    this.fileHome = null;
+    this.fileSlot = null;
+    this.customizerObserver = null;
   }
 
   mount() {
@@ -332,6 +339,17 @@ class MapPanel {
       },
     });
     parametersContainer.parentNode.insertBefore(this.el, parametersContainer);
+    // The Customizer builds its controls again on a preset, an undo or a
+    // link's values, which leaves the Map file control held here stale; and
+    // its detail level, which the held control shows too, can change.
+    this.customizerObserver = new MutationObserver(() =>
+      this.syncFileControl()
+    );
+    this.customizerObserver.observe(parametersContainer, {
+      childList: true,
+      attributes: true,
+      attributeFilter: ['data-detail-level'],
+    });
     // A place or route map never shows the sample station: the empty plate
     // waits for its draft from the start.
     if (this.mapType === 'place' || this.mapType === 'route') this.wait();
@@ -359,8 +377,64 @@ class MapPanel {
         this.schedule();
       }
       this.adoptPicture();
+      if (this.mapType === 'drawing') this.steps?.refresh();
     });
     this.schedule(0);
+  }
+
+  /**
+   * A map from a drawing holds the tile's Map file control in its first
+   * step, so choosing, converting and tracing happen there; every other
+   * type, the Alt View (where this panel hides and the tile's controls
+   * stay) and the panel's end give it back to its place in the Customizer.
+   * A control the Customizer built again replaces the stale one held here.
+   */
+  syncFileControl() {
+    const container = document.getElementById('parametersContainer');
+    // The Customizer's detail level (descriptions under the names, beside
+    // them, or behind a help button) is an attribute on its container.
+    if (this.fileSlot) {
+      const level = container?.dataset.detailLevel;
+      if (level) this.fileSlot.dataset.detailLevel = level;
+      else delete this.fileSlot.dataset.detailLevel;
+    }
+    const fresh =
+      container
+        ?.querySelector(`[id="param-${this.config.mapFileParam}"]`)
+        ?.closest('.param-control') || null;
+    if (fresh && this.heldFile && fresh !== this.heldFile) {
+      this.heldFile.remove();
+      this.heldFile = null;
+      this.fileHome = null;
+    }
+    const want =
+      this.mapType === 'drawing' &&
+      !this.altOff &&
+      Boolean(this.fileSlot?.isConnected);
+    if (want) {
+      if (!this.heldFile) {
+        if (!fresh) return;
+        this.fileHome = document.createComment('map file control');
+        fresh.before(this.fileHome);
+        this.heldFile = fresh;
+      }
+      if (this.heldFile.parentNode !== this.fileSlot)
+        this.fileSlot.appendChild(this.heldFile);
+      return;
+    }
+    if (!this.heldFile) return;
+    if (this.fileHome?.isConnected) this.fileHome.replaceWith(this.heldFile);
+    else this.heldFile.remove();
+    this.heldFile = null;
+    this.fileHome = null;
+  }
+
+  /** Whether the tile's Map file control holds a file. */
+  holdsMapFile() {
+    const value =
+      stateManager.getState()?.parameters?.[this.config.mapFileParam];
+    if (typeof value === 'string') return value.length > 0;
+    return Boolean(value?.data || value?.name);
   }
 
   /**
@@ -856,7 +930,9 @@ class MapPanel {
       delete this.el.dataset.mapType;
       heading.textContent = MAP_TYPE_QUESTION;
       this.steps = null;
+      this.fileSlot = null;
       box.replaceChildren(this.buildChooser());
+      this.syncFileControl();
       if (focus) box.querySelector('input[type="radio"]')?.focus();
       return;
     }
@@ -880,6 +956,7 @@ class MapPanel {
     };
     const plates = [p.intro, p.bed, p.warnings, p.door, p.symbols, p.render];
     const [s1, s2, s3, s4, s5] = this.steps.sections;
+    this.fileSlot = null;
     if (type.key === 'place') {
       fill(s1, [a.where]);
       fill(s2, [a.radius]);
@@ -893,13 +970,15 @@ class MapPanel {
       fill(s4, [a.make]);
       fill(s5, plates);
     } else {
-      fill(s1, [note(WORKFLOW_STRINGS.drawingChoose)]);
+      this.fileSlot = el('div', 'tactile-map-file-slot');
+      fill(s1, [note(WORKFLOW_STRINGS.drawingChoose), [this.fileSlot]]);
       fill(s2, [p.width]);
       fill(s3, [p.door, p.symbols]);
       fill(s4, [note(WORKFLOW_STRINGS.drawingApply)]);
       fill(s5, [p.intro, p.bed, p.warnings, p.render]);
     }
     box.replaceChildren(this.steps.el);
+    this.syncFileControl();
     this.steps.refresh();
     if (focus) this.steps.show(0);
   }
@@ -1006,6 +1085,9 @@ class MapPanel {
       !(this.address?.getPlace() && this.address?.getDest())
     ) {
       return WORKFLOW_STRINGS.needBoth;
+    }
+    if (key === 'drawing' && index === 0 && !this.holdsMapFile()) {
+      return WORKFLOW_STRINGS.needDrawing;
     }
     if (key !== 'drawing' && index === 3 && this.source !== 'draft') {
       return WORKFLOW_STRINGS.needMap;
@@ -1532,6 +1614,7 @@ class MapPanel {
     if (off === this.altOff) return;
     this.altOff = off;
     for (const el of this.sections()) el.hidden = off;
+    this.syncFileControl();
     if (off) announce(ALT_VIEW_SENTENCE, { source: SOURCE });
   }
 
@@ -1539,6 +1622,10 @@ class MapPanel {
     clearTimeout(this.timer);
     this.altObserver?.disconnect();
     this.altObserver = null;
+    this.customizerObserver?.disconnect();
+    this.customizerObserver = null;
+    this.mapType = null;
+    this.syncFileControl();
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;

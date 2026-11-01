@@ -105,18 +105,21 @@ let downloads;
 
 function mount({ type = 'drawing', ...options } = {}) {
   destroyMapPanel();
-  initMapPanel({ ...CONFIG, type }, {
-    plan: sampleStationPlan(),
-    setFile: vi.fn((name, fileName, svg) => {
-      files.push({ name, fileName, svg });
-      return true;
-    }),
-    render: vi.fn(async () => EMPTY_STL()),
-    download: vi.fn((bytes, name, format) => {
-      downloads.push({ bytes, name, format });
-    }),
-    ...options,
-  });
+  initMapPanel(
+    { ...CONFIG, type },
+    {
+      plan: sampleStationPlan(),
+      setFile: vi.fn((name, fileName, svg) => {
+        files.push({ name, fileName, svg });
+        return true;
+      }),
+      render: vi.fn(async () => EMPTY_STL()),
+      download: vi.fn((bytes, name, format) => {
+        downloads.push({ bytes, name, format });
+      }),
+      ...options,
+    }
+  );
 }
 
 async function readZip() {
@@ -170,7 +173,9 @@ describe('the map types and their steps', () => {
     ];
     expect(radios.map((r) => r.value)).toEqual(['place', 'route', 'drawing']);
     expect(
-      radios.map((r) => document.querySelector(`label[for="${r.id}"]`).textContent)
+      radios.map(
+        (r) => document.querySelector(`label[for="${r.id}"]`).textContent
+      )
     ).toEqual(['A place map', 'A route map', 'A map from your drawing']);
     const described = document.getElementById(
       radios[1].getAttribute('aria-describedby')
@@ -178,9 +183,9 @@ describe('the map types and their steps', () => {
     expect(described.textContent).toBe(
       'From one place to another, on foot or by bus and train, with the turns, crossings and steps on the way.'
     );
-    expect(document.querySelector('#tactileMapChooser legend').textContent).toBe(
-      'Map type'
-    );
+    expect(
+      document.querySelector('#tactileMapChooser legend').textContent
+    ).toBe('Map type');
     const go = document.getElementById('tactileMapChooserNext');
     expect(go.disabled).toBe(true);
     expect(document.getElementById('tactileMapChooserReason').textContent).toBe(
@@ -209,9 +214,9 @@ describe('the map types and their steps', () => {
     expect(
       document.querySelector('label[for="tactileMapAddress"]').textContent
     ).toBe('From');
-    expect(document.querySelector('label[for="tactileMapTo"]').textContent).toBe(
-      'To'
-    );
+    expect(
+      document.querySelector('label[for="tactileMapTo"]').textContent
+    ).toBe('To');
     // A route map shows the empty plate, never the sample station.
     expect(getMapPlan().meta.waiting).toBe(true);
     back().click();
@@ -268,15 +273,140 @@ describe('the map types and their steps', () => {
   });
 
   it('lays a map from a drawing out with its width, its door and the plates, and keeps the sample station', () => {
+    stateManager.setState({
+      parameters: { ...params(), map_file: 'sample_station.svg' },
+    });
     mount({ type: 'drawing' });
     const step = (n) => document.getElementById(`tactileMapSteps-step-${n}`);
-    expect(step(1).textContent).toContain('The sample station drawing is loaded.');
+    expect(step(1).textContent).toContain(
+      'Choose an SVG or a DXF drawing, or a photo to trace. Until you choose one, the map uses the sample station.'
+    );
     expect(step(2).querySelector('#tactileMapDrawingWidth')).toBeTruthy();
     expect(step(3).querySelector('#tactileMapEditDrawing')).toBeTruthy();
     expect(step(5).querySelector('#tactileMapBed')).toBeTruthy();
     expect(document.getElementById('tactileMapAddress')).toBeNull();
     expect(getMapPlan().meta.waiting).toBeFalsy();
     expect(next().disabled).toBe(false);
+  });
+});
+
+describe("a map from a drawing's first step", () => {
+  const next = () => document.getElementById('tactileMapSteps-next');
+  const reason = () => document.getElementById('tactileMapSteps-reason');
+  const stepOne = () => document.getElementById('tactileMapSteps-step-1');
+  const group = () => document.querySelector('#parametersContainer details');
+
+  // The tile's Map file control as the Customizer builds it: a group with
+  // the file control and the map's width after it.
+  function buildCustomizer() {
+    document.getElementById('parametersContainer').innerHTML =
+      '<div class="forge-disclosure-row"><details class="param-group" open>' +
+      '<summary>Map file</summary>' +
+      '<div class="param-control param-control--file">' +
+      '<label for="param-map_file">Map file</label>' +
+      '<input type="file" id="param-map_file"></div>' +
+      '<div class="param-control"><input id="param-map_width_mm"></div>' +
+      '</details></div>';
+    return document.getElementById('param-map_file').closest('.param-control');
+  }
+  const holdFile = (value) =>
+    stateManager.setState({ parameters: { ...params(), map_file: value } });
+  const atHome = (control) =>
+    control.parentNode === group() &&
+    control.nextElementSibling?.querySelector('#param-map_width_mm');
+
+  it("holds the tile's Map file control in step 1 under its note, out of the Customizer", () => {
+    holdFile('sample_station.svg');
+    const control = buildCustomizer();
+    mount({ type: 'drawing' });
+    expect(stepOne().contains(control)).toBe(true);
+    const note = stepOne().querySelector('.braille-panel-help');
+    expect(note.textContent).toBe(
+      'Choose an SVG or a DXF drawing, or a photo to trace. Until you choose one, the map uses the sample station.'
+    );
+    expect(
+      note.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(group().querySelector('#param-map_file')).toBeNull();
+    expect(group().querySelector('#param-map_width_mm')).toBeTruthy();
+    expect(document.querySelectorAll('#param-map_file')).toHaveLength(1);
+  });
+
+  it('gives the control back to its place in the Customizer for another map type, in the Alt View and when the panel goes', async () => {
+    holdFile('sample_station.svg');
+    const control = buildCustomizer();
+    mount({ type: 'drawing' });
+    document.getElementById('tactileMapSteps-back').click();
+    expect(atHome(control)).toBeTruthy();
+    const place = document.getElementById('tactileMapType-place');
+    place.checked = true;
+    place.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('tactileMapChooserNext').click();
+    expect(atHome(control)).toBeTruthy();
+
+    mount({ type: 'drawing' });
+    expect(stepOne().contains(control)).toBe(true);
+    const root = document.documentElement;
+    root.setAttribute('data-ui-variant', 'mono');
+    try {
+      await vi.waitFor(() => expect(atHome(control)).toBeTruthy(), SETTLE);
+      root.removeAttribute('data-ui-variant');
+      await vi.waitFor(
+        () => expect(stepOne().contains(control)).toBe(true),
+        SETTLE
+      );
+    } finally {
+      root.removeAttribute('data-ui-variant');
+    }
+
+    destroyMapPanel();
+    expect(atHome(control)).toBeTruthy();
+  });
+
+  it('takes the new control when the Customizer builds its controls again, and leaves no copy behind', async () => {
+    holdFile('sample_station.svg');
+    const first = buildCustomizer();
+    mount({ type: 'drawing' });
+    expect(stepOne().contains(first)).toBe(true);
+    const second = buildCustomizer();
+    await vi.waitFor(
+      () => expect(stepOne().contains(second)).toBe(true),
+      SETTLE
+    );
+    expect(first.isConnected).toBe(false);
+    expect(document.querySelectorAll('#param-map_file')).toHaveLength(1);
+    expect(group().querySelector('#param-map_file')).toBeNull();
+  });
+
+  it("shows the control at the Customizer's detail level, and follows a change of it", async () => {
+    holdFile('sample_station.svg');
+    const container = document.getElementById('parametersContainer');
+    container.dataset.detailLevel = 'show';
+    const control = buildCustomizer();
+    mount({ type: 'drawing' });
+    expect(control.closest('[data-detail-level]').dataset.detailLevel).toBe(
+      'show'
+    );
+    container.dataset.detailLevel = 'hide';
+    await vi.waitFor(
+      () =>
+        expect(control.closest('[data-detail-level]').dataset.detailLevel).toBe(
+          'hide'
+        ),
+      SETTLE
+    );
+  });
+
+  it('waits on step 1 with its reason while the control holds no file, and goes on once it holds one', async () => {
+    holdFile(null);
+    buildCustomizer();
+    mount({ type: 'drawing' });
+    expect(next().disabled).toBe(true);
+    expect(reason().textContent).toBe('Choose a drawing first.');
+    expect(next().getAttribute('aria-describedby')).toBe(reason().id);
+    holdFile({ name: 'station.svg', data: svgToDataUrl(DRAWING) });
+    await vi.waitFor(() => expect(next().disabled).toBe(false), SETTLE);
+    expect(reason().textContent).toBe('');
   });
 });
 
@@ -951,12 +1081,12 @@ describe('the map data row', () => {
     // The map tiles' service asks for its own credit, with its link.
     const links = [...document.querySelectorAll('#tactileMapAttribution a')];
     expect(links).toHaveLength(2);
-    expect(links[1].getAttribute('href')).toBe('https://tiles.openstreetmap.us');
+    expect(links[1].getAttribute('href')).toBe(
+      'https://tiles.openstreetmap.us'
+    );
     expect(links[1].getAttribute('target')).toBe('_blank');
     expect(links[1].getAttribute('rel')).toContain('noopener');
-    expect(
-      document.getElementById('tactileMapAttribution').textContent
-    ).toBe(
+    expect(document.getElementById('tactileMapAttribution').textContent).toBe(
       'Map data from OpenStreetMap contributors (opens in new tab), ODbL. Tiles by OSM US (opens in new tab).'
     );
   });
