@@ -841,20 +841,20 @@ describe('the map data row', () => {
     });
   });
 
-  it('says the wait when the server is busy, and gives up after the second wait', async () => {
+  it('says the wait when no server answers, and gives up after the second wait', async () => {
     await pickPlace({ pullArea: refusing('busy', [30, 60]) });
     getData().click();
     await vi.waitFor(() =>
       expect(addressStatus()).toBe(
-        'The map server is still busy. Try again in a few minutes, or export the area from openstreetmap.org and load it with Load an OpenStreetMap file.'
+        'No map server answered. Try again in a few minutes, or export the area from openstreetmap.org and use the file instead.'
       )
     );
     expect(announce).toHaveBeenCalledWith(
-      'The map server is busy. Trying again in 30 seconds.',
+      'No map server answered. Trying again in 30 seconds.',
       { source: 'tactile-map' }
     );
     expect(announce).toHaveBeenCalledWith(
-      'The map server is busy. Trying again in 60 seconds.',
+      'No map server answered. Trying again in 60 seconds.',
       { source: 'tactile-map' }
     );
     expect(announceError).toHaveBeenCalledWith(addressStatus(), {

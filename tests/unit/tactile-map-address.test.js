@@ -245,3 +245,98 @@ describe('the address section', () => {
     expect(status()).toBe('Type an address or a place first.');
   });
 });
+
+describe('the pull, sentence by sentence', () => {
+  const PLACE = PLACES[0];
+  const MAIN = "OpenStreetMap's main server";
+  const VK = "VK Maps' server";
+  const getData = () => document.getElementById('tactileMapGetData');
+
+  async function pick(pullArea) {
+    destroyMapPanel();
+    initMapPanel(CONFIG, {
+      plan: sampleStationPlan(),
+      setFile: vi.fn(() => true),
+      render: vi.fn(async () => new Uint8Array(84)),
+      download: vi.fn(),
+      searchPlaces: vi.fn(async () => [PLACE]),
+      pullArea,
+    });
+    type('1000 4th Ave, Seattle, WA');
+    searchBtn().click();
+    await vi.waitFor(() => expect(radios()).toHaveLength(1));
+    radios()[0].click();
+    vi.clearAllMocks();
+  }
+
+  it('says the switch to the second server once, in one sentence, when the main server refuses this site, then the counts', async () => {
+    await pick(
+      vi.fn(async ({ onWait }) => {
+        onWait(0, VK, { from: MAIN, reason: 'refused' });
+        return { elements: [], bytes: 10, ms: 1, host: VK };
+      })
+    );
+    getData().click();
+    await vi.waitFor(() =>
+      expect(status()).toBe(
+        '0 map features within 250 m: 0 walkways, 0 crossings, 0 buildings, 0 landmarks.'
+      )
+    );
+    expect(announce.mock.calls.map((c) => c[0])).toEqual([
+      `Getting map data within 250 m of ${PLACE.name}...`,
+      "OpenStreetMap's main server refused this site's request. Trying VK Maps' server; this can take half a minute.",
+      '0 map features within 250 m: 0 walkways, 0 crossings, 0 buildings, 0 landmarks.',
+    ]);
+    expect(announceError).not.toHaveBeenCalled();
+  });
+
+  it('names a server that ran out of time, or sent no map data, the same way', async () => {
+    await pick(
+      vi.fn(async ({ onWait }) => {
+        onWait(0, VK, { from: MAIN, reason: 'no-answer' });
+        onWait(0, VK, { from: MAIN, reason: 'no-data' });
+        return { elements: [], bytes: 10, ms: 1, host: VK };
+      })
+    );
+    getData().click();
+    await vi.waitFor(() =>
+      expect(announce.mock.calls.map((c) => c[0])).toContain(
+        "OpenStreetMap's main server sent no map data. Trying VK Maps' server; this can take half a minute."
+      )
+    );
+    expect(announce.mock.calls.map((c) => c[0])).toContain(
+      "OpenStreetMap's main server did not answer in time. Trying VK Maps' server; this can take half a minute."
+    );
+  });
+
+  it('says every stage of a pull that no server answers, in order, and ends on what to do, as an error', async () => {
+    await pick(
+      vi.fn(async ({ onWait }) => {
+        onWait(0, VK, { from: MAIN, reason: 'refused' });
+        onWait(30);
+        onWait(0, VK, { from: MAIN, reason: 'refused' });
+        onWait(60);
+        onWait(0, VK, { from: MAIN, reason: 'refused' });
+        const error = new Error('busy');
+        error.code = 'busy';
+        throw error;
+      })
+    );
+    getData().click();
+    const END =
+      'No map server answered. Try again in a few minutes, or export the area from openstreetmap.org and use the file instead.';
+    await vi.waitFor(() => expect(status()).toBe(END));
+    const SWITCH =
+      "OpenStreetMap's main server refused this site's request. Trying VK Maps' server; this can take half a minute.";
+    expect(announce.mock.calls.map((c) => c[0])).toEqual([
+      `Getting map data within 250 m of ${PLACE.name}...`,
+      SWITCH,
+      'No map server answered. Trying again in 30 seconds.',
+      SWITCH,
+      'No map server answered. Trying again in 60 seconds.',
+      SWITCH,
+    ]);
+    expect(announceError.mock.calls.map((c) => c[0])).toEqual([END]);
+    expect(getData().disabled).toBe(false);
+  });
+});

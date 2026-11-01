@@ -48,7 +48,7 @@ Content-Security-Policy:
   style-src 'self';
   img-src 'self' data: blob:;
   font-src 'self';
-  connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev https://overpass-api.de https://nominatim.openstreetmap.org https://s3.amazonaws.com;
+  connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev https://overpass-api.de https://maps.mail.ru https://nominatim.openstreetmap.org https://s3.amazonaws.com;
   frame-ancestors 'none';
   object-src 'none';
   base-uri 'self';

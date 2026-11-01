@@ -11,17 +11,26 @@
  * lazy chunk on the first press; a test stubs them):
  * - `searchPlaces(query)` resolves `[{ name, lat, lon, kind }]`, or rejects
  *   with a `code`: 'empty', 'rate', 'no-answer';
- * - `pullArea({ lat, lon, radiusM, onWait })` resolves `{ elements, bytes }`,
- *   calling `onWait(seconds)` before each back-off, or rejects with 'busy'
- *   or 'no-answer';
+ * - `pullArea({ lat, lon, radiusM, onWait })` resolves `{ elements, bytes,
+ *   host }`, calling `onWait(seconds)` before each back-off and
+ *   `onWait(0, nextServer, { from, reason })` when it moves to the next
+ *   server at once, or rejects with 'busy' or 'no-answer';
  * - `readOsmFile(file)` resolves `{ elements, center }` or rejects with
  *   'not-osm'.
  *
  * The data kept for the draft: `{ elements, center, radiusM, source, place,
- * landmarks, bytes }` with `source` 'overpass' or 'file'.
+ * landmarks, bytes, host }` with `source` 'overpass' or 'file' and `host`
+ * the name of the server that answered.
  *
  * @license GPL-3.0-or-later
  */
+
+/** How a server failed, as the middle of the switch sentence. */
+const HOST_FAILED = Object.freeze({
+  refused: "refused this site's request",
+  'no-answer': 'did not answer in time',
+  'no-data': 'sent no map data',
+});
 
 export const ADDRESS_STRINGS = Object.freeze({
   heading: 'Map from an address',
@@ -68,10 +77,13 @@ export const ADDRESS_STRINGS = Object.freeze({
   /** A11Y: the status line after a pull. */
   got: (n, r, w, c, b, l) =>
     `${n} map features within ${r} m: ${w} walkways, ${c} crossings, ${b} buildings, ${l} landmarks.`,
-  /** A11Y: the server refused, or gave no answer; a back-off runs. */
-  busyWait: (s) => `The map server is busy. Trying again in ${s} seconds.`,
-  /** A11Y: the second back-off failed too. */
-  busy: 'The map server is still busy. Try again in a few minutes, or export the area from openstreetmap.org and load it with Load an OpenStreetMap file.',
+  /** A11Y: one server failed and the pull moves to the next, in one breath. */
+  hostSwitch: (from, next, reason) =>
+    `${from} ${HOST_FAILED[reason] || HOST_FAILED.refused}. Trying ${next}; this can take half a minute.`,
+  /** A11Y: every server failed; a back-off runs before the list again. */
+  busyWait: (s) => `No map server answered. Trying again in ${s} seconds.`,
+  /** A11Y: the last try of the list failed too. */
+  busy: 'No map server answered. Try again in a few minutes, or export the area from openstreetmap.org and use the file instead.',
   /** A11Y: the pull did not answer. */
   noData:
     'The map data did not arrive. Check your connection and try again, or load an OpenStreetMap file instead.',
@@ -598,15 +610,21 @@ export function createAddressSection({
     say(text);
   }
 
+  /** A back-off's seconds, or the move to the next server (0 seconds). */
+  function sayWait(seconds, next, info) {
+    say(
+      seconds > 0
+        ? S.busyWait(seconds)
+        : S.hostSwitch(info?.from, next, info?.reason)
+    );
+  }
+
   async function pullRoute() {
     const at = place;
     const to = dest;
     const box = boxAround(at, to);
     say(S.gettingRoute(short(at), short(to)));
-    const { elements, bytes } = await pullArea({
-      box,
-      onWait: (s) => say(S.busyWait(s)),
-    });
+    const { elements, bytes, host } = await pullArea({ box, onWait: sayWait });
     keep({
       elements,
       center: { lat: (at.lat + to.lat) / 2, lon: (at.lon + to.lon) / 2 },
@@ -617,6 +635,7 @@ export function createAddressSection({
       to,
       landmarks: ticked(),
       bytes,
+      host,
     });
     let text = S.gotRoute(countFeatures(elements).n, short(at), short(to));
     if (bytes > BIG_BYTES) {
@@ -644,11 +663,11 @@ export function createAddressSection({
     const at = place;
     say(S.getting(r, at.name));
     try {
-      const { elements, bytes } = await pullArea({
+      const { elements, bytes, host } = await pullArea({
         lat: at.lat,
         lon: at.lon,
         radiusM: r,
-        onWait: (s) => say(S.busyWait(s)),
+        onWait: sayWait,
       });
       keep({
         elements,
@@ -658,6 +677,7 @@ export function createAddressSection({
         place: at,
         landmarks: ticked(),
         bytes,
+        host,
       });
       sayCounts(elements, r, bytes);
     } catch (error) {

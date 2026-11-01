@@ -3,15 +3,17 @@ import { test, expect } from '@playwright/test';
 
 // The map data hosts under the SHIPPED headers.
 //
-// A map from an address reaches three hosts the browser must be allowed to
-// contact: Nominatim for the address, Overpass for the map data, and the
+// A map from an address reaches the hosts the browser must be allowed to
+// contact: Nominatim for the address, two Overpass servers for the map data
+// (the main one first, VK Maps' when the main one refuses the site), and the
 // terrain tiles on S3 for the slopes. The dev server serves no
 // Content-Security-Policy, so only this lane can say the deployed site lets
 // those requests leave the browser, and that nothing else in the policy
-// moved when the three hosts were added.
+// moved when the hosts were added.
 
 const HOSTS = [
   'https://overpass-api.de',
+  'https://maps.mail.ru',
   'https://nominatim.openstreetmap.org',
   'https://s3.amazonaws.com',
 ];
@@ -38,7 +40,7 @@ function committedPolicy() {
 }
 
 test.describe('the map data hosts under the shipped CSP', () => {
-  test('prod-map-data-csp: connect-src names the three hosts, and the served policy is the committed line', async ({
+  test('prod-map-data-csp: connect-src names the map hosts, and the served policy is the committed line', async ({
     page,
   }) => {
     const response = await page.goto('/');
@@ -57,7 +59,7 @@ test.describe('the map data hosts under the shipped CSP', () => {
       expect(connect.split(/\s+/), `${host} in connect-src`).toContain(host);
     }
 
-    // The policy around the three hosts is the one the app shipped with.
+    // The policy around the map hosts is the one the app shipped with.
     expect(served).toContain("default-src 'self'");
     expect(served).toContain("script-src 'self' 'wasm-unsafe-eval'");
     expect(served).not.toContain('unsafe-inline');

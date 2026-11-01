@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Get map data reaches a map server from the published site: when
+  OpenStreetMap's main server refuses the site or does not answer, the
+  Tactile Map Designer asks VK Maps' server instead and says which one it
+  is asking, and a pull that fails says what failed instead of "busy".
+
 ## [5.8.0] - 2026-11-01
 
 ### Added
