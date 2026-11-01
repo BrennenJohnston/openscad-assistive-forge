@@ -181,7 +181,7 @@ describe('the map types and their steps', () => {
       radios[1].getAttribute('aria-describedby')
     );
     expect(described.textContent).toBe(
-      'From one place to another, on foot or by bus and train, with the turns, crossings and steps on the way.'
+      'From one place to another on foot, with the turns, crossings and steps on the way.'
     );
     expect(
       document.querySelector('#tactileMapChooser legend').textContent

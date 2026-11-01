@@ -29,7 +29,7 @@ export const MAP_TYPES = Object.freeze([
     key: 'route',
     name: 'A route map',
     sentence:
-      'From one place to another, on foot or by bus and train, with the turns, crossings and steps on the way.',
+      'From one place to another on foot, with the turns, crossings and steps on the way.',
     steps: Object.freeze([
       'From and To',
       // Walking only, until the bus and train choice joins this step.
