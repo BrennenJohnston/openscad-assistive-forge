@@ -9099,8 +9099,15 @@ if (rounded) {
       const exampleType = button.dataset.example;
       const tutorialId = button.dataset.tutorial;
 
-      // Load the example first
-      await fileHandler.loadExampleByKey(exampleType);
+      // Load the example first. A map tile's card names the menu holding
+      // the map type, read now: a choice made before this page finished
+      // starting has no listener to miss.
+      const typeMenu = button.dataset.mapTypeFrom
+        ? document.getElementById(button.dataset.mapTypeFrom)
+        : null;
+      await fileHandler.loadExampleByKey(exampleType, {
+        mapType: typeMenu?.value || null,
+      });
 
       if (exampleType) {
         // Screen reader confirmation that an example was loaded
@@ -9159,17 +9166,6 @@ if (rounded) {
   if (brailleVariantSelect && openBrailleCardBtn) {
     brailleVariantSelect.addEventListener('change', () => {
       openBrailleCardBtn.dataset.example = brailleVariantSelect.value;
-    });
-  }
-
-  // Wire the tactile map tool selector the same way (one tool today)
-  const tactileMapVariantSelect = document.getElementById(
-    'tactileMapVariantSelect'
-  );
-  const openTactileMapBtn = document.getElementById('openTactileMapBtn');
-  if (tactileMapVariantSelect && openTactileMapBtn) {
-    tactileMapVariantSelect.addEventListener('change', () => {
-      openTactileMapBtn.dataset.example = tactileMapVariantSelect.value;
     });
   }
 
@@ -9267,6 +9263,7 @@ if (rounded) {
           // Clean up URL to avoid reloading on refresh
           initUrlParams.delete('example');
           initUrlParams.delete('load'); // Also remove ?load= alias
+          initUrlParams.delete('type'); // a map tile's type, read by the load
           const cleanUrl = cleanUrlKeepingFragment();
           history.replaceState(null, '', cleanUrl);
 

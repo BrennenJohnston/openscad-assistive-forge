@@ -46,6 +46,7 @@ import {
 } from '../announcer.js';
 import { dataUrlToText } from '../svg-text-encoding.js';
 import { WAITING_TITLE, sampleStationPlan, waitingPlan } from './plan.js';
+import { mapType } from './map-types.js';
 import {
   drawingBox,
   filledOutlines,
@@ -234,6 +235,8 @@ function el(tag, className, text) {
 class MapPanel {
   constructor(config, options) {
     this.config = config;
+    // The map type the card or the link chose; none opens the chooser.
+    this.mapType = mapType(config.type)?.key ?? null;
     this.plan = options.plan || sampleStationPlan();
     this.setFile = options.setFile || setFileThroughControl;
     this.bedKey = options.bedKey || BED_PRESETS[0].key;
@@ -566,6 +569,7 @@ class MapPanel {
   build() {
     const section = el('section', 'braille-panel tactile-map-panel');
     section.id = 'tactileMapPanel';
+    if (this.mapType) section.dataset.mapType = this.mapType;
     section.setAttribute('aria-labelledby', 'tactileMapHeading');
 
     const heading = el('h2', 'braille-panel-heading', 'Tactile map plates');

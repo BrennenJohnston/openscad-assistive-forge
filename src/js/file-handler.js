@@ -123,7 +123,7 @@ function findExampleKeyByFileName(fileName) {
  * Extracted from loadExampleByKey for reuse during saved-project restore.
  * @param {string} exampleKey - Key into EXAMPLE_DEFINITIONS
  */
-async function restoreGalleryFromManifest(exampleKey) {
+async function restoreGalleryFromManifest(exampleKey, { mapType } = {}) {
   pendingBrailleConfig = null;
   pendingMapConfig = null;
   setModelInputVariables([]);
@@ -137,7 +137,15 @@ async function restoreGalleryFromManifest(exampleKey) {
 
     const tactileMap = manifestData.tactileMap;
     if (tactileMap?.mapFileParam) {
-      pendingMapConfig = tactileMap;
+      // The map type the card chose, else the one a link names
+      // (`?example=tactile-map&type=route`); the panel checks it.
+      pendingMapConfig = {
+        ...tactileMap,
+        type:
+          mapType ||
+          new URLSearchParams(window.location.search).get('type') ||
+          null,
+      };
       // The map file is the model's input, not a picture to lay over it.
       setModelInputVariables([tactileMap.mapFileParam]);
       // Start fetching the panel's chunk now, while the tile's own files
@@ -1582,7 +1590,7 @@ export function initFileHandler({
 
   async function loadExampleByKey(
     exampleKey,
-    { closeFeaturesGuideModal = false } = {}
+    { closeFeaturesGuideModal = false, mapType = null } = {}
   ) {
     const example = EXAMPLE_DEFINITIONS[exampleKey];
     if (!example) {
@@ -1684,7 +1692,7 @@ export function initFileHandler({
 
       currentExampleKey = exampleKey;
       clearGalleryOptions();
-      await restoreGalleryFromManifest(exampleKey);
+      await restoreGalleryFromManifest(exampleKey, { mapType });
 
       const isProgramExample = Object.values(PROGRAM_DEFINITIONS).some((prog) =>
         prog.examples.includes(exampleKey)

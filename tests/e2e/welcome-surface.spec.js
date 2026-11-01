@@ -277,7 +277,7 @@ test.describe('the Tactile Map Designer card', () => {
     await card.locator('summary').click()
     await expect(card.locator('.role-path-tips li')).toHaveCount(4)
     const select = card.locator('#tactileMapVariantSelect')
-    await expect(select).toHaveValue('tactile-map')
+    await expect(select).toHaveValue('place')
     const button = card.locator('#openTactileMapBtn')
     await expect(button).toHaveText('Open Tactile Map Designer')
     await expect(button).toHaveAttribute('data-example', 'tactile-map')
@@ -298,5 +298,52 @@ test.describe('the Tactile Map Designer card', () => {
       'Tactile map plates',
       { timeout: 15_000 }
     )
+    // The first choice, a place map, is the one the card opens by default.
+    await expect(page.locator('#tactileMapPanel')).toHaveAttribute(
+      'data-map-type',
+      'place'
+    )
+  })
+
+  test('its menu offers the three map types, and the one chosen opens the tile on that type', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 10_000 })
+    const select = page.getByLabel('Map type')
+    await expect(select).toHaveId('tactileMapVariantSelect')
+    const options = select.locator('option')
+    await expect(options).toHaveText([
+      'A place map',
+      'A route map',
+      'A map from your drawing',
+    ])
+    expect(
+      await options.evaluateAll((list) => list.map((o) => o.value))
+    ).toEqual(['place', 'route', 'drawing'])
+    await select.selectOption({ label: 'A route map' })
+    const button = page.locator('#openTactileMapBtn')
+    await expect(button).toHaveAttribute('data-example', 'tactile-map')
+    await button.click()
+    await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('#tactileMapPanel')).toHaveAttribute(
+      'data-map-type',
+      'route',
+      { timeout: 15_000 }
+    )
+  })
+
+  test('a link with a type opens the tile on that type, and the type leaves the address bar', async ({
+    page,
+  }) => {
+    await page.goto('/?example=tactile-map&type=drawing')
+    await expect(page.locator('#tactileMapPanel')).toHaveAttribute(
+      'data-map-type',
+      'drawing',
+      { timeout: 30_000 }
+    )
+    await expect
+      .poll(() => new URL(page.url()).searchParams.has('type'))
+      .toBe(false)
   })
 })
