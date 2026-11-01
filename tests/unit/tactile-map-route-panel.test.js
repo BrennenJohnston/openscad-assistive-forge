@@ -233,7 +233,7 @@ describe('Make a route map', () => {
       )
     );
     expect(addressStatus()).toBe(
-      'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk. Open the drawing editor to check it.'
+      'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk.'
     );
     // The model is told the fitted size.
     await vi.waitFor(() => {

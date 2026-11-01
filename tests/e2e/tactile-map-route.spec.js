@@ -120,7 +120,7 @@ test('a route map from the Husky Union Building to the Bill & Melinda Gates Cent
   await expect(draft).toHaveText('Make a route map');
   await draft.click();
   await expect(status).toHaveText(
-    'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk. Open the drawing editor to check it.',
+    'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk.',
     { timeout: 30000 }
   );
   const editor = page.locator('#drawingEditorSurface .drawing-editor');

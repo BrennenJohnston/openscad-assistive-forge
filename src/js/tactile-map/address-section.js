@@ -93,7 +93,7 @@ export const ADDRESS_STRINGS = Object.freeze({
   routeDraft: 'Make a route map',
   /** A11Y: the status line after a route draft. */
   routeReady: (m, from, to, crossings, steps, w, h) =>
-    `Route map ready: a ${m} m walk from ${from} to ${to}, ${crossings === 1 ? '1 crossing' : `${crossings} crossings`} and ${steps === 1 ? '1 flight of steps' : `${steps} flights of steps`} on the way. The map is ${w} x ${h} mm, fitted to the walk. Open the drawing editor to check it.`,
+    `Route map ready: a ${m} m walk from ${from} to ${to}, ${crossings === 1 ? '1 crossing' : `${crossings} crossings`} and ${steps === 1 ? '1 flight of steps' : `${steps} flights of steps`} on the way. The map is ${w} x ${h} mm, fitted to the walk.`,
   /** A11Y: no walk joins the two places. */
   noWalk: (from, to) =>
     `No walking route joins ${from} and ${to} in this map data. Try other places, or load an OpenStreetMap file of the area.`,
@@ -101,10 +101,10 @@ export const ADDRESS_STRINGS = Object.freeze({
   routeName: (from, to) => `Route map from ${from} to ${to}`,
   /** A11Y: the status line after a draft, with warnings. */
   draftReady: (on, total, w) =>
-    `Draft map ready: ${on} of ${total} features on; ${w} warnings. Open the drawing editor to choose what stays.`,
+    `Draft map ready: ${on} of ${total} features on; ${w} warnings. Choose what stays.`,
   /** A11Y: the same, no warnings. */
   draftReadyClean: (on, total) =>
-    `Draft map ready: ${on} of ${total} features on; no warnings. Open the drawing editor to choose what stays.`,
+    `Draft map ready: ${on} of ${total} features on; no warnings. Choose what stays.`,
   /** A11Y: nothing near the address. */
   nothingNear: (d) =>
     `No sidewalks within ${d} m of the address. Try a larger radius or another address.`,
