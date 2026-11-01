@@ -12,12 +12,14 @@ import {
   scaleChoice,
   groundAcrossM,
   symbolMeters,
-  mmPerMeter,
+  mmPerMeterAt,
   nearestRule,
   sidewalksAsOneLine,
   sentenceFor,
   CUSTOM_RANGE,
+  groundBox,
 } from '../../src/js/tactile-map/scales.js';
+import { projectLatLon } from '../../src/js/tactile-map/osm-geometry.js';
 
 describe('the scale choices', () => {
   it('names five choices for the ground they fit, with their ratios, and a custom ratio', () => {
@@ -42,9 +44,9 @@ describe('the scale choices', () => {
     expect(symbolMeters(1000)).toBe(10);
     expect(symbolMeters(4000)).toBe(40);
     expect(symbolMeters(2000, 8)).toBe(16);
-    expect(mmPerMeter(1000)).toBe(1);
-    expect(mmPerMeter(500)).toBe(2);
-    expect(mmPerMeter(4000)).toBe(0.25);
+    expect(mmPerMeterAt(1000)).toBe(1);
+    expect(mmPerMeterAt(500)).toBe(2);
+    expect(mmPerMeterAt(4000)).toBe(0.25);
   });
 
   it('draws less as the ground grows: every sidewalk and marking near a building, streets as one line over a neighborhood', () => {
@@ -52,24 +54,30 @@ describe('the scale choices', () => {
     expect(rules('building')).toMatchObject({
       streetsAsOneLine: false,
       crossingMarkings: true,
-      curbRamps: true,
-      stubs: true,
     });
     expect(rules('block')).toMatchObject({
       streetsAsOneLine: false,
       crossingMarkings: false,
-      curbRamps: true,
     });
     expect(rules('blocks')).toMatchObject({
       streetsAsOneLine: 'whereUnder3mm',
-      curbRamps: false,
-      stubs: false,
     });
     expect(rules('neighborhood')).toMatchObject({
       streetsAsOneLine: true,
       crossings: false,
       sidePaths: false,
     });
+  });
+
+  it('gives the ground a plate covers as a box centered on the place: 480 by 360 m at 1:1000', () => {
+    const center = { lat: 47.652873, lon: -122.3044814 };
+    const box = groundBox(center, 1000, { w: 480, h: 360 });
+    const [west, south] = projectLatLon(box.south, box.west, center);
+    const [east, north] = projectLatLon(box.north, box.east, center);
+    expect(east - west).toBeCloseTo(480, 6);
+    expect(north - south).toBeCloseTo(360, 6);
+    expect(east + west).toBeCloseTo(0, 6);
+    expect(north + south).toBeCloseTo(0, 6);
   });
 
   it('takes a custom ratio to the nearest named choice for its rules, the more detailed one on a tie', () => {
@@ -91,20 +99,20 @@ describe('the scale choices', () => {
   it('says in one sentence what a choice fits on the plate, what a symbol stands for, and what draws', () => {
     const plate = { w: 480, h: 360 };
     expect(sentenceFor(scaleChoice('block'), plate)).toBe(
-      '480 m across on this plate. A 10 mm symbol stands for 10 m. Sidewalks, crossings and curb ramps draw.'
+      '480 m across on this plate. A 10 mm symbol stands for 10 m. Sidewalks and crossings draw.'
     );
     expect(sentenceFor(scaleChoice('building'), plate)).toBe(
-      '240 m across on this plate. A 10 mm symbol stands for 5 m. Every sidewalk, crossing marking and curb ramp draws.'
+      '240 m across on this plate. A 10 mm symbol stands for 5 m. Every sidewalk draws, and a crossing without markings is dashed.'
     );
     expect(sentenceFor(scaleChoice('blocks'), plate)).toBe(
-      '960 m across on this plate. A 10 mm symbol stands for 20 m. Narrow streets draw as one line; curb ramps leave.'
+      '960 m across on this plate. A 10 mm symbol stands for 20 m. Narrow streets draw as one line; entrances leave.'
     );
     expect(sentenceFor(scaleChoice('neighborhood'), plate)).toBe(
-      '1920 m across on this plate. A 10 mm symbol stands for 40 m. Streets draw as one line; crossings and side paths leave.'
+      '1920 m across on this plate. A 10 mm symbol stands for 40 m. Streets draw as one line; crossings, side paths and landmarks leave.'
     );
     // Custom takes its typed ratio and the rules of the nearest choice.
     expect(sentenceFor(scaleChoice('custom'), plate, 1500)).toBe(
-      '720 m across on this plate. A 10 mm symbol stands for 15 m. Sidewalks, crossings and curb ramps draw.'
+      '720 m across on this plate. A 10 mm symbol stands for 15 m. Sidewalks and crossings draw.'
     );
     // Fit to the route has no ratio until the route is drafted.
     expect(sentenceFor(scaleChoice('route'), plate)).toBe(

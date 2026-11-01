@@ -75,8 +75,8 @@ function fail(code, message) {
  * @returns {string}
  */
 export function buildQuery({ lat, lon, radiusM, box }) {
-  // A box (south, west, north, east) for a map between two places; a radius
-  // around one place otherwise.
+  // A box (south, west, north, east): the ground a place map's scale covers,
+  // or the room around two places; a radius around one place otherwise.
   const around = box
     ? `${box.south},${box.west},${box.north},${box.east}`
     : `around:${radiusM},${lat},${lon}`;

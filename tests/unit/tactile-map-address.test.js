@@ -286,11 +286,11 @@ describe('the pull, sentence by sentence', () => {
     // No sidewalk in the data: the draft says so, as the last sentence.
     await vi.waitFor(() =>
       expect(status()).toBe(
-        'No sidewalks within 30 m of the address. Try a larger radius or another address.'
+        'No sidewalks within 30 m of the address. Try a scale with more ground, or another address.'
       )
     );
     expect(announce.mock.calls.map((c) => c[0])).toEqual([
-      `Getting map data within 250 m of ${PLACE.name}...`,
+      `Getting map data for 480 by 360 m around ${PLACE.name}...`,
       "OpenStreetMap's main server refused this site's request. Trying VK Maps' server; this can take half a minute.",
     ]);
     expect(announceError.mock.calls.map((c) => c[0])).toEqual([status()]);
@@ -335,7 +335,7 @@ describe('the pull, sentence by sentence', () => {
     const SWITCH =
       "OpenStreetMap's main server refused this site's request. Trying VK Maps' server; this can take half a minute.";
     expect(announce.mock.calls.map((c) => c[0])).toEqual([
-      `Getting map data within 250 m of ${PLACE.name}...`,
+      `Getting map data for 480 by 360 m around ${PLACE.name}...`,
       SWITCH,
       'No map server answered. Trying again in 30 seconds.',
       SWITCH,

@@ -4,48 +4,47 @@
  * stands for, and what draws at it. The tactile limits decide the drawing
  * rules: two lines closer than the minimum gap (3 mm) read as one, and a
  * 10 mm symbol stands for more ground as the ratio grows, so the larger the
- * ground the fewer kinds of feature a map can carry.
+ * ground the fewer kinds of feature a map can carry. A rule's `landmarks`
+ * lists the ticked landmark kinds that start on at its scale (all when it
+ * has none); the others are in the draft, off.
  *
  * @license GPL-3.0-or-later
  */
 import { DEFAULT_SETTINGS } from './levels-svg.js';
+import { boxAroundCenter } from './osm-geometry.js';
 
 const RULES = {
   building: Object.freeze({
     streetsAsOneLine: false,
     crossings: true,
     crossingMarkings: true,
-    curbRamps: true,
-    stubs: true,
     sidePaths: true,
-    drawn: 'Every sidewalk, crossing marking and curb ramp draws.',
+    drawn: 'Every sidewalk draws, and a crossing without markings is dashed.',
   }),
   block: Object.freeze({
     streetsAsOneLine: false,
     crossings: true,
     crossingMarkings: false,
-    curbRamps: true,
-    stubs: true,
     sidePaths: true,
-    drawn: 'Sidewalks, crossings and curb ramps draw.',
+    drawn: 'Sidewalks and crossings draw.',
   }),
   blocks: Object.freeze({
     streetsAsOneLine: 'whereUnder3mm',
     crossings: true,
     crossingMarkings: false,
-    curbRamps: false,
-    stubs: false,
     sidePaths: true,
-    drawn: 'Narrow streets draw as one line; curb ramps leave.',
+    // A 10 mm symbol stands for 20 m: a door's would cover its building.
+    landmarks: ['transit-stop'],
+    drawn: 'Narrow streets draw as one line; entrances leave.',
   }),
   neighborhood: Object.freeze({
     streetsAsOneLine: true,
     crossings: false,
     crossingMarkings: false,
-    curbRamps: false,
-    stubs: false,
     sidePaths: false,
-    drawn: 'Streets draw as one line; crossings and side paths leave.',
+    landmarks: [],
+    drawn:
+      'Streets draw as one line; crossings, side paths and landmarks leave.',
   }),
 };
 
@@ -95,13 +94,22 @@ export function groundAcrossM(ratio, plateWmm) {
   return (plateWmm * ratio) / 1000;
 }
 
+/** The ground a plate covers at 1:`ratio`, centered, as a box in degrees. */
+export function groundBox(center, ratio, plate) {
+  return boxAroundCenter(
+    center,
+    groundAcrossM(ratio, plate.w) / 2,
+    groundAcrossM(ratio, plate.h) / 2
+  );
+}
+
 /** Meters of ground a symbol `symbolMm` across stands for at 1:`ratio`. */
 export function symbolMeters(ratio, symbolMm = DEFAULT_SETTINGS.symbolSizeMm) {
   return (symbolMm * ratio) / 1000;
 }
 
 /** Millimeters of plate for one meter of ground at 1:`ratio`. */
-export function mmPerMeter(ratio) {
+export function mmPerMeterAt(ratio) {
   return 1000 / ratio;
 }
 
@@ -124,7 +132,7 @@ export function nearestRule(ratio) {
  * two sidewalks fall at the minimum gap or closer on the plate.
  */
 export function sidewalksAsOneLine(ratio, streetWidthM) {
-  return streetWidthM * mmPerMeter(ratio) <= DEFAULT_SETTINGS.minGapMm;
+  return streetWidthM * mmPerMeterAt(ratio) <= DEFAULT_SETTINGS.minGapMm;
 }
 
 /**

@@ -75,6 +75,27 @@ const INTEREST_TAGS = Object.freeze([
 ]);
 
 /**
+ * The box `halfEastM` east and west and `halfNorthM` north and south of the
+ * center, in degrees.
+ *
+ * @param {{lat: number, lon: number}} center
+ * @param {number} halfEastM
+ * @param {number} halfNorthM
+ * @returns {{south: number, west: number, north: number, east: number}}
+ */
+export function boxAroundCenter(center, halfEastM, halfNorthM) {
+  const cosLat = Math.cos((center.lat * Math.PI) / 180);
+  const dLat = halfNorthM / M_PER_DEG_LAT;
+  const dLon = halfEastM / (M_PER_DEG_LON * cosLat);
+  return {
+    south: center.lat - dLat,
+    west: center.lon - dLon,
+    north: center.lat + dLat,
+    east: center.lon + dLon,
+  };
+}
+
+/**
  * A point to meters east and north of the center.
  *
  * @param {number} lat

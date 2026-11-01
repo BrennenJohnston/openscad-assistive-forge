@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or in a link. Each walks you through its own numbered steps, one at a
   time, and one Make the map button gets the data, drafts the map and opens
   it in the editor. A route can avoid steps where another way exists.
+- A place map is drawn at a named scale instead of a radius: a building and
+  its doors, a block, a few blocks, a neighborhood, or a custom ratio, each
+  saying how much ground fits on the plate and what draws at it.
 
 ### Fixed
 

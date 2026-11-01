@@ -22,6 +22,7 @@ import { emptyPlan } from './plan.js';
 import { MAP_CLASSES, ROAD_WIDTHS_M } from './map-classes.js';
 import { mmPerMeter, projectLatLon, toMm } from './osm-geometry.js';
 import { intersect, simplify } from '../ring-geometry.js';
+import { mmPerMeterAt, sidewalksAsOneLine } from './scales.js';
 
 /** A walkway with a point this close to the address starts on. */
 export const NEAR_M = 30;
@@ -32,9 +33,16 @@ export const SIMPLIFY_MM = 0.5;
 /** Lines shorter than this and areas smaller than this are left out. */
 export const MIN_LINE_MM = 3;
 export const MIN_AREA_MM2 = 10;
+/**
+ * The most features a draft holds: the drawing editor lists at most 1,000
+ * shapes (`SHAPE_LIST_CAP` in svg-preparer.js), one per feature.
+ */
+export const DRAFT_LIMIT = 1000;
 
 const ROAD_VALUES = Object.keys(ROAD_WIDTHS_M);
 const FOOT_PATH = ['yes', 'designated'];
+/** A crossing tagged with no marking on the road. */
+const UNMARKED = ['unmarked', 'no'];
 
 const round3 = (v) => Math.round(v * 1000) / 1000;
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -251,13 +259,28 @@ export function draftPlan({
   elements = [],
   center,
   radiusM,
+  scale = null,
   landmarks = [],
   size = { w: 480, h: 360 },
   place = null,
 } = {}) {
   const w = size.w;
   const h = size.h;
-  const k = mmPerMeter(w, radiusM);
+  const k = scale ? mmPerMeterAt(scale.ratio) : mmPerMeter(w, radiusM);
+  // What draws at this scale; without one, everything, as before scales.
+  const rules = scale?.rules || {
+    streetsAsOneLine: false,
+    crossings: true,
+    crossingMarkings: false,
+    sidePaths: true,
+  };
+  // A ticked landmark starts on where its symbol fits the scale.
+  const fits = (cls) => !rules.landmarks || rules.landmarks.includes(cls);
+  const landmarkOn = (cls) => ticked.has(cls) && fits(cls);
+  const streetAsOneLine = (widthM) =>
+    rules.streetsAsOneLine === true ||
+    (rules.streetsAsOneLine === 'whereUnder3mm' &&
+      sidewalksAsOneLine(scale.ratio, widthM));
   const ticked = new Set(landmarks);
   const plan = emptyPlan(w, h);
   plan.meta.title = place?.name ? place.name.split(',')[0].trim() : '';
@@ -282,6 +305,7 @@ export function draftPlan({
     landmarks: 0,
     total: 0,
     on: 0,
+    leftOut: 0,
   };
 
   const addLine = (id, cls, points, on, name) => {
@@ -332,6 +356,7 @@ export function draftPlan({
       const highway = t.highway;
 
       if (highway === 'steps') {
+        if (!rules.sidePaths) continue;
         const mid = Math.floor(points.length / 2);
         const at =
           points.length % 2 === 0
@@ -348,6 +373,12 @@ export function draftPlan({
       if (ROAD_VALUES.includes(highway)) {
         const widthM =
           Number(t.width) > 0 ? Number(t.width) : ROAD_WIDTHS_M[highway];
+        // A street whose curbs would fall too close to read as two draws as
+        // one line; over a whole neighborhood the streets are the map, on.
+        if (streetAsOneLine(widthM)) {
+          addLine(id, 'curb', points, rules.streetsAsOneLine === true, name);
+          continue;
+        }
         const { left, right } = offsetLine(points, (widthM / 2) * k);
         addLine(`${id}-left`, 'curb', left, false, name);
         addLine(`${id}-right`, 'curb', right, false, name);
@@ -360,8 +391,17 @@ export function draftPlan({
       if (cls === 'area') {
         addArea(id, 'area', closed ? points.slice(0, -1) : points, false, name);
       } else if (cls === 'crossing') {
+        if (!rules.crossings) continue;
         addLine(id, 'crossing', points, ticked.has('crossing'), name);
+        // Near a building the crossing's marking is kept: one with none is
+        // dashed, a marked one keeps the class's ticks.
+        if (rules.crossingMarkings && UNMARKED.includes(t.crossing)) {
+          for (const f of features) {
+            if (f.id === id || f.id.startsWith(`${id}-`)) f.style = 'dashed';
+          }
+        }
       } else if (cls === 'walkway') {
+        if (!rules.sidePaths) continue;
         addLine(id, 'walkway', points, nearCenter(points), name);
       } else {
         addLine(id, cls, points, false, name);
@@ -371,11 +411,13 @@ export function draftPlan({
       const at = mm(el);
       const id = `osm-node-${el.id}`;
       if (t.shop !== undefined) {
-        if (ticked.has('shop')) addPoint(id, 'landmark', at, true, name);
+        if (ticked.has('shop'))
+          addPoint(id, 'landmark', at, fits('landmark'), name);
         continue;
       }
       if (t.amenity === 'bench') {
-        if (ticked.has('bench')) addPoint(id, 'landmark', at, true, name);
+        if (ticked.has('bench'))
+          addPoint(id, 'landmark', at, fits('landmark'), name);
         continue;
       }
       const cls = classFromTable(t, 'node');
@@ -385,10 +427,11 @@ export function draftPlan({
         continue;
       }
       if (cls === 'crossing') {
-        addPoint(id, 'crossing', at, ticked.has('crossing'), name);
+        if (rules.crossings)
+          addPoint(id, 'crossing', at, ticked.has('crossing'), name);
         continue;
       }
-      addPoint(id, cls, at, ticked.has(cls), name);
+      addPoint(id, cls, at, landmarkOn(cls), name);
     }
   }
 
@@ -402,6 +445,29 @@ export function draftPlan({
     const ends =
       f.kind === 'line' ? [f.points[0], f.points[f.points.length - 1]] : [f.at];
     if (ends.some(touches)) f.on = true;
+  }
+
+  // Over the editor's limit: every feature on stays, then the off ones
+  // nearest the address; the rest are counted, not drawn.
+  let leftOut = 0;
+  if (features.length + 1 > DRAFT_LIMIT) {
+    const reach = (f) => {
+      const pts =
+        f.kind === 'line' ? f.points : f.kind === 'area' ? f.ring : [f.at];
+      return Math.min(...pts.map((pt) => dist(pt, middle)));
+    };
+    const on = features.filter((f) => f.on);
+    const off = features
+      .filter((f) => !f.on)
+      .map((f) => [reach(f), f])
+      .sort((a, b) => a[0] - b[0])
+      .map(([, f]) => f);
+    const room = Math.max(0, DRAFT_LIMIT - 1 - on.length);
+    const keep = new Set([...on, ...off.slice(0, room)]);
+    leftOut = features.length - keep.size;
+    const kept = features.filter((f) => keep.has(f));
+    features.length = 0;
+    features.push(...kept);
   }
 
   features.push({
@@ -429,6 +495,7 @@ export function draftPlan({
     }
   }
 
+  counts.leftOut = leftOut;
   plan.features = features;
   return { plan, counts };
 }

@@ -334,6 +334,7 @@ class MapPanel {
           this.sayAddress(err?.message || String(err), true);
         }),
       onChange: () => this.steps?.refresh(),
+      plateSize: () => ({ w: this.plan.size.w, h: this.plan.size.h }),
       onSteep: (on, gradePct) => {
         this.markSteep(on, gradePct).catch((err) => {
           this.sayAddress(err?.message || String(err), true);
@@ -994,7 +995,7 @@ class MapPanel {
     this.fileSlot = null;
     if (type.key === 'place') {
       fill(s1, [a.where]);
-      fill(s2, [a.radius]);
+      fill(s2, [a.scale]);
       fill(s3, [a.landmarks]);
       fill(s4, [a.make]);
       fill(s5, plates);
@@ -1186,12 +1187,24 @@ class MapPanel {
       elements: osm.elements,
       center: osm.center,
       radiusM: osm.radiusM,
+      scale: osm.scale,
       landmarks: osm.landmarks,
       size: { w: this.plan.size.w, h: this.plan.size.h },
       place: osm.place,
     });
-    if (!plan.features.some((f) => f.class === 'walkway' && f.on)) {
-      this.sayAddress(ADDRESS_STRINGS.nothingNear(NEAR_M), true);
+    // A scale that draws sidewalks needs one near the address; one that
+    // draws streets alone needs a street.
+    const drawsSidewalks = osm.scale?.rules?.sidePaths !== false;
+    const found = drawsSidewalks
+      ? plan.features.some((f) => f.class === 'walkway' && f.on)
+      : plan.features.some((f) => f.class === 'curb' && f.on);
+    if (!found) {
+      this.sayAddress(
+        drawsSidewalks
+          ? ADDRESS_STRINGS.nothingNear(NEAR_M)
+          : ADDRESS_STRINGS.nothingDrawn,
+        true
+      );
       return;
     }
     const { warnings } = buildLevelRings(plan);
@@ -1207,6 +1220,7 @@ class MapPanel {
       (warnings.length
         ? ADDRESS_STRINGS.draftReady(counts.on, counts.total, warnings.length)
         : ADDRESS_STRINGS.draftReadyClean(counts.on, counts.total)) +
+        (counts.leftOut ? ADDRESS_STRINGS.leftOut(counts.leftOut) : '') +
         this.bigNote(osm)
     );
     await this.steepIfWanted();
