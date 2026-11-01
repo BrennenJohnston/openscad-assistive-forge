@@ -5,6 +5,7 @@
  *
  * @license GPL-3.0-or-later
  */
+import { goToStep } from './helpers/map-steps.js';
 import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -35,8 +36,8 @@ async function dismissSavePrompt(page) {
   }
 }
 
-async function openTactileMap(page) {
-  await page.goto('/?example=tactile-map');
+async function openTactileMap(page, type = 'drawing') {
+  await page.goto(`/?example=tactile-map&type=${type}`);
   await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 20000 });
   await expect(page.locator('#tactileMapPanel')).toBeVisible({
     timeout: 15000,
@@ -45,12 +46,12 @@ async function openTactileMap(page) {
 }
 
 test.describe('Tactile Map tile', () => {
-  test('the panel sits above the controls and names the plates', async ({
+  test('the panel sits above the controls and names its map type', async ({
     page,
   }) => {
     await openTactileMap(page);
     await expect(page.locator('#tactileMapPanel h2')).toHaveText(
-      'Tactile map plates'
+      'A map from your drawing'
     );
     await expect(page.locator('#tactileMapSummary')).toHaveText(
       '4 plates of 240 x 180 mm, A1 to B2.',
@@ -99,6 +100,7 @@ test.describe('Tactile Map tile', () => {
         timeout: PREVIEW_TIMEOUT,
       }
     );
+    await goToStep(page, 5);
     await page.locator('#tactileMapPlates input[value="A1"]').check();
     await expect(page.locator('#param-map_width_mm-spinbox')).toHaveValue(
       '240',
@@ -133,6 +135,7 @@ test.describe('Tactile Map tile', () => {
       }
     );
     const downloadPromise = page.waitForEvent('download', { timeout: 240_000 });
+    await goToStep(page, 5);
     await page.locator('#tactileMapRenderAll').click();
     await expect(page.locator('#tactileMapRenderCancel')).toBeVisible();
     const download = await downloadPromise;
@@ -204,6 +207,7 @@ test.describe('Tactile Map tile', () => {
       .toBe('station.svg');
     await expect(page.locator('#tactileMapDrawingWidth')).toHaveValue('340');
 
+    await goToStep(page, 3);
     const door = page.locator('#tactileMapEditDrawing');
     await expect(door).toHaveText('Edit drawing as a map');
     await door.click();
@@ -282,7 +286,7 @@ test.describe('the map data row', () => {
       'The Seattle Public Library - Central Library, 1000, 4th Avenue, Seattle, King County, Washington, 98104, United States',
   };
 
-  test('shows the radius and the landmarks at the floor, pulls through a routed Overpass answer, and the file door takes an export', async ({
+  test('shows the radius and the landmarks at the floor in their steps, makes the map through a routed Overpass answer, and the file door takes an export', async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -308,21 +312,7 @@ test.describe('the map data row', () => {
         body: OVERPASS,
       });
     });
-    await openTactileMap(page);
-
-    const radius = page.locator('#tactileMapRadius');
-    await expect(radius).toHaveAttribute('min', '100');
-    await expect(radius).toHaveAttribute('max', '600');
-    await expect(radius).toHaveAttribute('step', '10');
-    await expect(radius).toHaveValue('250');
-    const boxes = page.locator('#tactileMapLandmarks input[type="checkbox"]');
-    await expect(boxes).toHaveCount(6);
-    await expect(page.locator('#tactileMapLandmark-entrances')).toBeChecked();
-    await expect(page.locator('#tactileMapLandmark-transit')).toBeChecked();
-    await expect(page.locator('#tactileMapLandmark-shops')).not.toBeChecked();
-    const getData = page.locator('#tactileMapGetData');
-    await expect(getData).toBeDisabled();
-
+    await openTactileMap(page, 'place');
     // The floor for this pointer: 44 px on touch, the desktop density on a mouse.
     const floor = await page.evaluate(() =>
       parseFloat(
@@ -331,17 +321,45 @@ test.describe('the map data row', () => {
         )
       )
     );
+
+    // Step 1: where.
+    await page.locator('#tactileMapAddress').fill('1000 4th Ave, Seattle');
+    await page.locator('#tactileMapSearch').click();
+    await page.locator('#tactileMapPlace1').check();
+
+    // Step 2: how much ground.
+    await goToStep(page, 2);
+    const radius = page.locator('#tactileMapRadius');
+    await expect(radius).toHaveAttribute('min', '100');
+    await expect(radius).toHaveAttribute('max', '600');
+    await expect(radius).toHaveAttribute('step', '10');
+    await expect(radius).toHaveValue('250');
     expect((await radius.boundingBox()).height).toBeGreaterThanOrEqual(floor);
+
+    // Step 3: what to show.
+    await goToStep(page, 3);
+    const boxes = page.locator('#tactileMapLandmarks input[type="checkbox"]');
+    await expect(boxes).toHaveCount(6);
+    await expect(page.locator('#tactileMapLandmark-entrances')).toBeChecked();
+    await expect(page.locator('#tactileMapLandmark-transit')).toBeChecked();
+    await expect(page.locator('#tactileMapLandmark-shops')).not.toBeChecked();
     for (const row of await page
       .locator('#tactileMapLandmarks .braille-panel-toggle-row')
       .all()) {
       expect((await row.boundingBox()).height).toBeGreaterThanOrEqual(floor);
     }
-    expect((await getData.boundingBox()).height).toBeGreaterThanOrEqual(floor);
+
+    // Step 4: make the map.
+    await goToStep(page, 4);
+    const make = page.locator('#tactileMapMake');
+    await expect(make).toHaveText('Make the map');
+    expect((await make.boundingBox()).height).toBeGreaterThanOrEqual(floor);
     expect(
       (await page.locator('#tactileMapLoadFile').boundingBox()).height
     ).toBeGreaterThanOrEqual(floor);
-
+    await expect(page.locator('#tactileMapLoadFile')).toHaveText(
+      'Use a file instead'
+    );
     const link = page.locator('#tactileMapAttribution a').first();
     await expect(link).toHaveAttribute(
       'href',
@@ -352,17 +370,12 @@ test.describe('the map data row', () => {
       'Map data from OpenStreetMap contributors'
     );
 
-    await page.locator('#tactileMapAddress').fill('1000 4th Ave, Seattle');
-    await page.locator('#tactileMapSearch').click();
-    await page.locator('#tactileMapPlace1').check();
-    await expect(getData).toBeEnabled();
-    await getData.click();
+    await make.click();
     const status = page.locator('#tactileMapAddressStatus');
-    await expect(status).toHaveText(
-      '21 map features within 250 m: 11 walkways, 4 crossings, 3 buildings, 3 landmarks.',
-      { timeout: 15000 }
-    );
+    await expect(status).toContainText('Draft map ready: ', { timeout: 15000 });
     expect(pulled).toContain('around%3A250%2C47.6067142%2C-122.3326983');
+    await page.locator('#drawingEditorSurface .drawing-editor-close').click();
+    await expect(page.locator('#drawingEditorSurface')).toBeHidden();
 
     await page.setInputFiles('#tactileMapOsmFile', {
       name: 'export.osm',
@@ -423,21 +436,13 @@ test.describe('the draft map', () => {
         body: OVERPASS,
       })
     );
-    await openTactileMap(page);
-    const draft = page.locator('#tactileMapDraft');
-    await expect(draft).toHaveText('Make a draft map');
-    await expect(draft).toBeDisabled();
-
+    await openTactileMap(page, 'place');
     await page.locator('#tactileMapAddress').fill('1000 4th Ave, Seattle');
     await page.locator('#tactileMapSearch').click();
     await page.locator('#tactileMapPlace1').check();
-    await page.locator('#tactileMapGetData').click();
+    await goToStep(page, 4);
+    await page.locator('#tactileMapMake').click();
     const status = page.locator('#tactileMapAddressStatus');
-    await expect(status).toContainText('21 map features within 250 m', {
-      timeout: 15000,
-    });
-    await expect(draft).toBeEnabled();
-    await draft.click();
     await expect(status).toContainText('Draft map ready: ', { timeout: 15000 });
     await expect(
       page.locator('#drawingEditorSurface .drawing-editor').first()
@@ -584,10 +589,15 @@ test.describe('steep sidewalks', () => {
         });
       }
     );
-    await openTactileMap(page);
+    await openTactileMap(page, 'place');
+    await page.locator('#tactileMapAddress').fill('1000 4th Ave, Seattle');
+    await page.locator('#tactileMapSearch').click();
+    await page.locator('#tactileMapPlace1').check();
+    await goToStep(page, 3);
     const steep = page.locator('#tactileMapSteep');
     const grade = page.locator('#tactileMapGrade');
-    await expect(steep).toBeDisabled();
+    await expect(steep).toBeEnabled();
+    await expect(steep).not.toBeChecked();
     await expect(grade).toHaveValue('5');
     await expect(grade).toHaveAttribute('min', '3');
     await expect(grade).toHaveAttribute('max', '12');
@@ -602,23 +612,16 @@ test.describe('steep sidewalks', () => {
       (await page.locator('.tactile-map-steep-row').boundingBox()).height
     ).toBeGreaterThanOrEqual(floor);
     expect((await grade.boundingBox()).height).toBeGreaterThanOrEqual(floor);
-
-    await page.locator('#tactileMapAddress').fill('1000 4th Ave, Seattle');
-    await page.locator('#tactileMapSearch').click();
-    await page.locator('#tactileMapPlace1').check();
-    await page.locator('#tactileMapGetData').click();
+    await goToStep(page, 4);
+    await page.locator('#tactileMapMake').click();
     const status = page.locator('#tactileMapAddressStatus');
-    await expect(status).toContainText('map features within 250 m', {
-      timeout: 15000,
-    });
-    await page.locator('#tactileMapDraft').click();
     await expect(status).toContainText('Draft map ready', { timeout: 15000 });
     await page.locator('#drawingEditorSurface .drawing-editor-close').click();
     await expect(page.locator('#drawingEditorSurface')).toBeHidden();
     const levelsBefore = await page.evaluate(
       () => window.stateManager?.getState()?.parameters?.map_file?.data
     );
-    await expect(steep).toBeEnabled();
+    await goToStep(page, 3);
     await steep.check();
     await expect(status).toHaveText(
       /^\d+ steep segments marked, steeper than 5 %\.$/,
@@ -755,6 +758,7 @@ test.describe('the drawing editor on a phone held sideways', () => {
   }) => {
     test.setTimeout(120_000);
     await openTactileMap(page);
+    await goToStep(page, 3);
     await page.locator('#tactileMapEditDrawing').click();
     await expect(
       page.locator('#drawingEditorSurface .drawing-editor')

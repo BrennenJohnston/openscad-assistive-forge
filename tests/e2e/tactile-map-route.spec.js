@@ -10,6 +10,7 @@
  *
  * @license GPL-3.0-or-later
  */
+import { goToStep } from './helpers/map-steps.js';
 import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 
@@ -90,7 +91,7 @@ test('a route map from the Husky Union Building to the Bill & Melinda Gates Cent
   page,
 }) => {
   test.setTimeout(300_000);
-  await page.goto('/?example=tactile-map');
+  await page.goto('/?example=tactile-map&type=route');
   await expect(page.locator('#tactileMapPanel')).toBeVisible({
     timeout: 20000,
   });
@@ -115,14 +116,10 @@ test('a route map from the Husky Union Building to the Bill & Melinda Gates Cent
   await page.locator('#tactileMapTo').fill('Bill & Melinda Gates Center');
   await page.locator('#tactileMapToSearch').click();
   await page.locator('#tactileMapToPlace1').check();
-  await page.locator('#tactileMapGetData').click();
-  await expect(status).toHaveText(
-    /^\d+ map features around Husky Union Building and Bill & Melinda Gates Center\.$/,
-    { timeout: 30000 }
-  );
-  const draft = page.locator('#tactileMapDraft');
-  await expect(draft).toHaveText('Make a route map');
-  await draft.click();
+  await goToStep(page, 4);
+  const make = page.locator('#tactileMapMake');
+  await expect(make).toHaveText('Make the map');
+  await make.click();
   await expect(status).toHaveText(
     'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk.',
     { timeout: 30000 }
@@ -181,7 +178,7 @@ test('a route map from the Husky Union Building to the Bill & Melinda Gates Cent
   // The model takes the fitted size and renders with no warning.
   // Escape leaves the editor, and focus goes back to the button that opened it.
   await page.keyboard.press('Escape');
-  await expect(draft).toBeFocused();
+  await expect(make).toBeFocused();
   await expect(page.locator('#param-map_width_mm-spinbox')).toHaveValue('172', {
     timeout: 10000,
   });

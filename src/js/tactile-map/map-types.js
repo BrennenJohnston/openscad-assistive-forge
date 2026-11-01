@@ -32,7 +32,8 @@ export const MAP_TYPES = Object.freeze([
       'From one place to another, on foot or by bus and train, with the turns, crossings and steps on the way.',
     steps: Object.freeze([
       'From and To',
-      'On foot or by bus and train',
+      // Walking only, until the bus and train choice joins this step.
+      'How you walk',
       'What to show',
       'Make the map',
       'Check and print',
@@ -54,6 +55,26 @@ export const MAP_TYPES = Object.freeze([
 ]);
 
 export const MAP_TYPE_QUESTION = 'What map do you want to make?';
+
+/** The words of the chooser and of the steps' needs and notes. */
+export const WORKFLOW_STRINGS = Object.freeze({
+  /** A11Y: the chooser's group name (the heading above asks the question). */
+  chooserLegend: 'Map type',
+  /** A11Y: beside Next while no type is chosen. */
+  chooserReason: 'Choose a map type first.',
+  /** A11Y: beside Next on the first step of a place map. */
+  needPlace: 'Pick a place first.',
+  /** A11Y: beside Next on the first step of a route map. */
+  needBoth: 'Pick both places first.',
+  /** A11Y: beside Next on the Make the map step. */
+  needMap: 'Make the map first.',
+  /** The drawing workflow's first step, until the file control joins it. */
+  drawingChoose:
+    'The sample station drawing is loaded. To use your own, choose it with the Map file control below the steps: an SVG, a DXF, or a photo to trace.',
+  /** The drawing workflow's fourth step. */
+  drawingApply:
+    'Press Apply classes in the editor. The plates in the next step follow what you applied.',
+});
 
 /** @returns {object|null} the type with this key */
 export function mapType(key) {

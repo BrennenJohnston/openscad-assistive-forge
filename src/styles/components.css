@@ -16532,8 +16532,8 @@ body.tutorial-body-locked {
 }
 
 /* The landmark boxes and the steep switch: the size and the ring the plate
-   radios have, the row at the touch floor; the Get map data and file rows
-   wrap on a narrow sheet. */
+   radios have, the row at the touch floor; the file row
+   wraps on a narrow sheet. */
 .tactile-map-steep-row {
   min-height: var(--size-touch-target);
 }
@@ -16559,9 +16559,7 @@ body.tutorial-body-locked {
   outline-offset: var(--focus-ring-offset, 2px);
 }
 
-.tactile-map-get-row,
-.tactile-map-file-row,
-.tactile-map-draft-row {
+.tactile-map-file-row {
   flex-wrap: wrap;
   align-items: center;
 }
@@ -16588,8 +16586,116 @@ body.tutorial-body-locked {
   color: var(--color-error-text);
 }
 
-.tactile-map-draft-reason[hidden] {
+/* The numbered steps: a list of the steps, the current one marked; the
+   step's heading; one step's controls; Back and Next at the foot. */
+.tactile-map-workflow,
+.tactile-map-steps,
+.tactile-map-step,
+.tactile-map-chooser {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.tactile-map-step[hidden] {
   display: none;
+}
+
+/* The list of steps runs as a wrapping row, numbered, so the step itself
+   stays near the top of the panel on a phone. */
+.tactile-map-steps-list {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-sm);
+  list-style: decimal inside;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.tactile-map-steps-item {
+  display: list-item;
+}
+
+.tactile-map-step-link {
+  min-height: var(--size-touch-target);
+  padding: 0 var(--space-xs);
+  border: none;
+  background: none;
+  color: var(--color-accent-fg);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.tactile-map-step-link[aria-current='step'] {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-bold);
+  text-decoration: none;
+}
+
+.tactile-map-step-link:focus-visible,
+.tactile-map-types input[type='radio']:focus-visible {
+  outline: var(--focus-ring-width, 3px) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset, 2px);
+}
+
+.tactile-map-step-later {
+  padding: 0 var(--space-xs);
+}
+
+.tactile-map-step-heading {
+  margin: 0;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+}
+
+.tactile-map-step-actions {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* The chooser: three cards, each a radio, its name and its sentence; the
+   whole card is the radio's label area at the touch floor. */
+.tactile-map-type-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--space-sm);
+  align-items: center;
+  padding: var(--space-sm);
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  min-height: var(--size-touch-target);
+}
+
+.tactile-map-type-card:has(input:checked) {
+  border-width: var(--border-width-base);
+  border-color: var(--color-accent-fg);
+}
+
+.tactile-map-type-card input[type='radio'] {
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  margin: 0;
+}
+
+.tactile-map-type-name {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.tactile-map-type-card .braille-panel-help {
+  grid-column: 2;
+  margin: 0;
+}
+
+.tactile-map-make-row {
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 /* reset.css strips colour and underline from every anchor; the attribution

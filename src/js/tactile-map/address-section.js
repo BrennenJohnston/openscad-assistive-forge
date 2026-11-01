@@ -1,11 +1,13 @@
 /**
- * The Tactile Map Designer's address section: a typed address or place
- * name, a Search press, up to five places to pick from; then the map's
- * radius, the landmarks to show, Get map data, and a door for an
- * OpenStreetMap export kept on the device. Nothing is sent until a press
- * (Nominatim forbids autocomplete), one search a second, and every
- * sentence goes once through the announcer under the panel's source, on a
- * status line of its own.
+ * The Tactile Map Designer's address controls: a typed address or place
+ * name, a Search press, up to five places to pick from (and, for a route
+ * map, where the walk ends); the map's radius; the steps on the way; the
+ * landmarks to show; Make the map, which gets the data and drafts in one
+ * press; and a door for an OpenStreetMap export kept on the device. The
+ * panel lays these parts out in its numbered steps (`parts`). Nothing is
+ * sent until a press (Nominatim forbids autocomplete), one search a
+ * second, and every sentence goes once through the announcer under the
+ * panel's source, in a status box of its own.
  *
  * The network and file work is handed in (the panel loads each module as a
  * lazy chunk on the first press; a test stubs them):
@@ -19,8 +21,9 @@
  *   'not-osm'.
  *
  * The data kept for the draft: `{ elements, center, radiusM, source, place,
- * landmarks, bytes, host }` with `source` 'overpass' or 'file' and `host`
- * the name of the server that answered.
+ * landmarks, bytes, host, key }` with `source` 'overpass' or 'file', `host`
+ * the name of the source that answered, and `key` what was asked for, so a
+ * second press for the same place reuses it.
  *
  * @license GPL-3.0-or-later
  */
@@ -33,8 +36,9 @@ const HOST_FAILED = Object.freeze({
 });
 
 export const ADDRESS_STRINGS = Object.freeze({
-  heading: 'Map from an address',
   label: 'Address or place',
+  /** A route map's first place. */
+  fromLabel: 'From',
   help: 'A street address, an intersection, or the name of a place. Nothing is sent until you press Search.',
   search: 'Search',
   /** A11Y: the status line while a search runs. */
@@ -44,37 +48,38 @@ export const ADDRESS_STRINGS = Object.freeze({
   /** A11Y: the results group's name. */
   found: 'Places found',
   /** A11Y: after a pick. */
-  picked: (name) =>
-    `${name} picked. Choose a radius and the landmarks, then get the map data.`,
+  picked: (name) => `${name} picked.`,
   /** A11Y: said after the pick while the preview shows the empty plate. */
-  waiting: 'The preview shows an empty plate until you make a draft map.',
-  /** Beside Make a draft map while it waits for data. */
-  needData: 'Get the map data first.',
+  waiting: 'The preview shows an empty plate until you make the map.',
   /** A11Y: Edit drawing as a map pressed on the empty plate. */
   waitingDoor:
-    'No map yet. Make a draft map first, or choose a drawing for the map file.',
+    'No map yet. Make the map first, or choose a drawing for the map file.',
+  /** A11Y: Make the map pressed with no place and no file. */
+  needPlace: 'Pick a place first, or use a file instead.',
   /** A11Y: the search did not answer. */
   noAnswer:
-    'The address search did not answer. Check your connection and try again, or load an OpenStreetMap file instead.',
+    'The address search did not answer. Check your connection and try again, or use a file instead.',
   /** A11Y: a second search within a second. */
   rate: 'One search a second; try again in a moment.',
   /** A11Y: nothing typed. */
   empty: 'Type an address or a place first.',
-  toLabel: 'To (optional)',
+  toLabel: 'To',
   toHelp:
     'Pick a destination and the draft follows the walk between the two places.',
   /** A11Y: the destinations group's name. */
   toFound: 'Destinations found',
   /** A11Y: after a destination is picked. */
-  toPicked: (name) =>
-    `${name} picked as the destination. Get the map data for the walk between the two places.`,
+  toPicked: (name) => `${name} picked as where the walk ends.`,
   radiusLabel: 'Map radius (m)',
   radiusHelp:
     'How far from the address the map reaches, 100 to 600 m. The map is twice this wide.',
-  radiusRouteHelp:
-    'The map covers both places and the walk between them, so the radius is not used.',
+  /** A11Y: the route's steps choice, its group name and its two answers. */
+  stepsLegend: 'Steps on the way',
+  stepsAllow: 'Allowed, and marked on the map',
+  stepsAvoid: 'Avoided where another way exists',
   landmarks: 'Landmarks to show',
-  getData: 'Get map data',
+  /** The one button: gets the data, drafts, opens the editor. */
+  make: 'Make the map',
   /** A11Y: the status line while a pull runs. */
   getting: (r, place) => `Getting map data within ${r} m of ${place}...`,
   /** A11Y: the status line while a pull for two places runs. */
@@ -93,11 +98,11 @@ export const ADDRESS_STRINGS = Object.freeze({
   busy: 'No map server answered. Try again in a few minutes, or export the area from openstreetmap.org and use the file instead.',
   /** A11Y: the pull did not answer. */
   noData:
-    'The map data did not arrive. Check your connection and try again, or load an OpenStreetMap file instead.',
+    'The map data did not arrive. Check your connection and try again, or use a file instead.',
   attribution: ['Map data from ', 'OpenStreetMap contributors', ', ODbL.'],
   /** The map tiles' service asks for its own credit, with its link. */
   tilesCredit: [' Tiles by ', 'OSM US', '.'],
-  loadFile: 'Load an OpenStreetMap file',
+  loadFile: 'Use a file instead',
   fileHelp:
     'An .osm export from openstreetmap.org, or a .geojson file. The file stays on your device.',
   /** A11Y: after a file loads. */
@@ -110,14 +115,12 @@ export const ADDRESS_STRINGS = Object.freeze({
   /** A11Y: the pull's size warning. */
   big: (mb) =>
     `${mb} MB of map data arrived. A smaller radius makes a lighter map.`,
-  draft: 'Make a draft map',
-  routeDraft: 'Make a route map',
   /** A11Y: the status line after a route draft. */
   routeReady: (m, from, to, crossings, steps, w, h) =>
     `Route map ready: a ${m} m walk from ${from} to ${to}, ${crossings === 1 ? '1 crossing' : `${crossings} crossings`} and ${steps === 1 ? '1 flight of steps' : `${steps} flights of steps`} on the way. The map is ${w} x ${h} mm, fitted to the walk.`,
   /** A11Y: no walk joins the two places. */
   noWalk: (from, to) =>
-    `No walking route joins ${from} and ${to} in this map data. Try other places, or load an OpenStreetMap file of the area.`,
+    `No walking route joins ${from} and ${to} in this map data. Try other places, or use a file of the area instead.`,
   /** The route draft's name in the editor's header. */
   routeName: (from, to) => `Route map from ${from} to ${to}`,
   /** A11Y: the status line after a draft, with warnings. */
@@ -212,20 +215,21 @@ function el(tag, className, text) {
 }
 
 /**
- * Build the section.
+ * Build the address controls.
  *
  * @param {object} args
  * @param {(query: string) => Promise<Array<{name: string, lat: number, lon: number, kind: string}>>} args.searchPlaces
- * @param {(where: {lat: number, lon: number, radiusM: number, onWait: Function}) => Promise<{elements: object[], bytes: number}>} args.pullArea
+ * @param {(where: object) => Promise<{elements: object[], bytes: number, host?: string}>} args.pullArea
  * @param {(file: File) => Promise<{elements: object[], center: {lat: number, lon: number}|null}>} args.readOsmFile
- * @param {(text: string, failed?: boolean) => void} args.say - writes the status line and announces once
+ * @param {(text: string, failed?: boolean, options?: {quiet?: boolean}) => void} args.say - writes the status box; announces once unless quiet
  * @param {(place: object) => boolean} [args.onPlace] - true when the preview
  *   now shows the empty plate, so the pick says so
  * @param {(osm: object) => void} [args.onData]
  * @param {() => void} [args.unsay] - take back a sentence still waiting to be said
- * @param {() => void} [args.onDraft] - Make a draft map pressed (enabled once data exists)
- * @param {(on: boolean, gradePct: number) => void} [args.onSteep] - the switch moved (enabled once a draft exists)
- * @returns {{ el: HTMLElement, refs: object, getPlace: () => object|null, getData: () => object|null, destroy: () => void }}
+ * @param {() => Promise<void>} [args.onDraft] - draft from the data kept and open the editor
+ * @param {(on: boolean, gradePct: number) => void} [args.onSteep] - the switch moved
+ * @param {() => void} [args.onChange] - a place, a destination or the data changed (the steps recheck their needs)
+ * @returns {{ el: HTMLElement, refs: object, parts: object, setMode: (mode: string) => void, getPlace: () => object|null, getDest: () => object|null, getData: () => object|null, avoidSteps: () => boolean, steepWanted: () => {on: boolean, gradePct: number}, destroy: () => void }}
  */
 export function createAddressSection({
   searchPlaces,
@@ -237,18 +241,12 @@ export function createAddressSection({
   onData,
   onDraft,
   onSteep,
+  onChange = () => {},
 }) {
   const S = ADDRESS_STRINGS;
-  const section = el(
-    'section',
-    'braille-panel tactile-map-panel tactile-map-address'
-  );
+  // A holder for the parts until the panel's steps take them.
+  const section = el('div', 'tactile-map-address');
   section.id = 'tactileMapAddressSection';
-  section.setAttribute('aria-labelledby', 'tactileMapAddressHeading');
-
-  const heading = el('h2', 'braille-panel-heading', S.heading);
-  heading.id = 'tactileMapAddressHeading';
-  section.appendChild(heading);
 
   const label = el('label', 'braille-panel-label', S.label);
   label.htmlFor = 'tactileMapAddress';
@@ -335,6 +333,33 @@ export function createAddressSection({
   radiusHelp.id = 'tactileMapRadiusHelp';
   section.appendChild(radiusHelp);
 
+  // A route on foot: may it take steps? Allowed and marked is the default.
+  const stepsChoice = el(
+    'fieldset',
+    'braille-panel-choice tactile-map-steps-choice'
+  );
+  stepsChoice.id = 'tactileMapStepsChoice';
+  stepsChoice.appendChild(el('legend', '', S.stepsLegend));
+  const stepsRadios = [
+    ['allow', S.stepsAllow, true],
+    ['avoid', S.stepsAvoid, false],
+  ].map(([value, text, on]) => {
+    const line = el('div', 'braille-panel-toggle-row');
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'tactileMapSteps';
+    radio.id = `tactileMapSteps-${value}`;
+    radio.value = value;
+    radio.checked = on;
+    const words = el('label', '', text);
+    words.htmlFor = radio.id;
+    line.appendChild(radio);
+    line.appendChild(words);
+    stepsChoice.appendChild(line);
+    return radio;
+  });
+  section.appendChild(stepsChoice);
+
   const landmarks = el(
     'fieldset',
     'braille-panel-choice tactile-map-landmarks'
@@ -357,77 +382,10 @@ export function createAddressSection({
   });
   section.appendChild(landmarks);
 
-  const getRow = el('div', 'braille-translate-row tactile-map-get-row');
-  const getData = el(
-    'button',
-    'btn btn-primary braille-translate-btn',
-    S.getData
-  );
-  getData.type = 'button';
-  getData.id = 'tactileMapGetData';
-  getData.disabled = true;
-  getRow.appendChild(getData);
-  section.appendChild(getRow);
-
-  const fileRow = el('div', 'braille-translate-row tactile-map-file-row');
-  const loadFile = el(
-    'button',
-    'btn btn-secondary braille-translate-btn',
-    S.loadFile
-  );
-  loadFile.type = 'button';
-  loadFile.id = 'tactileMapLoadFile';
-  loadFile.setAttribute('aria-describedby', 'tactileMapFileHelp');
-  const fileInput = document.createElement('input');
-  fileInput.type = 'file';
-  fileInput.accept = FILE_ACCEPT;
-  fileInput.id = 'tactileMapOsmFile';
-  fileInput.hidden = true;
-  fileInput.tabIndex = -1;
-  fileInput.setAttribute('aria-hidden', 'true');
-  fileRow.appendChild(loadFile);
-  fileRow.appendChild(fileInput);
-  section.appendChild(fileRow);
-  const fileHelp = el('p', 'braille-panel-help', S.fileHelp);
-  fileHelp.id = 'tactileMapFileHelp';
-  section.appendChild(fileHelp);
-
-  const draftRow = el('div', 'braille-translate-row tactile-map-draft-row');
-  draftRow.id = 'tactileMapDraftRow';
-  const draft = el('button', 'btn btn-primary braille-translate-btn', S.draft);
-  draft.type = 'button';
-  draft.id = 'tactileMapDraft';
-  draftRow.appendChild(draft);
-  const draftReason = el(
-    'span',
-    'braille-panel-help tactile-map-draft-reason',
-    S.needData
-  );
-  draftReason.id = 'tactileMapDraftReason';
-  draftRow.appendChild(draftReason);
-  section.appendChild(draftRow);
-
-  // A box directly under the buttons, where a person looks after a press.
-  // Shown, not a live region: the panel says each sentence once through the
-  // announcer, as it does for the plates line.
-  const status = el('p', 'braille-panel-help tactile-map-status-box');
-  status.id = 'tactileMapAddressStatus';
-  section.appendChild(status);
-
-  /** Make a draft map waits for data, with its reason beside it. */
-  function setDraftEnabled(on) {
-    draft.disabled = !on;
-    draftReason.hidden = on;
-    if (on) draft.removeAttribute('aria-describedby');
-    else draft.setAttribute('aria-describedby', draftReason.id);
-  }
-  setDraftEnabled(false);
-
   const steepRow = el('div', 'braille-panel-toggle-row tactile-map-steep-row');
   const steep = document.createElement('input');
   steep.type = 'checkbox';
   steep.id = 'tactileMapSteep';
-  steep.disabled = true;
   steep.setAttribute('aria-describedby', 'tactileMapSteepHelp');
   const steepLabel = el('label', '', S.steepLabel);
   steepLabel.htmlFor = steep.id;
@@ -458,6 +416,44 @@ export function createAddressSection({
   gradeHelp.id = 'tactileMapGradeHelp';
   section.appendChild(gradeHelp);
 
+  const makeRow = el('div', 'braille-translate-row tactile-map-make-row');
+  makeRow.id = 'tactileMapMakeRow';
+  const make = el('button', 'btn btn-primary braille-translate-btn', S.make);
+  make.type = 'button';
+  make.id = 'tactileMapMake';
+  makeRow.appendChild(make);
+  section.appendChild(makeRow);
+
+  // A box directly under the button, where a person looks after a press.
+  // Shown, not a live region: the panel says each sentence once through the
+  // announcer, as it does for the plates line.
+  const status = el('p', 'braille-panel-help tactile-map-status-box');
+  status.id = 'tactileMapAddressStatus';
+  section.appendChild(status);
+
+  const fileRow = el('div', 'braille-translate-row tactile-map-file-row');
+  const loadFile = el(
+    'button',
+    'btn btn-secondary braille-translate-btn',
+    S.loadFile
+  );
+  loadFile.type = 'button';
+  loadFile.id = 'tactileMapLoadFile';
+  loadFile.setAttribute('aria-describedby', 'tactileMapFileHelp');
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = FILE_ACCEPT;
+  fileInput.id = 'tactileMapOsmFile';
+  fileInput.hidden = true;
+  fileInput.tabIndex = -1;
+  fileInput.setAttribute('aria-hidden', 'true');
+  fileRow.appendChild(loadFile);
+  fileRow.appendChild(fileInput);
+  section.appendChild(fileRow);
+  const fileHelp = el('p', 'braille-panel-help', S.fileHelp);
+  fileHelp.id = 'tactileMapFileHelp';
+  section.appendChild(fileHelp);
+
   const attribution = el(
     'p',
     'braille-panel-help tactile-map-attribution',
@@ -479,11 +475,22 @@ export function createAddressSection({
   attribution.appendChild(document.createTextNode(S.tilesCredit[2]));
   section.appendChild(attribution);
 
+  /** The groups the panel's steps lay out. */
+  const parts = {
+    where: [label, help, row, results],
+    to: [toLabel, toHelp, toRow, toResults],
+    radius: [radiusRow, radiusHelp],
+    steps: [stepsChoice],
+    landmarks: [landmarks, steepRow, steepHelp, gradeRow, gradeHelp],
+    make: [makeRow, status, fileRow, fileHelp, attribution],
+  };
+
+  let mode = 'place';
   let place = null;
   let dest = null;
   let osm = null;
   let running = false;
-  let pulling = false;
+  let making = false;
 
   /** A place's own name: the first part of the geocoder's long one. */
   const short = (p) => (p?.name || '').split(',')[0].trim();
@@ -498,8 +505,9 @@ export function createAddressSection({
   /** @returns {boolean} whether the preview now shows the empty plate */
   function setPlace(p) {
     place = p;
-    getData.disabled = !place || pulling;
-    return place ? Boolean(onPlace?.(place)) : false;
+    const waiting = place ? Boolean(onPlace?.(place)) : false;
+    onChange();
+    return waiting;
   }
 
   /**
@@ -508,15 +516,13 @@ export function createAddressSection({
    */
   function setDest(p) {
     dest = p;
-    radiusHelp.textContent = dest ? S.radiusRouteHelp : S.radiusHelp;
-    draft.textContent = dest ? S.routeDraft : S.draft;
     if (osm?.source === 'file') {
       keep({ ...osm, to: dest });
     } else if (osm) {
       osm = null;
-      setDraftEnabled(false);
       onData?.(null);
     }
+    onChange();
   }
 
   function showList(list, places, { name, prefix, onPick }) {
@@ -627,21 +633,29 @@ export function createAddressSection({
   }
 
   const ticked = () => boxes.filter((b) => b.checked).map((b) => b.value);
+  const isRoute = () => mode === 'route' && Boolean(dest);
+
+  /** What a pull asks for: the same key, the same data. */
+  function pullKey() {
+    if (!place) return null;
+    const at = `${place.lat},${place.lon}`;
+    return isRoute()
+      ? `route:${at}:${dest.lat},${dest.lon}`
+      : `place:${at}:${radiusM()}`;
+  }
 
   function keep(data) {
     osm = data;
-    setDraftEnabled(Boolean(osm));
     onData?.(osm);
+    onChange();
   }
 
-  /** Row 27 and, over 2 MB, row 37 in the same breath. */
-  function sayCounts(elements, r, bytes) {
+  /** Row 27, shown, not said: the draft's sentence follows at once. */
+  function countsSentence(elements, r) {
     const c = countFeatures(elements);
-    let text = S.got(c.n, r, c.walkways, c.crossings, c.buildings, c.landmarks);
-    if (bytes > BIG_BYTES) {
-      text += ' ' + S.big((bytes / (1024 * 1024)).toFixed(1));
-    }
-    say(text);
+    return isRoute()
+      ? S.gotRoute(c.n, short(place), short(dest))
+      : S.got(c.n, r, c.walkways, c.crossings, c.buildings, c.landmarks);
   }
 
   /** A back-off's seconds, or the move to the next server (0 seconds). */
@@ -653,72 +667,64 @@ export function createAddressSection({
     );
   }
 
-  async function pullRoute() {
-    const at = place;
-    const to = dest;
-    const box = boxAround(at, to);
-    say(S.gettingRoute(short(at), short(to)));
-    const { elements, bytes, host } = await pullArea({ box, onWait: sayWait });
-    keep({
-      elements,
-      center: { lat: (at.lat + to.lat) / 2, lon: (at.lon + to.lon) / 2 },
-      radiusM: null,
-      box,
-      source: 'overpass',
-      place: at,
-      to,
-      landmarks: ticked(),
-      bytes,
-      host,
-    });
-    let text = S.gotRoute(countFeatures(elements).n, short(at), short(to));
-    if (bytes > BIG_BYTES) {
-      text += ' ' + S.big((bytes / (1024 * 1024)).toFixed(1));
-    }
-    say(text);
-  }
-
+  /** Pull the data for the place (or the walk); true when it arrived. */
   async function pull() {
-    if (pulling || !place) return;
-    pulling = true;
-    getData.disabled = true;
-    if (dest) {
-      try {
-        await pullRoute();
-      } catch (error) {
-        say(error?.code === 'busy' ? S.busy : S.noData, true);
-      } finally {
-        pulling = false;
-        getData.disabled = !place;
-      }
-      return;
-    }
-    const r = radiusM();
+    const key = pullKey();
     const at = place;
-    say(S.getting(r, at.name));
+    const to = isRoute() ? dest : null;
+    const r = radiusM();
+    const where = to
+      ? { box: boxAround(at, to) }
+      : { lat: at.lat, lon: at.lon, radiusM: r };
+    say(to ? S.gettingRoute(short(at), short(to)) : S.getting(r, at.name));
     try {
       const { elements, bytes, host } = await pullArea({
-        lat: at.lat,
-        lon: at.lon,
-        radiusM: r,
+        ...where,
         onWait: sayWait,
       });
       keep({
         elements,
-        center: { lat: at.lat, lon: at.lon },
-        radiusM: r,
+        center: to
+          ? { lat: (at.lat + to.lat) / 2, lon: (at.lon + to.lon) / 2 }
+          : { lat: at.lat, lon: at.lon },
+        radiusM: to ? null : r,
+        box: where.box,
         source: 'overpass',
         place: at,
+        to,
         landmarks: ticked(),
         bytes,
         host,
+        key,
       });
-      sayCounts(elements, r, bytes);
+      // The draft's sentence follows at once and is the one said.
+      say(countsSentence(elements, r), false, { quiet: true });
+      return true;
     } catch (error) {
       say(error?.code === 'busy' ? S.busy : S.noData, true);
+      return false;
+    }
+  }
+
+  /** Make the map: the data (unless already here), the draft, the editor. */
+  async function makeTheMap() {
+    if (making) return;
+    const fromFile = osm?.source === 'file';
+    if (!place && !fromFile) {
+      say(S.needPlace, true);
+      return;
+    }
+    making = true;
+    make.disabled = true;
+    try {
+      if (!fromFile && osm?.key !== pullKey()) {
+        if (!(await pull())) return;
+      }
+      if (osm) osm = { ...osm, landmarks: ticked() };
+      await onDraft?.();
     } finally {
-      pulling = false;
-      getData.disabled = !place;
+      making = false;
+      make.disabled = false;
     }
   }
 
@@ -733,7 +739,7 @@ export function createAddressSection({
         radiusM: radiusM(),
         source: 'file',
         place: at,
-        to: dest,
+        to: isRoute() ? dest : null,
         landmarks: ticked(),
         bytes: file.size,
       });
@@ -764,18 +770,15 @@ export function createAddressSection({
     }
   });
   // An emptied destination (typed away, or the field's own clear button)
-  // makes the map a one-place map again.
+  // makes the walk's end unknown again.
   toInput.addEventListener('input', () => {
     if (toInput.value.trim() === '' && dest) {
       clearList(toResults);
       setDest(null);
     }
   });
-  getData.addEventListener('click', () => {
-    pull();
-  });
-  draft.addEventListener('click', () => {
-    if (osm) onDraft?.();
+  make.addEventListener('click', () => {
+    makeTheMap();
   });
   /** The grade the input holds, kept inside its range. */
   function gradePct() {
@@ -802,29 +805,32 @@ export function createAddressSection({
       input,
       button,
       results,
+      label,
       toInput,
       toButton,
       toResults,
       radius,
+      stepsChoice,
       landmarks,
-      getData,
+      make,
       loadFile,
       fileInput,
-      draft,
-      draftReason,
       steep,
       grade,
       attribution,
       status,
     },
-    getPlace: () => place,
-    getDest: () => dest,
-    getData: () => osm,
-    /** A draft exists: the switch may be used; off: the switch rests and clears. */
-    setDraftReady(ready) {
-      steep.disabled = !ready;
-      if (!ready) steep.checked = false;
+    parts,
+    /** A place map reads one place; a route map two. */
+    setMode(next) {
+      mode = next === 'route' ? 'route' : 'place';
+      label.textContent = mode === 'route' ? S.fromLabel : S.label;
     },
+    getPlace: () => place,
+    getDest: () => (mode === 'route' ? dest : null),
+    getData: () => osm,
+    avoidSteps: () => stepsRadios[1].checked,
+    steepWanted: () => ({ on: steep.checked, gradePct: gradePct() }),
     destroy() {
       section.remove();
     },

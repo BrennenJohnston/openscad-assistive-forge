@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Tactile Map Designer starts by asking what map to make: a place map,
+  a route map, or a map from your drawing, also chosen on its welcome card
+  or in a link. Each walks you through its own numbered steps, one at a
+  time, and one Make the map button gets the data, drafts the map and opens
+  it in the editor. A route can avoid steps where another way exists.
+
 ### Fixed
 
 - Get map data works from the published site: the Tactile Map Designer

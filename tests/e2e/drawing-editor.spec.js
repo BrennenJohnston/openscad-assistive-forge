@@ -14,6 +14,7 @@
 
 import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
+import { goToStep } from './helpers/map-steps.js';
 import AxeBuilder from '@axe-core/playwright';
 import { PNG } from 'pngjs';
 import path from 'node:path';
@@ -2316,7 +2317,7 @@ test.describe('the map purpose', () => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
-    await page.goto('/?example=tactile-map');
+    await page.goto('/?example=tactile-map&type=drawing');
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       timeout: 240000,
     });
@@ -2464,7 +2465,7 @@ test.describe('the map purpose on its canvas', () => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
-    await page.goto('/?example=tactile-map');
+    await page.goto('/?example=tactile-map&type=drawing');
     await expect(page.locator('#tactileMapPanel')).toBeVisible({
       timeout: 60000,
     });
@@ -2495,6 +2496,7 @@ test.describe('the map purpose on its canvas', () => {
         { timeout: 30000 }
       )
       .toBe('three.svg');
+    await goToStep(page, 3);
     await page.locator('#tactileMapEditDrawing').click();
     await expect(
       page.locator('#drawingEditorSurface .drawing-editor').first()
@@ -2596,7 +2598,7 @@ test.describe('the map purpose in color', () => {
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
       localStorage.setItem('openscad-forge-theme', 'dark');
     });
-    await page.goto('/?example=tactile-map');
+    await page.goto('/?example=tactile-map&type=drawing');
     await expect(page.locator('#tactileMapPanel')).toBeVisible({
       timeout: 60000,
     });
@@ -2627,6 +2629,7 @@ test.describe('the map purpose in color', () => {
         { timeout: 30000 }
       )
       .toBe('three.svg');
+    await goToStep(page, 3);
     await page.locator('#tactileMapEditDrawing').click();
     await expect(
       page.locator('#drawingEditorSurface .drawing-editor').first()
@@ -2821,7 +2824,7 @@ test.describe('the route tool', () => {
         body: OVERPASS,
       })
     );
-    await page.goto('/?example=tactile-map');
+    await page.goto('/?example=tactile-map&type=place');
     await expect(page.locator('#tactileMapPanel')).toBeVisible({
       timeout: 60000,
     });
@@ -2835,12 +2838,8 @@ test.describe('the route tool', () => {
     await page.locator('#tactileMapAddress').fill('1000 4th Ave, Seattle');
     await page.locator('#tactileMapSearch').click();
     await page.locator('#tactileMapPlace1').check();
-    await page.locator('#tactileMapGetData').click();
-    await expect(page.locator('#tactileMapAddressStatus')).toContainText(
-      'map features within 250 m',
-      { timeout: 15000 }
-    );
-    await page.locator('#tactileMapDraft').click();
+    await goToStep(page, 4);
+    await page.locator('#tactileMapMake').click();
     await expect(
       page.locator('#drawingEditorSurface .drawing-editor').first()
     ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });

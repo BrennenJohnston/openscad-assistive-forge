@@ -10,11 +10,12 @@
  * @license GPL-3.0-or-later
  */
 import { test, expect } from '@playwright/test';
+import { goToStep } from '../e2e/helpers/map-steps.js';
 
-/** Data, or a sentence that ends the pull without it (any version's words). */
-const DATA = /map features (within|around)/;
+/** A draft, or a sentence that ends the press without one. */
+const READY = /^(Draft|Route) map ready: /;
 const ENDED =
-  /No map server answered\. Try again|still busy|did not arrive|is not an OpenStreetMap/;
+  /No map server answered\. Try again|did not arrive|No sidewalks within|No walking route/;
 /** Nominatim's policy: one search a second. */
 const SEARCH_GAP_MS = 1100;
 
@@ -26,8 +27,8 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-async function openTile(page) {
-  await page.goto('/?example=tactile-map');
+async function openTile(page, type) {
+  await page.goto(`/?example=tactile-map&type=${type}`);
   await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 60000 });
   const notNow = page.locator('#saveProjectNotNow');
   try {
@@ -66,24 +67,24 @@ const TO = {
   list: '#tactileMapToResults',
 };
 
-/** Get map data and wait for the data, or fail on the sentence that ends it. */
-async function getData(page) {
+/** Make the map and wait for the draft, or fail on the sentence that ends it. */
+async function makeTheMap(page) {
+  await goToStep(page, 4);
   const box = page.locator('#tactileMapAddressStatus');
   const started = Date.now();
-  await page.locator('#tactileMapGetData').click();
+  await page.locator('#tactileMapMake').click();
   await expect
     .poll(async () => (await box.textContent()) || '', {
       timeout: 240000,
       intervals: [1000],
     })
-    .toMatch(new RegExp(`${DATA.source}|${ENDED.source}`));
+    .toMatch(new RegExp(`${READY.source}|${ENDED.source}`));
   const said = (await box.textContent()) || '';
   test.info().annotations.push({
     type: 'pull',
     description: `${Math.round((Date.now() - started) / 1000)} s: ${said}`,
   });
-  expect(said, 'the pull ended without map data').toMatch(DATA);
-  await expect(page.locator('#tactileMapDraft')).toBeEnabled();
+  expect(said, 'the press ended without a map').toMatch(READY);
 }
 
 async function editorOpens(page) {
@@ -100,11 +101,9 @@ test.describe('the Tactile Map Designer with the live services', () => {
   test('a place map: the Gates Center, data from a live server, a draft in the editor', async ({
     page,
   }) => {
-    await openTile(page);
+    await openTile(page, 'place');
     await pick(page, FROM, '3800 E Stevens Way NE', /Gates Center/);
-    await getData(page);
-
-    await page.locator('#tactileMapDraft').click();
+    await makeTheMap(page);
     await editorOpens(page);
     await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
       /^Draft map ready: \d+ of \d+ features on/
@@ -123,13 +122,11 @@ test.describe('the Tactile Map Designer with the live services', () => {
   test('a route map on foot: the Husky Union Building to the Gates Center, data from a live server, a route in the editor', async ({
     page,
   }) => {
-    await openTile(page);
+    await openTile(page, 'route');
     await pick(page, FROM, 'Husky Union Building', /Husky Union/);
     await page.waitForTimeout(SEARCH_GAP_MS);
     await pick(page, TO, '3800 E Stevens Way NE', /Gates Center/);
-    await getData(page);
-
-    await page.locator('#tactileMapDraft').click();
+    await makeTheMap(page);
     await editorOpens(page);
     await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
       /^Route map ready: a \d+ m walk from Husky Union Building to Bill & Melinda Gates Center/

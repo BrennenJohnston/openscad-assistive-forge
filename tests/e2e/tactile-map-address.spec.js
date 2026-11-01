@@ -5,6 +5,7 @@
  *
  * @license GPL-3.0-or-later
  */
+import { goToStep } from './helpers/map-steps.js';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { existsSync, readFileSync } from 'node:fs';
@@ -59,7 +60,7 @@ async function dismissSavePrompt(page) {
 }
 
 async function openTactileMap(page) {
-  await page.goto('/?example=tactile-map');
+  await page.goto('/?example=tactile-map&type=place');
   await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 20000 });
   await expect(page.locator('#tactileMapPanel')).toBeVisible({
     timeout: 15000,
@@ -84,17 +85,16 @@ test.describe('the address section', () => {
     });
     await openTactileMap(page);
 
-    const section = page.locator('#tactileMapAddressSection');
-    await expect(section).toBeVisible();
-    await expect(section.getByRole('heading', { name: 'Map from an address' })).toBeVisible();
-    // Above the plates section in the document.
-    expect(
-      await page.evaluate(() => {
-        const a = document.getElementById('tactileMapAddressSection');
-        const b = document.getElementById('tactileMapPanel');
-        return Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-      })
-    ).toBe(true);
+    // A place map's first step: the panel names the type, the step says
+    // which of how many, and the address field stands in it.
+    await expect(
+      page.locator('#tactileMapPanel').getByRole('heading', { name: 'A place map' })
+    ).toBeVisible();
+    const step = page.locator('#tactileMapSteps-step-1');
+    await expect(page.locator('#tactileMapSteps-heading')).toHaveText(
+      'Step 1 of 5: Where'
+    );
+    await expect(step.locator('#tactileMapAddress')).toBeVisible();
 
     const input = page.locator('#tactileMapAddress');
     const button = page.locator('#tactileMapSearch');
@@ -129,7 +129,7 @@ test.describe('the address section', () => {
 
     await page.keyboard.press('ArrowDown');
     await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
-      `${NOMINATIM[1].display_name} picked. Choose a radius and the landmarks, then get the map data. The preview shows an empty plate until you make a draft map.`
+      `${NOMINATIM[1].display_name} picked. The preview shows an empty plate until you make the map.`
     );
   });
 
@@ -184,17 +184,14 @@ test.describe('the address section', () => {
       .check();
     await expect(page.locator('#param-title_text')).toHaveValue('NO MAP YET');
 
-    const draft = page.locator('#tactileMapDraft');
-    const reason = page.locator('#tactileMapDraftReason');
-    await expect(draft).toBeDisabled();
-    await expect(draft).toHaveAttribute(
-      'aria-describedby',
-      'tactileMapDraftReason'
-    );
-    await expect(reason).toBeVisible();
-    await expect(reason).toHaveText('Get the map data first.');
+    await goToStep(page, 4);
+    const next = page.locator('#tactileMapSteps-next');
+    const reason = page.locator('#tactileMapSteps-reason');
+    await expect(next).toBeDisabled();
+    await expect(next).toHaveAttribute('aria-describedby', 'tactileMapSteps-reason');
+    await expect(reason).toHaveText('Make the map first.');
 
-    await page.locator('#tactileMapGetData').click();
+    await page.locator('#tactileMapMake').click();
     const box = page.locator('#tactileMapAddressStatus');
     await expect(box).toHaveText(
       'No map server answered. Try again in a few minutes, or export the area from openstreetmap.org and use the file instead.',
@@ -205,8 +202,9 @@ test.describe('the address section', () => {
     expect(asked.filter((u) => u.includes('maps.mail.ru')).length).toBe(3);
     expect(asked.filter((u) => u.includes('overpass-api.de')).length).toBe(3);
     expect(asked.filter((u) => u === 'tiles').length).toBeGreaterThanOrEqual(1);
-    await expect(draft).toBeDisabled();
+    await expect(next).toBeDisabled();
     await expect(reason).toBeVisible();
+    await expect(page.locator('#tactileMapMake')).toBeEnabled();
 
     // The preview renders the empty plate: the map file has no features and
     // the model's echo says it finished.
@@ -278,18 +276,12 @@ test.describe('the address section', () => {
     await page.locator('#tactileMapAddress').fill('3800 E Stevens Way NE');
     await page.locator('#tactileMapSearch').click();
     await page.locator('#tactileMapResults input[type="radio"]').first().check();
-    await page.locator('#tactileMapGetData').click();
-    const box = page.locator('#tactileMapAddressStatus');
-    await expect(box).toHaveText(/^\d+ map features within 250 m: \d+ walkways/, {
-      timeout: 60000,
-    });
-    await expect(box).not.toHaveClass(/is-failed/);
-    expect(tiles).toEqual(['15/5251/11437.mvt']);
-    expect(overpass).toEqual([]);
+    await goToStep(page, 4);
     await expect(page.locator('#tactileMapAttribution')).toContainText(
       'Tiles by OSM US'
     );
-    await page.locator('#tactileMapDraft').click();
+    await page.locator('#tactileMapMake').click();
+    const box = page.locator('#tactileMapAddressStatus');
     await page.waitForFunction(
       () =>
         document.querySelector('#drawingEditorSurface .drawing-editor')?.dataset
@@ -298,6 +290,9 @@ test.describe('the address section', () => {
       { timeout: 60000 }
     );
     await expect(box).toHaveText(/^Draft map ready: \d+ of \d+ features on/);
+    await expect(box).not.toHaveClass(/is-failed/);
+    expect(tiles).toEqual(['15/5251/11437.mvt']);
+    expect(overpass).toEqual([]);
   });
 
   test('the page with the address section passes an axe scan, with results shown', async ({

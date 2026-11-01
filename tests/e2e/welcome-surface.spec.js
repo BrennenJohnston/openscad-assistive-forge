@@ -295,7 +295,7 @@ test.describe('the Tactile Map Designer card', () => {
     await button.click()
     await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 30_000 })
     await expect(page.locator('#tactileMapPanel h2')).toHaveText(
-      'Tactile map plates',
+      'A place map',
       { timeout: 15_000 }
     )
     // The first choice, a place map, is the one the card opens by default.

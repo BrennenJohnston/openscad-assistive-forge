@@ -48,6 +48,7 @@ describe('the map types', () => {
       'Check and print',
     ]);
     expect(mapType('route').steps[0]).toBe('From and To');
+    expect(mapType('route').steps[1]).toBe('How you walk');
     expect(mapType('drawing').steps[0]).toBe('Choose the drawing');
   });
 
