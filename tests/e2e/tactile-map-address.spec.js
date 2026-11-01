@@ -5,6 +5,7 @@
  *
  * @license GPL-3.0-or-later
  */
+import { previewSettled } from './helpers/preview-settled.js';
 import { goToStep } from './helpers/map-steps.js';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -88,7 +89,9 @@ test.describe('the address section', () => {
     // A place map's first step: the panel names the type, the step says
     // which of how many, and the address field stands in it.
     await expect(
-      page.locator('#tactileMapPanel').getByRole('heading', { name: 'A place map' })
+      page
+        .locator('#tactileMapPanel')
+        .getByRole('heading', { name: 'A place map' })
     ).toBeVisible();
     const step = page.locator('#tactileMapSteps-step-1');
     await expect(page.locator('#tactileMapSteps-heading')).toHaveText(
@@ -123,9 +126,9 @@ test.describe('the address section', () => {
     expect(searched.get('q')).toBe('1000 4th Ave, Seattle, WA');
     expect(searched.has('email')).toBe(false);
     await expect(radios.first()).toBeFocused();
-    await expect(
-      page.locator('#tactileMapResults legend')
-    ).toHaveText('Places found');
+    await expect(page.locator('#tactileMapResults legend')).toHaveText(
+      'Places found'
+    );
 
     await page.keyboard.press('ArrowDown');
     await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
@@ -171,10 +174,9 @@ test.describe('the address section', () => {
       });
     }
     await openTactileMap(page);
-    await expect(page.locator('#echoMessages')).toContainText(
-      'Finished map',
-      { timeout: 120000 }
-    );
+    await expect(page.locator('#echoMessages')).toContainText('Finished map', {
+      timeout: 120000,
+    });
 
     await page.locator('#tactileMapAddress').fill('1000 4th Ave, Seattle, WA');
     await page.locator('#tactileMapSearch').click();
@@ -188,7 +190,10 @@ test.describe('the address section', () => {
     const next = page.locator('#tactileMapSteps-next');
     const reason = page.locator('#tactileMapSteps-reason');
     await expect(next).toBeDisabled();
-    await expect(next).toHaveAttribute('aria-describedby', 'tactileMapSteps-reason');
+    await expect(next).toHaveAttribute(
+      'aria-describedby',
+      'tactileMapSteps-reason'
+    );
     await expect(reason).toHaveText('Make the map first.');
 
     await page.locator('#tactileMapMake').click();
@@ -209,8 +214,7 @@ test.describe('the address section', () => {
     // The preview renders the empty plate: the map file has no features and
     // the model's echo says it finished.
     const levels = await page.evaluate(
-      () =>
-        document.getElementById('tactileMapPanel').__forgeMapPanel.plan
+      () => document.getElementById('tactileMapPanel').__forgeMapPanel.plan
     );
     expect(levels.features).toEqual([]);
     expect(levels.meta.title).toBe('NO MAP YET');
@@ -266,7 +270,10 @@ test.describe('the address section', () => {
     // The Overpass servers by their hosts (a pattern on the word would
     // catch the app's own overpass.js module too).
     const overpass = [];
-    for (const host of ['https://overpass-api.de/**', 'https://maps.mail.ru/**']) {
+    for (const host of [
+      'https://overpass-api.de/**',
+      'https://maps.mail.ru/**',
+    ]) {
       await page.route(host, (route) => {
         overpass.push(route.request().url());
         return route.fulfill({ status: 406, body: 'no' });
@@ -275,7 +282,10 @@ test.describe('the address section', () => {
     await openTactileMap(page);
     await page.locator('#tactileMapAddress').fill('3800 E Stevens Way NE');
     await page.locator('#tactileMapSearch').click();
-    await page.locator('#tactileMapResults input[type="radio"]').first().check();
+    await page
+      .locator('#tactileMapResults input[type="radio"]')
+      .first()
+      .check();
     await goToStep(page, 4);
     await expect(page.locator('#tactileMapAttribution')).toContainText(
       'Tiles by OSM US'
@@ -312,6 +322,7 @@ test.describe('the address section', () => {
     await expect(
       page.locator('#tactileMapResults input[type="radio"]')
     ).toHaveCount(2, { timeout: 15000 });
+    await previewSettled(page);
     const results = await new AxeBuilder({ page }).analyze();
     const violations = results.violations.filter(
       (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)

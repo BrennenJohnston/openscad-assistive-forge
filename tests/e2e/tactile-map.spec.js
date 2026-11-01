@@ -5,6 +5,7 @@
  *
  * @license GPL-3.0-or-later
  */
+import { previewSettled } from './helpers/preview-settled.js';
 import { goToStep } from './helpers/map-steps.js';
 import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
@@ -259,6 +260,7 @@ test.describe('Tactile Map tile', () => {
 
   test('the page with the panel passes an axe scan', async ({ page }) => {
     await openTactileMap(page);
+    await previewSettled(page);
     const results = await new AxeBuilder({ page }).analyze();
     const violations = results.violations.filter(
       (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)
@@ -301,7 +303,11 @@ test.describe('the map data row', () => {
     );
     // The map tiles refuse, so the pull reaches the routed Overpass answer.
     await page.route('https://tiles.openstreetmap.us/**', (route) =>
-      route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*' }, body: '' })
+      route.fulfill({
+        status: 503,
+        headers: { 'access-control-allow-origin': '*' },
+        body: '',
+      })
     );
     await page.route('https://overpass-api.de/api/interpreter', (route) => {
       pulled = route.request().postData();
@@ -386,6 +392,7 @@ test.describe('the map data row', () => {
       timeout: 15000,
     });
 
+    await previewSettled(page);
     const results = await new AxeBuilder({ page }).analyze();
     const violations = results.violations.filter(
       (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)
@@ -426,7 +433,11 @@ test.describe('the draft map', () => {
     );
     // The map tiles refuse, so the pull reaches the routed Overpass answer.
     await page.route('https://tiles.openstreetmap.us/**', (route) =>
-      route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*' }, body: '' })
+      route.fulfill({
+        status: 503,
+        headers: { 'access-control-allow-origin': '*' },
+        body: '',
+      })
     );
     await page.route('https://overpass-api.de/api/interpreter', (route) =>
       route.fulfill({
@@ -508,6 +519,7 @@ test.describe('the draft map', () => {
       })
       .toMatch(/Draft map updated: \d+ features on, \d+ off\./);
 
+    await previewSettled(page);
     const results = await new AxeBuilder({ page }).analyze();
     const violations = results.violations.filter(
       (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)
@@ -567,7 +579,11 @@ test.describe('steep sidewalks', () => {
     );
     // The map tiles refuse, so the pull reaches the routed Overpass answer.
     await page.route('https://tiles.openstreetmap.us/**', (route) =>
-      route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*' }, body: '' })
+      route.fulfill({
+        status: 503,
+        headers: { 'access-control-allow-origin': '*' },
+        body: '',
+      })
     );
     await page.route('https://overpass-api.de/api/interpreter', (route) =>
       route.fulfill({
@@ -648,6 +664,7 @@ test.describe('steep sidewalks', () => {
     );
     expect(steepCount).toBeGreaterThan(0);
 
+    await previewSettled(page);
     const results = await new AxeBuilder({ page }).analyze();
     const violations = results.violations.filter(
       (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)
