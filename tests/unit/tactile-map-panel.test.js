@@ -604,6 +604,51 @@ describe('the map panel', () => {
   });
 });
 
+describe('what the map file holds, told to the model', () => {
+  it('says drawing while the file control holds a drawing not classed yet, and levels for a levels file', async () => {
+    destroyMapPanel();
+    initMapPanel(
+      { ...CONFIG, mapFileKindParam: 'map_file_kind', type: 'drawing' },
+      {
+        plan: sampleStationPlan(),
+        setFile: vi.fn((name, fileName, svg) => {
+          files.push({ name, fileName, svg });
+          return true;
+        }),
+        render: vi.fn(async () => EMPTY_STL()),
+        download: vi.fn(),
+      }
+    );
+    // The panel's own levels file goes to the model as levels.
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    expect(params().map_file_kind).toBe('levels');
+    // A drawing chosen in the control: the model raises it whole until its
+    // shapes are classed.
+    stateManager.setState({
+      parameters: {
+        ...params(),
+        map_file: { name: 'station.svg', data: svgToDataUrl(DRAWING) },
+      },
+    });
+    await vi.waitFor(
+      () => expect(params().map_file_kind).toBe('drawing'),
+      SETTLE
+    );
+    // A levels file a person saved and chose again is levels.
+    const saved = files[files.length - 1].svg;
+    stateManager.setState({
+      parameters: {
+        ...params(),
+        map_file: { name: 'levels_whole.svg', data: svgToDataUrl(saved) },
+      },
+    });
+    await vi.waitFor(
+      () => expect(params().map_file_kind).toBe('levels'),
+      SETTLE
+    );
+  });
+});
+
 describe('the warnings in Check and print', () => {
   // Two landmarks 12 mm apart: one "too close" warning; four of them, two.
   const landmark = (id, x, y) => ({

@@ -106,6 +106,20 @@ describe('the Tactile Map tile', () => {
     expect(src).toMatch(/outside 75 to 450 mm/);
   });
 
+  it('raises a drawing not classed yet whole on the first level, with no level lookups, when the panel says so', () => {
+    const src = source();
+    const p = params();
+    const choices = (param) => param.enum.map((o) => o.value ?? o);
+    expect(choices(p.map_file_kind)).toEqual(['levels', 'drawing']);
+    expect(p.map_file_kind.default).toBe('levels');
+    expect(manifest().tactileMap.mapFileKindParam).toBe('map_file_kind');
+    expect(src).toMatch(
+      /map_file_kind\s*==\s*"levels"\s*\|\|\s*map_file_kind\s*==\s*"drawing"/
+    );
+    // The drawing whole, clipped to the plate: an import with no id.
+    expect(src).toMatch(/import\s*\(\s*map_file\s*,\s*center\s*=\s*false\s*\)/);
+  });
+
   it('ships the sample levels file it defaults to', () => {
     const m = manifest();
     const p = params();

@@ -431,6 +431,17 @@ class MapPanel {
     this.fileHome = null;
   }
 
+  /**
+   * Tell the model what the map file holds, when the manifest names the
+   * parameter: its levels file, or a drawing whose shapes are not classed
+   * yet, which the model raises whole instead of looking up levels it lacks.
+   */
+  setFileKind(kind) {
+    const key = this.config.mapFileKindParam;
+    if (!key || stateManager.getState()?.parameters?.[key] === kind) return;
+    setParameterValue(key, kind);
+  }
+
   /** Whether the tile's Map file control holds a file. */
   holdsMapFile() {
     const value =
@@ -502,6 +513,13 @@ class MapPanel {
     if (data === this.lastPictureData) return;
     this.lastPictureData = data;
     const picture = this.currentPicture();
+    if (picture) {
+      // After the file control's own change has reached the preview: its
+      // handler hands the preview the values it had, without this one, and
+      // the preview renders the last values it was given.
+      const kind = isLevelsFile(picture.svg) ? 'levels' : 'drawing';
+      queueMicrotask(() => this.setFileKind(kind));
+    }
     if (!picture || isLevelsFile(picture.svg)) return;
     const svg = filledOutlines(picture.svg);
     if (this.drawing && this.drawing.svg === svg) return;
@@ -1613,6 +1631,7 @@ class MapPanel {
       setParameterValue(this.config.plateShowsTitleParam, showTitle);
     if (this.config.plateShowsNorthParam)
       setParameterValue(this.config.plateShowsNorthParam, showNorth);
+    this.setFileKind('levels');
     if (!this.setFile(this.config.mapFileParam, fileName, svg)) {
       console.warn(
         `[MapPanel] No file control for parameter: ${this.config.mapFileParam}`

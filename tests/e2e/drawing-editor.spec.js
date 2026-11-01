@@ -12,6 +12,7 @@
  * @license GPL-3.0-or-later
  */
 
+import { previewSettled } from './helpers/preview-settled.js';
 import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 import { goToStep } from './helpers/map-steps.js';
@@ -2760,6 +2761,17 @@ test.describe('a map from your drawing, step by step', () => {
     await expect(
       one.getByRole('button', { name: 'Open the drawing editor' })
     ).toHaveCount(0);
+    // A drawing not classed yet is raised whole, with no levels looked up,
+    // so the preview gives no warnings.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => window.stateManager?.getState()?.parameters?.map_file_kind
+        )
+      )
+      .toBe('drawing');
+    await previewSettled(page);
+    await expect(page.locator('#echoDrawerLabel')).not.toContainText('warning');
 
     await next.click();
     await expect(heading).toHaveText("Step 2 of 5: The drawing's real width");

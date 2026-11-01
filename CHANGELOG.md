@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A map pull's result shows in a framed box under the buttons, a failure in
   red, and once a place is picked the preview shows an empty plate titled NO
   MAP YET instead of the sample station until the draft is made.
+- A drawing chosen for a tactile map previews raised as drawn until its
+  shapes are classed, instead of five OpenSCAD warnings, and the plan's
+  warnings fold under one line that counts them.
 
 ## [5.8.0] - 2026-11-01
 
