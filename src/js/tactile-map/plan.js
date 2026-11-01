@@ -54,6 +54,25 @@ export function emptyPlan(w, h) {
   };
 }
 
+/** The raised title of a place or route map that has no data yet. */
+export const WAITING_TITLE = 'NO MAP YET';
+
+/**
+ * The plate a place or route map shows until its draft is made: no
+ * features, the map's own size, the title NO MAP YET, marked as waiting so
+ * the panel knows the sample station is gone and no map has come yet.
+ *
+ * @param {number} w - Map width in mm
+ * @param {number} h - Map height in mm
+ * @returns {object}
+ */
+export function waitingPlan(w, h) {
+  const plan = emptyPlan(w, h);
+  plan.meta.title = WAITING_TITLE;
+  plan.meta.waiting = true;
+  return plan;
+}
+
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const isPair = (p) =>
   Array.isArray(p) && p.length === 2 && isNum(p[0]) && isNum(p[1]);

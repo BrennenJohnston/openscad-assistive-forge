@@ -11,17 +11,26 @@
  * lazy chunk on the first press; a test stubs them):
  * - `searchPlaces(query)` resolves `[{ name, lat, lon, kind }]`, or rejects
  *   with a `code`: 'empty', 'rate', 'no-answer';
- * - `pullArea({ lat, lon, radiusM, onWait })` resolves `{ elements, bytes }`,
- *   calling `onWait(seconds)` before each back-off, or rejects with 'busy'
- *   or 'no-answer';
+ * - `pullArea({ lat, lon, radiusM, onWait })` resolves `{ elements, bytes,
+ *   host }`, calling `onWait(seconds)` before each back-off and
+ *   `onWait(0, nextServer, { from, reason })` when it moves to the next
+ *   server at once, or rejects with 'busy' or 'no-answer';
  * - `readOsmFile(file)` resolves `{ elements, center }` or rejects with
  *   'not-osm'.
  *
  * The data kept for the draft: `{ elements, center, radiusM, source, place,
- * landmarks, bytes }` with `source` 'overpass' or 'file'.
+ * landmarks, bytes, host }` with `source` 'overpass' or 'file' and `host`
+ * the name of the server that answered.
  *
  * @license GPL-3.0-or-later
  */
+
+/** How a server failed, as the middle of the switch sentence. */
+const HOST_FAILED = Object.freeze({
+  refused: "refused this site's request",
+  'no-answer': 'did not answer in time',
+  'no-data': 'sent no map data',
+});
 
 export const ADDRESS_STRINGS = Object.freeze({
   heading: 'Map from an address',
@@ -37,6 +46,13 @@ export const ADDRESS_STRINGS = Object.freeze({
   /** A11Y: after a pick. */
   picked: (name) =>
     `${name} picked. Choose a radius and the landmarks, then get the map data.`,
+  /** A11Y: said after the pick while the preview shows the empty plate. */
+  waiting: 'The preview shows an empty plate until you make a draft map.',
+  /** Beside Make a draft map while it waits for data. */
+  needData: 'Get the map data first.',
+  /** A11Y: Edit drawing as a map pressed on the empty plate. */
+  waitingDoor:
+    'No map yet. Make a draft map first, or choose a drawing for the map file.',
   /** A11Y: the search did not answer. */
   noAnswer:
     'The address search did not answer. Check your connection and try again, or load an OpenStreetMap file instead.',
@@ -68,14 +84,19 @@ export const ADDRESS_STRINGS = Object.freeze({
   /** A11Y: the status line after a pull. */
   got: (n, r, w, c, b, l) =>
     `${n} map features within ${r} m: ${w} walkways, ${c} crossings, ${b} buildings, ${l} landmarks.`,
-  /** A11Y: the server refused, or gave no answer; a back-off runs. */
-  busyWait: (s) => `The map server is busy. Trying again in ${s} seconds.`,
-  /** A11Y: the second back-off failed too. */
-  busy: 'The map server is still busy. Try again in a few minutes, or export the area from openstreetmap.org and load it with Load an OpenStreetMap file.',
+  /** A11Y: one server failed and the pull moves to the next, in one breath. */
+  hostSwitch: (from, next, reason) =>
+    `${from} ${HOST_FAILED[reason] || HOST_FAILED.refused}. Trying ${next}; this can take half a minute.`,
+  /** A11Y: every server failed; a back-off runs before the list again. */
+  busyWait: (s) => `No map server answered. Trying again in ${s} seconds.`,
+  /** A11Y: the last try of the list failed too. */
+  busy: 'No map server answered. Try again in a few minutes, or export the area from openstreetmap.org and use the file instead.',
   /** A11Y: the pull did not answer. */
   noData:
     'The map data did not arrive. Check your connection and try again, or load an OpenStreetMap file instead.',
-  attribution: ['Map data from ', 'OpenStreetMap contributors', ', ODbL'],
+  attribution: ['Map data from ', 'OpenStreetMap contributors', ', ODbL.'],
+  /** The map tiles' service asks for its own credit, with its link. */
+  tilesCredit: [' Tiles by ', 'OSM US', '.'],
   loadFile: 'Load an OpenStreetMap file',
   fileHelp:
     'An .osm export from openstreetmap.org, or a .geojson file. The file stays on your device.',
@@ -130,6 +151,7 @@ export const ADDRESS_STRINGS = Object.freeze({
 export const GRADE = Object.freeze({ min: 3, max: 12, step: 0.5, value: 5 });
 
 export const ATTRIBUTION_URL = 'https://www.openstreetmap.org/copyright';
+export const TILES_CREDIT_URL = 'https://tiles.openstreetmap.us';
 export const RADIUS = Object.freeze({
   min: 100,
   max: 600,
@@ -197,7 +219,8 @@ function el(tag, className, text) {
  * @param {(where: {lat: number, lon: number, radiusM: number, onWait: Function}) => Promise<{elements: object[], bytes: number}>} args.pullArea
  * @param {(file: File) => Promise<{elements: object[], center: {lat: number, lon: number}|null}>} args.readOsmFile
  * @param {(text: string, failed?: boolean) => void} args.say - writes the status line and announces once
- * @param {(place: object) => void} [args.onPlace]
+ * @param {(place: object) => boolean} [args.onPlace] - true when the preview
+ *   now shows the empty plate, so the pick says so
  * @param {(osm: object) => void} [args.onData]
  * @param {() => void} [args.unsay] - take back a sentence still waiting to be said
  * @param {() => void} [args.onDraft] - Make a draft map pressed (enabled once data exists)
@@ -374,9 +397,31 @@ export function createAddressSection({
   const draft = el('button', 'btn btn-primary braille-translate-btn', S.draft);
   draft.type = 'button';
   draft.id = 'tactileMapDraft';
-  draft.disabled = true;
   draftRow.appendChild(draft);
+  const draftReason = el(
+    'span',
+    'braille-panel-help tactile-map-draft-reason',
+    S.needData
+  );
+  draftReason.id = 'tactileMapDraftReason';
+  draftRow.appendChild(draftReason);
   section.appendChild(draftRow);
+
+  // A box directly under the buttons, where a person looks after a press.
+  // Shown, not a live region: the panel says each sentence once through the
+  // announcer, as it does for the plates line.
+  const status = el('p', 'braille-panel-help tactile-map-status-box');
+  status.id = 'tactileMapAddressStatus';
+  section.appendChild(status);
+
+  /** Make a draft map waits for data, with its reason beside it. */
+  function setDraftEnabled(on) {
+    draft.disabled = !on;
+    draftReason.hidden = on;
+    if (on) draft.removeAttribute('aria-describedby');
+    else draft.setAttribute('aria-describedby', draftReason.id);
+  }
+  setDraftEnabled(false);
 
   const steepRow = el('div', 'braille-panel-toggle-row tactile-map-steep-row');
   const steep = document.createElement('input');
@@ -419,20 +464,20 @@ export function createAddressSection({
     S.attribution[0]
   );
   attribution.id = 'tactileMapAttribution';
-  const link = el('a', '', S.attribution[1]);
-  link.href = ATTRIBUTION_URL;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
-  link.appendChild(el('span', 'sr-only', ' (opens in new tab)'));
-  attribution.appendChild(link);
+  const outLink = (text, href) => {
+    const a = el('a', '', text);
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.appendChild(el('span', 'sr-only', ' (opens in new tab)'));
+    return a;
+  };
+  attribution.appendChild(outLink(S.attribution[1], ATTRIBUTION_URL));
   attribution.appendChild(document.createTextNode(S.attribution[2]));
+  attribution.appendChild(document.createTextNode(S.tilesCredit[0]));
+  attribution.appendChild(outLink(S.tilesCredit[1], TILES_CREDIT_URL));
+  attribution.appendChild(document.createTextNode(S.tilesCredit[2]));
   section.appendChild(attribution);
-
-  // Shown, not a live region: the panel says each sentence once through the
-  // announcer, as it does for the plates line.
-  const status = el('p', 'braille-panel-help');
-  status.id = 'tactileMapAddressStatus';
-  section.appendChild(status);
 
   let place = null;
   let dest = null;
@@ -450,10 +495,11 @@ export function createAddressSection({
     }
   }
 
+  /** @returns {boolean} whether the preview now shows the empty plate */
   function setPlace(p) {
     place = p;
     getData.disabled = !place || pulling;
-    if (place) onPlace?.(place);
+    return place ? Boolean(onPlace?.(place)) : false;
   }
 
   /**
@@ -468,7 +514,7 @@ export function createAddressSection({
       keep({ ...osm, to: dest });
     } else if (osm) {
       osm = null;
-      draft.disabled = true;
+      setDraftEnabled(false);
       onData?.(null);
     }
   }
@@ -503,8 +549,8 @@ export function createAddressSection({
     name: 'tactileMapPlace',
     prefix: 'tactileMapPlace',
     onPick: (p) => {
-      setPlace(p);
-      say(S.picked(p.name));
+      const waiting = setPlace(p);
+      say(waiting ? `${S.picked(p.name)} ${S.waiting}` : S.picked(p.name));
     },
     onNone: () => setPlace(null),
   };
@@ -584,7 +630,7 @@ export function createAddressSection({
 
   function keep(data) {
     osm = data;
-    draft.disabled = !osm;
+    setDraftEnabled(Boolean(osm));
     onData?.(osm);
   }
 
@@ -598,15 +644,21 @@ export function createAddressSection({
     say(text);
   }
 
+  /** A back-off's seconds, or the move to the next server (0 seconds). */
+  function sayWait(seconds, next, info) {
+    say(
+      seconds > 0
+        ? S.busyWait(seconds)
+        : S.hostSwitch(info?.from, next, info?.reason)
+    );
+  }
+
   async function pullRoute() {
     const at = place;
     const to = dest;
     const box = boxAround(at, to);
     say(S.gettingRoute(short(at), short(to)));
-    const { elements, bytes } = await pullArea({
-      box,
-      onWait: (s) => say(S.busyWait(s)),
-    });
+    const { elements, bytes, host } = await pullArea({ box, onWait: sayWait });
     keep({
       elements,
       center: { lat: (at.lat + to.lat) / 2, lon: (at.lon + to.lon) / 2 },
@@ -617,6 +669,7 @@ export function createAddressSection({
       to,
       landmarks: ticked(),
       bytes,
+      host,
     });
     let text = S.gotRoute(countFeatures(elements).n, short(at), short(to));
     if (bytes > BIG_BYTES) {
@@ -644,11 +697,11 @@ export function createAddressSection({
     const at = place;
     say(S.getting(r, at.name));
     try {
-      const { elements, bytes } = await pullArea({
+      const { elements, bytes, host } = await pullArea({
         lat: at.lat,
         lon: at.lon,
         radiusM: r,
-        onWait: (s) => say(S.busyWait(s)),
+        onWait: sayWait,
       });
       keep({
         elements,
@@ -658,6 +711,7 @@ export function createAddressSection({
         place: at,
         landmarks: ticked(),
         bytes,
+        host,
       });
       sayCounts(elements, r, bytes);
     } catch (error) {
@@ -757,6 +811,7 @@ export function createAddressSection({
       loadFile,
       fileInput,
       draft,
+      draftReason,
       steep,
       grade,
       attribution,

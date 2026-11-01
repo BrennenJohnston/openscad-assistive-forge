@@ -16560,8 +16560,36 @@ body.tutorial-body-locked {
 }
 
 .tactile-map-get-row,
-.tactile-map-file-row {
+.tactile-map-file-row,
+.tactile-map-draft-row {
   flex-wrap: wrap;
+  align-items: center;
+}
+
+/* The status box under the buttons: what the last press did, in a frame a
+   person sees; a failure takes the error colours and a thicker edge, and its
+   words say the failure first, so colour is never the only sign. */
+.tactile-map-status-box {
+  margin: 0;
+  padding: var(--space-sm);
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+}
+
+.tactile-map-status-box:empty {
+  display: none;
+}
+
+.tactile-map-status-box.is-failed {
+  border-width: var(--border-width-base);
+  border-color: var(--color-error);
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
+}
+
+.tactile-map-draft-reason[hidden] {
+  display: none;
 }
 
 /* reset.css strips colour and underline from every anchor; the attribution

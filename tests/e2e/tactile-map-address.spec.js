@@ -7,6 +7,7 @@
  */
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { existsSync, readFileSync } from 'node:fs';
 
 const ALLOWED_AXE_VIOLATIONS = [];
 
@@ -128,8 +129,175 @@ test.describe('the address section', () => {
 
     await page.keyboard.press('ArrowDown');
     await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
-      `${NOMINATIM[1].display_name} picked. Choose a radius and the landmarks, then get the map data.`
+      `${NOMINATIM[1].display_name} picked. Choose a radius and the landmarks, then get the map data. The preview shows an empty plate until you make a draft map.`
     );
+  });
+
+  test('a pull every server refuses shows the failure in the box, keeps Make a draft map waiting with its reason, and the preview holds the empty NO MAP YET plate', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.route('https://nominatim.openstreetmap.org/search*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(NOMINATIM),
+      })
+    );
+    // The map tiles and both servers refuse, as the main one refuses the
+    // published site. The pull's real 30 s and 60 s waits run: the app's
+    // render limits use the same values, so the page's timers are left alone.
+    const asked = [];
+    await page.route('https://tiles.openstreetmap.us/**', (route) => {
+      asked.push('tiles');
+      return route.fulfill({
+        status: 503,
+        headers: { 'access-control-allow-origin': '*' },
+        body: '',
+      });
+    });
+    for (const url of [
+      'https://overpass-api.de/api/interpreter',
+      'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+    ]) {
+      await page.route(url, (route) => {
+        asked.push(url);
+        return route.fulfill({
+          status: 406,
+          headers: { 'access-control-allow-origin': '*' },
+          body: 'Not Acceptable',
+        });
+      });
+    }
+    await openTactileMap(page);
+    await expect(page.locator('#echoMessages')).toContainText(
+      'Finished map',
+      { timeout: 120000 }
+    );
+
+    await page.locator('#tactileMapAddress').fill('1000 4th Ave, Seattle, WA');
+    await page.locator('#tactileMapSearch').click();
+    await page
+      .locator('#tactileMapResults input[type="radio"]')
+      .first()
+      .check();
+    await expect(page.locator('#param-title_text')).toHaveValue('NO MAP YET');
+
+    const draft = page.locator('#tactileMapDraft');
+    const reason = page.locator('#tactileMapDraftReason');
+    await expect(draft).toBeDisabled();
+    await expect(draft).toHaveAttribute(
+      'aria-describedby',
+      'tactileMapDraftReason'
+    );
+    await expect(reason).toBeVisible();
+    await expect(reason).toHaveText('Get the map data first.');
+
+    await page.locator('#tactileMapGetData').click();
+    const box = page.locator('#tactileMapAddressStatus');
+    await expect(box).toHaveText(
+      'No map server answered. Try again in a few minutes, or export the area from openstreetmap.org and use the file instead.',
+      { timeout: 150000 }
+    );
+    await expect(box).toBeVisible();
+    await expect(box).toHaveClass(/is-failed/);
+    expect(asked.filter((u) => u.includes('maps.mail.ru')).length).toBe(3);
+    expect(asked.filter((u) => u.includes('overpass-api.de')).length).toBe(3);
+    expect(asked.filter((u) => u === 'tiles').length).toBeGreaterThanOrEqual(1);
+    await expect(draft).toBeDisabled();
+    await expect(reason).toBeVisible();
+
+    // The preview renders the empty plate: the map file has no features and
+    // the model's echo says it finished.
+    const levels = await page.evaluate(
+      () =>
+        document.getElementById('tactileMapPanel').__forgeMapPanel.plan
+    );
+    expect(levels.features).toEqual([]);
+    expect(levels.meta.title).toBe('NO MAP YET');
+    await expect(page.locator('.preview-state-indicator')).toHaveClass(
+      /state-current/,
+      { timeout: 120000 }
+    );
+    await expect(page.locator('#echoMessages')).toContainText(
+      'Finished map: 480 x 360 mm'
+    );
+  });
+
+  test('a place map gets its data from the map tiles, never asking an Overpass server, and drafts from them', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const GATES = {
+      place_id: 3,
+      lat: '47.652873',
+      lon: '-122.3044814',
+      type: 'university',
+      importance: 0.5,
+      display_name:
+        'Bill & Melinda Gates Center, 3800, East Stevens Way Northeast, Seattle, Washington, 98195, United States',
+    };
+    await page.route('https://nominatim.openstreetmap.org/search*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify([GATES]),
+      })
+    );
+    // Real tiles over the University of Washington (fetched 2026-11-01;
+    // map data from OpenStreetMap contributors, ODbL); any other tile empty.
+    const tiles = [];
+    await page.route('https://tiles.openstreetmap.us/**', (route) => {
+      const name = route.request().url().split('/sourdough/')[1];
+      tiles.push(name);
+      const file = `tests/fixtures/tactile-map/sourdough-${name.replace('.mvt', '').replaceAll('/', '-')}.mvt`;
+      return existsSync(file)
+        ? route.fulfill({
+            status: 200,
+            contentType: 'application/x-protobuf',
+            headers: { 'access-control-allow-origin': '*' },
+            body: readFileSync(file),
+          })
+        : route.fulfill({
+            status: 204,
+            headers: { 'access-control-allow-origin': '*' },
+          });
+    });
+    // The Overpass servers by their hosts (a pattern on the word would
+    // catch the app's own overpass.js module too).
+    const overpass = [];
+    for (const host of ['https://overpass-api.de/**', 'https://maps.mail.ru/**']) {
+      await page.route(host, (route) => {
+        overpass.push(route.request().url());
+        return route.fulfill({ status: 406, body: 'no' });
+      });
+    }
+    await openTactileMap(page);
+    await page.locator('#tactileMapAddress').fill('3800 E Stevens Way NE');
+    await page.locator('#tactileMapSearch').click();
+    await page.locator('#tactileMapResults input[type="radio"]').first().check();
+    await page.locator('#tactileMapGetData').click();
+    const box = page.locator('#tactileMapAddressStatus');
+    await expect(box).toHaveText(/^\d+ map features within 250 m: \d+ walkways/, {
+      timeout: 60000,
+    });
+    await expect(box).not.toHaveClass(/is-failed/);
+    expect(tiles).toEqual(['15/5251/11437.mvt']);
+    expect(overpass).toEqual([]);
+    await expect(page.locator('#tactileMapAttribution')).toContainText(
+      'Tiles by OSM US'
+    );
+    await page.locator('#tactileMapDraft').click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector('#drawingEditorSurface .drawing-editor')?.dataset
+          .purpose === 'map',
+      null,
+      { timeout: 60000 }
+    );
+    await expect(box).toHaveText(/^Draft map ready: \d+ of \d+ features on/);
   });
 
   test('the page with the address section passes an axe scan, with results shown', async ({
