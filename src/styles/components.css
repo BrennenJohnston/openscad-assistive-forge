@@ -16492,7 +16492,11 @@ body.tutorial-body-locked {
 
 .tactile-map-warnings {
   margin: 0;
-  padding-left: var(--space-md);
+  padding: 0 var(--space-md) var(--space-sm) var(--space-xl);
+}
+
+.tactile-map-warnings li + li {
+  margin-top: var(--space-xs);
 }
 
 .tactile-map-warnings:empty {

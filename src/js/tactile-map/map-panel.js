@@ -94,6 +94,8 @@ const ENGINE_NOT_READY =
 /** A11Y: said once when the Alt View comes on with this panel mounted. */
 export const ALT_VIEW_SENTENCE =
   'The Tactile Map Designer is not available in the Alt View. Its controls return when the Alt View is off.';
+/** A11Y: the name of the folded warnings list, its count first. */
+export const WARNINGS_TITLE = (n) => (n === 1 ? '1 warning' : `${n} warnings`);
 
 let panel = null;
 
@@ -768,10 +770,25 @@ class MapPanel {
     add('bed', styleSelect);
     this.refs.idStyle = styleSelect;
 
+    // The plan's warnings, folded: a draft of a whole block can carry fifty,
+    // and the plates and the render button stand after them.
+    const warningsBox = el(
+      'details',
+      'forge-disclosure tactile-map-warnings-box'
+    );
+    warningsBox.id = 'tactileMapWarningsBox';
+    warningsBox.hidden = true;
+    const warningsSummary = el('summary');
+    const warningsTitle = el('span', 'forge-disclosure-title');
+    warningsSummary.appendChild(warningsTitle);
+    warningsBox.appendChild(warningsSummary);
     const warnings = el('ul', 'braille-panel-help tactile-map-warnings');
     warnings.id = 'tactileMapWarnings';
-    add('warnings', warnings);
+    warningsBox.appendChild(warnings);
+    add('warnings', warningsBox);
     this.refs.warnings = warnings;
+    this.refs.warningsBox = warningsBox;
+    this.refs.warningsTitle = warningsTitle;
 
     const widthRow = el('div', 'braille-panel-toggle-row tactile-map-drawing');
     const widthLabel = el('label', 'braille-panel-label', 'Drawing width (mm)');
@@ -1560,11 +1577,12 @@ class MapPanel {
     this.rebuildPlates();
 
     const built = buildLevelRings(this.plan, { tapeWidthMm: this.tapeWidth() });
+    const allWarnings = [...this.planWarnings, ...built.warnings];
     this.refs.warnings.replaceChildren(
-      ...[...this.planWarnings, ...built.warnings].map((warning) =>
-        el('li', '', warning.text)
-      )
+      ...allWarnings.map((warning) => el('li', '', warning.text))
     );
+    this.refs.warningsBox.hidden = allWarnings.length === 0;
+    this.refs.warningsTitle.textContent = WARNINGS_TITLE(allWarnings.length);
 
     let svg;
     let size;

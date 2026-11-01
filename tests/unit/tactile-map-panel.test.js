@@ -604,6 +604,68 @@ describe('the map panel', () => {
   });
 });
 
+describe('the warnings in Check and print', () => {
+  // Two landmarks 12 mm apart: one "too close" warning; four of them, two.
+  const landmark = (id, x, y) => ({
+    id,
+    class: 'landmark',
+    kind: 'point',
+    symbol: 'landmark-triangle',
+    at: [x, y],
+    on: true,
+  });
+  const planWith = (pairs) => {
+    const plan = sampleStationPlan();
+    for (let i = 0; i < pairs; i += 1) {
+      plan.features.push(
+        landmark(`w${i}a`, 60 + i * 80, 300),
+        landmark(`w${i}b`, 72 + i * 80, 300)
+      );
+    }
+    return plan;
+  };
+  const box = () => document.getElementById('tactileMapWarningsBox');
+
+  it('folds the list into a closed disclosure that says how many there are', async () => {
+    mount({ type: 'drawing', plan: planWith(2) });
+    await vi.waitFor(
+      () =>
+        expect(
+          document.getElementById('tactileMapWarnings').children.length
+        ).toBe(2),
+      SETTLE
+    );
+    expect(box().tagName).toBe('DETAILS');
+    expect(box().classList.contains('forge-disclosure')).toBe(true);
+    expect(box().open).toBe(false);
+    expect(box().hidden).toBe(false);
+    expect(box().querySelector('summary').textContent).toBe('2 warnings');
+    expect(box().contains(document.getElementById('tactileMapWarnings'))).toBe(
+      true
+    );
+    // It stands before the render button, as the list did.
+    expect(
+      box().compareDocumentPosition(
+        document.getElementById('tactileMapRenderAll')
+      ) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('says one warning in the singular, and hides with none', async () => {
+    mount({ type: 'drawing', plan: planWith(1) });
+    await vi.waitFor(
+      () =>
+        expect(box().querySelector('summary').textContent).toBe('1 warning'),
+      SETTLE
+    );
+    mount({ type: 'drawing', plan: sampleStationPlan() });
+    await vi.waitFor(() => expect(box().hidden).toBe(true), SETTLE);
+    expect(document.getElementById('tactileMapWarnings').children.length).toBe(
+      0
+    );
+  });
+});
+
 describe('render every plate and download', () => {
   it('renders the four plates in order into one archive of eleven entries', async () => {
     await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
