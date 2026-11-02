@@ -104,7 +104,7 @@ What leaves your device, and when, is under Privacy. The data is OpenStreetMap's
 | Landmark                   | anything you name in the key           | symbol | a disc, 10 mm                                                    | BANA 2022 8.6.5; Jehoel 2009                                        |
 | You are here               | the reader's place                     | symbol | a disc with a square hole, 10 mm                                 | BANA 2022 8.5.6; ISO 19028                                          |
 | Transit stop               | a bus, train or tram stop              | symbol | a square with a notch, 9 mm                                      | BANA 2022 8.5.4                                                     |
-| Curb ramp                  | a lowered curb at a crossing           | symbol | a triangle, 10 mm on a side                                      | OpenSidewalks curbs; Jehoel 2009 |
+| Curb ramp                  | a lowered or flush curb, no edge       | symbol | a triangle, 10 mm on a side                                      | OpenSidewalks curbs; Jehoel 2009 |
 | Raised curb                | a curb a wheel cannot take             | symbol | a square, 9 mm                                                   | OpenSidewalks curbs; Jehoel 2009 |
 | Text                       | a word you drew                        | symbol | the letters as drawn                                             | ADA 703.2                                                           |
 

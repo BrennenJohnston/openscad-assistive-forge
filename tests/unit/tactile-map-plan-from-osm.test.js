@@ -645,13 +645,14 @@ describe('the pedestrian base near a building', () => {
       ['osm-node-33', 'raised-curb', 'point', true],
       ['osm-node-34', 'curb-ramp', 'point', true],
       ['osm-node-35', 'curb-ramp', 'point', false],
+      ['osm-node-36', 'curb-ramp', 'point', true],
       ['osm-node-37', 'curb-ramp', 'point', false],
       ['osm-node-38', 'curb-ramp', 'point', true],
     ]);
     expect(one(plan, 'osm-node-31').at).toEqual(at2(0, 12));
     expect(one(plan, 'osm-node-33').at).toEqual(at2(40, 12));
-    // A flush curb is neither a ramp nor a raised curb.
-    expect(one(plan, 'osm-node-36')).toBeUndefined();
+    // A flush curb leaves no edge for a cane, as a ramp does: drawn as one.
+    expect(one(plan, 'osm-node-36').at).toEqual(at2(-40, 30));
     // Curbs are not counted as landmarks.
     expect(counts.landmarks).toBe(0);
     expect(validatePlan(plan).ok).toBe(true);

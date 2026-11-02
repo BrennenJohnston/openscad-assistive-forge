@@ -242,8 +242,8 @@ export const MAP_CLASSES = Object.freeze([
     level: 2,
     symbolKey: 'landmark-triangle',
     source:
-      'OpenSidewalks curb ramps (barrier=kerb, kerb=lowered); the library triangle, a wedge for a slope (Jehoel 2009: identified at 6.4 mm)',
-    osm: [{ tag: 'kerb', values: ['lowered'], kind: 'node' }],
+      'OpenSidewalks curb ramps (barrier=kerb, kerb=lowered), and a flush curb, which leaves a cane no edge either; the library triangle, a wedge for a slope (Jehoel 2009: identified at 6.4 mm)',
+    osm: [{ tag: 'kerb', values: ['lowered', 'flush'], kind: 'node' }],
   },
   {
     key: 'raised-curb',
