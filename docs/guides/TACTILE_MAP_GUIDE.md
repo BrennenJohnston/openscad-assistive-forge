@@ -64,10 +64,10 @@ Choose **A place map**. It drafts a map of a street address from OpenStreetMap, 
 
 #### A route map
 
-Choose **A route map** to map the walk between two places instead of the ground around one. Its five steps are From and To, How you walk, What to show, Make the map, and Check and print.
+Choose **A route map** to map the walk between two places instead of the ground around one. Its five steps are From and To, How you travel, What to show, Make the map, and Check and print.
 
 1. Pick the start in **From** as a place map picks its address. Type the destination in **To**, press its **Search** and pick it under **Destinations found**. There is no scale to choose: the map covers both places and the walk between them.
-2. Under **Steps on the way**, choose **Allowed, and marked on the map**, where it starts, or **Avoided where another way exists**.
+2. Under **On foot, or by bus and train?**, choose how the trip goes; **On foot** is where it starts. Under **Steps on the way**, choose **Allowed, and marked on the map**, where it starts, or **Avoided where another way exists**. By bus and train, set **Leave at**, press **Find journeys**, and pick one of up to three journeys, each said in words, for example "22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony." Then choose **Which walk to map**: the walk to the first stop, or the walk from the last stop. Each is a map of its own, drawn the way a walk is, with the stop as a Transit stop named with its line; make one, then come back for the other. The ride between the stops is not drawn; the journey's words follow the map's ready sentence.
 3. Tick the landmarks in What to show, then press **Make the map**. The request asks for a box around both places with at least 150 m to spare beyond them. The app finds the shortest walk on the ways people walk, from a door of the first building to a door of the second (its main entrance when the data marks one). Where the data has no sidewalk the walk may follow a street, counted at three times its length so that a sidewalk wins whenever there is one. Steps are allowed and marked unless you chose to avoid them: they are often the shortest way, and a reader should know they are there.
 4. The draft switches on what the walk needs:
    - the walk as one dotted Route line from door to door, so no short piece of path is lost;
@@ -194,6 +194,7 @@ A map from an address is the one part that talks to anyone, and only when you pr
 - **Search** sends the words you typed to OpenStreetMap's Nominatim service (nominatim.openstreetmap.org), with the app's web address as the referer and nothing else: no account, no email, no location of yours.
 - **Make the map** asks OpenStreetMap US's tile service (tiles.openstreetmap.us) for the tiles over the area: each request names a tile's number, which says what square of about 800 m the map is in and nothing more. Only when the tiles fail does the app send the four edges of a box: the ground the chosen scale covers around the picked place, or for a route map the room around both places, to OpenStreetMap's main Overpass server (overpass-api.de), and when that server refuses or does not answer, to VK Maps' Overpass server (maps.mail.ru); the status line names each before it is asked.
 - **Mark steep sidewalks** fetches up to four terrain tiles from AWS Open Data (s3.amazonaws.com), each a 256 by 256 pixel picture of heights named by its tile number, which says what square kilometer the map is in and nothing more.
+- **A route map by bus and train** sends the two places' coordinates and the time to Transitous's journey planner (api.transitous.org), once a press, with the site's address as the referer, which is how its terms ask a browser app to be known. Nothing else goes with it.
 
 Each of those hosts sees your connection's address, as any web request does. A file you load through **Use a file instead** stays on your device. The drawing route and the plates never leave it.
 
@@ -208,6 +209,7 @@ The map data and the terrain heights:
 - The OpenStreetMap US Tileservice, https://tiles.openstreetmap.us/, and its usage policy, https://tiles.openstreetmap.us/usage-policy/: free for low volume non-commercial use, with the credit "Tiles by OSM US"; its Sourdough tiles, https://sourdough.osm.fyi/, keep OpenStreetMap's own tags layer by layer. Read on 2026-11-01.
 - The Overpass API's public instances and their usage page, https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances: the terms the pull keeps to. It lists the main server (overpass-api.de), which asks an app to pause 30 seconds after a 429 or 406 answer, and VK Maps' instance (maps.mail.ru/osm/tools/overpass), the second server the pull asks, which says it has no request limits at present. Read again on 2026-11-01.
 - The Mapzen terrain tiles on AWS Open Data, https://registry.opendata.aws/terrain-tiles/: Terrarium PNG tiles of heights, built from public elevation data under open terms listed on that page; the app reads zoom 15 at about 3 m per pixel. The incline figure and the rise-over-run definition follow the OpenSidewalks schema, https://sidewalks.washington.edu/opensidewalks/.
+- Transitous, https://transitous.org/, and its API terms, https://transitous.org/api/: a community-run journey planner on the MOTIS engine, free for open-source, non-commercial apps that are light on its resources, routing on OpenStreetMap data and the transit agencies' published schedules, which it lists at https://transitous.org/sources. Read on 2026-11-01.
 
 The research behind the figures:
 

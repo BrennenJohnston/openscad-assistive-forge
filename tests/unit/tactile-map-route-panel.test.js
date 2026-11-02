@@ -84,19 +84,22 @@ const editor = {
 
 function mount({ type = 'route', ...options } = {}) {
   destroyMapPanel();
-  initMapPanel({ ...CONFIG, type }, {
-    plan: sampleStationPlan(),
-    setFile: vi.fn((name, fileName, svg) => {
-      files.push({ name, fileName, svg });
-      return true;
-    }),
-    render: vi.fn(async () => new Uint8Array(84)),
-    download: vi.fn(),
-    getEditor: async () => editor,
-    searchPlaces: vi.fn(async (q) => (/gates/i.test(q) ? [GATES] : [HUB])),
-    pullArea: vi.fn(async () => ({ elements: ELEMENTS(), bytes: 188956 })),
-    ...options,
-  });
+  initMapPanel(
+    { ...CONFIG, type },
+    {
+      plan: sampleStationPlan(),
+      setFile: vi.fn((name, fileName, svg) => {
+        files.push({ name, fileName, svg });
+        return true;
+      }),
+      render: vi.fn(async () => new Uint8Array(84)),
+      download: vi.fn(),
+      getEditor: async () => editor,
+      searchPlaces: vi.fn(async (q) => (/gates/i.test(q) ? [GATES] : [HUB])),
+      pullArea: vi.fn(async () => ({ elements: ELEMENTS(), bytes: 188956 })),
+      ...options,
+    }
+  );
 }
 
 async function pick(inputId, buttonId, resultsId, text) {
@@ -161,7 +164,9 @@ describe('the second address', () => {
   it('with both places picked, lets the first step go on, asks for the box around both and keeps both', async () => {
     mount();
     expect($('tactileMapSteps-next').disabled).toBe(true);
-    expect($('tactileMapSteps-reason').textContent).toBe('Pick both places first.');
+    expect($('tactileMapSteps-reason').textContent).toBe(
+      'Pick both places first.'
+    );
     await pickFrom();
     expect($('tactileMapSteps-next').disabled).toBe(true);
     await pickTo();
@@ -387,5 +392,222 @@ describe('the plate summary', () => {
         ),
       SETTLE
     );
+  });
+});
+
+describe('a route by bus and train', () => {
+  const TRANSIT = readFileSync(
+    'tests/fixtures/tactile-map/transitous-hub-downtown.json',
+    'utf8'
+  );
+  const next = () => $('tactileMapSteps-next');
+  const choose = (id) => {
+    $(id).checked = true;
+    $(id).dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  let planJourneys;
+
+  async function toStepTwo(options = {}) {
+    planJourneys = vi.fn(async () => {
+      const { createTransitPlanner } =
+        await import('../../src/js/tactile-map/transit.js');
+      return createTransitPlanner({
+        fetch: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => JSON.parse(TRANSIT),
+        }),
+      }).planJourneys({
+        from: HUB,
+        to: GATES,
+        mode: 'transit',
+        when: new Date(),
+      });
+    });
+    mount({ planJourneys, ...options });
+    await pickFrom();
+    await new Promise((r) => setTimeout(r, 1100));
+    await pickTo();
+    next().click();
+    expect($('tactileMapSteps-heading').textContent).toBe(
+      'Step 2 of 5: How you travel'
+    );
+  }
+
+  beforeEach(() => {
+    files = [];
+    opened = null;
+  });
+  afterEach(() => destroyMapPanel());
+
+  it('asks how you travel, on foot first; by bus and train it shows when to leave, Find journeys and the credit, and holds Next until a journey is picked', async () => {
+    await toStepTwo();
+    expect($('tactileMapTravel').querySelector('legend').textContent).toBe(
+      'On foot, or by bus and train?'
+    );
+    const radios = [
+      ...$('tactileMapTravel').querySelectorAll('input[type="radio"]'),
+    ];
+    expect(
+      radios.map((r) => [
+        document.querySelector(`label[for="${r.id}"]`).textContent,
+        r.checked,
+      ])
+    ).toEqual([
+      ['On foot', true],
+      ['By bus and train', false],
+    ]);
+    expect($('tactileMapTransit').hidden).toBe(true);
+    expect(next().disabled).toBe(false);
+    choose('tactileMapTravel-transit');
+    expect($('tactileMapTransit').hidden).toBe(false);
+    expect($('tactileMapLeaveAt').type).toBe('datetime-local');
+    expect($('tactileMapLeaveAt').value).not.toBe('');
+    expect(
+      document.querySelector('label[for="tactileMapLeaveAt"]').textContent
+    ).toBe('Leave at');
+    expect($('tactileMapFindJourneys').textContent).toBe('Find journeys');
+    const credit = $('tactileMapTransitCredit');
+    expect(credit.textContent).toBe(
+      'Routes from Transitous (opens in new tab), on OpenStreetMap data.'
+    );
+    expect(credit.querySelector('a').getAttribute('href')).toBe(
+      'https://transitous.org/sources'
+    );
+    expect(next().disabled).toBe(true);
+    expect($('tactileMapSteps-reason').textContent).toBe(
+      'Find and pick a journey first.'
+    );
+    expect(planJourneys).not.toHaveBeenCalled();
+  });
+
+  it('finds the journeys on a press, lists them in words, and asks which walk to map once one is picked', async () => {
+    await toStepTwo();
+    choose('tactileMapTravel-transit');
+    $('tactileMapFindJourneys').click();
+    await vi.waitFor(
+      () => expect($('tactileMapJourneys').hidden).toBe(false),
+      SETTLE
+    );
+    expect(planJourneys).toHaveBeenCalledTimes(1);
+    const ask = planJourneys.mock.calls[0][0];
+    expect([ask.from.lat, ask.to.lat, ask.mode]).toEqual([
+      HUB.lat,
+      GATES.lat,
+      'transit',
+    ]);
+    expect(ask.when instanceof Date).toBe(true);
+    const words = [...$('tactileMapJourneys').querySelectorAll('label')].map(
+      (l) => l.textContent
+    );
+    expect(words).toEqual([
+      '32 min, no change: the 1 Line to Symphony.',
+      '32 min, no change: the 2 Line to Symphony.',
+      '22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony.',
+    ]);
+    expect(addressStatus()).toBe('3 journeys found.');
+    expect($('tactileMapWhichWalk').hidden).toBe(true);
+    choose('tactileMapJourney-3');
+    expect($('tactileMapWhichWalk').hidden).toBe(false);
+    const walks = [
+      ...$('tactileMapWhichWalk').querySelectorAll('input[type="radio"]'),
+    ];
+    expect(
+      walks.map((r) => [
+        document.querySelector(`label[for="${r.id}"]`).textContent,
+        r.checked,
+      ])
+    ).toEqual([
+      ['The walk to the stop', true],
+      ['The walk from the stop', false],
+    ]);
+    expect(next().disabled).toBe(false);
+  });
+
+  it('maps the walk to the stop: the data around the place and the stop, the stop named with its line, the journey said', async () => {
+    const pullArea = vi.fn(async () => ({
+      elements: ELEMENTS(),
+      bytes: 188956,
+    }));
+    await toStepTwo({ pullArea });
+    choose('tactileMapTravel-transit');
+    $('tactileMapFindJourneys').click();
+    await vi.waitFor(
+      () => expect($('tactileMapJourneys').hidden).toBe(false),
+      SETTLE
+    );
+    choose('tactileMapJourney-3');
+    next().click();
+    next().click();
+    $('tactileMapMake').click();
+    await vi.waitFor(() => expect(opened).not.toBeNull(), SETTLE);
+    const box = pullArea.mock.calls[0][0].box;
+    const stop = JSON.parse(TRANSIT).itineraries[2].legs[1].from;
+    for (const p of [HUB, stop]) {
+      expect(p.lat).toBeGreaterThan(box.south);
+      expect(p.lat).toBeLessThan(box.north);
+      expect(p.lon).toBeGreaterThan(box.west);
+      expect(p.lon).toBeLessThan(box.east);
+    }
+    const end = getMapPlan().features.find((f) => f.id === 'destination-stop');
+    expect(end.name).toBe('East Stevens Way NE & Benton Ln, 72');
+    expect(addressStatus()).toMatch(
+      /^Route map ready: a \d+ m walk from Husky Union Building to East Stevens Way NE & Benton Ln, .* The journey: 22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony\.$/
+    );
+    expect(getMapData().travel).toMatchObject({ mode: 'transit', walk: 'to' });
+  });
+
+  it('maps the walk from the stop when asked: it starts at the last stop, named with its line', async () => {
+    const pullArea = vi.fn(async () => ({
+      elements: ELEMENTS(),
+      bytes: 188956,
+    }));
+    await toStepTwo({ pullArea });
+    choose('tactileMapTravel-transit');
+    $('tactileMapFindJourneys').click();
+    await vi.waitFor(
+      () => expect($('tactileMapJourneys').hidden).toBe(false),
+      SETTLE
+    );
+    choose('tactileMapJourney-3');
+    choose('tactileMapWhichWalk-from');
+    next().click();
+    next().click();
+    $('tactileMapMake').click();
+    await vi.waitFor(() => expect(getMapData()).not.toBeNull(), SETTLE);
+    const box = pullArea.mock.calls[0][0].box;
+    const last = JSON.parse(TRANSIT).itineraries[2].legs[3].to;
+    expect(last.name).toBe('Symphony');
+    expect(last.lat).toBeGreaterThan(box.south);
+    expect(last.lat).toBeLessThan(box.north);
+    expect(getMapData().place.name).toBe('Symphony');
+    expect(getMapData().travel).toMatchObject({
+      walk: 'from',
+      stopName: 'Symphony, 2 Line',
+    });
+  });
+
+  it('says what went wrong when the planner refuses, and keeps Next held', async () => {
+    const refusing = vi.fn(async () => {
+      const e = new Error('rate');
+      e.code = 'rate';
+      throw e;
+    });
+    mount({ planJourneys: refusing });
+    await pickFrom();
+    await new Promise((r) => setTimeout(r, 1100));
+    await pickTo();
+    next().click();
+    choose('tactileMapTravel-transit');
+    $('tactileMapFindJourneys').click();
+    await vi.waitFor(
+      () =>
+        expect(addressStatus()).toBe(
+          'The journey planner asks for a moment between searches. Try again shortly.'
+        ),
+      SETTLE
+    );
+    expect($('tactileMapJourneys').hidden).toBe(true);
+    expect(next().disabled).toBe(true);
   });
 });

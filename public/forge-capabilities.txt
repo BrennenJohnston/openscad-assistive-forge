@@ -47,11 +47,12 @@ build: __BUILD_STAMP__
 allowed: self, data:, raw.githubusercontent.com, media.githubusercontent.com,
          *.github.io, *.gitlab.io, *.pages.dev,
          tiles.openstreetmap.us, overpass-api.de, maps.mail.ru,
-         nominatim.openstreetmap.org, s3.amazonaws.com
-         (the last five are the map tools' own: OpenStreetMap data from
+         nominatim.openstreetmap.org, s3.amazonaws.com, api.transitous.org
+         (the last six are the map tools' own: OpenStreetMap data from
          OpenStreetMap US's map tiles, and from two Overpass servers only
-         when the tiles fail, the address search, and terrain tiles, fetched
-         only when a person asks for a map)
+         when the tiles fail, the address search, terrain tiles, and a route
+         map's journeys from Transitous, fetched only when a person asks
+         for a map)
 refused: everything else, including GitHub Release assets and object storage
 inline:  ?manifest=data:application/json;base64,... works; keep the whole URL
          under 8 KB

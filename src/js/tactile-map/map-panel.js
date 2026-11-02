@@ -268,6 +268,8 @@ class MapPanel {
     // The address section: its geocoder (a test's stub, else the lazy
     // chunk loaded on the first press) and the place last picked.
     this.searchPlaces = options.searchPlaces || null;
+    this.planJourneys = options.planJourneys || null;
+    this.transitPlanner = null;
     this.pullArea = options.pullArea || null;
     // A test's stand-ins: the terrain host (loadTiles' fetch) or the
     // height reader itself.
@@ -335,6 +337,7 @@ class MapPanel {
         }),
       onChange: () => this.steps?.refresh(),
       plateSize: () => ({ w: this.plan.size.w, h: this.plan.size.h }),
+      planJourneys: (ask) => this.journeys(ask),
       onSteep: (on, gradePct) => {
         this.markSteep(on, gradePct).catch((err) => {
           this.sayAddress(err?.message || String(err), true);
@@ -1001,7 +1004,7 @@ class MapPanel {
       fill(s5, plates);
     } else if (type.key === 'route') {
       fill(s1, [a.where, a.to]);
-      fill(s2, [a.steps]);
+      fill(s2, [a.travel, a.steps]);
       fill(s3, [a.landmarks]);
       fill(s4, [a.make]);
       fill(s5, plates);
@@ -1125,10 +1128,29 @@ class MapPanel {
     if (key === 'drawing' && index === 0 && !this.holdsMapFile()) {
       return WORKFLOW_STRINGS.needDrawing;
     }
+    if (key === 'route' && index === 1) {
+      const travel = this.address?.getTravel();
+      if (travel?.mode === 'transit' && !travel.journey) {
+        return WORKFLOW_STRINGS.needJourney;
+      }
+    }
     if (key !== 'drawing' && index === 3 && this.source !== 'draft') {
       return WORKFLOW_STRINGS.needMap;
     }
     return null;
+  }
+
+  /**
+   * Journeys by bus and train: a stub when a test handed one in, else the
+   * planner from the lazy transit chunk, kept for the session.
+   */
+  async journeys(ask) {
+    if (this.planJourneys) return this.planJourneys(ask);
+    if (!this.transitPlanner) {
+      const { createTransitPlanner } = await import('./transit.js');
+      this.transitPlanner = createTransitPlanner();
+    }
+    return this.transitPlanner.planJourneys(ask);
   }
 
   /** The geocoder: a stub when a test handed one in, else the lazy chunk. */
@@ -1237,6 +1259,9 @@ class MapPanel {
     const from = short(osm.place);
     const to = short(osm.to);
     const { draftRoutePlan } = await import('./plan-from-route.js');
+    // A walk of a trip by bus and train ends, or starts, at its stop.
+    const travel = osm.travel;
+    const stop = travel?.stopName ? { name: travel.stopName } : null;
     const { plan, counts } = draftRoutePlan({
       elements: osm.elements,
       from: osm.place,
@@ -1244,6 +1269,8 @@ class MapPanel {
       size: { w: this.plan.size.w, h: this.plan.size.h },
       landmarks: osm.landmarks,
       avoidSteps: this.address?.avoidSteps() ?? false,
+      fromStop: travel?.walk === 'from' ? stop : null,
+      toStop: travel?.walk === 'to' ? stop : null,
     });
     if (!plan) {
       this.sayAddress(ADDRESS_STRINGS.noWalk(from, to), true);
@@ -1267,7 +1294,9 @@ class MapPanel {
         counts.steps,
         plan.size.w,
         plan.size.h
-      ) + this.bigNote(osm)
+      ) +
+        (travel?.words ? ADDRESS_STRINGS.journeyNote(travel.words) : '') +
+        this.bigNote(osm)
     );
     await this.steepIfWanted();
     await this.openDraft();

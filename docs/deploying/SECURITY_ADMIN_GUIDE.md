@@ -48,7 +48,7 @@ Content-Security-Policy:
   style-src 'self';
   img-src 'self' data: blob:;
   font-src 'self';
-  connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev https://tiles.openstreetmap.us https://overpass-api.de https://maps.mail.ru https://nominatim.openstreetmap.org https://s3.amazonaws.com;
+  connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev https://tiles.openstreetmap.us https://overpass-api.de https://maps.mail.ru https://nominatim.openstreetmap.org https://s3.amazonaws.com https://api.transitous.org;
   frame-ancestors 'none';
   object-src 'none';
   base-uri 'self';
@@ -66,7 +66,7 @@ Content-Security-Policy:
 | `script-src 'wasm-unsafe-eval'` | Required | OpenSCAD WASM needs to compile code at runtime |
 | `worker-src blob:` | Required | Web Worker blob URLs for WASM processing |
 | `style-src 'self'` | Tightened | No `unsafe-inline` needed. CodeMirror's injected `<style>` is blocked and its rules are re-homed into a constructable stylesheet; expect one `style-src-elem` violation from that element |
-| `connect-src` (external origins) | Required | Manifest sharing (`?manifest=`) fetches project files from author-hosted repos on GitHub, GitLab, and Cloudflare Pages |
+| `connect-src` (external origins) | Required | Manifest sharing (`?manifest=`) fetches project files from author-hosted repos on GitHub, GitLab, and Cloudflare Pages; the Tactile Map Designer reaches its map data hosts (OpenStreetMap US's tiles, two Overpass servers, Nominatim, terrain tiles on AWS, Transitous) only when a person makes a map |
 | `frame-ancestors 'none'` | Security | Prevents clickjacking via framing |
 
 ### CSP Reporting

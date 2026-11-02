@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A place map is drawn at a named scale instead of a radius: a building and
   its doors, a block, a few blocks, a neighborhood, or a custom ratio, each
   saying how much ground fits on the plate and what draws at it.
+- A route map can be a trip by bus and train, planned by Transitous, the
+  open journey planner, as well as a walk.
 
 ### Fixed
 

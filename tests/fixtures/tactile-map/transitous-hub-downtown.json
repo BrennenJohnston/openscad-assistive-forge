@@ -1,0 +1,3815 @@
+{
+ "from": {
+  "name": "START",
+  "lat": 47.6553685,
+  "lon": -122.3051021
+ },
+ "to": {
+  "name": "END",
+  "lat": 47.6062,
+  "lon": -122.3321
+ },
+ "direct": [],
+ "itineraries": [
+  {
+   "duration": 1920,
+   "transfers": 0,
+   "legs": [
+    {
+     "mode": "WALK",
+     "duration": 900,
+     "distance": 1021.0,
+     "from": {
+      "name": "START",
+      "lat": 47.6553685,
+      "lon": -122.3051021
+     },
+     "to": {
+      "name": "U District",
+      "lat": 47.659873999999995,
+      "lon": -122.31419000000001,
+      "stopId": "us-wa-Sound-Transit_990001"
+     },
+     "legGeometry": {
+      "points": "qws{yAzh{ghFOCNqB??eL[??wEE??gFH??{EL??{DP??ZtK??GbE??QhM??OjG??EvA??{KbR??eCdD??uCzE??kBzC??}AhC??yFhJ??y@pA??uA|B??eBpC??iAfB??Yh@??mFvI??mAlB??k@~@??MR??a@r@??o@bA??oIbN??}IzN??}IvN??}CbF??KP??_@p@??uBrD??wCbF??S\\??U^??CF??q@hA??Wb@??aA~A??{LbS??mZfD??y@uA??iB{C??gCvCsA`Ak@d@??c@p@{@lCk@pD??uEhHeAxAkCrDwFlJcIbQgCtE??EhG??Aj@??CrC??CvC???hA??AzB??aMpR??}JlO??Q\\??C~E??GnR??EnQ??GlQ??GzO???bCA`C??kDC??CFMb@??Uj@??K`F??KlE???nA???nF???tC??C`N?n@??AnBEfY??@p@??AzC??AxB??CfA??Af@??OlZ??G`S??CnG",
+      "precision": 6
+     },
+     "steps": [
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 23.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 13.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 11.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 15.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 17.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 32.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 19.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 26.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 27.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 27.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 0.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 34.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 49.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Klickitat Lane",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Klickitat Lane",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 16.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 90.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 34.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 29.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 23.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 22.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 22.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 36.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 33.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 24.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      }
+     ]
+    },
+    {
+     "mode": "TRAM",
+     "duration": 660,
+     "headsign": "Federal Way Downtown",
+     "agencyName": "Sound Transit",
+     "routeShortName": "1 Line",
+     "from": {
+      "name": "U District",
+      "lat": 47.659873999999995,
+      "lon": -122.31419000000001,
+      "stopId": "us-wa-Sound-Transit_990001"
+     },
+     "to": {
+      "name": "Symphony",
+      "lat": 47.607245999999996,
+      "lon": -122.335754,
+      "stopId": "us-wa-Sound-Transit_455"
+     },
+     "legGeometry": {
+      "points": "cu|{yAz{mhhFb[vBzFSrF_@rFo@jF{@lFoAhFcBdFwBdF_DtEsCrEkDlEgEnEoE|DgFtD{EfDcGfDcGvCkHpCwGdCuH|BuHhB_IbBkIrAgIrAoKjAkMrU_zCjB_SzAsNbBsNnB_N~B_NjCkMvCaMfDaMnDwL|DoKdEwLvEgKzEcKbF{JrFsIzFgJ~FkIlGsHxGkHzGwGfHoGhHwFpH{E~H{EvHsD~HsDjI_DjIkCnIcBnIcBvIcAhL}@lOq@boEsD~pByA|^IlVHpVp@hVf@lVbBlVnAbVvBfV~CbV~CbV|DbVdE~UfFxUnFrUvGtUvGrUvHjUfIdUfJdUfJzTzJzTbLpTbLpTvLfT~MbTfNvSvNfXfSnnZfoUbUfPbMjHrMjHjMbGzMnFbNpE~MdEdNvClN~ChNbBnNbBpVnA~SRfaC{@~MR~LR~Ip@|Iz@|IxAxIvBtIvBnI~CnIrDfIrDfIzEvHbFvHzFpHbGhHjHxGjHxG~HnGrIbGzI|F|JlF|JjFjKrEzKnEbLdEvLtDvLnDjMzCrMtCvM`ChNvB|NbB~MbBrNjAfO~@fOp@fO\\fORfOJfOKfOSpOg@fOg@dO_A~NsA|N{A|NoAnKwLf|@iAzJe@jHWjHCjH?jHRvH\\rHl@vG~@jHhA~H|BnKhDnKtbBvmFjMzc@nn@vpBvBpE~BdEnCjDrCjCjCnArDbB~Cf@rDRtFSbFwAlE{BjGoEzqA}jAjWkWz|@gw@zDdE",
+      "precision": 6
+     }
+    },
+    {
+     "mode": "WALK",
+     "duration": 360,
+     "distance": 397.0,
+     "from": {
+      "name": "Symphony",
+      "lat": 47.607245999999996,
+      "lon": -122.335754,
+      "stopId": "us-wa-Sound-Transit_455"
+     },
+     "to": {
+      "name": "END",
+      "lat": 47.6062,
+      "lon": -122.3321
+     },
+     "legGeometry": {
+      "points": "m}uxyAx{wihFfHoG??hB_B??Fk@??`CuB??rAiA??{AuE??oAwD??Bi@??hc@}_@??BgA??iIgW??e@yA??oA{D??iGsR??`@]??hByA??`BuA??^[??k@oA??UcA??e@sB??gA_F??DmA??jD{C??xH_H??tG_G??nHyG??\\u@??h@G??vBiB??tAiA??ZY??iNqc@??\\[",
+      "precision": 6
+     },
+     "steps": [
+      {
+       "streetName": "",
+       "distance": 19.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 76.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 34.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 28.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 11.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 52.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "duration": 1920,
+   "transfers": 0,
+   "legs": [
+    {
+     "mode": "WALK",
+     "duration": 900,
+     "distance": 1021.0,
+     "from": {
+      "name": "START",
+      "lat": 47.6553685,
+      "lon": -122.3051021
+     },
+     "to": {
+      "name": "U District",
+      "lat": 47.659873999999995,
+      "lon": -122.31419000000001,
+      "stopId": "us-wa-Sound-Transit_990001"
+     },
+     "legGeometry": {
+      "points": "qws{yAzh{ghFOCNqB??eL[??wEE??gFH??{EL??{DP??ZtK??GbE??QhM??OjG??EvA??{KbR??eCdD??uCzE??kBzC??}AhC??yFhJ??y@pA??uA|B??eBpC??iAfB??Yh@??mFvI??mAlB??k@~@??MR??a@r@??o@bA??oIbN??}IzN??}IvN??}CbF??KP??_@p@??uBrD??wCbF??S\\??U^??CF??q@hA??Wb@??aA~A??{LbS??mZfD??y@uA??iB{C??gCvCsA`Ak@d@??c@p@{@lCk@pD??uEhHeAxAkCrDwFlJcIbQgCtE??EhG??Aj@??CrC??CvC???hA??AzB??aMpR??}JlO??Q\\??C~E??GnR??EnQ??GlQ??GzO???bCA`C??kDC??CFMb@??Uj@??K`F??KlE???nA???nF???tC??C`N?n@??AnBEfY??@p@??AzC??AxB??CfA??Af@??OlZ??G`S??CnG",
+      "precision": 6
+     },
+     "steps": [
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 23.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 13.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 11.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 15.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 17.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 32.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 19.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 26.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 27.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 27.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 0.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 34.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 49.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Klickitat Lane",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Klickitat Lane",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 16.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 90.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 34.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 29.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 23.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 22.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 22.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 36.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 33.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 24.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      }
+     ]
+    },
+    {
+     "mode": "TRAM",
+     "duration": 660,
+     "headsign": "Downtown Redmond",
+     "agencyName": "Sound Transit",
+     "routeShortName": "2 Line",
+     "from": {
+      "name": "U District",
+      "lat": 47.659873999999995,
+      "lon": -122.31419000000001,
+      "stopId": "us-wa-Sound-Transit_990001"
+     },
+     "to": {
+      "name": "Symphony",
+      "lat": 47.607245999999996,
+      "lon": -122.335754,
+      "stopId": "us-wa-Sound-Transit_455"
+     },
+     "legGeometry": {
+      "points": "cu|{yAz{mhhFb[vBzFSrF_@rFo@jF{@lFoAhFcBdFwBdF_DtEsCrEkDlEgEnEoE|DgFtD{EfDcGfDcGvCkHpCwGdCuH|BuHhB_IbBkIrAgIrAoKjAkMrU_zCjB_SzAsNbBsNnB_N~B_NjCkMvCaMfDaMnDwL|DoKdEwLvEgKzEcKbF{JrFsIzFgJ~FkIlGsHxGkHzGwGfHoGhHwFpH{E~H{EvHsD~HsDjI_DjIkCnIcBnIcBvIcAhL}@lOq@boEsD~pByA|^IlVHpVp@hVf@lVbBlVnAbVvBfV~CbV~CbV|DbVdE~UfFxUnFrUvGtUvGrUvHjUfIdUfJdUfJzTzJzTbLpTbLpTvLfT~MbTfNvSvNfXfSnnZfoUbUfPbMjHrMjHjMbGzMnFbNpE~MdEdNvClN~ChNbBnNbBpVnA~SRfaC{@~MR~LR~Ip@|Iz@|IxAxIvBtIvBnI~CnIrDfIrDfIzEvHbFvHzFpHbGhHjHxGjHxG~HnGrIbGzI|F|JlF|JjFjKrEzKnEbLdEvLtDvLnDjMzCrMtCvM`ChNvB|NbB~MbBrNjAfO~@fOp@fO\\fORfOJfOKfOSpOg@fOg@dO_A~NsA|N{A|NoAnKwLf|@iAzJe@jHWjHCjH?jHRvH\\rHl@vG~@jHhA~H|BnKhDnKtbBvmFjMzc@nn@vpBvBpE~BdEnCjDrCjCjCnArDbB~Cf@rDRtFSbFwAlE{BjGoEzqA}jAjWkWz|@gw@zDdE",
+      "precision": 6
+     }
+    },
+    {
+     "mode": "WALK",
+     "duration": 360,
+     "distance": 397.0,
+     "from": {
+      "name": "Symphony",
+      "lat": 47.607245999999996,
+      "lon": -122.335754,
+      "stopId": "us-wa-Sound-Transit_455"
+     },
+     "to": {
+      "name": "END",
+      "lat": 47.6062,
+      "lon": -122.3321
+     },
+     "legGeometry": {
+      "points": "m}uxyAx{wihFfHoG??hB_B??Fk@??`CuB??rAiA??{AuE??oAwD??Bi@??hc@}_@??BgA??iIgW??e@yA??oA{D??iGsR??`@]??hByA??`BuA??^[??k@oA??UcA??e@sB??gA_F??DmA??jD{C??xH_H??tG_G??nHyG??\\u@??h@G??vBiB??tAiA??ZY??iNqc@??\\[",
+      "precision": 6
+     },
+     "steps": [
+      {
+       "streetName": "",
+       "distance": 19.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 76.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 34.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 28.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 11.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 52.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "duration": 1320,
+   "transfers": 1,
+   "legs": [
+    {
+     "mode": "WALK",
+     "duration": 120,
+     "distance": 102.0,
+     "from": {
+      "name": "START",
+      "lat": 47.6553685,
+      "lon": -122.3051021
+     },
+     "to": {
+      "name": "East Stevens Way NE & Benton Ln",
+      "lat": 47.654503,
+      "lon": -122.30512999999999,
+      "stopId": "us-wa-Metro-Transit_75403"
+     },
+     "legGeometry": {
+      "points": "qws{yAzh{ghFrBd@??TgC??pGjA??pAf@jFpC??bK`M??hHzD??~DfB",
+      "precision": 6
+     },
+     "steps": [
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 16.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 19.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 27.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 11.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      }
+     ]
+    },
+    {
+     "mode": "BUS",
+     "duration": 60,
+     "headsign": "University District",
+     "agencyName": "Metro Transit",
+     "routeShortName": "72",
+     "from": {
+      "name": "East Stevens Way NE & Benton Ln",
+      "lat": 47.654503,
+      "lon": -122.30512999999999,
+      "stopId": "us-wa-Metro-Transit_75403"
+     },
+     "to": {
+      "name": "Stevens Way & Rainier Vista NE",
+      "lat": 47.652390000000004,
+      "lon": -122.306305,
+      "stopId": "us-wa-Metro-Transit_75402"
+     },
+     "legGeometry": {
+      "points": "mer{yAre|ghFd@sDnDnAfFz@bEf@zG?tM]xF?xD\\fInA`FvAvGbCzEjCfE~CzDjCtD|DnDfEbF`GdDnGxDrIhBrDVz@sBlB",
+      "precision": 6
+     }
+    },
+    {
+     "mode": "WALK",
+     "duration": 300,
+     "from": {
+      "name": "Stevens Way & Rainier Vista NE",
+      "lat": 47.652390000000004,
+      "lon": -122.306305,
+      "stopId": "us-wa-Metro-Transit_75402"
+     },
+     "to": {
+      "name": "Univ of Washington",
+      "lat": 47.649350000000005,
+      "lon": -122.303795,
+      "stopId": "us-wa-Sound-Transit_99604"
+     },
+     "legGeometry": {
+      "points": "",
+      "precision": 6
+     }
+    },
+    {
+     "mode": "TRAM",
+     "duration": 480,
+     "headsign": "Downtown Redmond",
+     "agencyName": "Sound Transit",
+     "routeShortName": "2 Line",
+     "from": {
+      "name": "Univ of Washington",
+      "lat": 47.649350000000005,
+      "lon": -122.303795,
+      "stopId": "us-wa-Sound-Transit_99604"
+     },
+     "to": {
+      "name": "Symphony",
+      "lat": 47.607245999999996,
+      "lon": -122.335754,
+      "stopId": "us-wa-Sound-Transit_455"
+     },
+     "legGeometry": {
+      "points": "kch{yAdryghF?xA~pByA|^IlVHpVp@hVf@lVbBlVnAbVvBfV~CbV~CbV|DbVdE~UfFxUnFrUvGtUvGrUvHjUfIdUfJdUfJzTzJzTbLpTbLpTvLfT~MbTfNvSvNfXfSnnZfoUbUfPbMjHrMjHjMbGzMnFbNpE~MdEdNvClN~ChNbBnNbBpVnA~SRfaC{@~MR~LR~Ip@|Iz@|IxAxIvBtIvBnI~CnIrDfIrDfIzEvHbFvHzFpHbGhHjHxGjHxG~HnGrIbGzI|F|JlF|JjFjKrEzKnEbLdEvLtDvLnDjMzCrMtCvM`ChNvB|NbB~MbBrNjAfO~@fOp@fO\\fORfOJfOKfOSpOg@fOg@dO_A~NsA|N{A|NoAnKwLf|@iAzJe@jHWjHCjH?jHRvH\\rHl@vG~@jHhA~H|BnKhDnKtbBvmFjMzc@nn@vpBvBpE~BdEnCjDrCjCjCnArDbB~Cf@rDRtFSbFwAlE{BjGoEzqA}jAjWkWz|@gw@zDdE",
+      "precision": 6
+     }
+    },
+    {
+     "mode": "WALK",
+     "duration": 360,
+     "distance": 397.0,
+     "from": {
+      "name": "Symphony",
+      "lat": 47.607245999999996,
+      "lon": -122.335754,
+      "stopId": "us-wa-Sound-Transit_455"
+     },
+     "to": {
+      "name": "END",
+      "lat": 47.6062,
+      "lon": -122.3321
+     },
+     "legGeometry": {
+      "points": "m}uxyAx{wihFfHoG??hB_B??Fk@??`CuB??rAiA??{AuE??oAwD??Bi@??hc@}_@??BgA??iIgW??e@yA??oA{D??iGsR??`@]??hByA??`BuA??^[??k@oA??UcA??e@sB??gA_F??DmA??jD{C??xH_H??tG_G??nHyG??\\u@??h@G??vBiB??tAiA??ZY??iNqc@??\\[",
+      "precision": 6
+     },
+     "steps": [
+      {
+       "streetName": "",
+       "distance": 19.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 76.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 34.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 28.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 11.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 52.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "duration": 1920,
+   "transfers": 0,
+   "legs": [
+    {
+     "mode": "WALK",
+     "duration": 900,
+     "distance": 1021.0,
+     "from": {
+      "name": "START",
+      "lat": 47.6553685,
+      "lon": -122.3051021
+     },
+     "to": {
+      "name": "U District",
+      "lat": 47.659873999999995,
+      "lon": -122.31419000000001,
+      "stopId": "us-wa-Sound-Transit_990001"
+     },
+     "legGeometry": {
+      "points": "qws{yAzh{ghFOCNqB??eL[??wEE??gFH??{EL??{DP??ZtK??GbE??QhM??OjG??EvA??{KbR??eCdD??uCzE??kBzC??}AhC??yFhJ??y@pA??uA|B??eBpC??iAfB??Yh@??mFvI??mAlB??k@~@??MR??a@r@??o@bA??oIbN??}IzN??}IvN??}CbF??KP??_@p@??uBrD??wCbF??S\\??U^??CF??q@hA??Wb@??aA~A??{LbS??mZfD??y@uA??iB{C??gCvCsA`Ak@d@??c@p@{@lCk@pD??uEhHeAxAkCrDwFlJcIbQgCtE??EhG??Aj@??CrC??CvC???hA??AzB??aMpR??}JlO??Q\\??C~E??GnR??EnQ??GlQ??GzO???bCA`C??kDC??CFMb@??Uj@??K`F??KlE???nA???nF???tC??C`N?n@??AnBEfY??@p@??AzC??AxB??CfA??Af@??OlZ??G`S??CnG",
+      "precision": 6
+     },
+     "steps": [
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 23.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 13.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 11.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 15.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 17.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 32.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 19.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 26.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 27.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 27.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 0.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 34.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 49.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Klickitat Lane",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Klickitat Lane",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 16.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 90.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 34.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 29.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 23.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 22.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 22.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 36.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 33.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 24.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      }
+     ]
+    },
+    {
+     "mode": "TRAM",
+     "duration": 660,
+     "headsign": "Federal Way Downtown",
+     "agencyName": "Sound Transit",
+     "routeShortName": "1 Line",
+     "from": {
+      "name": "U District",
+      "lat": 47.659873999999995,
+      "lon": -122.31419000000001,
+      "stopId": "us-wa-Sound-Transit_990001"
+     },
+     "to": {
+      "name": "Symphony",
+      "lat": 47.607245999999996,
+      "lon": -122.335754,
+      "stopId": "us-wa-Sound-Transit_455"
+     },
+     "legGeometry": {
+      "points": "cu|{yAz{mhhFb[vBzFSrF_@rFo@jF{@lFoAhFcBdFwBdF_DtEsCrEkDlEgEnEoE|DgFtD{EfDcGfDcGvCkHpCwGdCuH|BuHhB_IbBkIrAgIrAoKjAkMrU_zCjB_SzAsNbBsNnB_N~B_NjCkMvCaMfDaMnDwL|DoKdEwLvEgKzEcKbF{JrFsIzFgJ~FkIlGsHxGkHzGwGfHoGhHwFpH{E~H{EvHsD~HsDjI_DjIkCnIcBnIcBvIcAhL}@lOq@boEsD~pByA|^IlVHpVp@hVf@lVbBlVnAbVvBfV~CbV~CbV|DbVdE~UfFxUnFrUvGtUvGrUvHjUfIdUfJdUfJzTzJzTbLpTbLpTvLfT~MbTfNvSvNfXfSnnZfoUbUfPbMjHrMjHjMbGzMnFbNpE~MdEdNvClN~ChNbBnNbBpVnA~SRfaC{@~MR~LR~Ip@|Iz@|IxAxIvBtIvBnI~CnIrDfIrDfIzEvHbFvHzFpHbGhHjHxGjHxG~HnGrIbGzI|F|JlF|JjFjKrEzKnEbLdEvLtDvLnDjMzCrMtCvM`ChNvB|NbB~MbBrNjAfO~@fOp@fO\\fORfOJfOKfOSpOg@fOg@dO_A~NsA|N{A|NoAnKwLf|@iAzJe@jHWjHCjH?jHRvH\\rHl@vG~@jHhA~H|BnKhDnKtbBvmFjMzc@nn@vpBvBpE~BdEnCjDrCjCjCnArDbB~Cf@rDRtFSbFwAlE{BjGoEzqA}jAjWkWz|@gw@zDdE",
+      "precision": 6
+     }
+    },
+    {
+     "mode": "WALK",
+     "duration": 360,
+     "distance": 397.0,
+     "from": {
+      "name": "Symphony",
+      "lat": 47.607245999999996,
+      "lon": -122.335754,
+      "stopId": "us-wa-Sound-Transit_455"
+     },
+     "to": {
+      "name": "END",
+      "lat": 47.6062,
+      "lon": -122.3321
+     },
+     "legGeometry": {
+      "points": "m}uxyAx{wihFfHoG??hB_B??Fk@??`CuB??rAiA??{AuE??oAwD??Bi@??hc@}_@??BgA??iIgW??e@yA??oA{D??iGsR??`@]??hByA??`BuA??^[??k@oA??UcA??e@sB??gA_F??DmA??jD{C??xH_H??tG_G??nHyG??\\u@??h@G??vBiB??tAiA??ZY??iNqc@??\\[",
+      "precision": 6
+     },
+     "steps": [
+      {
+       "streetName": "",
+       "distance": 19.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 76.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 34.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 28.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 11.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 52.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "duration": 1920,
+   "transfers": 0,
+   "legs": [
+    {
+     "mode": "WALK",
+     "duration": 900,
+     "distance": 1021.0,
+     "from": {
+      "name": "START",
+      "lat": 47.6553685,
+      "lon": -122.3051021
+     },
+     "to": {
+      "name": "U District",
+      "lat": 47.659873999999995,
+      "lon": -122.31419000000001,
+      "stopId": "us-wa-Sound-Transit_990001"
+     },
+     "legGeometry": {
+      "points": "qws{yAzh{ghFOCNqB??eL[??wEE??gFH??{EL??{DP??ZtK??GbE??QhM??OjG??EvA??{KbR??eCdD??uCzE??kBzC??}AhC??yFhJ??y@pA??uA|B??eBpC??iAfB??Yh@??mFvI??mAlB??k@~@??MR??a@r@??o@bA??oIbN??}IzN??}IvN??}CbF??KP??_@p@??uBrD??wCbF??S\\??U^??CF??q@hA??Wb@??aA~A??{LbS??mZfD??y@uA??iB{C??gCvCsA`Ak@d@??c@p@{@lCk@pD??uEhHeAxAkCrDwFlJcIbQgCtE??EhG??Aj@??CrC??CvC???hA??AzB??aMpR??}JlO??Q\\??C~E??GnR??EnQ??GlQ??GzO???bCA`C??kDC??CFMb@??Uj@??K`F??KlE???nA???nF???tC??C`N?n@??AnBEfY??@p@??AzC??AxB??CfA??Af@??OlZ??G`S??CnG",
+      "precision": 6
+     },
+     "steps": [
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 23.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 13.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 11.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 15.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 17.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 32.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 19.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 26.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 27.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 27.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 12.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 0.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "King Lane Northeast",
+       "distance": 34.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 49.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Klickitat Lane",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Klickitat Lane",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 16.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 90.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 34.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 29.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 23.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 22.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 22.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Stevens Lane",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 36.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 33.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 24.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      }
+     ]
+    },
+    {
+     "mode": "TRAM",
+     "duration": 660,
+     "headsign": "Downtown Redmond",
+     "agencyName": "Sound Transit",
+     "routeShortName": "2 Line",
+     "from": {
+      "name": "U District",
+      "lat": 47.659873999999995,
+      "lon": -122.31419000000001,
+      "stopId": "us-wa-Sound-Transit_990001"
+     },
+     "to": {
+      "name": "Symphony",
+      "lat": 47.607245999999996,
+      "lon": -122.335754,
+      "stopId": "us-wa-Sound-Transit_455"
+     },
+     "legGeometry": {
+      "points": "cu|{yAz{mhhFb[vBzFSrF_@rFo@jF{@lFoAhFcBdFwBdF_DtEsCrEkDlEgEnEoE|DgFtD{EfDcGfDcGvCkHpCwGdCuH|BuHhB_IbBkIrAgIrAoKjAkMrU_zCjB_SzAsNbBsNnB_N~B_NjCkMvCaMfDaMnDwL|DoKdEwLvEgKzEcKbF{JrFsIzFgJ~FkIlGsHxGkHzGwGfHoGhHwFpH{E~H{EvHsD~HsDjI_DjIkCnIcBnIcBvIcAhL}@lOq@boEsD~pByA|^IlVHpVp@hVf@lVbBlVnAbVvBfV~CbV~CbV|DbVdE~UfFxUnFrUvGtUvGrUvHjUfIdUfJdUfJzTzJzTbLpTbLpTvLfT~MbTfNvSvNfXfSnnZfoUbUfPbMjHrMjHjMbGzMnFbNpE~MdEdNvClN~ChNbBnNbBpVnA~SRfaC{@~MR~LR~Ip@|Iz@|IxAxIvBtIvBnI~CnIrDfIrDfIzEvHbFvHzFpHbGhHjHxGjHxG~HnGrIbGzI|F|JlF|JjFjKrEzKnEbLdEvLtDvLnDjMzCrMtCvM`ChNvB|NbB~MbBrNjAfO~@fOp@fO\\fORfOJfOKfOSpOg@fOg@dO_A~NsA|N{A|NoAnKwLf|@iAzJe@jHWjHCjH?jHRvH\\rHl@vG~@jHhA~H|BnKhDnKtbBvmFjMzc@nn@vpBvBpE~BdEnCjDrCjCjCnArDbB~Cf@rDRtFSbFwAlE{BjGoEzqA}jAjWkWz|@gw@zDdE",
+      "precision": 6
+     }
+    },
+    {
+     "mode": "WALK",
+     "duration": 360,
+     "distance": 397.0,
+     "from": {
+      "name": "Symphony",
+      "lat": 47.607245999999996,
+      "lon": -122.335754,
+      "stopId": "us-wa-Sound-Transit_455"
+     },
+     "to": {
+      "name": "END",
+      "lat": 47.6062,
+      "lon": -122.3321
+     },
+     "legGeometry": {
+      "points": "m}uxyAx{wihFfHoG??hB_B??Fk@??`CuB??rAiA??{AuE??oAwD??Bi@??hc@}_@??BgA??iIgW??e@yA??oA{D??iGsR??`@]??hByA??`BuA??^[??k@oA??UcA??e@sB??gA_F??DmA??jD{C??xH_H??tG_G??nHyG??\\u@??h@G??vBiB??tAiA??ZY??iNqc@??\\[",
+      "precision": 6
+     },
+     "steps": [
+      {
+       "streetName": "",
+       "distance": 19.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 76.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 34.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 28.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 11.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 52.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "duration": 1320,
+   "transfers": 1,
+   "legs": [
+    {
+     "mode": "WALK",
+     "duration": 120,
+     "distance": 102.0,
+     "from": {
+      "name": "START",
+      "lat": 47.6553685,
+      "lon": -122.3051021
+     },
+     "to": {
+      "name": "East Stevens Way NE & Benton Ln",
+      "lat": 47.654503,
+      "lon": -122.30512999999999,
+      "stopId": "us-wa-Metro-Transit_75403"
+     },
+     "legGeometry": {
+      "points": "qws{yAzh{ghFrBd@??TgC??pGjA??pAf@jFpC??bK`M??hHzD??~DfB",
+      "precision": 6
+     },
+     "steps": [
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 16.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 19.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 27.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 11.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      }
+     ]
+    },
+    {
+     "mode": "BUS",
+     "duration": 60,
+     "headsign": "Bitter Lake Pinehurst Station",
+     "agencyName": "Metro Transit",
+     "routeShortName": "77",
+     "from": {
+      "name": "East Stevens Way NE & Benton Ln",
+      "lat": 47.654503,
+      "lon": -122.30512999999999,
+      "stopId": "us-wa-Metro-Transit_75403"
+     },
+     "to": {
+      "name": "Stevens Way & Rainier Vista NE",
+      "lat": 47.652390000000004,
+      "lon": -122.306305,
+      "stopId": "us-wa-Metro-Transit_75402"
+     },
+     "legGeometry": {
+      "points": "mer{yAre|ghFd@sDnDnAfFz@bEf@zG?tM]xF?xD\\fInA`FvAvGbCzEjCfE~CzDjCtD|DnDfEbF`GdDnGxDrIhBrDVz@sBlB",
+      "precision": 6
+     }
+    },
+    {
+     "mode": "WALK",
+     "duration": 300,
+     "from": {
+      "name": "Stevens Way & Rainier Vista NE",
+      "lat": 47.652390000000004,
+      "lon": -122.306305,
+      "stopId": "us-wa-Metro-Transit_75402"
+     },
+     "to": {
+      "name": "Univ of Washington",
+      "lat": 47.649350000000005,
+      "lon": -122.303795,
+      "stopId": "us-wa-Sound-Transit_99604"
+     },
+     "legGeometry": {
+      "points": "",
+      "precision": 6
+     }
+    },
+    {
+     "mode": "TRAM",
+     "duration": 480,
+     "headsign": "Downtown Redmond",
+     "agencyName": "Sound Transit",
+     "routeShortName": "2 Line",
+     "from": {
+      "name": "Univ of Washington",
+      "lat": 47.649350000000005,
+      "lon": -122.303795,
+      "stopId": "us-wa-Sound-Transit_99604"
+     },
+     "to": {
+      "name": "Symphony",
+      "lat": 47.607245999999996,
+      "lon": -122.335754,
+      "stopId": "us-wa-Sound-Transit_455"
+     },
+     "legGeometry": {
+      "points": "kch{yAdryghF?xA~pByA|^IlVHpVp@hVf@lVbBlVnAbVvBfV~CbV~CbV|DbVdE~UfFxUnFrUvGtUvGrUvHjUfIdUfJdUfJzTzJzTbLpTbLpTvLfT~MbTfNvSvNfXfSnnZfoUbUfPbMjHrMjHjMbGzMnFbNpE~MdEdNvClN~ChNbBnNbBpVnA~SRfaC{@~MR~LR~Ip@|Iz@|IxAxIvBtIvBnI~CnIrDfIrDfIzEvHbFvHzFpHbGhHjHxGjHxG~HnGrIbGzI|F|JlF|JjFjKrEzKnEbLdEvLtDvLnDjMzCrMtCvM`ChNvB|NbB~MbBrNjAfO~@fOp@fO\\fORfOJfOKfOSpOg@fOg@dO_A~NsA|N{A|NoAnKwLf|@iAzJe@jHWjHCjH?jHRvH\\rHl@vG~@jHhA~H|BnKhDnKtbBvmFjMzc@nn@vpBvBpE~BdEnCjDrCjCjCnArDbB~Cf@rDRtFSbFwAlE{BjGoEzqA}jAjWkWz|@gw@zDdE",
+      "precision": 6
+     }
+    },
+    {
+     "mode": "WALK",
+     "duration": 360,
+     "distance": 397.0,
+     "from": {
+      "name": "Symphony",
+      "lat": 47.607245999999996,
+      "lon": -122.335754,
+      "stopId": "us-wa-Sound-Transit_455"
+     },
+     "to": {
+      "name": "END",
+      "lat": 47.6062,
+      "lon": -122.3321
+     },
+     "legGeometry": {
+      "points": "m}uxyAx{wihFfHoG??hB_B??Fk@??`CuB??rAiA??{AuE??oAwD??Bi@??hc@}_@??BgA??iIgW??e@yA??oA{D??iGsR??`@]??hByA??`BuA??^[??k@oA??UcA??e@sB??gA_F??DmA??jD{C??xH_H??tG_G??nHyG??\\u@??h@G??vBiB??tAiA??ZY??iNqc@??\\[",
+      "precision": 6
+     },
+     "steps": [
+      {
+       "streetName": "",
+       "distance": 19.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 76.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 34.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 28.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 9.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 11.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 18.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 8.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 52.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

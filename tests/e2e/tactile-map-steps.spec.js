@@ -206,7 +206,7 @@ test.describe('the map workflows by keyboard', () => {
     await page.keyboard.press('Space');
     await axeClean(page, 'route step 1');
 
-    await nextStep(page, 2, 'How you walk');
+    await nextStep(page, 2, 'How you travel');
     await axeClean(page, 'route step 2');
     await nextStep(page, 3, 'What to show');
     await nextStep(page, 4, 'Make the map');

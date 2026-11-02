@@ -273,3 +273,52 @@ describe('a route map draft', () => {
     ).toBeNull();
   });
 });
+
+describe('a walk to or from a stop', () => {
+  // The 72's stop by the HUB, from Transitous's journey downtown.
+  const JOURNEYS = JSON.parse(
+    readFileSync(
+      'tests/fixtures/tactile-map/transitous-hub-downtown.json',
+      'utf8'
+    )
+  );
+  const bus = JOURNEYS.itineraries[2].legs[1];
+  const STOP = { lat: bus.from.lat, lon: bus.from.lon, name: bus.from.name };
+
+  it('ends the walk to the stop at a Transit stop named by the stop and its line, not a door', () => {
+    const { plan } = draftRoutePlan({
+      elements: ELEMENTS,
+      from: HUB,
+      to: STOP,
+      size: SIZE,
+      toStop: { name: `${STOP.name}, 72` },
+    });
+    const end = plan.features.find((f) => f.id === 'destination-stop');
+    expect(end).toMatchObject({
+      class: 'transit-stop',
+      kind: 'point',
+      name: 'East Stevens Way NE & Benton Ln, 72',
+      on: true,
+    });
+    expect(
+      plan.features.find((f) => f.id === 'destination-door')
+    ).toBeUndefined();
+    expect(plan.features.find((f) => f.id === 'you-are-here').on).toBe(true);
+  });
+
+  it('starts the walk from the stop at a Transit stop instead of You are here', () => {
+    const { plan } = draftRoutePlan({
+      elements: ELEMENTS,
+      from: STOP,
+      to: GATES,
+      size: SIZE,
+      fromStop: { name: `${STOP.name}, 72` },
+    });
+    const start = plan.features.find((f) => f.id === 'start-stop');
+    expect(start).toMatchObject({ class: 'transit-stop', on: true });
+    expect(plan.features.find((f) => f.id === 'you-are-here')).toBeUndefined();
+    expect(plan.features.find((f) => f.id === 'destination-door').on).toBe(
+      true
+    );
+  });
+});

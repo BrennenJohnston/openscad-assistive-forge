@@ -1,0 +1,228 @@
+{
+ "from": {
+  "name": "",
+  "lat": 47.6553685,
+  "lon": -122.3051021
+ },
+ "to": {
+  "name": "",
+  "lat": 47.652873,
+  "lon": -122.3044814
+ },
+ "direct": [
+  {
+   "duration": 324,
+   "transfers": 0,
+   "legs": [
+    {
+     "mode": "WALK",
+     "duration": 324,
+     "distance": 342.0,
+     "from": {
+      "name": "START",
+      "lat": 47.6553685,
+      "lon": -122.3051021
+     },
+     "to": {
+      "name": "END",
+      "lat": 47.652873,
+      "lon": -122.3044814
+     },
+     "legGeometry": {
+      "points": "qws{yAzh{ghFrBd@??TgC??pGjA??pAf@jFpC??P_@??d@kA??v@_C??fKdK??|FfE??tItD??|@T??xETjF???R@??dA???tBN??vA@??vSdA??zBDdAKbH^??vDn@??vBv@??f@aCDu@??NsC??VeF\\gC??b@cD??ZcC??RoG??dAkG??hDyG??d@u@??jBZ??lFbA",
+      "precision": 6
+     },
+     "steps": [
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 16.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 19.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 2.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 26.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 16.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 20.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 25.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 1.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 4.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 37.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 27.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 7.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 14.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 5.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Snohomish Lane",
+       "distance": 10.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Snohomish Lane",
+       "distance": 11.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Snohomish Lane",
+       "distance": 14.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "Northeast Snohomish Lane",
+       "distance": 3.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 6.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      },
+      {
+       "streetName": "",
+       "distance": 13.0,
+       "elevationUp": 0,
+       "elevationDown": 0
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "itineraries": []
+}
