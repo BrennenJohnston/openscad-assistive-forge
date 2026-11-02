@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A map pull's result shows in a framed box under the buttons, a failure in
   red, and once a place is picked the preview shows an empty plate titled NO
   MAP YET instead of the sample station until the draft is made.
+- The Customizer's help mark is a 20 px circle again, beside its label, not a
+  44 px disc over the end of it, when the descriptions are behind help marks.
 
 ## [5.8.0] - 2026-11-01
 
