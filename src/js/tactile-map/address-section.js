@@ -458,7 +458,7 @@ export function createAddressSection({
   const leaveAt = document.createElement('input');
   leaveAt.type = 'datetime-local';
   leaveAt.id = 'tactileMapLeaveAt';
-  leaveAt.className = 'braille-panel-number';
+  leaveAt.className = 'braille-panel-number tactile-map-leave-at';
   {
     const d = new Date();
     d.setSeconds(0, 0);

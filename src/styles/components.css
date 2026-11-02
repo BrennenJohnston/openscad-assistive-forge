@@ -16527,6 +16527,12 @@ body.tutorial-body-locked {
   min-height: var(--size-touch-target);
 }
 
+/* A date and a time do not fit a number field's width. */
+.tactile-map-panel .tactile-map-leave-at {
+  width: auto;
+  max-width: 100%;
+}
+
 /* The address section: the field and Search on one row (the field takes
    the room), the places found as radio rows at the touch floor. */
 .tactile-map-address-row {

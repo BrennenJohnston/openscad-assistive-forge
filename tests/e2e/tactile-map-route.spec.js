@@ -260,6 +260,9 @@ test('a route by bus and train: the journeys found on a press, the walk to the 7
   await expect(page.locator('#tactileMapTravel-transit')).toBeChecked();
   await expect(page.locator('#tactileMapTransit')).toBeVisible();
   await expect(page.locator('#tactileMapSteps-next')).toBeDisabled();
+  // Wide enough to show the date and the time, not a number field's 5em.
+  const leave = await page.locator('#tactileMapLeaveAt').boundingBox();
+  expect(leave.width).toBeGreaterThan(180);
   await page.locator('#tactileMapFindJourneys').click();
   const listed = page.locator('#tactileMapJourneys label');
   await expect(listed).toHaveCount(3);
