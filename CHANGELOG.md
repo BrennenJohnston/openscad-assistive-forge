@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Get map data works from the published site: the Tactile Map Designer
+  reads OpenStreetMap US's map tiles first, and only when they fail asks
+  OpenStreetMap's main Overpass server, then VK Maps' server, saying which
+  one it is asking; a pull that fails says what failed instead of "busy".
+- A map pull's result shows in a framed box under the buttons, a failure in
+  red, and once a place is picked the preview shows an empty plate titled NO
+  MAP YET instead of the sample station until the draft is made.
+
 ## [5.8.0] - 2026-11-01
 
 ### Added

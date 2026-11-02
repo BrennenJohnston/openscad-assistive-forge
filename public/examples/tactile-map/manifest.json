@@ -13,7 +13,8 @@
     "heightParam": "map_height_mm",
     "plateIdParam": "plate_id",
     "plateShowsTitleParam": "plate_shows_title",
-    "plateShowsNorthParam": "plate_shows_north"
+    "plateShowsNorthParam": "plate_shows_north",
+    "titleParam": "title_text"
   },
   "tactile": [
     "base_thickness_mm",

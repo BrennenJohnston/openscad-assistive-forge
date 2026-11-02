@@ -295,6 +295,10 @@ test.describe('the map data row', () => {
         body: JSON.stringify([PLACE]),
       })
     );
+    // The map tiles refuse, so the pull reaches the routed Overpass answer.
+    await page.route('https://tiles.openstreetmap.us/**', (route) =>
+      route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*' }, body: '' })
+    );
     await page.route('https://overpass-api.de/api/interpreter', (route) => {
       pulled = route.request().postData();
       return route.fulfill({
@@ -338,7 +342,7 @@ test.describe('the map data row', () => {
       (await page.locator('#tactileMapLoadFile').boundingBox()).height
     ).toBeGreaterThanOrEqual(floor);
 
-    const link = page.locator('#tactileMapAttribution a');
+    const link = page.locator('#tactileMapAttribution a').first();
     await expect(link).toHaveAttribute(
       'href',
       'https://www.openstreetmap.org/copyright'
@@ -406,6 +410,10 @@ test.describe('the draft map', () => {
         headers: { 'access-control-allow-origin': '*' },
         body: JSON.stringify([PLACE]),
       })
+    );
+    // The map tiles refuse, so the pull reaches the routed Overpass answer.
+    await page.route('https://tiles.openstreetmap.us/**', (route) =>
+      route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*' }, body: '' })
     );
     await page.route('https://overpass-api.de/api/interpreter', (route) =>
       route.fulfill({
@@ -551,6 +559,10 @@ test.describe('steep sidewalks', () => {
         headers: { 'access-control-allow-origin': '*' },
         body: JSON.stringify([PLACE]),
       })
+    );
+    // The map tiles refuse, so the pull reaches the routed Overpass answer.
+    await page.route('https://tiles.openstreetmap.us/**', (route) =>
+      route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*' }, body: '' })
     );
     await page.route('https://overpass-api.de/api/interpreter', (route) =>
       route.fulfill({
