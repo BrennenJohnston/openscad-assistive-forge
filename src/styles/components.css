@@ -3792,7 +3792,9 @@ dialog:modal {
   border-radius: 50%;
   background-clip: content-box;
   padding: calc((var(--size-touch-target) - 20px) / 2);
-  background: var(--color-accent);
+  /* The color alone: the background shorthand would reset the clip, and the
+     mark would fill its whole target. */
+  background-color: var(--color-accent);
   color: var(--color-accent-text);
   border: none;
   font-size: var(--font-size-2xs);
@@ -3808,7 +3810,7 @@ dialog:modal {
 }
 
 .param-help-button:hover {
-  background: var(--color-accent-hover);
+  background-color: var(--color-accent-hover);
   transform: scale(1.1);
 }
 
@@ -3822,7 +3824,7 @@ dialog:modal {
 }
 
 .param-help-button[aria-expanded='true'] {
-  background: var(--color-accent-hover);
+  background-color: var(--color-accent-hover);
 }
 
 /* CodeMirror's own search panel ships 21 px buttons, 13 px checkboxes and a

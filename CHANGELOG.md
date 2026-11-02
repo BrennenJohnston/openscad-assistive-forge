@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A drawing chosen for a tactile map previews raised as drawn until its
   shapes are classed, instead of five OpenSCAD warnings, and the plan's
   warnings fold under one line that counts them.
+- The Customizer's help mark is a 20 px circle again, beside its label, not a
+  44 px disc over the end of it, when the descriptions are behind help marks.
 
 ## [5.8.0] - 2026-11-01
 

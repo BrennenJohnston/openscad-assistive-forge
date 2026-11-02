@@ -10,6 +10,7 @@
  * @license GPL-3.0-or-later
  */
 import { test, expect } from '@playwright/test';
+import { PNG } from 'pngjs';
 import { skipWithoutWebGL } from './helpers/webgl.js';
 
 test.describe.configure({ timeout: 180_000 });
@@ -79,6 +80,69 @@ test('the Customizer’s help and reset buttons', async ({ page }) => {
   });
   await expectAtLeast(page, '.param-help-button', 'a help button');
   await expectAtLeast(page, '.param-reset-btn', 'a reset button');
+});
+
+// The round mark is 20 px across inside its 44 px target: the padding and
+// background-clip draw it so. A background shorthand after the clip resets
+// the clip, and the color fills the whole target over the label beside it.
+test('the help mark is a 20 px circle inside its target, at rest, under the mouse and open', async ({
+  page,
+}) => {
+  await openBox(page);
+  await page.locator('#paramDetailLevel').selectOption('hide');
+  await page.evaluate(() => {
+    document
+      .querySelectorAll('#parametersContainer details')
+      .forEach((d) => (d.open = true));
+  });
+  const button = page.locator('.param-help-button').first();
+  await button.scrollIntoViewIfNeeded();
+  // The mark's chord 7 px above its center, clear of the "?" glyph: from the
+  // center outward while the pixels are not the ground, which is read at the
+  // target's corner (the round mark never reaches it, so no browser's color
+  // management matters). A 20 px circle is 14.3 px across there; a 44 px
+  // one, 41.7.
+  const markWidth = async () => {
+    const png = PNG.sync.read(
+      await button.screenshot({ animations: 'disabled' })
+    );
+    const scale = png.width / (await button.boundingBox()).width;
+    const at = (x, y) => {
+      const i = (y * png.width + x) * 4;
+      return [png.data[i], png.data[i + 1], png.data[i + 2]];
+    };
+    const ground = at(0, 0);
+    const off = (x, y) => {
+      const [r, g, b] = at(x, y);
+      return (
+        Math.abs(r - ground[0]) +
+          Math.abs(g - ground[1]) +
+          Math.abs(b - ground[2]) >
+        60
+      );
+    };
+    const y = Math.floor(png.height / 2) - Math.round(7 * scale);
+    const middle = Math.floor(png.width / 2);
+    let left = middle;
+    let right = middle;
+    while (left > 0 && off(left - 1, y)) left -= 1;
+    while (right < png.width - 1 && off(right + 1, y)) right += 1;
+    return off(middle, y) ? Math.round((right - left + 1) / scale) : 0;
+  };
+  const atRest = await markWidth();
+  expect(atRest, `at rest the chord is ${atRest} px`).toBeGreaterThanOrEqual(
+    11
+  );
+  expect(atRest, `at rest the chord is ${atRest} px`).toBeLessThanOrEqual(17);
+  await button.hover();
+  const hovered = await markWidth();
+  expect(hovered, `under the mouse it is ${hovered} px`).toBeLessThanOrEqual(
+    24
+  );
+  await button.click();
+  await expect(button).toHaveAttribute('aria-expanded', 'true');
+  const open = await markWidth();
+  expect(open, `open it is ${open} px`).toBeLessThanOrEqual(17);
 });
 
 test('the Customizer’s one reset-all button, full size, still asks first', async ({
