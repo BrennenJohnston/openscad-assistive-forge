@@ -28,7 +28,7 @@ describe('the map types', () => {
       'The ground around one address, to learn an area before you go: a block, a campus, the streets around a stop.'
     );
     expect(mapType('route').sentence).toBe(
-      'From one place to another on foot, with the turns, crossings and steps on the way.'
+      'From one place to another, on foot or by bus and train, with the turns, crossings and steps on the way.'
     );
     expect(mapType('drawing').sentence).toBe(
       'A floor plan, a station drawing, a DXF or a traced photo you already have, with your own classes.'
@@ -48,7 +48,7 @@ describe('the map types', () => {
       'Check and print',
     ]);
     expect(mapType('route').steps[0]).toBe('From and To');
-    expect(mapType('route').steps[1]).toBe('How you walk');
+    expect(mapType('route').steps[1]).toBe('How you travel');
     expect(mapType('drawing').steps[0]).toBe('Choose the drawing');
   });
 

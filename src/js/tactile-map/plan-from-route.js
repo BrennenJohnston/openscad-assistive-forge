@@ -201,6 +201,10 @@ const shortName = (place, fallback) =>
  * @param {{w: number, h: number}} [args.size] - the map in mm
  * @param {string[]} [args.landmarks] - the landmark boxes ticked
  * @param {boolean} [args.avoidSteps]
+ * @param {{name: string}|null} [args.fromStop] - the walk starts at this stop
+ *   (a walk from a bus or train): a Transit stop there, not You are here
+ * @param {{name: string}|null} [args.toStop] - the walk ends at this stop: a
+ *   Transit stop there, not a door
  * @returns {{ plan: object|null, walk: object|null, counts: object|null }}
  */
 export function draftRoutePlan({
@@ -210,6 +214,8 @@ export function draftRoutePlan({
   size = { w: 480, h: 360 },
   landmarks = [],
   avoidSteps = false,
+  fromStop = null,
+  toStop = null,
 } = {}) {
   const walk = walkBetween({ elements, from, to, avoidSteps });
   if (!walk || walk.points.length < 2) {
@@ -401,22 +407,40 @@ export function draftRoutePlan({
       points: route,
       on: true,
     },
-    {
-      id: 'you-are-here',
-      class: 'you-are-here',
-      kind: 'point',
-      name: 'You are here',
-      at: here,
-      on: true,
-    },
-    {
-      id: 'destination-door',
-      class: 'entrance',
-      kind: 'point',
-      name: endName || 'Destination',
-      at: route[route.length - 1],
-      on: true,
-    },
+    fromStop
+      ? {
+          id: 'start-stop',
+          class: 'transit-stop',
+          kind: 'point',
+          name: fromStop.name,
+          at: route[0],
+          on: true,
+        }
+      : {
+          id: 'you-are-here',
+          class: 'you-are-here',
+          kind: 'point',
+          name: 'You are here',
+          at: here,
+          on: true,
+        },
+    toStop
+      ? {
+          id: 'destination-stop',
+          class: 'transit-stop',
+          kind: 'point',
+          name: toStop.name,
+          at: route[route.length - 1],
+          on: true,
+        }
+      : {
+          id: 'destination-door',
+          class: 'entrance',
+          kind: 'point',
+          name: endName || 'Destination',
+          at: route[route.length - 1],
+          on: true,
+        },
     ...extra
   );
 

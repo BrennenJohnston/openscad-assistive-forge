@@ -184,7 +184,7 @@ describe('the map types and their steps', () => {
       radios[1].getAttribute('aria-describedby')
     );
     expect(described.textContent).toBe(
-      'From one place to another on foot, with the turns, crossings and steps on the way.'
+      'From one place to another, on foot or by bus and train, with the turns, crossings and steps on the way.'
     );
     expect(
       document.querySelector('#tactileMapChooser legend').textContent
@@ -258,11 +258,16 @@ describe('the map types and their steps', () => {
     expect(params().title_text).toBe('Station');
   });
 
-  it("lays a route map's second step out as the choice of steps on the way, allowed and marked first", () => {
+  it("lays a route map's second step out as how you travel, then the choice of steps on the way, allowed and marked first", () => {
     mount({ type: 'route' });
     const two = document.getElementById('tactileMapSteps-step-2');
-    expect(two.querySelector('legend').textContent).toBe('Steps on the way');
-    const radios = [...two.querySelectorAll('input[type="radio"]')];
+    expect(
+      [...two.querySelectorAll(':scope > fieldset > legend')].map(
+        (l) => l.textContent
+      )
+    ).toEqual(['On foot, or by bus and train?', 'Steps on the way']);
+    const steps = two.querySelector('#tactileMapStepsChoice');
+    const radios = [...steps.querySelectorAll('input[type="radio"]')];
     expect(
       radios.map((r) => [
         document.querySelector(`label[for="${r.id}"]`).textContent,

@@ -51,7 +51,10 @@ async function pick(page, { field, press, list }, query, wanted) {
   await expect(radios.first()).toBeVisible({ timeout: 30000 });
   const names = await page.locator(`${list} label`).allTextContents();
   const at = names.findIndex((n) => wanted.test(n));
-  expect(at, `"${query}" found ${JSON.stringify(names)}`).toBeGreaterThanOrEqual(0);
+  expect(
+    at,
+    `"${query}" found ${JSON.stringify(names)}`
+  ).toBeGreaterThanOrEqual(0);
   await radios.nth(at).check();
   return names[at];
 }
@@ -130,6 +133,32 @@ test.describe('the Tactile Map Designer with the live services', () => {
     await editorOpens(page);
     await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
       /^Route map ready: a \d+ m walk from Husky Union Building to Bill & Melinda Gates Center/
+    );
+  });
+
+  test('a route by bus and train: the Husky Union Building to the Central Library, journeys from Transitous, the walk to the first stop in the editor', async ({
+    page,
+  }) => {
+    await openTile(page, 'route');
+    await pick(page, FROM, 'Husky Union Building', /Husky Union/);
+    await page.waitForTimeout(SEARCH_GAP_MS);
+    await pick(page, TO, 'Seattle Central Library', /Central Library/);
+    await goToStep(page, 2);
+    await page.locator('#tactileMapTravel-transit').check();
+    await page.locator('#tactileMapFindJourneys').click();
+    const journeys = page.locator('#tactileMapJourneys input[type="radio"]');
+    await expect(journeys.first()).toBeVisible({ timeout: 60000 });
+    const words = await page
+      .locator('#tactileMapJourneys label')
+      .allTextContents();
+    test
+      .info()
+      .annotations.push({ type: 'journeys', description: words.join(' | ') });
+    await journeys.first().check();
+    await makeTheMap(page);
+    await editorOpens(page);
+    await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
+      /^Route map ready: a \d+ m walk from Husky Union Building to .* The journey: \d+ min, /
     );
   });
 });

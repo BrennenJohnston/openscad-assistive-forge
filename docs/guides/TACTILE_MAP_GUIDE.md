@@ -64,10 +64,10 @@ Choose **A place map**. It drafts a map of a street address from OpenStreetMap, 
 
 #### A route map
 
-Choose **A route map** to map the walk between two places instead of the ground around one. Its five steps are From and To, How you walk, What to show, Make the map, and Check and print.
+Choose **A route map** to map the walk between two places instead of the ground around one. Its five steps are From and To, How you travel, What to show, Make the map, and Check and print.
 
 1. Pick the start in **From** as a place map picks its address. Type the destination in **To**, press its **Search** and pick it under **Destinations found**. There is no scale to choose: the map covers both places and the walk between them.
-2. Under **Steps on the way**, choose **Allowed, and marked on the map**, where it starts, or **Avoided where another way exists**.
+2. Under **On foot, or by bus and train?**, choose how the trip goes; **On foot** is where it starts. Under **Steps on the way**, choose **Allowed, and marked on the map**, where it starts, or **Avoided where another way exists**. By bus and train, set **Leave at**, press **Find journeys**, and pick one of up to three journeys, each said in words, for example "22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony." Then choose **Which walk to map**: the walk to the first stop, or the walk from the last stop. Each is a map of its own, drawn the way a walk is, with the stop as a Transit stop named with its line; make one, then come back for the other. The ride between the stops is not drawn; the journey's words follow the map's ready sentence.
 3. Tick the landmarks in What to show, then press **Make the map**. The request asks for a box around both places with at least 150 m to spare beyond them. The app finds the shortest walk on the ways people walk, from a door of the first building to a door of the second (its main entrance when the data marks one). Where the data has no sidewalk the walk may follow a street, counted at three times its length so that a sidewalk wins whenever there is one. Steps are allowed and marked unless you chose to avoid them: they are often the shortest way, and a reader should know they are there.
 4. The draft switches on what the walk needs:
    - the walk as one dotted Route line from door to door, so no short piece of path is lost;

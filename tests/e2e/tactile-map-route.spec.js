@@ -80,7 +80,11 @@ test.beforeEach(async ({ page }) => {
   });
   // The map tiles refuse, so the pull reaches the routed Overpass answer.
   await page.route('https://tiles.openstreetmap.us/**', (route) =>
-    route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*' }, body: '' })
+    route.fulfill({
+      status: 503,
+      headers: { 'access-control-allow-origin': '*' },
+      body: '',
+    })
   );
   await page.route('https://overpass-api.de/api/interpreter', (route) =>
     route.fulfill(answer(OVERPASS))
@@ -203,4 +207,86 @@ test('a route map from the Husky Union Building to the Bill & Melinda Gates Cent
   await expect(page.locator('#echoDrawerLabel')).toHaveText(
     /^OpenSCAD Messages \(\d+ echo\)$/
   );
+});
+
+test('a route by bus and train: the journeys found on a press, the walk to the 72 stop by the HUB made into a map, the stop named with its line', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  // Transitous's answer for the HUB to downtown, measured 2026-11-01.
+  const journeys = readFileSync(
+    'tests/fixtures/tactile-map/transitous-hub-downtown.json',
+    'utf8'
+  );
+  let asked = 0;
+  await page.route('https://api.transitous.org/**', (route) => {
+    asked += 1;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: journeys,
+    });
+  });
+  await page.goto('/?example=tactile-map&type=route');
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: WASM_READY_TIMEOUT,
+  });
+  const notNow = page.locator('#saveProjectNotNow');
+  try {
+    await notNow.waitFor({ state: 'visible', timeout: 6000 });
+    await notNow.click();
+  } catch {
+    // No save-project prompt this time.
+  }
+  await page.locator('#tactileMapAddress').fill('Husky Union Building');
+  await page.locator('#tactileMapSearch').click();
+  await page.locator('#tactileMapResults input[type="radio"]').first().check();
+  await page.waitForTimeout(1100);
+  await page.locator('#tactileMapTo').fill('Gates Center');
+  await page.locator('#tactileMapToSearch').click();
+  await page
+    .locator('#tactileMapToResults input[type="radio"]')
+    .first()
+    .check();
+  await goToStep(page, 2);
+  await expect(page.locator('#tactileMapSteps-heading')).toHaveText(
+    'Step 2 of 5: How you travel'
+  );
+  // By keyboard: the mode is a radio group.
+  await page.locator('#tactileMapTravel-walk').focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator('#tactileMapTravel-transit')).toBeChecked();
+  await expect(page.locator('#tactileMapTransit')).toBeVisible();
+  await expect(page.locator('#tactileMapSteps-next')).toBeDisabled();
+  await page.locator('#tactileMapFindJourneys').click();
+  const listed = page.locator('#tactileMapJourneys label');
+  await expect(listed).toHaveCount(3);
+  expect(asked).toBe(1);
+  await expect(listed.nth(2)).toHaveText(
+    '22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony.'
+  );
+  await page.locator('#tactileMapJourney-3').check();
+  await expect(page.locator('#tactileMapWhichWalk-to')).toBeChecked();
+  await expect(page.locator('#tactileMapSteps-next')).toBeEnabled();
+
+  await goToStep(page, 4);
+  await page.locator('#tactileMapMake').click();
+  const status = page.locator('#tactileMapAddressStatus');
+  await expect(status).toHaveText(
+    /^Route map ready: a \d+ m walk from Husky Union Building to East Stevens Way NE & Benton Ln, .* The journey: 22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony\.$/,
+    { timeout: 60000 }
+  );
+  await expect(
+    page.locator('#drawingEditorSurface .drawing-editor').first()
+  ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });
+  const stop = await page.evaluate(
+    () =>
+      document
+        .getElementById('tactileMapPanel')
+        .__forgeMapPanel.plan.features.find((f) => f.id === 'destination-stop')
+        ?.name
+  );
+  expect(stop).toBe('East Stevens Way NE & Benton Ln, 72');
 });

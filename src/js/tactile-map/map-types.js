@@ -29,11 +29,10 @@ export const MAP_TYPES = Object.freeze([
     key: 'route',
     name: 'A route map',
     sentence:
-      'From one place to another on foot, with the turns, crossings and steps on the way.',
+      'From one place to another, on foot or by bus and train, with the turns, crossings and steps on the way.',
     steps: Object.freeze([
       'From and To',
-      // Walking only, until the bus and train choice joins this step.
-      'How you walk',
+      'How you travel',
       'What to show',
       'Make the map',
       'Check and print',
@@ -68,6 +67,8 @@ export const WORKFLOW_STRINGS = Object.freeze({
   needBoth: 'Pick both places first.',
   /** A11Y: beside Next on the Make the map step. */
   needMap: 'Make the map first.',
+  /** A11Y: beside Next on a route's second step, by bus and train. */
+  needJourney: 'Find and pick a journey first.',
   /** A11Y: beside Next on a map from a drawing's first step, with no file. */
   needDrawing: 'Choose a drawing first.',
   /** The drawing workflow's first step, above the tile's Map file control. */

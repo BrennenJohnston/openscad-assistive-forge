@@ -38,6 +38,7 @@ import {
   groundBox,
   sentenceFor,
 } from './scales.js';
+import { TRANSIT_STRINGS } from './transit.js';
 
 /** How a server failed, as the middle of the switch sentence. */
 const HOST_FAILED = Object.freeze({
@@ -91,6 +92,29 @@ export const ADDRESS_STRINGS = Object.freeze({
   stepsLegend: 'Steps on the way',
   stepsAllow: 'Allowed, and marked on the map',
   stepsAvoid: 'Avoided where another way exists',
+  /** A11Y: a route's mode question and its two answers (row 15). */
+  travelLegend: 'On foot, or by bus and train?',
+  travelWalk: 'On foot',
+  travelTransit: 'By bus and train',
+  /** A11Y: the time a trip by bus and train leaves. */
+  leaveAt: 'Leave at',
+  findJourneys: 'Find journeys',
+  /** A11Y: the journeys' group name; the walk's question and its answers. */
+  journeysLegend: 'Journeys',
+  whichWalkLegend: 'Which walk to map',
+  walkTo: 'The walk to the stop',
+  walkFrom: 'The walk from the stop',
+  /** A11Y: while the planner is asked, and its answers. */
+  findingJourneys: (from, to) => `Finding journeys from ${from} to ${to}...`,
+  journeysFound: (n) => (n === 1 ? '1 journey found.' : `${n} journeys found.`),
+  journeysNone:
+    'No journey by bus and train joins these places at that time. Try another time, or go on foot.',
+  journeysRate:
+    'The journey planner asks for a moment between searches. Try again shortly.',
+  journeysNoAnswer:
+    'The journey planner did not answer. Check your connection and try again, or go on foot.',
+  /** A11Y: after a route's ready sentence, the journey the walk is part of. */
+  journeyNote: (words) => ` The journey: ${words}`,
   landmarks: 'Landmarks to show',
   /** The one button: gets the data, drafts, opens the editor. */
   make: 'Make the map',
@@ -261,6 +285,7 @@ export function createAddressSection({
   onSteep,
   onChange = () => {},
   plateSize = () => ({ w: 480, h: 360 }),
+  planJourneys = null,
 }) {
   const S = ADDRESS_STRINGS;
   // A holder for the parts until the panel's steps take them.
@@ -384,6 +409,113 @@ export function createAddressSection({
   customRow.hidden = true;
   scaleChoice.appendChild(customRow);
   section.appendChild(scaleChoice);
+
+  // A route: on foot, or by bus and train, a journey the planner finds on
+  // a press; a trip's map is one of its walks, to the first stop or from
+  // the last.
+  const choiceRow = (name, id, value, text, on) => {
+    const line = el('div', 'braille-panel-toggle-row');
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = name;
+    radio.id = id;
+    radio.value = value;
+    radio.checked = on;
+    const words = el('label', '', text);
+    words.htmlFor = id;
+    line.appendChild(radio);
+    line.appendChild(words);
+    return { line, radio };
+  };
+  const travelChoice = el(
+    'fieldset',
+    'braille-panel-choice tactile-map-travel'
+  );
+  travelChoice.id = 'tactileMapTravel';
+  travelChoice.appendChild(el('legend', '', S.travelLegend));
+  const travelRadios = [
+    ['walk', S.travelWalk, true],
+    ['transit', S.travelTransit, false],
+  ].map(([value, text, on]) => {
+    const { line, radio } = choiceRow(
+      'tactileMapTravel',
+      `tactileMapTravel-${value}`,
+      value,
+      text,
+      on
+    );
+    travelChoice.appendChild(line);
+    return radio;
+  });
+  section.appendChild(travelChoice);
+
+  const transitBox = el('div', 'tactile-map-transit');
+  transitBox.id = 'tactileMapTransit';
+  transitBox.hidden = true;
+  const leaveRow = el('div', 'braille-panel-field-row');
+  const leaveLabel = el('label', '', S.leaveAt);
+  leaveLabel.htmlFor = 'tactileMapLeaveAt';
+  const leaveAt = document.createElement('input');
+  leaveAt.type = 'datetime-local';
+  leaveAt.id = 'tactileMapLeaveAt';
+  leaveAt.className = 'braille-panel-number';
+  {
+    const d = new Date();
+    d.setSeconds(0, 0);
+    leaveAt.value = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
+  }
+  leaveRow.appendChild(leaveLabel);
+  leaveRow.appendChild(leaveAt);
+  transitBox.appendChild(leaveRow);
+  const findRow = el('div', 'braille-translate-row');
+  const find = el(
+    'button',
+    'btn btn-secondary braille-translate-btn',
+    S.findJourneys
+  );
+  find.type = 'button';
+  find.id = 'tactileMapFindJourneys';
+  findRow.appendChild(find);
+  transitBox.appendChild(findRow);
+  // Shown, not live: the same sentence goes once through the announcer.
+  const journeyStatus = el('p', 'braille-panel-help');
+  journeyStatus.id = 'tactileMapJourneyStatus';
+  transitBox.appendChild(journeyStatus);
+  const journeysBox = el(
+    'fieldset',
+    'braille-panel-choice tactile-map-journeys'
+  );
+  journeysBox.id = 'tactileMapJourneys';
+  journeysBox.hidden = true;
+  transitBox.appendChild(journeysBox);
+  const whichWalk = el(
+    'fieldset',
+    'braille-panel-choice tactile-map-which-walk'
+  );
+  whichWalk.id = 'tactileMapWhichWalk';
+  whichWalk.hidden = true;
+  whichWalk.appendChild(el('legend', '', S.whichWalkLegend));
+  const walkRadios = [
+    ['to', S.walkTo, true],
+    ['from', S.walkFrom, false],
+  ].map(([value, text, on]) => {
+    const { line, radio } = choiceRow(
+      'tactileMapWhichWalk',
+      `tactileMapWhichWalk-${value}`,
+      value,
+      text,
+      on
+    );
+    whichWalk.appendChild(line);
+    return radio;
+  });
+  transitBox.appendChild(whichWalk);
+  const transitCredit = el('p', 'braille-panel-help tactile-map-attribution');
+  transitCredit.id = 'tactileMapTransitCredit';
+  transitBox.appendChild(transitCredit);
+  section.appendChild(transitBox);
 
   // A route on foot: may it take steps? Allowed and marked is the default.
   const stepsChoice = el(
@@ -526,12 +658,22 @@ export function createAddressSection({
   attribution.appendChild(outLink(S.tilesCredit[1], TILES_CREDIT_URL));
   attribution.appendChild(document.createTextNode(S.tilesCredit[2]));
   section.appendChild(attribution);
+  transitCredit.appendChild(
+    document.createTextNode(TRANSIT_STRINGS.attribution[0])
+  );
+  transitCredit.appendChild(
+    outLink(TRANSIT_STRINGS.attribution[1], TRANSIT_STRINGS.sourcesUrl)
+  );
+  transitCredit.appendChild(
+    document.createTextNode(TRANSIT_STRINGS.attribution[2])
+  );
 
   /** The groups the panel's steps lay out. */
   const parts = {
     where: [label, help, row, results],
     to: [toLabel, toHelp, toRow, toResults],
     scale: [scaleChoice],
+    travel: [travelChoice, transitBox],
     steps: [stepsChoice],
     landmarks: [landmarks, steepRow, steepHelp, gradeRow, gradeHelp],
     make: [makeRow, status, fileRow, fileHelp, attribution],
@@ -724,14 +866,114 @@ export function createAddressSection({
   const ticked = () => boxes.filter((b) => b.checked).map((b) => b.value);
   const isRoute = () => mode === 'route' && Boolean(dest);
 
+  let journeys = [];
+  let journey = null;
+  const byTransit = () => travelRadios[1].checked;
+
+  /** How the route goes: on foot, or the journey picked and which walk. */
+  function getTravel() {
+    if (!byTransit()) return { mode: 'walk' };
+    return {
+      mode: 'transit',
+      journey,
+      walk: walkRadios[1].checked ? 'from' : 'to',
+    };
+  }
+
+  /**
+   * The walk a route map draws: between the two places on foot; by bus and
+   * train, from the first place to the first stop, or from the last stop to
+   * the second place, the stop named with its line.
+   */
+  function walkEnds() {
+    const travel = getTravel();
+    if (travel.mode !== 'transit' || !travel.journey) {
+      return { from: place, to: dest, stopName: null };
+    }
+    const rides = travel.journey.legs.filter((l) => l.mode !== 'WALK');
+    const ride = travel.walk === 'from' ? rides[rides.length - 1] : rides[0];
+    const stop = travel.walk === 'from' ? ride.to : ride.from;
+    const at = { name: stop.name, lat: stop.lat, lon: stop.lon };
+    const stopName = `${stop.name}, ${ride.routeShortName || ride.mode}`;
+    return travel.walk === 'from'
+      ? { from: at, to: dest, stopName }
+      : { from: place, to: at, stopName };
+  }
+
   /** What a pull asks for: the same key, the same data. */
   function pullKey() {
     if (!place) return null;
-    const at = `${place.lat},${place.lon}`;
     const plate = plateSize();
-    return isRoute()
-      ? `route:${at}:${dest.lat},${dest.lon}`
-      : `place:${at}:${currentScale().ratio}:${plate.w}x${plate.h}`;
+    if (isRoute()) {
+      const ends = walkEnds();
+      return `route:${ends.from.lat},${ends.from.lon}:${ends.to.lat},${ends.to.lon}`;
+    }
+    return `place:${place.lat},${place.lon}:${currentScale().ratio}:${plate.w}x${plate.h}`;
+  }
+
+  function leaveTime() {
+    const t = new Date(leaveAt.value);
+    return Number.isFinite(t.getTime()) ? t : new Date();
+  }
+
+  function showJourneys() {
+    journeysBox.replaceChildren(el('legend', '', S.journeysLegend));
+    journeys.forEach((j, i) => {
+      const { line, radio } = choiceRow(
+        'tactileMapJourney',
+        `tactileMapJourney-${i + 1}`,
+        String(i),
+        j.words,
+        false
+      );
+      radio.addEventListener('change', () => {
+        journey = journeys[i];
+        whichWalk.hidden = false;
+        onChange();
+      });
+      journeysBox.appendChild(line);
+    });
+    journeysBox.hidden = journeys.length === 0;
+    whichWalk.hidden = true;
+    journey = null;
+  }
+
+  /** Find journeys by bus and train between the two places: one request a press. */
+  async function findJourneys() {
+    if (!place || !dest || !planJourneys) {
+      say(S.needBoth, true);
+      return;
+    }
+    find.disabled = true;
+    const asking = S.findingJourneys(short(place), short(dest));
+    say(asking);
+    journeyStatus.textContent = asking;
+    try {
+      journeys = await planJourneys({
+        from: place,
+        to: dest,
+        when: leaveTime(),
+        mode: 'transit',
+      });
+      showJourneys();
+      const found = S.journeysFound(journeys.length);
+      say(found);
+      journeyStatus.textContent = found;
+    } catch (error) {
+      journeys = [];
+      showJourneys();
+      const failed =
+        error?.code === 'rate'
+          ? S.journeysRate
+          : error?.code === 'none-found'
+            ? S.journeysNone
+            : S.journeysNoAnswer;
+      say(failed, true);
+      journeyStatus.textContent = failed;
+    } finally {
+      find.disabled = false;
+      onChange();
+    }
   }
 
   function keep(data) {
@@ -741,10 +983,10 @@ export function createAddressSection({
   }
 
   /** Row 27, shown, not said: the draft's sentence follows at once. */
-  function countsSentence(elements, g) {
+  function countsSentence(elements, g, from, to) {
     const c = countFeatures(elements);
-    return isRoute()
-      ? S.gotRoute(c.n, short(place), short(dest))
+    return to
+      ? S.gotRoute(c.n, short(from), short(to))
       : S.got(c.n, g.w, g.h, c.walkways, c.crossings, c.buildings, c.landmarks);
   }
 
@@ -760,8 +1002,9 @@ export function createAddressSection({
   /** Pull the data for the place (or the walk); true when it arrived. */
   async function pull() {
     const key = pullKey();
-    const at = place;
-    const to = isRoute() ? dest : null;
+    const ends = isRoute() ? walkEnds() : null;
+    const at = ends ? ends.from : place;
+    const to = ends ? ends.to : null;
     const scale = currentScale();
     const g = ground();
     const where = to
@@ -787,13 +1030,20 @@ export function createAddressSection({
         source: 'overpass',
         place: at,
         to,
+        travel: ends
+          ? {
+              ...getTravel(),
+              stopName: ends.stopName,
+              words: journey?.words || null,
+            }
+          : null,
         landmarks: ticked(),
         bytes,
         host,
         key,
       });
       // The draft's sentence follows at once and is the one said.
-      say(countsSentence(elements, g), false, { quiet: true });
+      say(countsSentence(elements, g, at, to), false, { quiet: true });
       return true;
     } catch (error) {
       say(error?.code === 'busy' ? S.busy : S.noData, true);
@@ -882,6 +1132,19 @@ export function createAddressSection({
     if (!Number.isFinite(n)) return GRADE.value;
     return Math.min(GRADE.max, Math.max(GRADE.min, n));
   }
+  for (const radio of travelRadios) {
+    radio.addEventListener('change', () => {
+      transitBox.hidden = !byTransit();
+      onChange();
+    });
+  }
+  for (const radio of walkRadios) {
+    radio.addEventListener('change', () => onChange());
+  }
+  find.addEventListener('click', () => {
+    findJourneys();
+  });
+
   for (const radio of scaleRadios) {
     radio.addEventListener('change', () => {
       refreshScale();
@@ -937,6 +1200,7 @@ export function createAddressSection({
     getDest: () => (mode === 'route' ? dest : null),
     getData: () => osm,
     avoidSteps: () => stepsRadios[1].checked,
+    getTravel,
     getScale: () => currentScale(),
     /** The plate's size changed: the ground each choice covers did too. */
     refreshScale,
