@@ -1776,14 +1776,14 @@
                   </details>
                   <div class="role-path-actions">
                     <div class="charm-variant-selector">
-                      <label for="tactileMapVariantSelect">Tool</label>
+                      <label for="tactileMapVariantSelect">Map type</label>
                       <select
                         id="tactileMapVariantSelect"
                         class="charm-variant-select"
                       >
-                        <option value="tactile-map" selected>
-                          Tactile Map
-                        </option>
+                        <option value="place" selected>A place map</option>
+                        <option value="route">A route map</option>
+                        <option value="drawing">A map from your drawing</option>
                       </select>
                     </div>
                     <button
@@ -1791,6 +1791,7 @@
                       class="btn btn-primary btn-role-try"
                       id="openTactileMapBtn"
                       data-example="tactile-map"
+                      data-map-type-from="tactileMapVariantSelect"
                       data-role="creators"
                       aria-label="Open Tactile Map Designer"
                     >

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Tactile Map Designer starts by asking what map to make: a place map,
+  a route map, or a map from your drawing, also chosen on its welcome card
+  or in a link. Each walks you through its own numbered steps, one at a
+  time, and one Make the map button gets the data, drafts the map and opens
+  it in the editor. A route can avoid steps where another way exists.
+
 ### Fixed
 
 - Get map data works from the published site: the Tactile Map Designer
@@ -16,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A map pull's result shows in a framed box under the buttons, a failure in
   red, and once a place is picked the preview shows an empty plate titled NO
   MAP YET instead of the sample station until the draft is made.
+- A drawing chosen for a tactile map previews raised as drawn until its
+  shapes are classed, instead of five OpenSCAD warnings, and the plan's
+  warnings fold under one line that counts them.
 - The Customizer's help mark is a 20 px circle again, beside its label, not a
   44 px disc over the end of it, when the descriptions are behind help marks.
 

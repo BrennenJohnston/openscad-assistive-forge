@@ -50,6 +50,7 @@ const CONFIG = {
   plateIdParam: 'plate_id',
   plateShowsTitleParam: 'plate_shows_title',
   plateShowsNorthParam: 'plate_shows_north',
+  type: 'place',
 };
 
 const PLACES = [
@@ -132,12 +133,14 @@ afterEach(() => {
 });
 
 describe('the address section', () => {
-  it('stands above the plates section with its heading, label, sentence and Search button', () => {
+  it('stands in the first step of a place map with its label, sentence and Search button', () => {
     mount(vi.fn(async () => PLACES));
-    const section = document.getElementById('tactileMapAddressSection');
-    expect(section).toBeTruthy();
-    expect(section.nextElementSibling.id).toBe('tactileMapPanel');
-    expect(section.querySelector('h2').textContent).toBe('Map from an address');
+    expect(document.querySelector('#tactileMapPanel h2').textContent).toBe(
+      'A place map'
+    );
+    expect(
+      document.getElementById('tactileMapSteps-step-1').contains(input())
+    ).toBe(true);
     expect(
       document.querySelector('label[for="tactileMapAddress"]').textContent
     ).toBe('Address or place');
@@ -198,7 +201,7 @@ describe('the address section', () => {
     radios()[1].click();
     expect(getMapPlace()).toEqual(PLACES[1]);
     expect(status()).toBe(
-      `${PLACES[1].name} picked. Choose a radius and the landmarks, then get the map data. The preview shows an empty plate until you make a draft map.`
+      `${PLACES[1].name} picked. The preview shows an empty plate until you make the map.`
     );
   });
 
@@ -221,7 +224,7 @@ describe('the address section', () => {
     searchBtn().click();
     await vi.waitFor(() =>
       expect(status()).toBe(
-        'The address search did not answer. Check your connection and try again, or load an OpenStreetMap file instead.'
+        'The address search did not answer. Check your connection and try again, or use a file instead.'
       )
     );
     expect(announceError).toHaveBeenCalledWith(status(), {
@@ -253,7 +256,7 @@ describe('the pull, sentence by sentence', () => {
   const PLACE = PLACES[0];
   const MAIN = "OpenStreetMap's main server";
   const VK = "VK Maps' server";
-  const getData = () => document.getElementById('tactileMapGetData');
+  const make = () => document.getElementById('tactileMapMake');
 
   async function pick(pullArea) {
     destroyMapPanel();
@@ -272,25 +275,25 @@ describe('the pull, sentence by sentence', () => {
     vi.clearAllMocks();
   }
 
-  it('says the switch to the second server once, in one sentence, when the main server refuses this site, then the counts', async () => {
+  it('says the switch to the second server once, in one sentence, when the main server refuses this site, then the draft, never the counts', async () => {
     await pick(
       vi.fn(async ({ onWait }) => {
         onWait(0, VK, { from: MAIN, reason: 'refused' });
         return { elements: [], bytes: 10, ms: 1, host: VK };
       })
     );
-    getData().click();
+    make().click();
+    // No sidewalk in the data: the draft says so, as the last sentence.
     await vi.waitFor(() =>
       expect(status()).toBe(
-        '0 map features within 250 m: 0 walkways, 0 crossings, 0 buildings, 0 landmarks.'
+        'No sidewalks within 30 m of the address. Try a larger radius or another address.'
       )
     );
     expect(announce.mock.calls.map((c) => c[0])).toEqual([
       `Getting map data within 250 m of ${PLACE.name}...`,
       "OpenStreetMap's main server refused this site's request. Trying VK Maps' server; this can take half a minute.",
-      '0 map features within 250 m: 0 walkways, 0 crossings, 0 buildings, 0 landmarks.',
     ]);
-    expect(announceError).not.toHaveBeenCalled();
+    expect(announceError.mock.calls.map((c) => c[0])).toEqual([status()]);
   });
 
   it('names a server that ran out of time, or sent no map data, the same way', async () => {
@@ -301,7 +304,7 @@ describe('the pull, sentence by sentence', () => {
         return { elements: [], bytes: 10, ms: 1, host: VK };
       })
     );
-    getData().click();
+    make().click();
     await vi.waitFor(() =>
       expect(announce.mock.calls.map((c) => c[0])).toContain(
         "OpenStreetMap's main server sent no map data. Trying VK Maps' server; this can take half a minute."
@@ -325,7 +328,7 @@ describe('the pull, sentence by sentence', () => {
         throw error;
       })
     );
-    getData().click();
+    make().click();
     const END =
       'No map server answered. Try again in a few minutes, or export the area from openstreetmap.org and use the file instead.';
     await vi.waitFor(() => expect(status()).toBe(END));
@@ -340,16 +343,19 @@ describe('the pull, sentence by sentence', () => {
       SWITCH,
     ]);
     expect(announceError.mock.calls.map((c) => c[0])).toEqual([END]);
-    expect(getData().disabled).toBe(false);
+    expect(make().disabled).toBe(false);
   });
 });
 
 describe('the waiting plate and the status box', () => {
   const PLACE = PLACES[0];
-  const getData = () => document.getElementById('tactileMapGetData');
-  const draft = () => document.getElementById('tactileMapDraft');
+  const make = () => document.getElementById('tactileMapMake');
   const box = () => document.getElementById('tactileMapAddressStatus');
-  const reason = () => document.getElementById('tactileMapDraftReason');
+  const next = () => document.getElementById('tactileMapSteps-next');
+  const ELEMENTS = () =>
+    JSON.parse(
+      readFileSync('tests/fixtures/tactile-map/overpass-20.json', 'utf8')
+    ).elements.map(trimElement);
   const params = () => stateManager.getState().parameters;
   const DATA = { elements: [], bytes: 10, ms: 1, host: "VK Maps' server" };
 
@@ -375,46 +381,52 @@ describe('the waiting plate and the status box', () => {
     radios()[0].click();
   }
 
-  it('is a box directly under the draft button, shown and not live, and hidden while empty', () => {
+  it('is a box directly under Make the map, shown and not live, and hidden while empty', () => {
     mountWith();
     expect(box().classList.contains('tactile-map-status-box')).toBe(true);
-    expect(box().previousElementSibling.id).toBe('tactileMapDraftRow');
+    expect(box().previousElementSibling.id).toBe('tactileMapMakeRow');
     expect(box().getAttribute('role')).toBeNull();
     expect(box().getAttribute('aria-live')).toBeNull();
     expect(box().textContent).toBe('');
   });
 
-  it('replaces the sample station with an empty plate of the same size the moment a place is picked, titled NO MAP YET, and says so with the pick', async () => {
+  it('starts a place map on an empty plate of the same size, titled NO MAP YET, never the sample station, and says so with the pick', async () => {
     mountWith();
-    expect(getMapPlan().features.length).toBeGreaterThan(0);
-    await pickFirst();
     const plan = getMapPlan();
     expect(plan.features).toEqual([]);
     expect(plan.size).toEqual({ w: 480, h: 360 });
     expect(plan.meta.waiting).toBe(true);
     expect(plan.meta.title).toBe('NO MAP YET');
     expect(params().title_text).toBe('NO MAP YET');
+    await pickFirst();
     expect(box().textContent).toBe(
-      `${PLACE.name} picked. Choose a radius and the landmarks, then get the map data. The preview shows an empty plate until you make a draft map.`
+      `${PLACE.name} picked. The preview shows an empty plate until you make the map.`
     );
     expect(announce).toHaveBeenLastCalledWith(box().textContent, {
       source: 'tactile-map',
     });
   });
 
-  it('keeps Make a draft map disabled with its reason beside it until data arrives, then drops the reason', async () => {
-    mountWith({ pullArea: vi.fn(async () => DATA) });
-    expect(draft().disabled).toBe(true);
-    expect(draft().getAttribute('aria-describedby')).toBe(
-      'tactileMapDraftReason'
-    );
-    expect(reason().textContent).toBe('Get the map data first.');
-    expect(reason().hidden).toBe(false);
+  it('holds the Make the map step until the map is made, saying why, then lets it go on', async () => {
+    const editor = { open: vi.fn() };
+    mountWith({
+      pullArea: vi.fn(async () => ({ ...DATA, elements: ELEMENTS() })),
+      getEditor: async () => editor,
+    });
     await pickFirst();
-    getData().click();
-    await vi.waitFor(() => expect(draft().disabled).toBe(false));
-    expect(draft().hasAttribute('aria-describedby')).toBe(false);
-    expect(reason().hidden).toBe(true);
+    next().click();
+    next().click();
+    next().click();
+    expect(document.getElementById('tactileMapSteps-heading').textContent).toBe(
+      'Step 4 of 5: Make the map'
+    );
+    expect(next().disabled).toBe(true);
+    expect(document.getElementById('tactileMapSteps-reason').textContent).toBe(
+      'Make the map first.'
+    );
+    make().click();
+    await vi.waitFor(() => expect(editor.open).toHaveBeenCalled());
+    expect(next().disabled).toBe(false);
   });
 
   it('shows a failed pull as a failure: the box marked failed, the failure first, Make still disabled with its reason', async () => {
@@ -425,16 +437,12 @@ describe('the waiting plate and the status box', () => {
       }),
     });
     await pickFirst();
-    getData().click();
+    make().click();
     await vi.waitFor(() =>
       expect(box().classList.contains('is-failed')).toBe(true)
     );
     expect(box().textContent.startsWith('No map server answered.')).toBe(true);
-    expect(draft().disabled).toBe(true);
-    expect(draft().getAttribute('aria-describedby')).toBe(
-      'tactileMapDraftReason'
-    );
-    expect(reason().hidden).toBe(false);
+    expect(make().disabled).toBe(false);
     // The next sentence that is not a failure clears the mark.
     type('1000 4th Ave, Seattle, WA');
     searchBtn().click();
@@ -452,7 +460,7 @@ describe('the waiting plate and the status box', () => {
       expect(
         document.getElementById('tactileMapDrawingStatus').textContent
       ).toBe(
-        'No map yet. Make a draft map first, or choose a drawing for the map file.'
+        'No map yet. Make the map first, or choose a drawing for the map file.'
       )
     );
     expect(editor.open).not.toHaveBeenCalled();
@@ -467,9 +475,7 @@ describe('the waiting plate and the status box', () => {
     mountWith({ pullArea, getEditor: async () => editor });
     await pickFirst();
     expect(params().title_text).toBe('NO MAP YET');
-    getData().click();
-    await vi.waitFor(() => expect(draft().disabled).toBe(false));
-    draft().click();
+    make().click();
     await vi.waitFor(() => expect(editor.open).toHaveBeenCalled());
     expect(params().title_text).toBe('');
     expect(getMapPlan().meta.waiting).toBeFalsy();
@@ -480,9 +486,7 @@ describe('the waiting plate and the status box', () => {
     stateManager.setState({
       parameters: { ...params(), title_text: 'Gates Center' },
     });
-    getData().click();
-    await vi.waitFor(() => expect(draft().disabled).toBe(false));
-    draft().click();
+    make().click();
     await vi.waitFor(() => expect(editor.open).toHaveBeenCalledTimes(2));
     expect(params().title_text).toBe('Gates Center');
   });
@@ -497,9 +501,7 @@ describe('the waiting plate and the status box', () => {
       getEditor: async () => editor,
     });
     await pickFirst();
-    getData().click();
-    await vi.waitFor(() => expect(draft().disabled).toBe(false));
-    draft().click();
+    make().click();
     await vi.waitFor(() => expect(editor.open).toHaveBeenCalled());
     const drafted = getMapPlan();
     expect(drafted.features.length).toBeGreaterThan(0);

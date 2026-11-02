@@ -33,6 +33,8 @@
 /* [Map file] */
 // The map's levels file (SVG). The Tactile Map Designer panel writes it; you can also choose one you saved.
 map_file = "sample_station.svg"; // [file:svg]
+// What the map file holds. The Tactile Map Designer panel sets it: levels for a levels file, drawing for a drawing whose shapes are not classed yet, shown raised whole on the first level until they are.
+map_file_kind = "levels"; // [levels, drawing]
 // Width of the whole map (mm). About two hand spans: 480 is the default.
 map_width_mm = 480; // [100:1:600]
 // Height of the whole map (mm). About one hand span: 360 is the default.
@@ -151,6 +153,8 @@ assert(in_range(map_width_mm, MAP_WIDTH_RANGE_MM),
        str("map_width_mm is ", map_width_mm, " mm, outside 100 to 600 mm."));
 assert(in_range(map_height_mm, MAP_HEIGHT_RANGE_MM),
        str("map_height_mm is ", map_height_mm, " mm, outside 75 to 450 mm."));
+assert(map_file_kind == "levels" || map_file_kind == "drawing",
+       "map_file_kind must be levels or drawing.");
 
 // =============================================================================
 // HEIGHTS
@@ -201,11 +205,22 @@ module face_2d() {
 // THE RAISED PARTS
 // =============================================================================
 
+// A drawing whose shapes are not classed yet has no level groups to look up:
+// it rises whole to the first level, clipped to the plate, until the panel
+// writes its levels file.
 module levels() {
-    for (n = [1 : levels_used])
+    if (map_file_kind == "drawing")
         translate([0, 0, base_eff - _fuse])
-            linear_extrude(height = level_z(n) - base_eff + _fuse)
-                import(map_file, id = str("level", n), center = false);
+            linear_extrude(height = level_z(1) - base_eff + _fuse)
+                intersection() {
+                    square([map_width_mm, map_height_mm]);
+                    import(map_file, center = false);
+                }
+    else
+        for (n = [1 : levels_used])
+            translate([0, 0, base_eff - _fuse])
+                linear_extrude(height = level_z(n) - base_eff + _fuse)
+                    import(map_file, id = str("level", n), center = false);
 }
 
 // The title: uppercase, left-aligned 9.525 mm in from the left edge, clipped
@@ -287,17 +302,19 @@ module border_frame() {
 // The channels are cut from the base's top face down, and on up through
 // anything raised over them, so a strip of tape always has a clear bed.
 module channels() {
-    translate([0, 0, base_eff - label_channel_depth_mm])
-        linear_extrude(height = label_channel_depth_mm + _fuse + 10)
-            import(map_file, id = "channels", center = false);
+    if (map_file_kind == "levels")
+        translate([0, 0, base_eff - label_channel_depth_mm])
+            linear_extrude(height = label_channel_depth_mm + _fuse + 10)
+                import(map_file, id = "channels", center = false);
 }
 
 // What is cut right through the plate: a plate's name as notches on its
 // bottom edge, slots a finger finds and the eye sees from the back.
 module cutouts() {
-    translate([0, 0, -_fuse])
-        linear_extrude(height = base_eff + 20)
-            import(map_file, id = "cutouts", center = false);
+    if (map_file_kind == "levels")
+        translate([0, 0, -_fuse])
+            linear_extrude(height = base_eff + 20)
+                import(map_file, id = "cutouts", center = false);
 }
 
 // =============================================================================

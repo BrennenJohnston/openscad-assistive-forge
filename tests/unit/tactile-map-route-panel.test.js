@@ -82,9 +82,9 @@ const editor = {
   }),
 };
 
-function mount(options = {}) {
+function mount({ type = 'route', ...options } = {}) {
   destroyMapPanel();
-  initMapPanel(CONFIG, {
+  initMapPanel({ ...CONFIG, type }, {
     plan: sampleStationPlan(),
     setFile: vi.fn((name, fileName, svg) => {
       files.push({ name, fileName, svg });
@@ -138,10 +138,10 @@ afterEach(() => {
 });
 
 describe('the second address', () => {
-  it('stands after the first place, with its label, its sentence, its own Search and a hidden list of destinations', () => {
+  it('stands after the first place in the first step, with its label, its sentence, its own Search and a hidden list of destinations', () => {
     mount();
     const label = document.querySelector('label[for="tactileMapTo"]');
-    expect(label.textContent).toBe(S.toLabel);
+    expect(label.textContent).toBe('To');
     expect($('tactileMapTo').type).toBe('search');
     expect($('tactileMapTo').getAttribute('aria-describedby')).toBe(
       'tactileMapToHelp'
@@ -152,19 +152,24 @@ describe('the second address', () => {
     expect($('tactileMapToResults').querySelector('legend').textContent).toBe(
       S.toFound
     );
-    const order = [...$('tactileMapAddressSection').children].map((n) => n.id);
+    const order = [...$('tactileMapSteps-step-1').children].map((n) => n.id);
     expect(order.indexOf('tactileMapResults')).toBeLessThan(
       order.indexOf('tactileMapToHelp')
     );
   });
 
-  it('with both places picked, asks for the box around both and keeps both, and the radius sentence says it is not used', async () => {
+  it('with both places picked, lets the first step go on, asks for the box around both and keeps both', async () => {
     mount();
+    expect($('tactileMapSteps-next').disabled).toBe(true);
+    expect($('tactileMapSteps-reason').textContent).toBe('Pick both places first.');
     await pickFrom();
+    expect($('tactileMapSteps-next').disabled).toBe(true);
     await pickTo();
-    expect(addressStatus()).toBe(S.toPicked('Bill & Melinda Gates Center'));
-    expect($('tactileMapRadiusHelp').textContent).toBe(S.radiusRouteHelp);
-    $('tactileMapGetData').click();
+    expect(addressStatus()).toBe(
+      'Bill & Melinda Gates Center picked as where the walk ends.'
+    );
+    expect($('tactileMapSteps-next').disabled).toBe(false);
+    $('tactileMapMake').click();
     expect(addressStatus()).toBe(
       S.gettingRoute('Husky Union Building', 'Bill & Melinda Gates Center')
     );
@@ -172,9 +177,8 @@ describe('the second address', () => {
     const pull = getMapData();
     expect(pull.place).toEqual(HUB);
     expect(pull.to).toEqual(GATES);
-    expect(addressStatus()).toMatch(
-      /^\d+ map features around Husky Union Building and Bill & Melinda Gates Center\.$/
-    );
+    // Let the draft this press started finish inside this case.
+    await vi.waitFor(() => expect(opened).not.toBeNull(), SETTLE);
   });
 
   it('asks Overpass for a box holding both places with at least 100 m to spare', async () => {
@@ -182,7 +186,7 @@ describe('the second address', () => {
     mount({ pullArea });
     await pickFrom();
     await pickTo();
-    $('tactileMapGetData').click();
+    $('tactileMapMake').click();
     await vi.waitFor(() => expect(pullArea).toHaveBeenCalledTimes(1), SETTLE);
     const { box, radiusM } = pullArea.mock.calls[0][0];
     expect(radiusM).toBeUndefined();
@@ -193,18 +197,31 @@ describe('the second address', () => {
     expect(box.east).toBeGreaterThan(Math.max(HUB.lon, GATES.lon));
   });
 
-  it('turns the draft button into Make a route map, and clearing the second address turns it back', async () => {
+  it('clearing the second address hides its places and holds the first step again', async () => {
     mount();
     await pickFrom();
-    expect($('tactileMapDraft').textContent).toBe(S.draft);
     await pickTo();
-    expect($('tactileMapDraft').textContent).toBe(S.routeDraft);
+    expect($('tactileMapSteps-next').disabled).toBe(false);
     const to = $('tactileMapTo');
     to.value = '';
     to.dispatchEvent(new Event('input', { bubbles: true }));
-    expect($('tactileMapDraft').textContent).toBe(S.draft);
-    expect($('tactileMapRadiusHelp').textContent).toBe(S.radiusHelp);
     expect($('tactileMapToResults').hidden).toBe(true);
+    expect($('tactileMapSteps-next').disabled).toBe(true);
+  });
+
+  it('avoids steps where another way exists when the second step says so', async () => {
+    mount();
+    await pickFrom();
+    await pickTo();
+    const avoid = $('tactileMapSteps-avoid');
+    avoid.checked = true;
+    avoid.dispatchEvent(new Event('change', { bubbles: true }));
+    $('tactileMapMake').click();
+    await vi.waitFor(
+      () => expect(addressStatus()).toMatch(/^Route map ready: /),
+      SETTLE
+    );
+    expect(addressStatus()).toMatch(/ 0 flights of steps on the way\./);
   });
 });
 
@@ -213,13 +230,12 @@ describe('Make a route map', () => {
     mount();
     await pickFrom();
     await pickTo();
-    $('tactileMapGetData').click();
+    $('tactileMapMake').click();
     await vi.waitFor(() => expect(getMapData()?.to).toEqual(GATES), SETTLE);
   }
 
   it('drafts the walk, says its length, its crossing and its steps, and opens the editor on it', async () => {
     await routeData();
-    $('tactileMapDraft').click();
     await vi.waitFor(() => expect(opened).not.toBeNull(), SETTLE);
     expect(addressStatus()).toBe(
       S.routeReady(
@@ -257,9 +273,7 @@ describe('Make a route map', () => {
     mount({ pullArea: vi.fn(async () => ({ elements: [], bytes: 2 })) });
     await pickFrom();
     await pickTo();
-    $('tactileMapGetData').click();
-    await vi.waitFor(() => expect(getMapData()?.to).toEqual(GATES), SETTLE);
-    $('tactileMapDraft').click();
+    $('tactileMapMake').click();
     await vi.waitFor(
       () =>
         expect(addressStatus()).toBe(
@@ -276,9 +290,7 @@ describe('Edit drawing as a map', () => {
     mount();
     await pickFrom();
     await pickTo();
-    $('tactileMapGetData').click();
-    await vi.waitFor(() => expect(getMapData()?.to).toEqual(GATES), SETTLE);
-    $('tactileMapDraft').click();
+    $('tactileMapMake').click();
     await vi.waitFor(() => expect(opened).not.toBeNull(), SETTLE);
     const first = opened;
     const regions = getMapPlan().features.map((f, index) => ({
@@ -300,7 +312,7 @@ describe('Edit drawing as a map', () => {
   });
 
   it('opens the sample station with its classes, not every shape at Ignore', async () => {
-    mount();
+    mount({ type: 'drawing' });
     // The panel writes its levels file into the file control; the control
     // then holds it, as it does on the page.
     await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
@@ -325,17 +337,16 @@ describe('focus after the editor', () => {
     mount();
     await pickFrom();
     await pickTo();
-    $('tactileMapGetData').click();
-    await vi.waitFor(() => expect(getMapData()?.to).toEqual(GATES), SETTLE);
-    $('tactileMapDraft').click();
+    $('tactileMapMake').click();
     await vi.waitFor(() => expect(opened).not.toBeNull(), SETTLE);
+    await vi.waitFor(() => expect($('tactileMapMake').disabled).toBe(false));
   }
 
-  it('goes back to Make a route map when the editor closes, and to Edit drawing as a map after it reopened the draft', async () => {
+  it('goes back to Make the map when the editor closes, and to Edit drawing as a map after it reopened the draft', async () => {
     await routeDraft();
-    expect(document.activeElement).not.toBe($('tactileMapDraft'));
+    expect(document.activeElement).not.toBe($('tactileMapMake'));
     opened.options.onClose();
-    expect(document.activeElement).toBe($('tactileMapDraft'));
+    expect(document.activeElement).toBe($('tactileMapMake'));
     opened = null;
     $('tactileMapEditDrawing').click();
     await vi.waitFor(() => expect(opened).not.toBeNull(), SETTLE);
@@ -350,7 +361,7 @@ describe('focus after the editor', () => {
       class: f.on ? f.class : 'ignore',
     }));
     opened.options.onApply({ regions, svg: opened.svg });
-    expect(document.activeElement).toBe($('tactileMapDraft'));
+    expect(document.activeElement).toBe($('tactileMapMake'));
     document.activeElement.blur();
     opened = null;
     $('tactileMapEditDrawing').click();
@@ -362,7 +373,10 @@ describe('focus after the editor', () => {
 
 describe('the plate summary', () => {
   it('says plate sizes in tenths of a millimeter at most: a 364 x 253 map on an A1 mini is 6 plates of 121.3 x 126.5 mm', async () => {
-    mount({ plan: { ...sampleStationPlan(), size: { w: 364, h: 253 } } });
+    mount({
+      type: 'drawing',
+      plan: { ...sampleStationPlan(), size: { w: 364, h: 253 } },
+    });
     const bed = $('tactileMapBed');
     bed.value = 'a1-mini';
     bed.dispatchEvent(new Event('change', { bubbles: true }));

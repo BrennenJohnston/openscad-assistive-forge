@@ -47,6 +47,13 @@ import {
 import { dataUrlToText } from '../svg-text-encoding.js';
 import { WAITING_TITLE, sampleStationPlan, waitingPlan } from './plan.js';
 import {
+  MAP_TYPES,
+  MAP_TYPE_QUESTION,
+  WORKFLOW_STRINGS,
+  mapType,
+} from './map-types.js';
+import { STEP_STRINGS, createSteps } from './steps.js';
+import {
   drawingBox,
   filledOutlines,
   planFromRegions,
@@ -62,7 +69,11 @@ import {
   plateLevelsSvg,
 } from './plate-tiling.js';
 import { loadSymbolLibraryFile, setLibrary } from './symbol-library.js';
-import { ADDRESS_STRINGS, createAddressSection } from './address-section.js';
+import {
+  ADDRESS_STRINGS,
+  BIG_BYTES,
+  createAddressSection,
+} from './address-section.js';
 import {
   archiveEntries,
   levelHeights,
@@ -83,6 +94,8 @@ const ENGINE_NOT_READY =
 /** A11Y: said once when the Alt View comes on with this panel mounted. */
 export const ALT_VIEW_SENTENCE =
   'The Tactile Map Designer is not available in the Alt View. Its controls return when the Alt View is off.';
+/** A11Y: the name of the folded warnings list, its count first. */
+export const WARNINGS_TITLE = (n) => (n === 1 ? '1 warning' : `${n} warnings`);
 
 let panel = null;
 
@@ -234,6 +247,12 @@ function el(tag, className, text) {
 class MapPanel {
   constructor(config, options) {
     this.config = config;
+    // The map type the card or the link chose; none opens the chooser.
+    this.mapType = mapType(config.type)?.key ?? null;
+    this.lastType = this.mapType;
+    // The type's numbered steps (see arrange()) and the parts they hold.
+    this.steps = null;
+    this.parts = {};
     this.plan = options.plan || sampleStationPlan();
     this.setFile = options.setFile || setFileThroughControl;
     this.bedKey = options.bedKey || BED_PRESETS[0].key;
@@ -279,6 +298,13 @@ class MapPanel {
     this.refs = {};
     this.el = null;
     this.unsubscribe = null;
+    // The tile's own Map file control while a map from a drawing holds it
+    // in its first step, the marker left where the Customizer built it, and
+    // the step's slot it stands in.
+    this.heldFile = null;
+    this.fileHome = null;
+    this.fileSlot = null;
+    this.customizerObserver = null;
   }
 
   mount() {
@@ -293,7 +319,7 @@ class MapPanel {
       searchPlaces: (query) => this.geocode(query),
       pullArea: (where) => this.pull(where),
       readOsmFile: (file) => this.readOsmFile(file),
-      say: (text, failed) => this.sayAddress(text, failed),
+      say: (text, failed, options) => this.sayAddress(text, failed, options),
       unsay: () => withdrawAnnouncement(SOURCE),
       onPlace: (place) => {
         this.place = place;
@@ -303,22 +329,33 @@ class MapPanel {
         this.osm = osm;
         if (osm) this.wait();
       },
-      onDraft: () => {
+      onDraft: () =>
         this.makeDraft().catch((err) => {
           this.sayAddress(err?.message || String(err), true);
-        });
-      },
+        }),
+      onChange: () => this.steps?.refresh(),
       onSteep: (on, gradePct) => {
         this.markSteep(on, gradePct).catch((err) => {
           this.sayAddress(err?.message || String(err), true);
         });
       },
     });
-    parametersContainer.parentNode.insertBefore(
-      this.address.el,
-      parametersContainer
-    );
     parametersContainer.parentNode.insertBefore(this.el, parametersContainer);
+    // The Customizer builds its controls again on a preset, an undo or a
+    // link's values, which leaves the Map file control held here stale; and
+    // its detail level, which the held control shows too, can change.
+    this.customizerObserver = new MutationObserver(() =>
+      this.syncFileControl()
+    );
+    this.customizerObserver.observe(parametersContainer, {
+      childList: true,
+      attributes: true,
+      attributeFilter: ['data-detail-level'],
+    });
+    // A place or route map never shows the sample station: the empty plate
+    // waits for its draft from the start.
+    if (this.mapType === 'place' || this.mapType === 'route') this.wait();
+    this.arrange();
     // The Tactile Map Designer steps aside in the Alt View: its sections
     // hide and it says so once; the tile's own controls stay.
     this.altOff = null;
@@ -342,8 +379,75 @@ class MapPanel {
         this.schedule();
       }
       this.adoptPicture();
+      if (this.mapType === 'drawing') this.steps?.refresh();
     });
     this.schedule(0);
+  }
+
+  /**
+   * A map from a drawing holds the tile's Map file control in its first
+   * step, so choosing, converting and tracing happen there; every other
+   * type, the Alt View (where this panel hides and the tile's controls
+   * stay) and the panel's end give it back to its place in the Customizer.
+   * A control the Customizer built again replaces the stale one held here.
+   */
+  syncFileControl() {
+    const container = document.getElementById('parametersContainer');
+    // The Customizer's detail level (descriptions under the names, beside
+    // them, or behind a help button) is an attribute on its container.
+    if (this.fileSlot) {
+      const level = container?.dataset.detailLevel;
+      if (level) this.fileSlot.dataset.detailLevel = level;
+      else delete this.fileSlot.dataset.detailLevel;
+    }
+    const fresh =
+      container
+        ?.querySelector(`[id="param-${this.config.mapFileParam}"]`)
+        ?.closest('.param-control') || null;
+    if (fresh && this.heldFile && fresh !== this.heldFile) {
+      this.heldFile.remove();
+      this.heldFile = null;
+      this.fileHome = null;
+    }
+    const want =
+      this.mapType === 'drawing' &&
+      !this.altOff &&
+      Boolean(this.fileSlot?.isConnected);
+    if (want) {
+      if (!this.heldFile) {
+        if (!fresh) return;
+        this.fileHome = document.createComment('map file control');
+        fresh.before(this.fileHome);
+        this.heldFile = fresh;
+      }
+      if (this.heldFile.parentNode !== this.fileSlot)
+        this.fileSlot.appendChild(this.heldFile);
+      return;
+    }
+    if (!this.heldFile) return;
+    if (this.fileHome?.isConnected) this.fileHome.replaceWith(this.heldFile);
+    else this.heldFile.remove();
+    this.heldFile = null;
+    this.fileHome = null;
+  }
+
+  /**
+   * Tell the model what the map file holds, when the manifest names the
+   * parameter: its levels file, or a drawing whose shapes are not classed
+   * yet, which the model raises whole instead of looking up levels it lacks.
+   */
+  setFileKind(kind) {
+    const key = this.config.mapFileKindParam;
+    if (!key || stateManager.getState()?.parameters?.[key] === kind) return;
+    setParameterValue(key, kind);
+  }
+
+  /** Whether the tile's Map file control holds a file. */
+  holdsMapFile() {
+    const value =
+      stateManager.getState()?.parameters?.[this.config.mapFileParam];
+    if (typeof value === 'string') return value.length > 0;
+    return Boolean(value?.data || value?.name);
   }
 
   /**
@@ -409,6 +513,13 @@ class MapPanel {
     if (data === this.lastPictureData) return;
     this.lastPictureData = data;
     const picture = this.currentPicture();
+    if (picture) {
+      // After the file control's own change has reached the preview: its
+      // handler hands the preview the values it had, without this one, and
+      // the preview renders the last values it was given.
+      const kind = isLevelsFile(picture.svg) ? 'levels' : 'drawing';
+      queueMicrotask(() => this.setFileKind(kind));
+    }
     if (!picture || isLevelsFile(picture.svg)) return;
     const svg = filledOutlines(picture.svg);
     if (this.drawing && this.drawing.svg === svg) return;
@@ -566,11 +677,20 @@ class MapPanel {
   build() {
     const section = el('section', 'braille-panel tactile-map-panel');
     section.id = 'tactileMapPanel';
+    if (this.mapType) section.dataset.mapType = this.mapType;
     section.setAttribute('aria-labelledby', 'tactileMapHeading');
 
-    const heading = el('h2', 'braille-panel-heading', 'Tactile map plates');
+    const heading = el('h2', 'braille-panel-heading', '');
     heading.id = 'tactileMapHeading';
     section.appendChild(heading);
+    this.refs.heading = heading;
+
+    // The parts the steps lay out, by group (see arrange()).
+    const parts = {};
+    const add = (group, node) => {
+      (parts[group] ||= []).push(node);
+    };
+    this.parts = parts;
 
     const help = el(
       'p',
@@ -578,11 +698,11 @@ class MapPanel {
       'Pick your printer’s bed and the map splits into equal plates. Choose a plate to preview and export it; Whole map shows everything at once.'
     );
     help.id = 'tactileMapHelp';
-    section.appendChild(help);
+    add('intro', help);
 
     const bedLabel = el('label', 'braille-panel-label', 'Print bed');
     bedLabel.htmlFor = 'tactileMapBed';
-    section.appendChild(bedLabel);
+    add('bed', bedLabel);
 
     const select = el('select', 'braille-panel-select');
     select.id = 'tactileMapBed';
@@ -599,7 +719,7 @@ class MapPanel {
       this.refs.custom.hidden = this.bedKey !== 'custom';
       this.schedule();
     });
-    section.appendChild(select);
+    add('bed', select);
     this.refs.select = select;
 
     const custom = el('div', 'tactile-map-custom');
@@ -634,24 +754,24 @@ class MapPanel {
       row.appendChild(input);
       custom.appendChild(row);
     }
-    section.appendChild(custom);
+    add('bed', custom);
     this.refs.custom = custom;
 
     const summary = el('p', 'braille-panel-help tactile-map-summary');
     summary.id = 'tactileMapSummary';
     summary.setAttribute('aria-live', 'polite');
-    section.appendChild(summary);
+    add('bed', summary);
     this.refs.summary = summary;
 
     const plates = el('fieldset', 'braille-panel-choice');
     plates.id = 'tactileMapPlates';
     plates.appendChild(el('legend', '', 'Plate'));
-    section.appendChild(plates);
+    add('bed', plates);
     this.refs.plates = plates;
 
     const styleLabel = el('label', 'braille-panel-label', 'Plate name style');
     styleLabel.htmlFor = 'tactileMapIdStyle';
-    section.appendChild(styleLabel);
+    add('bed', styleLabel);
     const styleSelect = el('select', 'braille-panel-select');
     styleSelect.id = 'tactileMapIdStyle';
     for (const style of ID_STYLES) {
@@ -665,13 +785,28 @@ class MapPanel {
       this.idStyle = styleSelect.value;
       this.schedule(0);
     });
-    section.appendChild(styleSelect);
+    add('bed', styleSelect);
     this.refs.idStyle = styleSelect;
 
+    // The plan's warnings, folded: a draft of a whole block can carry fifty,
+    // and the plates and the render button stand after them.
+    const warningsBox = el(
+      'details',
+      'forge-disclosure tactile-map-warnings-box'
+    );
+    warningsBox.id = 'tactileMapWarningsBox';
+    warningsBox.hidden = true;
+    const warningsSummary = el('summary');
+    const warningsTitle = el('span', 'forge-disclosure-title');
+    warningsSummary.appendChild(warningsTitle);
+    warningsBox.appendChild(warningsSummary);
     const warnings = el('ul', 'braille-panel-help tactile-map-warnings');
     warnings.id = 'tactileMapWarnings';
-    section.appendChild(warnings);
+    warningsBox.appendChild(warnings);
+    add('warnings', warningsBox);
     this.refs.warnings = warnings;
+    this.refs.warningsBox = warningsBox;
+    this.refs.warningsTitle = warningsTitle;
 
     const widthRow = el('div', 'braille-panel-toggle-row tactile-map-drawing');
     const widthLabel = el('label', 'braille-panel-label', 'Drawing width (mm)');
@@ -690,7 +825,7 @@ class MapPanel {
     });
     widthRow.appendChild(widthLabel);
     widthRow.appendChild(widthInput);
-    section.appendChild(widthRow);
+    add('width', widthRow);
     this.refs.drawingWidth = widthInput;
 
     const doorRow = el('div', 'braille-translate-row tactile-map-drawing-row');
@@ -708,11 +843,11 @@ class MapPanel {
       });
     });
     doorRow.appendChild(door);
-    section.appendChild(doorRow);
+    add('door', doorRow);
     const drawingStatus = el('p', 'braille-panel-help');
     drawingStatus.id = 'tactileMapDrawingStatus';
     drawingStatus.setAttribute('role', 'status');
-    section.appendChild(drawingStatus);
+    add('door', drawingStatus);
     this.refs.drawingStatus = drawingStatus;
 
     const symbols = el('div', 'braille-translate-row tactile-map-symbols');
@@ -767,8 +902,8 @@ class MapPanel {
     symbols.appendChild(load);
     symbols.appendChild(reset);
     symbols.appendChild(file);
-    section.appendChild(symbols);
-    section.appendChild(status);
+    add('symbols', symbols);
+    add('symbols', status);
 
     const actions = el('div', 'braille-translate-row tactile-map-actions');
     const renderAll = el(
@@ -798,16 +933,201 @@ class MapPanel {
     });
     actions.appendChild(renderAll);
     actions.appendChild(cancel);
-    section.appendChild(actions);
+    add('render', actions);
     this.refs.renderAll = renderAll;
     this.refs.cancel = cancel;
 
     const renderStatus = el('p', 'braille-panel-help');
     renderStatus.id = 'tactileMapRenderStatus';
-    section.appendChild(renderStatus);
+    add('render', renderStatus);
     this.refs.renderStatus = renderStatus;
 
+    // The chooser or the type's steps: laid out by arrange().
+    const workflow = el('div', 'tactile-map-workflow');
+    workflow.id = 'tactileMapWorkflow';
+    section.appendChild(workflow);
+    this.refs.workflow = workflow;
+
     return section;
+  }
+
+  /**
+   * The map's purpose first: the chooser when no type is known, else the
+   * type's numbered steps with every control in its step. The controls are
+   * the same elements whatever the layout (ids kept); a type's unused ones
+   * stay out of the page.
+   */
+  arrange({ focus = false } = {}) {
+    const box = this.refs.workflow;
+    if (!box) return;
+    const heading = this.refs.heading;
+    if (!this.mapType) {
+      delete this.el.dataset.mapType;
+      heading.textContent = MAP_TYPE_QUESTION;
+      this.steps = null;
+      this.fileSlot = null;
+      box.replaceChildren(this.buildChooser());
+      this.syncFileControl();
+      if (focus) box.querySelector('input[type="radio"]')?.focus();
+      return;
+    }
+    const type = mapType(this.mapType);
+    this.el.dataset.mapType = type.key;
+    heading.textContent = type.name;
+    this.address?.setMode(type.key);
+    this.steps = createSteps({
+      id: 'tactileMapSteps',
+      names: type.steps,
+      need: (i) => this.stepNeed(i),
+      onBackFromFirst: () => this.chooseAgain(),
+    });
+    const a = this.address?.parts || {};
+    const p = this.parts;
+    const note = (text) => [el('p', 'braille-panel-help', text)];
+    const fill = (section, groups) => {
+      for (const group of groups) {
+        for (const node of group || []) section.appendChild(node);
+      }
+    };
+    const plates = [p.intro, p.bed, p.warnings, p.door, p.symbols, p.render];
+    const [s1, s2, s3, s4, s5] = this.steps.sections;
+    this.fileSlot = null;
+    if (type.key === 'place') {
+      fill(s1, [a.where]);
+      fill(s2, [a.radius]);
+      fill(s3, [a.landmarks]);
+      fill(s4, [a.make]);
+      fill(s5, plates);
+    } else if (type.key === 'route') {
+      fill(s1, [a.where, a.to]);
+      fill(s2, [a.steps]);
+      fill(s3, [a.landmarks]);
+      fill(s4, [a.make]);
+      fill(s5, plates);
+    } else {
+      this.fileSlot = el('div', 'tactile-map-file-slot');
+      fill(s1, [note(WORKFLOW_STRINGS.drawingChoose), [this.fileSlot]]);
+      fill(s2, [p.width]);
+      fill(s3, [p.door, p.symbols]);
+      fill(s4, [note(WORKFLOW_STRINGS.drawingApply)]);
+      fill(s5, [p.intro, p.bed, p.warnings, p.render]);
+    }
+    box.replaceChildren(this.steps.el);
+    this.syncFileControl();
+    this.steps.refresh();
+    if (focus) this.steps.show(0);
+  }
+
+  /** The three map types as radios, each with its sentence, and Next. */
+  buildChooser() {
+    const wrap = el('div', 'tactile-map-chooser');
+    const group = el('fieldset', 'braille-panel-choice tactile-map-types');
+    group.id = 'tactileMapChooser';
+    group.appendChild(el('legend', 'sr-only', WORKFLOW_STRINGS.chooserLegend));
+    const radios = MAP_TYPES.map((type) => {
+      const card = el('div', 'tactile-map-type-card');
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'tactileMapType';
+      radio.id = `tactileMapType-${type.key}`;
+      radio.value = type.key;
+      radio.checked = type.key === this.lastType;
+      const name = el('label', 'tactile-map-type-name', type.name);
+      name.htmlFor = radio.id;
+      const sentence = el('p', 'braille-panel-help', type.sentence);
+      sentence.id = `${radio.id}-sentence`;
+      radio.setAttribute('aria-describedby', sentence.id);
+      card.appendChild(radio);
+      card.appendChild(name);
+      card.appendChild(sentence);
+      group.appendChild(card);
+      return radio;
+    });
+    wrap.appendChild(group);
+    const row = el('div', 'braille-translate-row tactile-map-step-actions');
+    const next = el(
+      'button',
+      'btn btn-primary braille-translate-btn',
+      STEP_STRINGS.next
+    );
+    next.type = 'button';
+    next.id = 'tactileMapChooserNext';
+    const reason = el(
+      'span',
+      'braille-panel-help tactile-map-step-reason',
+      WORKFLOW_STRINGS.chooserReason
+    );
+    reason.id = 'tactileMapChooserReason';
+    const sync = () => {
+      const chosen = radios.some((r) => r.checked);
+      next.disabled = !chosen;
+      reason.textContent = chosen ? '' : WORKFLOW_STRINGS.chooserReason;
+      if (chosen) next.removeAttribute('aria-describedby');
+      else next.setAttribute('aria-describedby', reason.id);
+    };
+    for (const r of radios) r.addEventListener('change', sync);
+    next.addEventListener('click', () => {
+      const chosen = radios.find((r) => r.checked);
+      if (chosen) this.setType(chosen.value);
+    });
+    sync();
+    row.appendChild(next);
+    row.appendChild(reason);
+    wrap.appendChild(row);
+    return wrap;
+  }
+
+  /**
+   * A type chosen: a place or route map shows the empty plate until its
+   * draft; a map from a drawing shows the sample station, its example.
+   */
+  setType(key) {
+    const type = mapType(key);
+    if (!type) return;
+    this.mapType = type.key;
+    this.lastType = type.key;
+    if (type.key === 'drawing') {
+      if (this.plan.meta?.waiting) {
+        this.plan = sampleStationPlan();
+        this.source = null;
+        this.planWarnings = [];
+        this.plate = 'whole';
+        this.leaveWaiting();
+        this.schedule(0);
+      }
+    } else {
+      this.wait();
+    }
+    this.arrange({ focus: true });
+  }
+
+  /** Back from the first step: the chooser again, the type still ticked. */
+  chooseAgain() {
+    this.lastType = this.mapType;
+    this.mapType = null;
+    this.arrange({ focus: true });
+  }
+
+  /** Why Next waits on a step, or null. */
+  stepNeed(index) {
+    const key = this.mapType;
+    if (key === 'place' && index === 0 && !this.address?.getPlace()) {
+      return WORKFLOW_STRINGS.needPlace;
+    }
+    if (
+      key === 'route' &&
+      index === 0 &&
+      !(this.address?.getPlace() && this.address?.getDest())
+    ) {
+      return WORKFLOW_STRINGS.needBoth;
+    }
+    if (key === 'drawing' && index === 0 && !this.holdsMapFile()) {
+      return WORKFLOW_STRINGS.needDrawing;
+    }
+    if (key !== 'drawing' && index === 3 && this.source !== 'draft') {
+      return WORKFLOW_STRINGS.needMap;
+    }
+    return null;
   }
 
   /** The geocoder: a stub when a test handed one in, else the lazy chunk. */
@@ -881,13 +1201,15 @@ class MapPanel {
     this.planWarnings = [];
     this.plate = 'whole';
     this.leaveWaiting();
-    this.address?.setDraftReady(true);
     this.schedule(0);
+    this.steps?.refresh();
     this.sayAddress(
-      warnings.length
+      (warnings.length
         ? ADDRESS_STRINGS.draftReady(counts.on, counts.total, warnings.length)
-        : ADDRESS_STRINGS.draftReadyClean(counts.on, counts.total)
+        : ADDRESS_STRINGS.draftReadyClean(counts.on, counts.total)) +
+        this.bigNote(osm)
     );
+    await this.steepIfWanted();
     await this.openDraft();
   }
 
@@ -907,6 +1229,7 @@ class MapPanel {
       to: osm.to,
       size: { w: this.plan.size.w, h: this.plan.size.h },
       landmarks: osm.landmarks,
+      avoidSteps: this.address?.avoidSteps() ?? false,
     });
     if (!plan) {
       this.sayAddress(ADDRESS_STRINGS.noWalk(from, to), true);
@@ -919,8 +1242,8 @@ class MapPanel {
     this.planWarnings = [];
     this.plate = 'whole';
     this.leaveWaiting();
-    this.address?.setDraftReady(true);
     this.schedule(0);
+    this.steps?.refresh();
     this.sayAddress(
       ADDRESS_STRINGS.routeReady(
         Math.round(counts.lengthM),
@@ -930,8 +1253,9 @@ class MapPanel {
         counts.steps,
         plan.size.w,
         plan.size.h
-      )
+      ) + this.bigNote(osm)
     );
+    await this.steepIfWanted();
     await this.openDraft();
   }
 
@@ -941,7 +1265,7 @@ class MapPanel {
    * lays the rows back over the plan by index and the plates follow.
    * Focus goes back to `opener`, the button that opened it, as it closes.
    */
-  async openDraft(opener = this.address?.refs?.draft) {
+  async openDraft(opener = this.address?.refs?.make) {
     const editor = await this.getEditor();
     if (!editor || typeof editor.open !== 'function') {
       this.sayAddress('The drawing editor is not on this page.', true);
@@ -980,6 +1304,19 @@ class MapPanel {
     });
   }
 
+  /** Over 2 MB of data: the size warning, said with the draft. */
+  bigNote(osm) {
+    return osm?.bytes > BIG_BYTES
+      ? ' ' + ADDRESS_STRINGS.big((osm.bytes / (1024 * 1024)).toFixed(1))
+      : '';
+  }
+
+  /** The steep switch ticked before the draft: mark them now. */
+  async steepIfWanted() {
+    const wish = this.address?.steepWanted();
+    if (wish?.on) await this.markSteep(true, wish.gradePct);
+  }
+
   /**
    * Mark steep sidewalks: on, the terrain tiles under the draft are read
    * (lazy chunks), every on walkway sampled, and the runs steeper than the
@@ -1000,10 +1337,8 @@ class MapPanel {
       return;
     }
     const geo = base.meta?.geo;
-    if (!geo?.center || !this.draft) {
-      if (sw) sw.checked = false;
-      return;
-    }
+    // Before a draft the switch is a wish, kept for the draft to come.
+    if (!geo?.center || !this.draft) return;
     const walkways = base.features.filter(
       (f) => f.kind === 'line' && f.on && f.class === 'walkway'
     ).length;
@@ -1041,13 +1376,13 @@ class MapPanel {
    * A sentence in the address section's status box, said once; a failure
    * marks the box until the next sentence.
    */
-  sayAddress(text, failed = false) {
+  sayAddress(text, failed = false, { quiet = false } = {}) {
     const line = this.address?.refs?.status;
     if (line) {
       line.textContent = text;
       line.classList.toggle('is-failed', failed);
     }
-    (failed ? announceError : announce)(text, { source: SOURCE });
+    if (!quiet) (failed ? announceError : announce)(text, { source: SOURCE });
   }
 
   /** Show a sentence under the buttons and say it once through the announcer. */
@@ -1260,11 +1595,12 @@ class MapPanel {
     this.rebuildPlates();
 
     const built = buildLevelRings(this.plan, { tapeWidthMm: this.tapeWidth() });
+    const allWarnings = [...this.planWarnings, ...built.warnings];
     this.refs.warnings.replaceChildren(
-      ...[...this.planWarnings, ...built.warnings].map((warning) =>
-        el('li', '', warning.text)
-      )
+      ...allWarnings.map((warning) => el('li', '', warning.text))
     );
+    this.refs.warningsBox.hidden = allWarnings.length === 0;
+    this.refs.warningsTitle.textContent = WARNINGS_TITLE(allWarnings.length);
 
     let svg;
     let size;
@@ -1295,6 +1631,7 @@ class MapPanel {
       setParameterValue(this.config.plateShowsTitleParam, showTitle);
     if (this.config.plateShowsNorthParam)
       setParameterValue(this.config.plateShowsNorthParam, showNorth);
+    this.setFileKind('levels');
     if (!this.setFile(this.config.mapFileParam, fileName, svg)) {
       console.warn(
         `[MapPanel] No file control for parameter: ${this.config.mapFileParam}`
@@ -1314,6 +1651,7 @@ class MapPanel {
     if (off === this.altOff) return;
     this.altOff = off;
     for (const el of this.sections()) el.hidden = off;
+    this.syncFileControl();
     if (off) announce(ALT_VIEW_SENTENCE, { source: SOURCE });
   }
 
@@ -1321,6 +1659,10 @@ class MapPanel {
     clearTimeout(this.timer);
     this.altObserver?.disconnect();
     this.altObserver = null;
+    this.customizerObserver?.disconnect();
+    this.customizerObserver = null;
+    this.mapType = null;
+    this.syncFileControl();
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;

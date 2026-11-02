@@ -103,20 +103,23 @@ const click = (id) => document.getElementById(id).click();
 let files;
 let downloads;
 
-function mount(options = {}) {
+function mount({ type = 'drawing', ...options } = {}) {
   destroyMapPanel();
-  initMapPanel(CONFIG, {
-    plan: sampleStationPlan(),
-    setFile: vi.fn((name, fileName, svg) => {
-      files.push({ name, fileName, svg });
-      return true;
-    }),
-    render: vi.fn(async () => EMPTY_STL()),
-    download: vi.fn((bytes, name, format) => {
-      downloads.push({ bytes, name, format });
-    }),
-    ...options,
-  });
+  initMapPanel(
+    { ...CONFIG, type },
+    {
+      plan: sampleStationPlan(),
+      setFile: vi.fn((name, fileName, svg) => {
+        files.push({ name, fileName, svg });
+        return true;
+      }),
+      render: vi.fn(async () => EMPTY_STL()),
+      download: vi.fn((bytes, name, format) => {
+        downloads.push({ bytes, name, format });
+      }),
+      ...options,
+    }
+  );
 }
 
 async function readZip() {
@@ -153,12 +156,269 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+describe('the map types and their steps', () => {
+  const heading = () => document.querySelector('#tactileMapPanel h2');
+  const stepHeading = () => document.getElementById('tactileMapSteps-heading');
+  const next = () => document.getElementById('tactileMapSteps-next');
+  const back = () => document.getElementById('tactileMapSteps-back');
+
+  it('with no type asks what map to make: three radios, each with its sentence, and Next waiting for a choice', () => {
+    mount({ type: null });
+    expect(heading().textContent).toBe('What map do you want to make?');
+    expect(
+      document.getElementById('tactileMapPanel').hasAttribute('data-map-type')
+    ).toBe(false);
+    const radios = [
+      ...document.querySelectorAll('#tactileMapChooser input[type="radio"]'),
+    ];
+    expect(radios.map((r) => r.value)).toEqual(['place', 'route', 'drawing']);
+    expect(
+      radios.map(
+        (r) => document.querySelector(`label[for="${r.id}"]`).textContent
+      )
+    ).toEqual(['A place map', 'A route map', 'A map from your drawing']);
+    const described = document.getElementById(
+      radios[1].getAttribute('aria-describedby')
+    );
+    expect(described.textContent).toBe(
+      'From one place to another on foot, with the turns, crossings and steps on the way.'
+    );
+    expect(
+      document.querySelector('#tactileMapChooser legend').textContent
+    ).toBe('Map type');
+    const go = document.getElementById('tactileMapChooserNext');
+    expect(go.disabled).toBe(true);
+    expect(document.getElementById('tactileMapChooserReason').textContent).toBe(
+      'Choose a map type first.'
+    );
+    // Nothing of a type's steps is on the page yet.
+    expect(document.getElementById('tactileMapAddress')).toBeNull();
+  });
+
+  it('choosing a route map opens its steps on the first, focused, and Back returns to the choice with the route still ticked', () => {
+    mount({ type: null });
+    const route = document.getElementById('tactileMapType-route');
+    route.checked = true;
+    route.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('tactileMapChooserNext').click();
+    expect(heading().textContent).toBe('A route map');
+    expect(
+      document.getElementById('tactileMapPanel').getAttribute('data-map-type')
+    ).toBe('route');
+    expect(stepHeading().textContent).toBe('Step 1 of 5: From and To');
+    expect(document.activeElement).toBe(stepHeading());
+    // The route's first step holds both places, labeled From and To.
+    const first = document.getElementById('tactileMapSteps-step-1');
+    expect(first.querySelector('#tactileMapAddress')).toBeTruthy();
+    expect(first.querySelector('#tactileMapTo')).toBeTruthy();
+    expect(
+      document.querySelector('label[for="tactileMapAddress"]').textContent
+    ).toBe('From');
+    expect(
+      document.querySelector('label[for="tactileMapTo"]').textContent
+    ).toBe('To');
+    // A route map shows the empty plate, never the sample station.
+    expect(getMapPlan().meta.waiting).toBe(true);
+    back().click();
+    expect(heading().textContent).toBe('What map do you want to make?');
+    expect(document.getElementById('tactileMapType-route').checked).toBe(true);
+  });
+
+  it("lays a place map's controls out one step at a time: where, how much ground, what to show, make, check and print", () => {
+    mount({ type: 'place' });
+    const step = (n) => document.getElementById(`tactileMapSteps-step-${n}`);
+    expect(step(1).querySelector('#tactileMapAddress')).toBeTruthy();
+    expect(step(1).querySelector('#tactileMapTo')).toBeNull();
+    expect(document.getElementById('tactileMapTo')).toBeNull();
+    expect(step(2).querySelector('#tactileMapRadius')).toBeTruthy();
+    expect(step(3).querySelector('#tactileMapLandmarks')).toBeTruthy();
+    expect(step(3).querySelector('#tactileMapSteep')).toBeTruthy();
+    expect(step(4).querySelector('#tactileMapMake')).toBeTruthy();
+    expect(step(4).querySelector('#tactileMapLoadFile')).toBeTruthy();
+    expect(step(5).querySelector('#tactileMapBed')).toBeTruthy();
+    expect(step(5).querySelector('#tactileMapRenderAll')).toBeTruthy();
+    expect(step(5).querySelector('#tactileMapEditDrawing')).toBeTruthy();
+    expect([1, 2, 3, 4, 5].map((n) => step(n).hidden)).toEqual([
+      false,
+      true,
+      true,
+      true,
+      true,
+    ]);
+    // Next waits for a place on the first step.
+    expect(next().disabled).toBe(true);
+    expect(document.getElementById('tactileMapSteps-reason').textContent).toBe(
+      'Pick a place first.'
+    );
+    // A place map shows the empty plate from the start.
+    expect(getMapPlan().meta.waiting).toBe(true);
+    expect(params().title_text).toBe('Station');
+  });
+
+  it("lays a route map's second step out as the choice of steps on the way, allowed and marked first", () => {
+    mount({ type: 'route' });
+    const two = document.getElementById('tactileMapSteps-step-2');
+    expect(two.querySelector('legend').textContent).toBe('Steps on the way');
+    const radios = [...two.querySelectorAll('input[type="radio"]')];
+    expect(
+      radios.map((r) => [
+        document.querySelector(`label[for="${r.id}"]`).textContent,
+        r.checked,
+      ])
+    ).toEqual([
+      ['Allowed, and marked on the map', true],
+      ['Avoided where another way exists', false],
+    ]);
+    expect(document.getElementById('tactileMapRadius')).toBeNull();
+  });
+
+  it('lays a map from a drawing out with its width, its door and the plates, and keeps the sample station', () => {
+    stateManager.setState({
+      parameters: { ...params(), map_file: 'sample_station.svg' },
+    });
+    mount({ type: 'drawing' });
+    const step = (n) => document.getElementById(`tactileMapSteps-step-${n}`);
+    expect(step(1).textContent).toContain(
+      'Choose an SVG or a DXF drawing, or a photo to trace. Until you choose one, the map uses the sample station.'
+    );
+    expect(step(2).querySelector('#tactileMapDrawingWidth')).toBeTruthy();
+    expect(step(3).querySelector('#tactileMapEditDrawing')).toBeTruthy();
+    expect(step(5).querySelector('#tactileMapBed')).toBeTruthy();
+    expect(document.getElementById('tactileMapAddress')).toBeNull();
+    expect(getMapPlan().meta.waiting).toBeFalsy();
+    expect(next().disabled).toBe(false);
+  });
+});
+
+describe("a map from a drawing's first step", () => {
+  const next = () => document.getElementById('tactileMapSteps-next');
+  const reason = () => document.getElementById('tactileMapSteps-reason');
+  const stepOne = () => document.getElementById('tactileMapSteps-step-1');
+  const group = () => document.querySelector('#parametersContainer details');
+
+  // The tile's Map file control as the Customizer builds it: a group with
+  // the file control and the map's width after it.
+  function buildCustomizer() {
+    document.getElementById('parametersContainer').innerHTML =
+      '<div class="forge-disclosure-row"><details class="param-group" open>' +
+      '<summary>Map file</summary>' +
+      '<div class="param-control param-control--file">' +
+      '<label for="param-map_file">Map file</label>' +
+      '<input type="file" id="param-map_file"></div>' +
+      '<div class="param-control"><input id="param-map_width_mm"></div>' +
+      '</details></div>';
+    return document.getElementById('param-map_file').closest('.param-control');
+  }
+  const holdFile = (value) =>
+    stateManager.setState({ parameters: { ...params(), map_file: value } });
+  const atHome = (control) =>
+    control.parentNode === group() &&
+    control.nextElementSibling?.querySelector('#param-map_width_mm');
+
+  it("holds the tile's Map file control in step 1 under its note, out of the Customizer", () => {
+    holdFile('sample_station.svg');
+    const control = buildCustomizer();
+    mount({ type: 'drawing' });
+    expect(stepOne().contains(control)).toBe(true);
+    const note = stepOne().querySelector('.braille-panel-help');
+    expect(note.textContent).toBe(
+      'Choose an SVG or a DXF drawing, or a photo to trace. Until you choose one, the map uses the sample station.'
+    );
+    expect(
+      note.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(group().querySelector('#param-map_file')).toBeNull();
+    expect(group().querySelector('#param-map_width_mm')).toBeTruthy();
+    expect(document.querySelectorAll('#param-map_file')).toHaveLength(1);
+  });
+
+  it('gives the control back to its place in the Customizer for another map type, in the Alt View and when the panel goes', async () => {
+    holdFile('sample_station.svg');
+    const control = buildCustomizer();
+    mount({ type: 'drawing' });
+    document.getElementById('tactileMapSteps-back').click();
+    expect(atHome(control)).toBeTruthy();
+    const place = document.getElementById('tactileMapType-place');
+    place.checked = true;
+    place.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('tactileMapChooserNext').click();
+    expect(atHome(control)).toBeTruthy();
+
+    mount({ type: 'drawing' });
+    expect(stepOne().contains(control)).toBe(true);
+    const root = document.documentElement;
+    root.setAttribute('data-ui-variant', 'mono');
+    try {
+      await vi.waitFor(() => expect(atHome(control)).toBeTruthy(), SETTLE);
+      root.removeAttribute('data-ui-variant');
+      await vi.waitFor(
+        () => expect(stepOne().contains(control)).toBe(true),
+        SETTLE
+      );
+    } finally {
+      root.removeAttribute('data-ui-variant');
+    }
+
+    destroyMapPanel();
+    expect(atHome(control)).toBeTruthy();
+  });
+
+  it('takes the new control when the Customizer builds its controls again, and leaves no copy behind', async () => {
+    holdFile('sample_station.svg');
+    const first = buildCustomizer();
+    mount({ type: 'drawing' });
+    expect(stepOne().contains(first)).toBe(true);
+    const second = buildCustomizer();
+    await vi.waitFor(
+      () => expect(stepOne().contains(second)).toBe(true),
+      SETTLE
+    );
+    expect(first.isConnected).toBe(false);
+    expect(document.querySelectorAll('#param-map_file')).toHaveLength(1);
+    expect(group().querySelector('#param-map_file')).toBeNull();
+  });
+
+  it("shows the control at the Customizer's detail level, and follows a change of it", async () => {
+    holdFile('sample_station.svg');
+    const container = document.getElementById('parametersContainer');
+    container.dataset.detailLevel = 'show';
+    const control = buildCustomizer();
+    mount({ type: 'drawing' });
+    expect(control.closest('[data-detail-level]').dataset.detailLevel).toBe(
+      'show'
+    );
+    container.dataset.detailLevel = 'hide';
+    await vi.waitFor(
+      () =>
+        expect(control.closest('[data-detail-level]').dataset.detailLevel).toBe(
+          'hide'
+        ),
+      SETTLE
+    );
+  });
+
+  it('waits on step 1 with its reason while the control holds no file, and goes on once it holds one', async () => {
+    holdFile(null);
+    buildCustomizer();
+    mount({ type: 'drawing' });
+    expect(next().disabled).toBe(true);
+    expect(reason().textContent).toBe('Choose a drawing first.');
+    expect(next().getAttribute('aria-describedby')).toBe(reason().id);
+    holdFile({ name: 'station.svg', data: svgToDataUrl(DRAWING) });
+    await vi.waitFor(() => expect(next().disabled).toBe(false), SETTLE);
+    expect(reason().textContent).toBe('');
+  });
+});
+
 describe('the map panel', () => {
   it('mounts above the parameter controls with its heading and the bed menu', () => {
     const section = document.getElementById('tactileMapPanel');
     expect(section).toBeTruthy();
     expect(section.nextElementSibling.id).toBe('parametersContainer');
-    expect(section.querySelector('h2').textContent).toBe('Tactile map plates');
+    // The heading names the map type the panel works on.
+    expect(section.querySelector('h2').textContent).toBe(
+      'A map from your drawing'
+    );
     const select = document.getElementById('tactileMapBed');
     expect(select.options.length).toBe(9);
     expect(select.options[0].textContent).toBe(
@@ -341,6 +601,113 @@ describe('the map panel', () => {
     destroyMapPanel();
     expect(document.getElementById('tactileMapPanel')).toBeNull();
     expect(isMapPanelActive()).toBe(false);
+  });
+});
+
+describe('what the map file holds, told to the model', () => {
+  it('says drawing while the file control holds a drawing not classed yet, and levels for a levels file', async () => {
+    destroyMapPanel();
+    initMapPanel(
+      { ...CONFIG, mapFileKindParam: 'map_file_kind', type: 'drawing' },
+      {
+        plan: sampleStationPlan(),
+        setFile: vi.fn((name, fileName, svg) => {
+          files.push({ name, fileName, svg });
+          return true;
+        }),
+        render: vi.fn(async () => EMPTY_STL()),
+        download: vi.fn(),
+      }
+    );
+    // The panel's own levels file goes to the model as levels.
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    expect(params().map_file_kind).toBe('levels');
+    // A drawing chosen in the control: the model raises it whole until its
+    // shapes are classed.
+    stateManager.setState({
+      parameters: {
+        ...params(),
+        map_file: { name: 'station.svg', data: svgToDataUrl(DRAWING) },
+      },
+    });
+    await vi.waitFor(
+      () => expect(params().map_file_kind).toBe('drawing'),
+      SETTLE
+    );
+    // A levels file a person saved and chose again is levels.
+    const saved = files[files.length - 1].svg;
+    stateManager.setState({
+      parameters: {
+        ...params(),
+        map_file: { name: 'levels_whole.svg', data: svgToDataUrl(saved) },
+      },
+    });
+    await vi.waitFor(
+      () => expect(params().map_file_kind).toBe('levels'),
+      SETTLE
+    );
+  });
+});
+
+describe('the warnings in Check and print', () => {
+  // Two landmarks 12 mm apart: one "too close" warning; four of them, two.
+  const landmark = (id, x, y) => ({
+    id,
+    class: 'landmark',
+    kind: 'point',
+    symbol: 'landmark-triangle',
+    at: [x, y],
+    on: true,
+  });
+  const planWith = (pairs) => {
+    const plan = sampleStationPlan();
+    for (let i = 0; i < pairs; i += 1) {
+      plan.features.push(
+        landmark(`w${i}a`, 60 + i * 80, 300),
+        landmark(`w${i}b`, 72 + i * 80, 300)
+      );
+    }
+    return plan;
+  };
+  const box = () => document.getElementById('tactileMapWarningsBox');
+
+  it('folds the list into a closed disclosure that says how many there are', async () => {
+    mount({ type: 'drawing', plan: planWith(2) });
+    await vi.waitFor(
+      () =>
+        expect(
+          document.getElementById('tactileMapWarnings').children.length
+        ).toBe(2),
+      SETTLE
+    );
+    expect(box().tagName).toBe('DETAILS');
+    expect(box().classList.contains('forge-disclosure')).toBe(true);
+    expect(box().open).toBe(false);
+    expect(box().hidden).toBe(false);
+    expect(box().querySelector('summary').textContent).toBe('2 warnings');
+    expect(box().contains(document.getElementById('tactileMapWarnings'))).toBe(
+      true
+    );
+    // It stands before the render button, as the list did.
+    expect(
+      box().compareDocumentPosition(
+        document.getElementById('tactileMapRenderAll')
+      ) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('says one warning in the singular, and hides with none', async () => {
+    mount({ type: 'drawing', plan: planWith(1) });
+    await vi.waitFor(
+      () =>
+        expect(box().querySelector('summary').textContent).toBe('1 warning'),
+      SETTLE
+    );
+    mount({ type: 'drawing', plan: sampleStationPlan() });
+    await vi.waitFor(() => expect(box().hidden).toBe(true), SETTLE);
+    expect(document.getElementById('tactileMapWarnings').children.length).toBe(
+      0
+    );
   });
 });
 
@@ -727,14 +1094,30 @@ describe('the map data row', () => {
     });
   const addressStatus = () =>
     document.getElementById('tactileMapAddressStatus').textContent;
-  const getData = () => document.getElementById('tactileMapGetData');
+  const make = () => document.getElementById('tactileMapMake');
   const radius = () => document.getElementById('tactileMapRadius');
+  let opened;
+  const editor = {
+    open: vi.fn((svg, analysis, options) => {
+      opened = { svg, analysis, options };
+    }),
+  };
+
+  beforeEach(() => {
+    opened = null;
+    mount({ type: 'place', getEditor: async () => editor });
+  });
   const boxes = () => [
     ...document.querySelectorAll('#tactileMapLandmarks input[type="checkbox"]'),
   ];
 
   async function pickPlace(options) {
-    mount({ searchPlaces: vi.fn(async () => [PLACE]), ...options });
+    mount({
+      type: 'place',
+      searchPlaces: vi.fn(async () => [PLACE]),
+      getEditor: async () => editor,
+      ...options,
+    });
     const input = document.getElementById('tactileMapAddress');
     input.value = 'Central Library';
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -784,10 +1167,10 @@ describe('the map data row', () => {
       ['Shops', false],
       ['Benches', false],
     ]);
-    expect(getData().textContent).toBe('Get map data');
-    expect(getData().disabled).toBe(true);
+    expect(make().textContent).toBe('Make the map');
+    expect(make().disabled).toBe(false);
     expect(document.getElementById('tactileMapLoadFile').textContent).toBe(
-      'Load an OpenStreetMap file'
+      'Use a file instead'
     );
     expect(document.getElementById('tactileMapOsmFile').accept).toBe(
       '.osm,.geojson,.json,application/json,text/xml'
@@ -805,31 +1188,46 @@ describe('the map data row', () => {
     // The map tiles' service asks for its own credit, with its link.
     const links = [...document.querySelectorAll('#tactileMapAttribution a')];
     expect(links).toHaveLength(2);
-    expect(links[1].getAttribute('href')).toBe('https://tiles.openstreetmap.us');
+    expect(links[1].getAttribute('href')).toBe(
+      'https://tiles.openstreetmap.us'
+    );
     expect(links[1].getAttribute('target')).toBe('_blank');
     expect(links[1].getAttribute('rel')).toContain('noopener');
-    expect(
-      document.getElementById('tactileMapAttribution').textContent
-    ).toBe(
+    expect(document.getElementById('tactileMapAttribution').textContent).toBe(
       'Map data from OpenStreetMap contributors (opens in new tab), ODbL. Tiles by OSM US (opens in new tab).'
     );
   });
 
-  it('Get map data waits for a place, pulls within the radius, keeps the data and says the counts', async () => {
+  it('Make the map with no place and no file says to pick one, and asks no server', async () => {
+    const pullArea = answered();
+    mount({ type: 'place', pullArea, getEditor: async () => editor });
+    make().click();
+    await vi.waitFor(() =>
+      expect(addressStatus()).toBe('Pick a place first, or use a file instead.')
+    );
+    expect(pullArea).not.toHaveBeenCalled();
+    expect(announceError).toHaveBeenCalledWith(addressStatus(), {
+      source: 'tactile-map',
+    });
+  });
+
+  it('Make the map pulls within the radius, keeps the data, shows the counts without saying them, and drafts', async () => {
     const pullArea = answered();
     await pickPlace({ pullArea });
-    expect(getData().disabled).toBe(false);
     radius().value = '300';
     radius().dispatchEvent(new Event('change', { bubbles: true }));
-    getData().click();
+    make().click();
     expect(addressStatus()).toBe(
       `Getting map data within 300 m of ${PLACE.name}...`
     );
-    await vi.waitFor(() =>
-      expect(addressStatus()).toBe(
-        '21 map features within 300 m: 11 walkways, 4 crossings, 3 buildings, 3 landmarks.'
-      )
+    expect(make().disabled).toBe(true);
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    expect(addressStatus()).toMatch(/^Draft map ready: /);
+    expect(announce).not.toHaveBeenCalledWith(
+      '21 map features within 300 m: 11 walkways, 4 crossings, 3 buildings, 3 landmarks.',
+      expect.anything()
     );
+    expect(make().disabled).toBe(false);
     const call = pullArea.mock.calls[0][0];
     expect([call.lat, call.lon, call.radiusM]).toEqual([
       PLACE.lat,
@@ -851,7 +1249,7 @@ describe('the map data row', () => {
 
   it('says the wait when no server answers, and gives up after the second wait', async () => {
     await pickPlace({ pullArea: refusing('busy', [30, 60]) });
-    getData().click();
+    make().click();
     await vi.waitFor(() =>
       expect(addressStatus()).toBe(
         'No map server answered. Try again in a few minutes, or export the area from openstreetmap.org and use the file instead.'
@@ -869,27 +1267,38 @@ describe('the map data row', () => {
       source: 'tactile-map',
     });
     expect(getMapData()).toBeNull();
-    expect(getData().disabled).toBe(false);
+    expect(make().disabled).toBe(false);
+    expect(opened).toBeNull();
   });
 
   it('says the data did not arrive when the pull fails', async () => {
     await pickPlace({ pullArea: refusing('no-answer') });
-    getData().click();
+    make().click();
     await vi.waitFor(() =>
       expect(addressStatus()).toBe(
-        'The map data did not arrive. Check your connection and try again, or load an OpenStreetMap file instead.'
+        'The map data did not arrive. Check your connection and try again, or use a file instead.'
       )
     );
   });
 
-  it('warns over 2 MB after the counts', async () => {
+  it('warns over 2 MB in the same breath as the draft', async () => {
     await pickPlace({ pullArea: answered({ bytes: 2_600_000 }) });
-    getData().click();
-    await vi.waitFor(() =>
-      expect(addressStatus()).toBe(
-        '21 map features within 250 m: 11 walkways, 4 crossings, 3 buildings, 3 landmarks. 2.5 MB of map data arrived. A smaller radius makes a lighter map.'
-      )
+    make().click();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    expect(addressStatus()).toMatch(
+      /^Draft map ready: .* Choose what stays\. 2\.5 MB of map data arrived\. A smaller radius makes a lighter map\.$/
     );
+  });
+
+  it('a second press for the same place drafts again without asking the server again', async () => {
+    const pullArea = answered();
+    await pickPlace({ pullArea });
+    make().click();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    opened = null;
+    make().click();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    expect(pullArea).toHaveBeenCalledTimes(1);
   });
 
   it('the file door takes an export, centered on the picked place', async () => {
@@ -907,7 +1316,7 @@ describe('the map data row', () => {
   });
 
   it('a wrong file says so', async () => {
-    mount();
+    mount({ type: 'place' });
     dropFile('notes.txt', 'hello there');
     await vi.waitFor(() =>
       expect(addressStatus()).toBe(
@@ -921,7 +1330,7 @@ describe('the map data row', () => {
   });
 
   it('a file with no place picked centers on the middle of the file and says so', async () => {
-    mount();
+    mount({ type: 'place' });
     dropFile('export.osm', OSM);
     await vi.waitFor(() =>
       expect(addressStatus()).toBe(
@@ -935,7 +1344,7 @@ describe('the map data row', () => {
   });
 });
 
-describe('the draft map button', () => {
+describe('the map Make the map drafts', () => {
   const PLACE = {
     name: 'Central Library, 1000, 4th Avenue, Seattle, Washington, United States',
     lat: 47.6067,
@@ -946,7 +1355,7 @@ describe('the draft map button', () => {
     readFileSync('tests/fixtures/tactile-map/overpass-20.json', 'utf8')
   );
   const trimmed = () => OVERPASS.elements.map(trimElement).filter(Boolean);
-  const draftBtn = () => document.getElementById('tactileMapDraft');
+  const make = () => document.getElementById('tactileMapMake');
   const addressStatus = () =>
     document.getElementById('tactileMapAddressStatus').textContent;
 
@@ -960,6 +1369,7 @@ describe('the draft map button', () => {
   async function pullData(elements = trimmed()) {
     opened = null;
     mount({
+      type: 'place',
       searchPlaces: vi.fn(async () => [PLACE]),
       pullArea: vi.fn(async () => ({ elements, bytes: 5363, ms: 1 })),
       getEditor: async () => editor,
@@ -974,26 +1384,26 @@ describe('the draft map button', () => {
       ).toHaveLength(1)
     );
     document.querySelector('#tactileMapResults input[type="radio"]').click();
-    document.getElementById('tactileMapGetData').click();
+    make().click();
     await vi.waitFor(() => expect(getMapData()).not.toBeNull());
   }
 
-  it('stands after the file door, disabled until map data exists', () => {
-    mount();
-    expect(draftBtn().textContent).toBe('Make a draft map');
-    expect(draftBtn().disabled).toBe(true);
-    const order = [
-      ...document.querySelectorAll('#tactileMapAddressSection > *'),
-    ].map((n) => n.id);
-    expect(order.indexOf('tactileMapFileHelp')).toBeLessThan(
-      order.indexOf(draftBtn().parentNode.id || 'tactileMapDraftRow')
-    );
+  it('stands first in its step, the status box under it, then the file door and the credit', () => {
+    mount({ type: 'place' });
+    expect(make().textContent).toBe('Make the map');
+    const step = make().closest('section');
+    expect([...step.children].map((n) => n.id)).toEqual([
+      'tactileMapMakeRow',
+      'tactileMapAddressStatus',
+      '',
+      'tactileMapFileHelp',
+      'tactileMapAttribution',
+    ]);
+    expect(step.querySelector('#tactileMapLoadFile')).toBeTruthy();
   });
 
   it('drafts the plan from the data, says how much is on, and opens the editor as a draft', async () => {
     await pullData();
-    expect(draftBtn().disabled).toBe(false);
-    draftBtn().click();
     await vi.waitFor(() => expect(opened).not.toBeNull());
     expect(addressStatus()).toMatch(
       /^Draft map ready: \d+ of 20 features on; (\d+ warnings|no warnings)\. Choose what stays\.$/
@@ -1019,7 +1429,6 @@ describe('the draft map button', () => {
 
   it('takes the rows back by index: a feature off keeps its class, one on takes the class, and the plan is rebuilt', async () => {
     await pullData();
-    draftBtn().click();
     await vi.waitFor(() => expect(opened).not.toBeNull());
     const before = JSON.parse(JSON.stringify(getMapPlan()));
     const filesBefore = files.length;
@@ -1055,7 +1464,6 @@ describe('the draft map button', () => {
   it('says there is nothing near when no sidewalk lies within reach', async () => {
     const far = trimmed().filter((e) => e.type === 'way' && e.tags.building);
     await pullData(far);
-    draftBtn().click();
     await vi.waitFor(() =>
       expect(addressStatus()).toBe(
         'No sidewalks within 30 m of the address. Try a larger radius or another address.'
@@ -1090,6 +1498,7 @@ describe('the steep switch', () => {
 
   async function drafted(options = {}) {
     mount({
+      type: 'place',
       searchPlaces: vi.fn(async () => [PLACE]),
       pullArea: vi.fn(async () => ({ elements: trimmed(), bytes: 1, ms: 1 })),
       getEditor: async () => editor,
@@ -1106,15 +1515,17 @@ describe('the steep switch', () => {
       ).toHaveLength(1)
     );
     document.querySelector('#tactileMapResults input[type="radio"]').click();
-    document.getElementById('tactileMapGetData').click();
-    await vi.waitFor(() => expect(getMapData()).not.toBeNull());
-    document.getElementById('tactileMapDraft').click();
+    if (options.steepFirst) {
+      steepBox().checked = true;
+      steepBox().dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    document.getElementById('tactileMapMake').click();
     await vi.waitFor(() => expect(getMapPlan().meta.geo).toBeTruthy());
   }
 
-  it('rests disabled until a draft exists, with the grade at 5 from 3 to 12 by 0.5', async () => {
-    mount();
-    expect(steepBox().disabled).toBe(true);
+  it('is a choice in What to show, unticked, with the grade at 5 from 3 to 12 by 0.5', async () => {
+    mount({ type: 'place' });
+    expect(steepBox().disabled).toBe(false);
     expect(steepBox().checked).toBe(false);
     expect(
       document.querySelector('label[for="tactileMapSteep"]').textContent
@@ -1134,8 +1545,16 @@ describe('the steep switch', () => {
     expect(document.getElementById('tactileMapGradeHelp').textContent).toBe(
       'Sidewalks steeper than this get chevrons, 3 to 12 %. 5 % is the grade where a walking surface counts as a ramp.'
     );
-    await drafted();
-    expect(steepBox().disabled).toBe(false);
+  });
+
+  it('ticked before the map is made, marks the steep runs as the draft is made', async () => {
+    await drafted({ steepFirst: true });
+    await vi.waitFor(() =>
+      expect(
+        getMapPlan().features.filter((f) => f.class === 'steep').length
+      ).toBeGreaterThan(0)
+    );
+    expect(steepBox().checked).toBe(true);
   });
 
   it('on, reads the heights, marks the steep runs, says so and writes the levels file; off removes them', async () => {
