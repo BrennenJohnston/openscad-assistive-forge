@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A place map near a building shows curb ramps and raised curbs, a traffic
   island as part of its crossing, and a crossing with no paint dashed, all
   read from the map data.
+- Steep sidewalks take a sidewalk's incline from the map data where it
+  gives a number, and the grade's help says what 5, 8 and 15 % feel like.
+- The Tactile Map Designer guide follows the three map types, and the
+  README in a plate zip says what the map is and carries its data credits.
 
 ### Fixed
 

@@ -1,8 +1,8 @@
 # Tactile Map Designer Guide
 
-The Tactile Map Designer turns a line drawing of a place into a map that is read by touch and printed on an ordinary 3D printer: up to three raised levels, symbols at a size a finger can tell apart, a raised title, a north cue, and channels for braille label tape. It splits the map into plates that fit your printer's bed and names every plate so you know where it goes. I built it from the station maps I print for a transit agency, and the figures below are the ones those maps settled on, backed by the published guidelines named at the end.
+The Tactile Map Designer makes a map that is read by touch and printed on an ordinary 3D printer: up to three raised levels, symbols at a size a finger can tell apart, a raised title, a north cue, and channels for braille label tape. It starts from the ground around an address, from the walk between two places, or from a drawing of your own, and splits the map into plates that fit your printer's bed, each named so you know where it goes. I built it from the station maps I print for a transit agency, and the figures below are the ones those maps settled on, backed by the published guidelines named at the end.
 
-It is for anyone who makes a map for a blind or low-vision reader: a station, a campus, a building floor, a park. You need a drawing of the place and a printer. You do not need to type a coordinate.
+It is for anyone who makes a map for a blind or low-vision reader: a station, a campus, a building floor, a park, a street corner, a walk to a bus stop. You need a printer, and an address or a drawing. You do not need to type a coordinate.
 
 ## What the tool makes
 
@@ -16,60 +16,32 @@ The sample it opens with is a stand-in station: a platform, a waiting area, stai
 
 ## Opening it
 
-On the welcome screen choose the **Tactile Map Designer** card and press **Open Tactile Map Designer**, or open `?example=tactile-map` directly. The card's **Map type** menu, or a link's `type` (`place`, `route` or `drawing`), says which map you want; opened without one, the panel above the model's own controls asks. Each map type walks you through five numbered steps, one at a time: **Next** goes on, waiting with its reason beside it until the step has what it needs, and **Back** goes back. The heading of each step says which it is and how many there are.
+On the welcome screen choose the **Tactile Map Designer** card and press **Open Tactile Map Designer**, or open `?example=tactile-map` directly. The card's **Map type** menu, or a link's `type` (`place`, `route` or `drawing`), says which map you want; opened without one, the panel above the model's own controls asks. Each map type walks you through five numbered steps, one at a time: **Next** goes on, waiting with its reason beside it until the step has what it needs, and **Back** goes back. The heading of each step says which it is and how many there are. The last step, **Check and print**, is the same for every type and is described under [Plates](#plates).
 
-## Three ways in
+## A place map
 
-### A drawing you upload or trace
+Choose **A place map** to map the ground around one address: a block, a campus, the streets around a stop. Its steps are Where, How much ground, What to show, Make the map, and Check and print.
 
-Choose **A map from your drawing**. It has five steps:
+1. **Where.** Type a street address, an intersection or the name of a place in **Address or place** and press **Search**. Nothing is sent until you press. Up to five places come back as a list; pick the one you meant. The search goes to OpenStreetMap's Nominatim service, one request a second at most, and the app does not offer suggestions as you type, because that service forbids it.
+2. **How much ground.** Choose the **Map scale**, named for the ground it fits: **A building and its doors** (1:500), **A block** (1:1000, where it starts), **A few blocks** (1:2000), **A neighborhood** (1:4000), or **Custom**, any ratio from 1:200 to 1:10000, which draws by the rules of the named scale nearest its ratio. Under each, a sentence says how much ground fits across the plate, what a 10 mm symbol stands for, and what draws:
+   - near a building, every sidewalk, curb ramp and raised curb, and a crossing without markings dashed. A crossing counts as painted when its data names any pattern (zebra, ladder, lines) and as unpainted when it names none. A curb ramp or raised curb starts on where it stands on a sidewalk or crossing that starts on and its symbol has 3 mm of room; the others wait in the list, off;
+   - at a block, the sidewalks and crossings;
+   - over a few blocks, a street whose curbs would fall 3 mm apart or closer draws as one line, and entrances start off;
+   - over a neighborhood the streets are the map, one line each, and crossings, side paths and landmarks leave.
+3. **What to show.** Tick the **Landmarks to show** you want in the draft: Entrances and Transit stops start ticked; Crossings, Steps and stairs, Shops and Benches start off. [Mark steep sidewalks](#steep-sidewalks) is here too.
+4. **Make the map.** One press gets the [map data](#where-the-map-data-comes-from) for the ground the scale covers, makes the draft and opens it [in the editor](#the-draft-in-the-editor). Everything in the draft starts off except the sidewalks within 30 m of the address, the crossings they end on, the curbs step 2 describes, the landmarks you ticked and the **You are here** point in the middle: a draft is a list of what is there, and you choose what a reader needs. The editor works with 1,000 shapes at a time, so a draft of a large piece of ground keeps every feature that is on and the others nearest the address, and the status line says how many it left out. A second press drafts again from the same data; a new place, scale or plate size gets new data first.
+5. **Check and print.**
 
-1. **Choose the drawing.** The model's **Map file** control stands in this step. Choose an SVG, a DXF (converted on your device), or a photo saved as PNG or JPG, which the app traces into shapes. Until you choose one, the map uses the sample station. A photo can be cropped before it is traced: **Crop first** stands beside **Start conversion**.
-2. **The drawing's real width.** **Drawing width (mm)** fills itself from the file when the file says how wide it is (a DXF in millimeters, an SVG with a width in mm, cm or inches); otherwise it starts at the map's width. Type the real width of the drawing, and the map is built at that scale. When you change it, the app says what one drawing unit is in millimeters.
-3. **Class the shapes.** Press **Edit drawing as a map**. The drawing editor opens with every shape of the drawing as a row, and each row has a **Class** menu. Every row starts at Ignore. Set a class on each shape that belongs on the map. A row's shape lights up on the picture when its row is focused; Undo and Redo on the toolbar take a class change back and forward, and Ctrl+Z and Ctrl+Y do the same. On the picture each shape takes its level's color, the colors the charm customizer gives its layers: blue for the floor level, orange for the symbol level, yellow-green for the top level, each with a light edge. A shape with no class, or Off, is hatched with a dashed edge, and the legend under the picture names all four.
-4. **Apply classes.** Press **Apply classes** in the editor. The editor closes, the app says how many features the plan now holds and how many shapes were ignored, the plates rebuild their summary, and the preview shows the map.
-5. **Check and print.** The print bed, the plates and the render button, as described under [Plates](#plates).
+## A route map
 
-What a class does to a shape:
+Choose **A route map** to map the walk between two places instead of the ground around one. Its steps are From and To, How you travel, What to show, Make the map, and Check and print.
 
-- A **line** class (Wall, Curb or edge, Walkway, Route, Crossing, Track) keeps the shape's centerline and draws it at the class's width and style. A wall drawn as a closed outline is one shape with an inner ring; set the inner ring to the wall's class or leave it at Ignore, and either way the line runs between the two edges. A shape wider than 6 mm at its middle is not a line anyone drew, so it stays an area and a warning names it. Dots drawn along a dotted line, each set to the same line class, are joined in order into one line.
-- An **area** class keeps the shape's outline, and keeps open whatever is drawn inside it (a courtyard, a slot, letters cut into a plateau) when those inner shapes are set to the same class or left at Ignore. A shape of another class inside it is a feature of its own.
-- A **point** class (Stairs, Elevator up, Elevator down, Entrance, Landmark, You are here, Transit stop) drops the drawn shape and puts the class's symbol at its center. The several strokes of one drawn symbol, within 10 mm of each other, become one point.
-- **Text** keeps a drawn word's letters as drawn, counters open, and raises them one symbol step above the floor they stand on, the height my printed maps use and, with the defaults, the ADA minimum for raised characters.
-- **Ignore** leaves the shape out. A key sheet beside the map, the digits of a scale bar, a border you do not want: set them to Ignore and they add nothing.
+1. **From and To.** Pick the start in **From** as a place map picks its address. Type the destination in **To**, press its **Search** and pick it under **Destinations found**. There is no scale to choose: the map covers both places and the walk between them.
+2. **How you travel.** Under **On foot, or by bus and train?**, choose how the trip goes; **On foot** is where it starts. Under **Steps on the way**, choose **Allowed, and marked on the map**, where it starts, or **Avoided where another way exists**. Steps are often the shortest way, and a reader should know they are there.
 
-The map is as big as the shapes you keep, plus half the width of the widest line class among them, so a wall along the edge stays on the plate. A drawing's margins add nothing. If you want a margin, draw a border and give it a class.
-
-Pressing **Edit drawing as a map** again reopens the editor on the same drawing with the classes you applied. Choosing another file for the Map file replaces the drawing.
-
-### Your own map plan
-
-Every map is a plan: a list of features in millimeters, each with a class and a kind (a line with its points, an area with its ring and any holes, a point with its center, a channel with its center and length), and the map's size. The plan the tool built is in the zip as `map_plan.json`, beside the plates, so what you made is yours to keep, read and reuse. The plan's shape is documented in the source file `src/js/tactile-map/plan.js`.
-
-### An address
-
-Choose **A place map**. It drafts a map of a street address from OpenStreetMap, for you to edit the same way as a drawing, in five steps: Where, How much ground, What to show, Make the map, and Check and print.
-
-1. Type a street address, an intersection or the name of a place in **Address or place** and press **Search**. Nothing is sent until you press. Up to five places come back as a list; pick the one you meant. The search goes to OpenStreetMap's Nominatim service, one request a second at most, and the app does not offer suggestions as you type, because that service forbids it.
-2. Choose the **Map scale**, named for the ground it fits: **A building and its doors** (1:500), **A block** (1:1000, where it starts), **A few blocks** (1:2000), **A neighborhood** (1:4000), or **Custom**, any ratio from 1:200 to 1:10000. Under each, a sentence says how much ground fits across the plate, what a 10 mm symbol stands for, and what draws: near a building every sidewalk, curb ramp and raised curb, and a crossing without markings dashed; over a few blocks a street whose curbs would fall 3 mm apart or closer draws as one line, and entrances start off; over a neighborhood the streets are the map, one line each, and crossings, side paths and landmarks leave. A curb ramp or raised curb starts on where it stands on a sidewalk or crossing that starts on and its symbol has 3 mm of room; the others wait in the list, off. A crossing counts as painted when its data says any pattern (zebra, ladder, lines) and as unpainted when it says none. Custom draws by the rules of the named scale nearest its ratio. The editor works with 1,000 shapes at a time, so a draft of a large piece of ground keeps every feature that is on and the others nearest the address, and the status line says how many it left out.
-3. Tick the **Landmarks to show** you want in the draft: Entrances and Transit stops start ticked; Crossings, Steps and stairs, Shops and Benches start off. **Mark steep sidewalks**, described below, is in this step too.
-4. Press **Make the map**. The app reads OpenStreetMap US's map tiles over the ground, each about 800 m across, one to nine of them, usually in a second or two, and the status line says how many features came back: walkways, crossings, buildings and landmarks. The tiles are made ahead of time from OpenStreetMap and carry the tags a draft is made from, so the draft is the same either way. When the tiles do not answer within 20 seconds or refuse, the status line says so and the app asks an Overpass server instead: OpenStreetMap's main server first, then VK Maps' server, which can take half a minute. Those servers are shared and often full; when neither answers, the app waits 30 seconds and asks both again, then 60, then tells you to try later or use a file instead. Then the data becomes a plan with north up and opens in the drawing editor's map purpose, one shape per feature. Everything starts off except the sidewalks within 30 m of the address, the crossings they end on, the landmarks you ticked and the **You are here** point in the middle: a draft is a list of what is there, and you choose what a reader needs. Switch a shape on by giving it a class; switch it off with the Class menu's last entry, **Off**. Buildings arrive as off areas and roads as off pairs of curb lines, because a block of raised buildings is a field a finger must cross; turn on the ones that help. Press **Apply classes** and the plates rebuild from what you kept; the editor says how many features are on and off. A second press of **Make the map** drafts again from the same data, unless the place, the radius or the landmarks changed.
-5. **Check and print** holds the plates, described under [Plates](#plates).
-
-**Walk this** is a tool in the editor's toolbar for the route: pick it (the key is W), then click the sidewalks in the order you walk them. Each one joins the route where one of its ends meets either end of the route, so the first two may be picked in either direction, and the status says how many segments are on the route and how long it is in meters. A segment that touches nothing on the route yet is refused, so pick the one between them first. **Clear route** puts every picked segment back. When you apply, the segments that meet become one Route line, the dotted line a finger follows.
-
-**Mark steep sidewalks** marks the sidewalks you kept that are steeper than the **Steep grade (%)** with chevrons pointing uphill, so a reader knows before the hill. The grade is 3 to 12 % and starts at 5 %, the grade where a walking surface counts as a ramp. For a feel of the numbers, AccessMap's: 5 % is a gentle slope, 8 % is near the most a ramp may be, and 15 % is a steep hill. Where the map data gives a sidewalk's incline as a number, such as 8 % or -6 %, that number is used: OpenStreetMap writes the steepest part of a way there, so the whole sidewalk gets chevrons when it is over the grade. The OSM US tiles leave that tag out, so a number is used only when the data came from an Overpass server or a file. Every other sidewalk is read from public terrain tiles at about 3 m per pixel, every 10 m and smoothed over 30 m: a long hill shows; a short steep step, a curb ramp or a stair does not. Switching it off removes the chevrons.
-
-**Use a file instead**, beside **Make the map**, is the other way in: an `.osm` export from openstreetmap.org (the Export button, a small box around your address) or a `.geojson` file, read on your device and never sent anywhere. It is for a busy server, for working offline, and for a map you want to build again later from the same data. With an address picked the file centers on it; without one, on the middle of the file.
-
-#### A route map
-
-Choose **A route map** to map the walk between two places instead of the ground around one. Its five steps are From and To, How you travel, What to show, Make the map, and Check and print.
-
-1. Pick the start in **From** as a place map picks its address. Type the destination in **To**, press its **Search** and pick it under **Destinations found**. There is no scale to choose: the map covers both places and the walk between them.
-2. Under **On foot, or by bus and train?**, choose how the trip goes; **On foot** is where it starts. Under **Steps on the way**, choose **Allowed, and marked on the map**, where it starts, or **Avoided where another way exists**. By bus and train, set **Leave at**, press **Find journeys**, and pick one of up to three journeys, each said in words, for example "22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony." Then choose **Which walk to map**: the walk to the first stop, or the walk from the last stop. Each is a map of its own, drawn the way a walk is, with the stop as a Transit stop named with its line; make one, then come back for the other. The ride between the stops is not drawn; the journey's words follow the map's ready sentence.
-3. Tick the landmarks in What to show, then press **Make the map**. The request asks for a box around both places with at least 150 m to spare beyond them. The app finds the shortest walk on the ways people walk, from a door of the first building to a door of the second (its main entrance when the data marks one). Where the data has no sidewalk the walk may follow a street, counted at three times its length so that a sidewalk wins whenever there is one. Steps are allowed and marked unless you chose to avoid them: they are often the shortest way, and a reader should know they are there.
-4. The draft switches on what the walk needs:
+   By bus and train, set **Leave at**, press **Find journeys**, and pick one of up to three journeys from Transitous, the open journey planner, each said in words, for example "22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony." Then choose **Which walk to map**: the walk to the first stop, or the walk from the last stop. Each is a map of its own, drawn the way a walk is, with the stop as a Transit stop named with its line; make one, then come back for the other. The ride between the stops is not drawn; the journey's words follow the map's ready sentence.
+3. **What to show.** Tick the landmarks you want, as a place map does. [Mark steep sidewalks](#steep-sidewalks) is here too.
+4. **Make the map.** One press gets the [map data](#where-the-map-data-comes-from) for a box around both places with at least 150 m to spare, finds the walk and opens the draft [in the editor](#the-draft-in-the-editor). The walk is the shortest one on the ways people walk, from a door of the first building to a door of the second (its main entrance when the data marks one). Where the data has no sidewalk the walk may follow a street, counted at three times its length so that a sidewalk wins whenever there is one. The draft switches on what the walk needs:
    - the walk as one dotted Route line from door to door, so no short piece of path is lost;
    - the crossings and the flights of steps on it;
    - the two buildings, **You are here** at the start door and an **Entrance** at the destination door;
@@ -77,13 +49,52 @@ Choose **A route map** to map the walk between two places instead of the ground 
    - the curbs of each street the walk crosses, for 25 m each side of the crossing;
    - the landmarks you ticked within 25 m of the walk, each set beside the route; of two that face each other across a street, one: the nearer, unless it has no room 3 mm clear of the route.
 
-   Nothing that is on comes within 3 mm of the route, so a finger never takes a curb for the route. Everything else in the data is drawn too, switched off, one choice away in the editor.
-5. The map is fitted to the walk and the two buildings, north up, with 30 m of ground around them, at the largest scale your map size allows, and the plate is cut to fit: a walk that runs north and south on a 480 x 360 mm setting keeps the height and narrows the plate. The status line says how long the walk is, how many crossings and flights of steps are on it, and the map's size.
-6. The editor opens on the draft. Its shapes are named by their street or building, or by their class and the nearest named place ("Stairs near Husky Union Building"). Change what your reader needs and press **Apply classes**; **Edit drawing as a map** reopens it later with your classes.
+   Nothing that is on comes within 3 mm of the route, so a finger never takes a curb for the route. Everything else in the data is drawn too, switched off, one choice away in the editor. The map is fitted to the walk and the two buildings, north up, with 30 m of ground around them, at the largest scale your map size allows, and the plate is cut to fit: a walk that runs north and south on a 480 x 360 mm setting keeps the height and narrows the plate. The status line says how long the walk is, how many crossings and flights of steps are on it, and the map's size; when no walk joins the two places in the data, it says so: try other places, or use a file of the area instead.
+5. **Check and print.**
 
-The raised title stays empty for you to write: two full place names are usually longer than the plate, and a short title ("HUB TO GATES") reads faster. When no walk joins the two places in the data, the status line says so; try other places, or use a file of the area instead.
+The raised title stays empty for you to write: two full place names are usually longer than the plate, and a short title ("HUB TO GATES") reads faster.
 
-What leaves your device, and when, is under Privacy. The data is OpenStreetMap's, under the Open Database License, and the map carries the line "Map data from OpenStreetMap contributors, ODbL"; the terms are under Sources.
+## A map from your drawing
+
+Choose **A map from your drawing** for a floor plan, a station drawing, a DXF or a traced photo. Its steps:
+
+1. **Choose the drawing.** The model's **Map file** control stands in this step. Choose an SVG, a DXF (converted on your device), or a photo saved as PNG or JPG, which the app traces into shapes. Until you choose one, the map uses the sample station. A photo can be cropped before it is traced: **Crop first** stands beside **Start conversion**. Until its shapes are classed, the preview shows the drawing raised whole on the floor level, so you see what you chose.
+2. **The drawing's real width.** **Drawing width (mm)** fills itself from the file when the file says how wide it is (a DXF in millimeters, an SVG with a width in mm, cm or inches); otherwise it starts at the map's width. Type the real width of the drawing, and the map is built at that scale. When you change it, the app says what one drawing unit is in millimeters.
+3. **Class the shapes.** Press **Edit drawing as a map**. The [editor](#the-draft-in-the-editor) opens with every shape of the drawing as a row, each starting at Ignore. Set a class on each shape that belongs on the map.
+4. **Apply classes.** Press **Apply classes** in the editor. The editor closes, the app says how many features the plan now holds and how many shapes were ignored, the plates rebuild their summary, and the preview shows the map.
+5. **Check and print.**
+
+What a class does to a drawn shape:
+
+- A **line** class (Wall, Curb or edge, Walkway, Route, Crossing, Track) keeps the shape's centerline and draws it at the class's width and style. A wall drawn as a closed outline is one shape with an inner ring; set the inner ring to the wall's class or leave it at Ignore, and either way the line runs between the two edges. A shape wider than 6 mm at its middle is not a line anyone drew, so it stays an area and a warning names it. Dots drawn along a dotted line, each set to the same line class, are joined in order into one line.
+- An **area** class keeps the shape's outline, and keeps open whatever is drawn inside it (a courtyard, a slot, letters cut into a plateau) when those inner shapes are set to the same class or left at Ignore. A shape of another class inside it is a feature of its own.
+- A **point** class (Stairs, Elevator up, Elevator down, Entrance, Landmark, You are here, Transit stop) drops the drawn shape and puts the class's symbol at its center. The several strokes of one drawn symbol, within 10 mm of each other, become one point.
+- **Text** keeps a drawn word's letters as drawn, counters open, and raises them one symbol step above the floor they stand on, the height my printed maps use and, with the defaults, the ADA minimum for raised characters.
+- **Ignore** leaves the shape out. A key sheet beside the map, the digits of a scale bar, a border you do not want: set them to Ignore and they add nothing.
+
+The map is as big as the shapes you keep, plus half the width of the widest line class among them, so a wall along the edge stays on the plate. A drawing's margins add nothing. If you want a margin, draw a border and give it a class. Pressing **Edit drawing as a map** again reopens the editor on the same drawing with the classes you applied; choosing another file for the Map file replaces the drawing.
+
+## Where the map data comes from
+
+A place map and a route map are drafted from OpenStreetMap. **Make the map** reads OpenStreetMap US's map tiles over the ground, each about 800 m across, one to nine of them, usually in a second or two, and the status line says how many features came back: walkways, crossings, buildings and landmarks. The tiles are made ahead of time from OpenStreetMap and carry the tags a draft is made from, so the draft is the same either way. When the tiles do not answer within 20 seconds or refuse, the status line says so and the app asks an Overpass server instead: OpenStreetMap's main server first, then VK Maps' server, which can take half a minute. Those servers are shared and often full; when neither answers, the app waits 30 seconds and asks both again, then 60, then tells you to try later or use a file instead.
+
+**Use a file instead**, beside **Make the map**, is the other way in: an `.osm` export from openstreetmap.org (the Export button, a small box around your address) or a `.geojson` file, read on your device and never sent anywhere. It is for a busy server, for working offline, and for a map you want to build again later from the same data. With an address picked the file centers on it; without one, on the middle of the file.
+
+The data is OpenStreetMap's, under the Open Database License. The panel shows the line "Map data from OpenStreetMap contributors, ODbL", and the README in the zip carries it with the plates, with Transitous's credit beside it for a trip by bus and train; the terms are under Sources.
+
+## The draft in the editor
+
+A draft opens in the drawing editor's map purpose, one shape per feature, each named by its street or building, or by its class and the nearest named place ("Stairs near Husky Union Building"). Each row has a **Class** menu: switch a shape on by giving it a class, and off with the menu's last entry, **Off**. Buildings arrive as off areas and roads as off pairs of curb lines, because a block of raised buildings is a field a finger must cross; turn on the ones that help. A row's shape lights up on the picture when its row is focused; Undo and Redo on the toolbar take a class change back and forward, and Ctrl+Z and Ctrl+Y do the same. On the picture each shape takes its level's color, the colors the charm customizer gives its layers: blue for the floor level, orange for the symbol level, yellow-green for the top level, each with a light edge. A shape with no class, or Off, is hatched with a dashed edge, and the legend under the picture names all four. Press **Apply classes** and the plates rebuild from what you kept; the editor says how many features are on and off. **Edit drawing as a map** reopens it later with your classes.
+
+**Walk this** is a tool in the editor's toolbar for drawing a route yourself: pick it (the key is W), then click the sidewalks in the order you walk them. Each one joins the route where one of its ends meets either end of the route, so the first two may be picked in either direction, and the status says how many segments are on the route and how long it is in meters. A segment that touches nothing on the route yet is refused, so pick the one between them first. **Clear route** puts every picked segment back. When you apply, the segments that meet become one Route line, the dotted line a finger follows.
+
+## Steep sidewalks
+
+**Mark steep sidewalks**, in a place or route map's What to show, marks the sidewalks you kept that are steeper than the **Steep grade (%)** with chevrons pointing uphill, so a reader knows before the hill. The grade is 3 to 12 % and starts at 5 %, the grade where a walking surface counts as a ramp. For a feel of the numbers, AccessMap's: 5 % is a gentle slope, 8 % is near the most a ramp may be, and 15 % is a steep hill. Where the map data gives a sidewalk's incline as a number, such as 8 % or -6 %, that number is used: OpenStreetMap writes the steepest part of a way there, so the whole sidewalk gets chevrons when it is over the grade. The OSM US tiles leave that tag out, so a number is used only when the data came from an Overpass server or a file. Every other sidewalk is read from public terrain tiles at about 3 m per pixel, every 10 m and smoothed over 30 m: a long hill shows; a short steep step, a curb ramp or a stair does not. Switching it off removes the chevrons.
+
+## The map plan
+
+Every map is a plan: a list of features in millimeters, each with a class and a kind (a line with its points, an area with its ring and any holes, a point with its center, a channel with its center and length), and the map's size. The plan the tool built is in the zip as `map_plan.json`, beside the plates, so what you made is yours to keep, read and reuse. The plan's shape is documented in the source file `src/js/tactile-map/plan.js`.
 
 ## The classes
 
@@ -96,7 +107,7 @@ What leaves your device, and when, is under Privacy. The data is OpenStreetMap's
 | Crossing                   | a street crossing                      | symbol | a line 1.5 mm wide with short cross-ticks, 6 mm long, 6 mm apart; near a building, dashed where it has no markings | BANA 2022 line styles                                               |
 | Track                      | rails                                  | floor  | two lines 1.0 mm wide with a 1.5 mm gap                          | Jehoel 2006: a double line reads as two when the gap is over 1.3 mm |
 | Steep sidewalk             | a sidewalk run steeper than your grade | symbol | a line 1.5 mm wide with a chevron every 10 mm, 6 mm across, pointing uphill | Ungar 2005: arrows are read by their point; OpenSidewalks: incline as rise over run |
-| Traffic island             | the crossing's part on an island       | symbol | a plain line 1.5 mm wide, so the ticks pause there               | OpenSidewalks: the island is part of the crossing |
+| Traffic island             | the crossing's part on an island       | symbol | a plain line 1.5 mm wide, so the ticks pause there               | OpenSidewalks: the island is part of the crossing                   |
 | Area                       | a platform, a building, water          | floor  | a plain raised area                                              | BANA 2022 3.4.3.1                                                   |
 | Stairs                     | a staircase                            | symbol | three bars, 10 mm                                                | Ungar 2005; BANA 2022                                               |
 | Elevator up, Elevator down | an elevator, read as up or down        | symbol | a solid triangle, 10 mm, apex up or down                         | Ungar 2005; Gual 2012                                               |
@@ -104,8 +115,8 @@ What leaves your device, and when, is under Privacy. The data is OpenStreetMap's
 | Landmark                   | anything you name in the key           | symbol | a disc, 10 mm                                                    | BANA 2022 8.6.5; Jehoel 2009                                        |
 | You are here               | the reader's place                     | symbol | a disc with a square hole, 10 mm                                 | BANA 2022 8.5.6; ISO 19028                                          |
 | Transit stop               | a bus, train or tram stop              | symbol | a square with a notch, 9 mm                                      | BANA 2022 8.5.4                                                     |
-| Curb ramp                  | a lowered or flush curb, no edge       | symbol | a triangle, 10 mm on a side                                      | OpenSidewalks curbs; Jehoel 2009 |
-| Raised curb                | a curb a wheel cannot take             | symbol | a square, 9 mm                                                   | OpenSidewalks curbs; Jehoel 2009 |
+| Curb ramp                  | a lowered or flush curb, no edge       | symbol | a triangle, 10 mm on a side                                      | OpenSidewalks curbs; Jehoel 2009                                    |
+| Raised curb                | a curb a wheel cannot take             | symbol | a square, 9 mm                                                   | OpenSidewalks curbs; Jehoel 2009                                    |
 | Text                       | a word you drew                        | symbol | the letters as drawn                                             | ADA 703.2                                                           |
 
 The shapes, and how to load a set of your own, are on the [Tactile map symbols](TACTILE_MAP_SYMBOLS.md) page.
@@ -132,6 +143,8 @@ The north cue starts as the arrow with an N because my printed maps carry one; B
 
 ## Plates
 
+**Check and print** holds the print bed, the plates, the warnings and the render button.
+
 Pick your printer's bed in the **Print bed** list and the map splits into the fewest equal plates that fit it, each with a 2 mm margin to the bed's edges. The list: Bambu Lab X1C, P1S or P1P (256 x 256 mm, the first), Bambu Lab A1 (256 x 256), Bambu Lab A1 mini (180 x 180), Prusa MK4S, MK4 or MK3S (250 x 210), Prusa MINI (180 x 180), Prusa XL (360 x 360), Creality Ender 3 family (220 x 220), Creality K1 Max (300 x 300), and a custom size from 100 to 600 mm. The summary line says how many plates and how big: "4 plates of 240 x 180 mm, A1 to B2." for the sample on the X1C. A bed that would cut the map into plates under 100 x 75 mm is refused in that line; choose a larger bed.
 
 Plates are named by row letter and column number, A1 at the top left. The **Plate** radio buttons show one plate in the preview, or the whole map; a plate shows the title only when it is the top-left plate, and the north arrow only when it is the top-right one (a north line runs along the whole top row). The **Plate name style** menu decides how a plate carries its name:
@@ -139,7 +152,7 @@ Plates are named by row letter and column number, A1 at the top left. The **Plat
 - **Notches on the bottom edge** (the default): one to four 3 x 2 mm notches cut right through the plate at its bottom edge say the row (A is one notch), and dots after them say the column. A finger finds them from either side, and a glued map shows only small pits along the seams.
 - **Raised letters in the margin**: a 10 mm strip below the map carries the name in 6 mm capitals, readable by touch and by eye before assembly. The strip sits between the rows unless you trim it after printing; it is the better choice if your readers handle loose plates.
 
-**Render every plate and download** renders each plate in turn through the same model (a sentence counts them off; **Cancel** stops after the plate under way, and the plates finished so far still download) and offers one zip: an STL per plate (a 3MF when the output format says so), `map_plan.json`, a levels file per plate, `plate_grid.svg` (the map with the grid and the names), and `README.txt`, which repeats the bed, the plate size, the list to print, the levels measured from the underside and the tape width.
+**Render every plate and download** renders each plate in turn through the same model (a sentence counts them off; **Cancel** stops after the plate under way, and the plates finished so far still download) and offers one zip: an STL per plate (a 3MF when the output format says so), `map_plan.json`, a levels file per plate, `plate_grid.svg` (the map with the grid and the names), and `README.txt`. The README says what the map is (a place map with its place and scale, a route map with its walk, or a map from a drawing), then the bed, the plate size, the list to print, the levels measured from the underside and the tape width, then the data's credits.
 
 To assemble: print one of each plate, lay them out as the grid reads, row A at the top and column 1 at the left, and glue them edge to edge onto a backing board of the map's size. I use 4 mm corrugated plastic and spray adhesive; the plates butt against each other with no tabs.
 
@@ -149,7 +162,7 @@ A channel is a recess the width of your tape plus 0.4 mm and 0.3 mm deep, so a s
 
 ## The warnings
 
-The plates section lists the builder's warnings under the plate picker, each naming the feature so you can move it, resize it or switch it off:
+Check and print lists the builder's warnings under one line that counts them ("3 warnings"), folded until you open it. Each names the feature so you can move it, resize it or switch it off:
 
 | What it says                                                                                        | What to do                                       |
 | --------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
@@ -177,29 +190,31 @@ The sentences give the real numbers; the ones above are examples.
 ## What the tool does not check
 
 - Whether the map is right for its reader. BANA 8.1 asks for an orientation and mobility specialist in the loop, and the editor is where that happens: the map is yours to read, revise and test with the people who will use it.
-- Whether the drawing is current. The tool draws what you give it.
+- Whether the drawing or the map data is current. The tool draws what it is given.
 - Whether the scale you typed is the true width of the drawing.
 - Mounting, finish and contrast.
 
 ## Keyboard and screen reader notes
 
-- Every control in the plates section is a native control with a visible label; the section is a labeled region.
+- Every control in the steps and the plates is a native control with a visible label; the panel is a labeled region.
+- **Next** and **Back** move between the steps, and the new step's heading takes focus, so a screen reader says which step it is and how many there are.
+- A step's status sentences are said once: a pick, the draft's ready sentence, a failure and what to try instead. The counts shown when the map data arrives are not said, because the ready sentence follows.
 - The plates summary is a polite live region: a change of bed or of plate is said once. Rendering every plate is counted off the same way, and the zip's name is said when it is ready.
 - In the drawing editor, each row's Class menu is a native menu named for its row, in the row's Tab order; the plan's size is said when Apply classes closes the editor.
-- The warnings are a plain list under the plate picker.
+- The warnings are a plain list inside a disclosure whose summary counts them.
 
 ## Privacy
 
 Everything runs on your device: the drawing's conversion and tracing, the plan, the rendering and the zip. Nothing is uploaded.
 
-A map from an address is the one part that talks to anyone, and only when you press:
+A place or route map is the one part that talks to anyone, and only when you press:
 
 - **Search** sends the words you typed to OpenStreetMap's Nominatim service (nominatim.openstreetmap.org), with the app's web address as the referer and nothing else: no account, no email, no location of yours.
-- **Make the map** asks OpenStreetMap US's tile service (tiles.openstreetmap.us) for the tiles over the area: each request names a tile's number, which says what square of about 800 m the map is in and nothing more. Only when the tiles fail does the app send the four edges of a box: the ground the chosen scale covers around the picked place, or for a route map the room around both places, to OpenStreetMap's main Overpass server (overpass-api.de), and when that server refuses or does not answer, to VK Maps' Overpass server (maps.mail.ru); the status line names each before it is asked.
+- **Make the map** asks OpenStreetMap US's tile service (tiles.openstreetmap.us) for the tiles over the area: each request names a tile's number, which says what square of about 800 m the map is in and nothing more. Only when the tiles fail does the app send the four edges of a box, the ground the chosen scale covers or the room around a route's two places, to an Overpass server (overpass-api.de, then maps.mail.ru); the status line names each before it is asked.
 - **Mark steep sidewalks** fetches up to four terrain tiles from AWS Open Data (s3.amazonaws.com), each a 256 by 256 pixel picture of heights named by its tile number, which says what square kilometer the map is in and nothing more.
-- **A route map by bus and train** sends the two places' coordinates and the time to Transitous's journey planner (api.transitous.org), once a press, with the site's address as the referer, which is how its terms ask a browser app to be known. Nothing else goes with it.
+- **Find journeys**, for a trip by bus and train, sends the two places' coordinates and the time to Transitous's journey planner (api.transitous.org), once a press, with the site's address as the referer, which is how its terms ask a browser app to be known. Nothing else goes with it.
 
-Each of those hosts sees your connection's address, as any web request does. A file you load through **Use a file instead** stays on your device. The drawing route and the plates never leave it.
+Each of those hosts sees your connection's address, as any web request does. A file you load through **Use a file instead** stays on your device. A map from your drawing and the plates never leave it.
 
 ## Sources
 
@@ -211,7 +226,7 @@ The map data and the terrain heights:
 - The Nominatim usage policy, https://operations.osmfoundation.org/policies/nominatim/: the terms the search keeps to.
 - The OpenStreetMap US Tileservice, https://tiles.openstreetmap.us/, and its usage policy, https://tiles.openstreetmap.us/usage-policy/: free for low volume non-commercial use, with the credit "Tiles by OSM US"; its Sourdough tiles, https://sourdough.osm.fyi/, keep OpenStreetMap's own tags layer by layer. Read on 2026-11-01.
 - The Overpass API's public instances and their usage page, https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances: the terms the pull keeps to. It lists the main server (overpass-api.de), which asks an app to pause 30 seconds after a 429 or 406 answer, and VK Maps' instance (maps.mail.ru/osm/tools/overpass), the second server the pull asks, which says it has no request limits at present. Read again on 2026-11-01.
-- The Mapzen terrain tiles on AWS Open Data, https://registry.opendata.aws/terrain-tiles/: Terrarium PNG tiles of heights, built from public elevation data under open terms listed on that page; the app reads zoom 15 at about 3 m per pixel. The incline figure and the rise-over-run definition follow the OpenSidewalks schema, https://sidewalks.washington.edu/opensidewalks/, which reads an incline from OpenStreetMap as the most along the path.
+- The Mapzen terrain tiles on AWS Open Data, https://registry.opendata.aws/terrain-tiles/: Terrarium PNG tiles of heights, built from public elevation data under open terms listed on that page; the app reads zoom 15 at about 3 m per pixel. The incline figure and the rise-over-run definition follow the OpenSidewalks schema, https://sidewalks.washington.edu/opensidewalks/, which reads an incline from OpenStreetMap as the most along the path; its curbs, crossings and traffic islands are the pedestrian base a map near a building draws.
 - OpenStreetMap's `incline` key, https://wiki.openstreetmap.org/wiki/Key:incline: a percent or a degree value, positive uphill along the way, or `up` and `down` when the number is unknown. AccessMap's profiles, https://taskarcenteratuw.github.io/tcat-wiki/accessmap/user-manual/profiles/: the words for 5, 8 and 15 %. Read on 2026-11-01.
 - Transitous, https://transitous.org/, and its API terms, https://transitous.org/api/: a community-run journey planner on the MOTIS engine, free for open-source, non-commercial apps that are light on its resources, routing on OpenStreetMap data and the transit agencies' published schedules, which it lists at https://transitous.org/sources. Read on 2026-11-01.
 
