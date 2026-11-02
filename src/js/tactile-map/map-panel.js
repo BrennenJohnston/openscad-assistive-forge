@@ -1361,8 +1361,9 @@ class MapPanel {
   }
 
   /**
-   * Mark steep sidewalks: on, the terrain tiles under the draft are read
-   * (lazy chunks), every on walkway sampled, and the runs steeper than the
+   * Mark steep sidewalks: on, each sidewalk's incline is taken from the
+   * map data where it gives a number, the terrain tiles under the draft
+   * are read (lazy chunks) for the rest, and the runs steeper than the
    * grade become Steep sidewalk features; off, those features leave. The
    * tiles are the map's third host; a failure says so and the switch rests.
    */
@@ -1387,17 +1388,24 @@ class MapPanel {
     ).length;
     this.sayAddress(ADDRESS_STRINGS.reading(walkways));
     try {
-      const [{ tilesCovering, loadTiles, elevationSampler }, { markSteep }] =
-        await Promise.all([import('./terrain.js'), import('./steep.js')]);
+      const { markSteep, inclinesOf, needsTerrain } =
+        await import('./steep.js');
+      const inclines = inclinesOf(this.osm?.elements);
       let elevationAt = this.elevationAt;
-      if (!elevationAt) {
+      if (!elevationAt && needsTerrain(base, inclines)) {
+        const { tilesCovering, loadTiles, elevationSampler } =
+          await import('./terrain.js');
         const radiusM = this.osm?.radiusM ?? 250;
         const tiles = await loadTiles(tilesCovering(geo.center, radiusM), {
           fetch: this.fetchTiles || undefined,
         });
         elevationAt = elevationSampler(tiles);
       }
-      const { plan, steepCount } = markSteep(base, { elevationAt, gradePct });
+      const { plan, steepCount } = markSteep(base, {
+        elevationAt,
+        gradePct,
+        inclines,
+      });
       this.plan = plan;
       this.schedule(0);
       this.sayAddress(

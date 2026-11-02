@@ -1663,7 +1663,7 @@ describe('the steep switch', () => {
       document.querySelector('label[for="tactileMapSteep"]').textContent
     ).toBe('Mark steep sidewalks');
     expect(document.getElementById('tactileMapSteepHelp').textContent).toBe(
-      'Chevrons along sidewalks steeper than the grade below, pointing uphill. Heights come from public terrain tiles at about 3 m per pixel, so a short steep step can be missed.'
+      "Chevrons along sidewalks steeper than the grade below, pointing uphill. A sidewalk's slope comes from the map data where it gives one, otherwise from public terrain tiles at about 3 m per pixel, which can miss a short steep step."
     );
     expect(
       document.querySelector('label[for="tactileMapGrade"]').textContent
@@ -1675,7 +1675,7 @@ describe('the steep switch', () => {
       gradeInput().value,
     ]).toEqual(['3', '12', '0.5', '5']);
     expect(document.getElementById('tactileMapGradeHelp').textContent).toBe(
-      'Sidewalks steeper than this get chevrons, 3 to 12 %. 5 % is the grade where a walking surface counts as a ramp.'
+      'Sidewalks steeper than this get chevrons, 3 to 12 %. 5 % is a gentle slope; 8 % is near the most a ramp may be; 15 % is a steep hill.'
     );
   });
 
@@ -1736,6 +1736,36 @@ describe('the steep switch', () => {
     gradeInput().value = '20';
     gradeInput().dispatchEvent(new Event('change', { bubbles: true }));
     expect(gradeInput().value).toBe('12');
+  });
+
+  it('takes the incline of each sidewalk from the map data and fetches no terrain tile when every one has a number', async () => {
+    const fetchTiles = vi.fn(async () => ({ ok: false, status: 403 }));
+    const tagged = () =>
+      trimmed().map((el) =>
+        el.type === 'way' ? { ...el, tags: { ...el.tags, incline: '8%' } } : el
+      );
+    await drafted({
+      elevationAt: null,
+      fetchTiles,
+      pullArea: vi.fn(async () => ({ elements: tagged(), bytes: 1, ms: 1 })),
+    });
+    steepBox().checked = true;
+    steepBox().dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(addressStatus()).toMatch(
+        /^\d+ steep segments marked, steeper than 5 %\.$/
+      )
+    );
+    expect(fetchTiles).not.toHaveBeenCalled();
+    const read = getMapPlan().features.filter(
+      (f) =>
+        f.kind === 'line' &&
+        f.on &&
+        (f.class === 'walkway' || f.class === 'crossing')
+    );
+    expect(
+      getMapPlan().features.filter((f) => f.class === 'steep')
+    ).toHaveLength(read.length);
   });
 
   it('says the tiles did not answer and rests the switch when the heights cannot be read', async () => {

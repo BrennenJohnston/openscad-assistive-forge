@@ -181,10 +181,11 @@ export const ADDRESS_STRINGS = Object.freeze({
   draftName: (place) => `Draft map of ${place}`,
   steepLabel: 'Mark steep sidewalks',
   steepHelp:
-    'Chevrons along sidewalks steeper than the grade below, pointing uphill. Heights come from public terrain tiles at about 3 m per pixel, so a short steep step can be missed.',
+    "Chevrons along sidewalks steeper than the grade below, pointing uphill. A sidewalk's slope comes from the map data where it gives one, otherwise from public terrain tiles at about 3 m per pixel, which can miss a short steep step.",
   gradeLabel: 'Steep grade (%)',
+  /** A11Y: the slope words are AccessMap's, adapted. */
   gradeHelp:
-    'Sidewalks steeper than this get chevrons, 3 to 12 %. 5 % is the grade where a walking surface counts as a ramp.',
+    'Sidewalks steeper than this get chevrons, 3 to 12 %. 5 % is a gentle slope; 8 % is near the most a ramp may be; 15 % is a steep hill.',
   /** A11Y: the status line while the tiles load. */
   reading: (n) => `Reading heights along ${n} sidewalks...`,
   /** A11Y: after, with steep segments. */
