@@ -10,6 +10,7 @@
  * @license GPL-3.0-or-later
  */
 import { test, expect } from '@playwright/test';
+import { goToStep } from './helpers/map-steps.js';
 
 test.use({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 2 });
 
@@ -27,8 +28,9 @@ async function seed(page, theme) {
   }, theme);
 }
 
+/** Open a map from the sample drawing and walk to Check and print, where the menu stands. */
 async function openTile(page) {
-  await page.goto('/?example=tactile-map');
+  await page.goto('/?example=tactile-map&type=drawing');
   await expect(page.locator('#tactileMapPanel')).toBeVisible({ timeout: 60000 });
   const notNow = page.locator('#saveProjectNotNow');
   try {
@@ -37,6 +39,7 @@ async function openTile(page) {
   } catch {
     // No save-project prompt to dismiss.
   }
+  await goToStep(page, 5);
 }
 
 /** Focus the control before the target by script, then one Tab: a keyboard arrival. */
