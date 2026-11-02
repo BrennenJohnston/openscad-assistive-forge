@@ -751,7 +751,8 @@ describe('render every plate and download', () => {
       JSON.parse(await zip.file('map_plan.json').async('string')).size
     ).toEqual({ w: 480, h: 360 });
     expect(readme).toBe(
-      'Station: 4 plates for a Bambu Lab X1C, P1S or P1P (256 x 256 mm) bed, each 240 x 180 mm. ' +
+      'A map from a drawing.\n' +
+        'Station: 4 plates for a Bambu Lab X1C, P1S or P1P (256 x 256 mm) bed, each 240 x 180 mm. ' +
         'Print one of each: A1, A2, B1, B2. ' +
         'Lay them out as the grid reads, row A at the top, column 1 at the left, and glue them edge to edge onto a backing board of 480 x 360 mm. ' +
         'Levels, measured from the underside: base 0.4 mm, then 1.0, 1.8, 2.4 mm. ' +

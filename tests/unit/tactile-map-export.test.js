@@ -117,6 +117,64 @@ describe('plateGridSvg', () => {
   });
 });
 
+describe('the README says what the map is', () => {
+  const base = {
+    mapName: 'Map',
+    bedName: x1c.name,
+    layout,
+    size: { w: 480, h: 360 },
+    heights: { base: 0.4, tops: [1, 1.8, 2.4] },
+    tapeWidthMm: 12.7,
+  };
+
+  it('opens a place map with its place and scale and closes with the map data credit', () => {
+    const readme = readmeText({
+      ...base,
+      about: {
+        type: 'place',
+        place: 'Bill & Melinda Gates Center',
+        ratio: 500,
+      },
+    });
+    const lines = readme.trimEnd().split('\n');
+    expect(lines[0]).toBe(
+      'A place map of Bill & Melinda Gates Center at 1:500.'
+    );
+    expect(lines[1]).toMatch(/^Map: 4 plates for a /);
+    expect(lines[lines.length - 1]).toBe(
+      'Map data from OpenStreetMap contributors, ODbL: https://www.openstreetmap.org/copyright'
+    );
+  });
+
+  it('opens a route map with its walk, says the journey by bus and train, and credits Transitous too', () => {
+    const readme = readmeText({
+      ...base,
+      about: {
+        type: 'route',
+        from: 'Husky Union Building',
+        to: 'East Stevens Way NE & Benton Ln',
+        lengthM: 60,
+        journey:
+          '22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony.',
+      },
+    });
+    const lines = readme.trimEnd().split('\n');
+    expect(lines[0]).toBe(
+      'A route map of a 60 m walk from Husky Union Building to East Stevens Way NE & Benton Ln. The walk is part of a journey by bus and train: 22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony.'
+    );
+    expect(lines.slice(-2)).toEqual([
+      'Map data from OpenStreetMap contributors, ODbL: https://www.openstreetmap.org/copyright',
+      'Routes from Transitous, on OpenStreetMap data: https://transitous.org/sources',
+    ]);
+  });
+
+  it('opens a map from a drawing plainly, with no map data credit', () => {
+    const readme = readmeText({ ...base, about: { type: 'drawing' } });
+    expect(readme.split('\n')[0]).toBe('A map from a drawing.');
+    expect(readme).not.toMatch(/OpenStreetMap/);
+  });
+});
+
 describe('the archive and its README', () => {
   it('puts plate_grid.svg before the README, which points at it', () => {
     const readme = readmeText({

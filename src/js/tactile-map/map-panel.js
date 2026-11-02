@@ -1527,6 +1527,29 @@ class MapPanel {
     }
   }
 
+  /** What the map is, for the README: its type and what it was made from. */
+  mapAbout() {
+    const short = (p) => (p?.name || '').split(',')[0].trim();
+    const osm = this.osm;
+    if (this.source === 'draft' && osm?.to) {
+      return {
+        type: 'route',
+        from: short(osm.place),
+        to: short(osm.to),
+        lengthM: Math.round(this.draft?.counts?.lengthM ?? 0),
+        journey: osm.travel?.words,
+      };
+    }
+    if (this.source === 'draft' && osm) {
+      return {
+        type: 'place',
+        place: short(osm.place),
+        ratio: osm.scale?.ratio,
+      };
+    }
+    return { type: 'drawing' };
+  }
+
   async buildArchive({ stem, extension, rendered, sets, rings, parameters }) {
     const bed = this.bed();
     const bedName =
@@ -1541,6 +1564,7 @@ class MapPanel {
       size: this.plan.size,
       heights: levelHeights(parameters),
       tapeWidthMm: this.tapeWidth(),
+      about: this.mapAbout(),
     });
     const grid = plateGridSvg({
       rings,
