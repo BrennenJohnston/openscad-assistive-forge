@@ -275,7 +275,10 @@ test.describe('the Tactile Map Designer card', () => {
     )
     await expect(card.locator('.role-path-meta a')).toHaveCount(0)
     await card.locator('summary').click()
-    await expect(card.locator('.role-path-tips li')).toHaveCount(4)
+    await expect(card.locator('.role-path-tips li')).toHaveCount(5)
+    await expect(card.locator('.role-path-tips li').first()).toContainText(
+      'Street maps and walking routes drafted from OpenStreetMap'
+    )
     const select = card.locator('#tactileMapVariantSelect')
     await expect(select).toHaveValue('place')
     const button = card.locator('#openTactileMapBtn')
