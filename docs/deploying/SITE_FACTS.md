@@ -62,7 +62,7 @@ Every response carries this CSP, configured in
 [`public/_headers`](../../public/_headers) — the single line as shipped:
 
 ```
-Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev https://tiles.openstreetmap.us https://overpass-api.de https://maps.mail.ru https://nominatim.openstreetmap.org https://s3.amazonaws.com; worker-src 'self' blob:; child-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
+Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev https://tiles.openstreetmap.us https://overpass-api.de https://maps.mail.ru https://nominatim.openstreetmap.org https://s3.amazonaws.com https://api.transitous.org; worker-src 'self' blob:; child-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
 ```
 
 Each directive, in plain language:
@@ -102,6 +102,12 @@ shell, the engine, libraries, fonts, examples, the service worker.
 `media.githubusercontent.com`, `*.github.io`, `*.gitlab.io`,
 `*.pages.dev`. If a network blocks all of these, the app still works —
 deep-link sharing is the only thing that does not.
+
+**Only when you make a tactile map**, and only on a press: OpenStreetMap
+US's map tiles (`tiles.openstreetmap.us`), two Overpass servers when the
+tiles fail (`overpass-api.de`, `maps.mail.ru`), the address search
+(`nominatim.openstreetmap.org`), terrain tiles for steep sidewalks
+(`s3.amazonaws.com`) and a route map's journeys (`api.transitous.org`).
 
 There are no other outbound connections.
 

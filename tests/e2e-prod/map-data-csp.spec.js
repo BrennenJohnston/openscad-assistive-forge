@@ -6,8 +6,8 @@ import { test, expect } from '@playwright/test';
 // A map from an address reaches the hosts the browser must be allowed to
 // contact: Nominatim for the address, OpenStreetMap US's map tiles for the
 // map data and two Overpass servers when the tiles fail (the main one first,
-// VK Maps' when the main one refuses the site), and the terrain tiles on S3
-// for the slopes. The dev server serves no
+// VK Maps' when the main one refuses the site), the terrain tiles on S3 for
+// the slopes, and Transitous for a route map's journeys. The dev server serves no
 // Content-Security-Policy, so only this lane can say the deployed site lets
 // those requests leave the browser, and that nothing else in the policy
 // moved when the hosts were added.
@@ -18,6 +18,7 @@ const HOSTS = [
   'https://maps.mail.ru',
   'https://nominatim.openstreetmap.org',
   'https://s3.amazonaws.com',
+  'https://api.transitous.org',
 ];
 
 /** The CSP line of public/_headers' global block, as the preview server reads it. */
