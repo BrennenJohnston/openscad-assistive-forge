@@ -25,6 +25,7 @@ export const KEPT_TAGS = Object.freeze([
   'highway',
   'footway',
   'crossing',
+  'crossing:markings',
   'kerb',
   'tactile_paving',
   'incline',

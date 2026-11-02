@@ -11,6 +11,10 @@
 import { svgToDataUrl } from '../svg-text-encoding.js';
 import { ringsToPathData } from '../ring-geometry.js';
 import { plateLevelsSvg } from './plate-tiling.js';
+import { ATTRIBUTION } from './overpass.js';
+import { TRANSIT_STRINGS } from './transit.js';
+
+const OSM_COPYRIGHT_URL = 'https://www.openstreetmap.org/copyright';
 
 /** The tile's own defaults, used when a parameter is not in the state. */
 const TILE_DEFAULTS = {
@@ -193,6 +197,36 @@ export function levelHeights(parameters = {}) {
 }
 
 /**
+ * What the map is, by its type, for the README's first line; and the
+ * credits its data asks to travel with it, for the last lines.
+ *
+ * @param {{type?: string, place?: string, ratio?: number, from?: string, to?: string, lengthM?: number, journey?: string}} about
+ * @returns {{ lead: string|null, credits: string[] }}
+ */
+export function mapAbout(about = {}) {
+  const osm = `${ATTRIBUTION}: ${OSM_COPYRIGHT_URL}`;
+  if (about.type === 'place') {
+    const where = about.place ? ` of ${about.place}` : '';
+    const scale = about.ratio ? ` at 1:${about.ratio}` : '';
+    return { lead: `A place map${where}${scale}.`, credits: [osm] };
+  }
+  if (about.type === 'route') {
+    let lead = `A route map of a ${about.lengthM} m walk from ${about.from} to ${about.to}.`;
+    const credits = [osm];
+    if (about.journey) {
+      lead += ` The walk is part of a journey by bus and train: ${about.journey}`;
+      const words = TRANSIT_STRINGS.attribution.join('').replace(/\.$/, '');
+      credits.push(`${words}: ${TRANSIT_STRINGS.sourcesUrl}`);
+    }
+    return { lead, credits };
+  }
+  if (about.type === 'drawing') {
+    return { lead: 'A map from a drawing.', credits: [] };
+  }
+  return { lead: null, credits: [] };
+}
+
+/**
  * The README that travels with the plates.
  *
  * @param {Object} input
@@ -202,6 +236,7 @@ export function levelHeights(parameters = {}) {
  * @param {{ w: number, h: number }} input.size - The whole map
  * @param {{ base: number, tops: number[] }} input.heights
  * @param {number} input.tapeWidthMm
+ * @param {object} [input.about] - what the map is (`mapAbout`)
  * @returns {string}
  */
 export function readmeText({
@@ -211,10 +246,13 @@ export function readmeText({
   size,
   heights,
   tapeWidthMm,
+  about,
 }) {
   const n = layout.plates.length;
   const ids = layout.plates.map((plate) => plate.id).join(', ');
+  const { lead, credits } = mapAbout(about);
   return (
+    (lead ? `${lead}\n` : '') +
     `${mapName}: ${n} ${n === 1 ? 'plate' : 'plates'} for a ${bedName} bed, ` +
     `each ${layout.plateW} x ${layout.plateH} mm. ` +
     `Print one of each: ${ids}. ` +
@@ -223,7 +261,8 @@ export function readmeText({
     `Levels, measured from the underside: base ${mm(heights.base)} mm, ` +
     `then ${heights.tops.map(mm).join(', ')} mm. ` +
     `Label channels take ${tapeWidthMm} mm tape. ` +
-    'The picture plate_grid.svg shows the layout.\n'
+    'The picture plate_grid.svg shows the layout.\n' +
+    credits.map((line) => `${line}\n`).join('')
   );
 }
 

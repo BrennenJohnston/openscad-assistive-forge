@@ -53,6 +53,8 @@ const LAYERS = [
   'amenities',
   'public_transport',
   'shops',
+  // Curbs: barrier=kerb points with their kerb value.
+  'barriers',
 ];
 const WAY_KEYS = ['highway', 'building', 'railway', 'leisure', 'amenity'];
 const wantedNode = (t) =>
@@ -61,7 +63,8 @@ const wantedNode = (t) =>
   t.highway === 'bus_stop' ||
   'public_transport' in t ||
   'amenity' in t ||
-  'shop' in t;
+  'shop' in t ||
+  'kerb' in t;
 
 function fail(code, message) {
   const error = new Error(message);

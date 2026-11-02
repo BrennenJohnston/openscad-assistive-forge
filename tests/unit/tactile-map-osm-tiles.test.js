@@ -114,6 +114,26 @@ describe('pullTiles', () => {
     );
   });
 
+  it('reads the curbs from the barriers layer and keeps a crossing\'s markings and a traffic island', async () => {
+    const { elements } = await pullTiles({ box: BOX, fetch: tileFetch() });
+    const nodes = elements.filter((e) => e.type === 'node');
+    const ways = elements.filter((e) => e.type === 'way');
+    expect(tagged(nodes, 'kerb', 'lowered').length).toBeGreaterThan(0);
+    expect(tagged(nodes, 'kerb', 'raised').length).toBeGreaterThan(0);
+    expect(
+      ways.filter((w) => /^zebra/.test(w.tags['crossing:markings'] || ''))
+        .length
+    ).toBeGreaterThan(10);
+    expect(tagged(ways, 'crossing:markings', 'no').length).toBeGreaterThan(0);
+    // The fixtures' one traffic island, a feature of two lines, lies south
+    // of the box near the tiles' edge: read over the two whole tiles.
+    const whole = await pullTiles({
+      box: { south: 47.6506, west: -122.3107, north: 47.6579, east: -122.2889 },
+      fetch: tileFetch(),
+    });
+    expect(tagged(whole.elements, 'footway', 'traffic_island')).toHaveLength(2);
+  });
+
   it('gives every element its own number, as the draft builders key them', async () => {
     const { elements } = await pullTiles({ box: BOX, fetch: tileFetch() });
     const ways = elements.filter((e) => e.type === 'way').map((e) => e.id);

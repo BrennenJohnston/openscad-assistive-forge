@@ -6,6 +6,13 @@
  * line of the run's samples drawn with chevrons pointing uphill. Nothing
  * else in the plan changes.
  *
+ * A way whose `incline` tag gives a number is taken at its word and no
+ * height is read for it: OpenStreetMap writes the steepest part of the way
+ * there, signed along the way's direction, so the whole way is steep or
+ * none of it is (OpenSidewalks reads the tag the same way). The terrain
+ * tiles stay the main path: the OSM US tiles keep no `incline` tag, and
+ * most sidewalks carry none.
+ *
  * The grade's range is a public default the owner signs (3 to 12 %, the 5 %
  * default the ADA ramp figure); the assert below is that range.
  *
@@ -19,6 +26,7 @@ export const GRADE_MAX_PCT = 12;
 const M_PER_DEG_LAT = 110540;
 const M_PER_DEG_LON = 111320;
 const CLASSES_READ = new Set(['walkway', 'crossing']);
+const WAY_ID = /^osm-way-\d+/;
 
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 
@@ -65,19 +73,94 @@ function smooth(values, radius) {
 }
 
 /**
+ * An `incline` tag as a signed percent: "8%", "-8 %", "8,5%", "10°" (its
+ * tangent), "up 8%" or "down 8%"; "0" is flat. Null when the tag gives no
+ * number ("up", "down", "yes") or a number with no unit, which could be a
+ * percent, a degree or a fraction: the terrain is read instead.
+ *
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+export function inclinePct(value) {
+  if (typeof value !== 'string') return null;
+  const s = value.trim().toLowerCase().replace(',', '.');
+  if (s === '0') return 0;
+  const m = /^(up|down)?\s*([+-]?\d+(?:\.\d+)?)\s*(%|°)$/.exec(s);
+  if (!m) return null;
+  let pct = Number(m[2]);
+  if (m[3] !== '%') {
+    if (Math.abs(pct) >= 90) return null;
+    pct = Math.tan((pct * Math.PI) / 180) * 100;
+  }
+  if (m[1] === 'up') pct = Math.abs(pct);
+  if (m[1] === 'down') pct = -Math.abs(pct);
+  return pct === 0 ? 0 : pct;
+}
+
+/**
+ * The ways of the map data whose incline gives a number, by the id their
+ * features carry (`osm-way-{id}`, a piece or a curb side adds a suffix).
+ *
+ * @param {Array<object>} elements - trimmed OpenStreetMap elements
+ * @returns {Map<string, number>} the id to its signed percent
+ */
+export function inclinesOf(elements) {
+  const out = new Map();
+  for (const el of elements || []) {
+    if (el?.type !== 'way') continue;
+    const pct = inclinePct(el.tags?.incline);
+    if (pct !== null) out.set(`osm-way-${el.id}`, pct);
+  }
+  return out;
+}
+
+function taggedIncline(f, inclines) {
+  const m = WAY_ID.exec(f.id || '');
+  return m && inclines.has(m[0]) ? inclines.get(m[0]) : null;
+}
+
+const isRead = (f) =>
+  f.kind === 'line' &&
+  f.on !== false &&
+  CLASSES_READ.has(f.class) &&
+  Array.isArray(f.points) &&
+  f.points.length >= 2;
+
+/**
+ * Whether any sidewalk the check reads lacks a number in the data, so the
+ * terrain tiles are needed.
+ *
+ * @param {object} plan
+ * @param {Map<string, number>} [inclines]
+ * @returns {boolean}
+ */
+export function needsTerrain(plan, inclines = new Map()) {
+  return (plan?.features || []).some(
+    (f) => isRead(f) && taggedIncline(f, inclines) === null
+  );
+}
+
+/**
  * Mark the steep runs.
  *
  * @param {object} plan - with `meta.geo = { center, mmPerM }` (a draft from OpenStreetMap)
  * @param {object} options
- * @param {(lat: number, lon: number) => number|null} options.elevationAt
+ * @param {(lat: number, lon: number) => number|null} [options.elevationAt] - needed unless every sidewalk read has an incline in `inclines`
  * @param {number} options.gradePct - 3 to 12
+ * @param {Map<string, number>} [options.inclines] - from `inclinesOf`
  * @param {number} [options.sampleM] - the step between height readings, meters
  * @param {number} [options.smoothM] - the moving-average window, meters
  * @returns {{ plan: object, steepCount: number }}
  */
 export function markSteep(
   plan,
-  { elevationAt, gradePct, sampleM = 10, smoothM = 30 } = {}
+  {
+    elevationAt,
+    gradePct,
+    inclines = new Map(),
+    sampleM = 10,
+    smoothM = 30,
+  } = {}
 ) {
   const g = Number(gradePct);
   if (!(g >= GRADE_MIN_PCT && g <= GRADE_MAX_PCT)) {
@@ -102,11 +185,30 @@ export function markSteep(
   // A 30 m window at 10 m steps: one sample each side.
   const radius = Math.max(1, Math.floor(smoothM / sampleM / 2));
 
+  const steepFeature = (f, n, points, sign) => {
+    const feature = {
+      id: `${f.id}-steep-${n}`,
+      class: 'steep',
+      kind: 'line',
+      points: points.map((p) => [p[0], p[1]]),
+      on: true,
+      style: 'chevrons',
+      uphill: sign > 0 ? 'end' : 'start',
+    };
+    if (f.name) feature.name = `${f.name}, steep`;
+    return feature;
+  };
+
   const added = [];
   for (const f of plan.features || []) {
-    if (f.kind !== 'line' || f.on === false || !CLASSES_READ.has(f.class))
+    if (!isRead(f)) continue;
+    const tagged = taggedIncline(f, inclines);
+    if (tagged !== null) {
+      if (Math.abs(tagged) > g)
+        added.push(steepFeature(f, 1, f.points, Math.sign(tagged)));
       continue;
-    if (!Array.isArray(f.points) || f.points.length < 2) continue;
+    }
+    if (typeof elevationAt !== 'function') continue;
     const total = lengthOf(f.points);
     const stepMm = sampleM * k;
     if (total < stepMm) continue;
@@ -153,17 +255,7 @@ export function markSteep(
       const last = Math.min(samples.length - 1, j + 1);
       if (last > i) {
         n += 1;
-        const feature = {
-          id: `${f.id}-steep-${n}`,
-          class: 'steep',
-          kind: 'line',
-          points: samples.slice(i, last + 1).map((p) => [p[0], p[1]]),
-          on: true,
-          style: 'chevrons',
-          uphill: sign > 0 ? 'end' : 'start',
-        };
-        if (f.name) feature.name = `${f.name}, steep`;
-        added.push(feature);
+        added.push(steepFeature(f, n, samples.slice(i, last + 1), sign));
       }
       i = j + 1;
     }

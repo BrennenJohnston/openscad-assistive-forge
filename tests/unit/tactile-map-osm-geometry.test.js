@@ -36,6 +36,7 @@ describe('trimElement', () => {
       tags: {
         highway: 'footway',
         footway: 'sidewalk',
+        incline: '-6%',
         name: 'Pike Street',
         source: 'survey',
         created_by: 'JOSM',
@@ -50,10 +51,12 @@ describe('trimElement', () => {
     expect(el.tags).toEqual({
       highway: 'footway',
       footway: 'sidewalk',
+      incline: '-6%',
       name: 'Pike Street',
     });
     expect(el.geometry).toHaveLength(2);
     expect(KEPT_TAGS).toContain('footway');
+    expect(KEPT_TAGS).toContain('crossing:markings');
     expect(KEPT_TAGS).not.toContain('source');
   });
 

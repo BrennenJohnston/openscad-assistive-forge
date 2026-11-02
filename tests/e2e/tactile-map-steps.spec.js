@@ -10,128 +10,19 @@
  * @license GPL-3.0-or-later
  */
 import { test, expect } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
-import { existsSync, readFileSync } from 'node:fs';
-
-const ALLOWED_AXE_VIOLATIONS = [];
-const GATES = {
-  place_id: 3,
-  lat: '47.652873',
-  lon: '-122.3044814',
-  type: 'university',
-  importance: 0.5,
-  display_name:
-    'Bill & Melinda Gates Center, 3800, East Stevens Way Northeast, Seattle, Washington, 98195, United States',
-};
-const HUB = {
-  place_id: 1,
-  lat: '47.6553685',
-  lon: '-122.3051021',
-  type: 'university',
-  importance: 0.5,
-  display_name:
-    'Husky Union Building, 4001, East Stevens Way Northeast, Seattle, Washington, 98195, United States',
-};
+import {
+  routeMapServices,
+  openChooser,
+  tabTo,
+  axeClean,
+  chooseByKeyboard,
+  nextStep,
+  searchByKeyboard,
+} from './helpers/map-keyboard.js';
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
-    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
-  });
-  await page.route('https://nominatim.openstreetmap.org/search*', (route) => {
-    const q = new URL(route.request().url()).searchParams.get('q') || '';
-    return route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      headers: { 'access-control-allow-origin': '*' },
-      body: JSON.stringify([/husky|hub/i.test(q) ? HUB : GATES]),
-    });
-  });
-  await page.route('https://tiles.openstreetmap.us/**', (route) => {
-    const name = route.request().url().split('/sourdough/')[1];
-    const file = `tests/fixtures/tactile-map/sourdough-${name.replace('.mvt', '').replaceAll('/', '-')}.mvt`;
-    return existsSync(file)
-      ? route.fulfill({
-          status: 200,
-          contentType: 'application/x-protobuf',
-          headers: { 'access-control-allow-origin': '*' },
-          body: readFileSync(file),
-        })
-      : route.fulfill({
-          status: 204,
-          headers: { 'access-control-allow-origin': '*' },
-        });
-  });
+  await routeMapServices(page);
 });
-
-async function openChooser(page) {
-  await page.goto('/?example=tactile-map');
-  await expect(page.locator('#tactileMapChooser')).toBeVisible({
-    timeout: 30000,
-  });
-  const notNow = page.locator('#saveProjectNotNow');
-  try {
-    await notNow.waitFor({ state: 'visible', timeout: 6000 });
-    await notNow.click();
-    await notNow.waitFor({ state: 'hidden', timeout: 5000 });
-  } catch {
-    // The prompt did not appear.
-  }
-}
-
-/** Press Tab until the element matching `selector` has focus. */
-async function tabTo(page, selector, max = 40) {
-  for (let i = 0; i < max; i += 1) {
-    if (await page.locator(selector).evaluate((n) => n === document.activeElement)) {
-      return;
-    }
-    await page.keyboard.press('Tab');
-  }
-  throw new Error(`Tab never reached ${selector}`);
-}
-
-async function axeClean(page, where) {
-  const results = await new AxeBuilder({ page })
-    .include('#tactileMapPanel')
-    .analyze();
-  const violations = results.violations.filter(
-    (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)
-  );
-  expect(
-    violations,
-    `${where}: ${violations.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`).join('\n')}`
-  ).toEqual([]);
-}
-
-/** Choose a map type in the chooser with the keyboard and press Next. */
-async function chooseByKeyboard(page, label) {
-  const radios = page.locator('#tactileMapChooser input[type="radio"]');
-  await radios.first().focus();
-  const names = await page
-    .locator('#tactileMapChooser .tactile-map-type-name')
-    .allTextContents();
-  const target = names.indexOf(label);
-  await page.keyboard.press('Space');
-  for (let i = 0; i < target; i += 1) await page.keyboard.press('ArrowDown');
-  await expect(radios.nth(target)).toBeChecked();
-  await tabTo(page, '#tactileMapChooserNext');
-  await page.keyboard.press('Enter');
-}
-
-/** Next by keyboard; the new step's heading has focus and says the step. */
-async function nextStep(page, n, name) {
-  await tabTo(page, '#tactileMapSteps-next');
-  await page.keyboard.press('Enter');
-  const heading = page.locator('#tactileMapSteps-heading');
-  await expect(heading).toHaveText(`Step ${n} of 5: ${name}`);
-  await expect(heading).toBeFocused();
-}
-
-async function searchByKeyboard(page, field, text) {
-  await page.locator(field).focus();
-  await page.keyboard.type(text);
-  await page.keyboard.press('Enter');
-}
 
 test.describe('the map workflows by keyboard', () => {
   test('the chooser asks what map to make and passes an axe scan', async ({

@@ -1361,8 +1361,9 @@ class MapPanel {
   }
 
   /**
-   * Mark steep sidewalks: on, the terrain tiles under the draft are read
-   * (lazy chunks), every on walkway sampled, and the runs steeper than the
+   * Mark steep sidewalks: on, each sidewalk's incline is taken from the
+   * map data where it gives a number, the terrain tiles under the draft
+   * are read (lazy chunks) for the rest, and the runs steeper than the
    * grade become Steep sidewalk features; off, those features leave. The
    * tiles are the map's third host; a failure says so and the switch rests.
    */
@@ -1387,17 +1388,24 @@ class MapPanel {
     ).length;
     this.sayAddress(ADDRESS_STRINGS.reading(walkways));
     try {
-      const [{ tilesCovering, loadTiles, elevationSampler }, { markSteep }] =
-        await Promise.all([import('./terrain.js'), import('./steep.js')]);
+      const { markSteep, inclinesOf, needsTerrain } =
+        await import('./steep.js');
+      const inclines = inclinesOf(this.osm?.elements);
       let elevationAt = this.elevationAt;
-      if (!elevationAt) {
+      if (!elevationAt && needsTerrain(base, inclines)) {
+        const { tilesCovering, loadTiles, elevationSampler } =
+          await import('./terrain.js');
         const radiusM = this.osm?.radiusM ?? 250;
         const tiles = await loadTiles(tilesCovering(geo.center, radiusM), {
           fetch: this.fetchTiles || undefined,
         });
         elevationAt = elevationSampler(tiles);
       }
-      const { plan, steepCount } = markSteep(base, { elevationAt, gradePct });
+      const { plan, steepCount } = markSteep(base, {
+        elevationAt,
+        gradePct,
+        inclines,
+      });
       this.plan = plan;
       this.schedule(0);
       this.sayAddress(
@@ -1519,6 +1527,29 @@ class MapPanel {
     }
   }
 
+  /** What the map is, for the README: its type and what it was made from. */
+  mapAbout() {
+    const short = (p) => (p?.name || '').split(',')[0].trim();
+    const osm = this.osm;
+    if (this.source === 'draft' && osm?.to) {
+      return {
+        type: 'route',
+        from: short(osm.place),
+        to: short(osm.to),
+        lengthM: Math.round(this.draft?.counts?.lengthM ?? 0),
+        journey: osm.travel?.words,
+      };
+    }
+    if (this.source === 'draft' && osm) {
+      return {
+        type: 'place',
+        place: short(osm.place),
+        ratio: osm.scale?.ratio,
+      };
+    }
+    return { type: 'drawing' };
+  }
+
   async buildArchive({ stem, extension, rendered, sets, rings, parameters }) {
     const bed = this.bed();
     const bedName =
@@ -1533,6 +1564,7 @@ class MapPanel {
       size: this.plan.size,
       heights: levelHeights(parameters),
       tapeWidthMm: this.tapeWidth(),
+      about: this.mapAbout(),
     });
     const grid = plateGridSvg({
       rings,
