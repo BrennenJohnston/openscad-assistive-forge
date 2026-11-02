@@ -45,7 +45,10 @@ import {
   getMapData,
   getMapPlan,
 } from '../../src/js/tactile-map/map-panel.js';
-import { trimElement } from '../../src/js/tactile-map/osm-geometry.js';
+import {
+  projectLatLon,
+  trimElement,
+} from '../../src/js/tactile-map/osm-geometry.js';
 import { setParameterValue } from '../../src/js/ui-generator.js';
 import { announce, announceError } from '../../src/js/announcer.js';
 import { stateManager } from '../../src/js/state.js';
@@ -230,7 +233,7 @@ describe('the map types and their steps', () => {
     expect(step(1).querySelector('#tactileMapAddress')).toBeTruthy();
     expect(step(1).querySelector('#tactileMapTo')).toBeNull();
     expect(document.getElementById('tactileMapTo')).toBeNull();
-    expect(step(2).querySelector('#tactileMapRadius')).toBeTruthy();
+    expect(step(2).querySelector('#tactileMapScale')).toBeTruthy();
     expect(step(3).querySelector('#tactileMapLandmarks')).toBeTruthy();
     expect(step(3).querySelector('#tactileMapSteep')).toBeTruthy();
     expect(step(4).querySelector('#tactileMapMake')).toBeTruthy();
@@ -1095,7 +1098,14 @@ describe('the map data row', () => {
   const addressStatus = () =>
     document.getElementById('tactileMapAddressStatus').textContent;
   const make = () => document.getElementById('tactileMapMake');
-  const radius = () => document.getElementById('tactileMapRadius');
+  const scaleRadios = () => [
+    ...document.querySelectorAll('#tactileMapScale input[type="radio"]'),
+  ];
+  const chooseScale = (key) => {
+    const radio = document.getElementById(`tactileMapScale-${key}`);
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+  };
   let opened;
   const editor = {
     open: vi.fn((svg, analysis, options) => {
@@ -1140,17 +1150,53 @@ describe('the map data row', () => {
     fileInput.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  it('shows the radius at 250 m from 100 to 600 by 10, six landmark boxes with Entrances and Transit stops ticked, and the attribution link', () => {
-    expect(radius().type).toBe('number');
-    expect([radius().min, radius().max, radius().step, radius().value]).toEqual(
-      ['100', '600', '10', '250']
+  it('offers the scales by the ground they fit, A block ticked, each saying what it fits on the plate; a custom ratio from 200 to 10000; six landmark boxes; the attribution link', () => {
+    expect(document.querySelector('#tactileMapScale legend').textContent).toBe(
+      'Map scale'
     );
     expect(
-      document.querySelector('label[for="tactileMapRadius"]').textContent
-    ).toBe('Map radius (m)');
-    expect(document.getElementById('tactileMapRadiusHelp').textContent).toBe(
-      'How far from the address the map reaches, 100 to 600 m. The map is twice this wide.'
+      scaleRadios().map((r) => [
+        document.querySelector(`label[for="${r.id}"]`).textContent,
+        r.checked,
+      ])
+    ).toEqual([
+      ['A building and its doors, 1:500', false],
+      ['A block, 1:1000', true],
+      ['A few blocks, 1:2000', false],
+      ['A neighborhood, 1:4000', false],
+      ['Custom', false],
+    ]);
+    const said = (r) =>
+      document.getElementById(r.getAttribute('aria-describedby')).textContent;
+    expect(said(scaleRadios()[1])).toBe(
+      '480 m across on this plate. A 10 mm symbol stands for 10 m. Sidewalks and crossings draw.'
     );
+    expect(said(scaleRadios()[3])).toBe(
+      '1920 m across on this plate. A 10 mm symbol stands for 40 m. Streets draw as one line; crossings, side paths and landmarks leave.'
+    );
+    // Custom's ratio waits until Custom is chosen.
+    const custom = document.getElementById('tactileMapScaleCustom');
+    expect(custom.closest('.tactile-map-scale-custom').hidden).toBe(true);
+    expect([custom.type, custom.min, custom.max, custom.value]).toEqual([
+      'number',
+      '200',
+      '10000',
+      '1500',
+    ]);
+    chooseScale('custom');
+    expect(custom.closest('.tactile-map-scale-custom').hidden).toBe(false);
+    expect(
+      document.querySelector('label[for="tactileMapScaleCustom"]').textContent
+    ).toBe('Custom scale, 1 to');
+    expect(said(scaleRadios()[4])).toBe(
+      '720 m across on this plate. A 10 mm symbol stands for 15 m. Sidewalks and crossings draw.'
+    );
+    custom.value = '3500';
+    custom.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(said(scaleRadios()[4])).toBe(
+      '1680 m across on this plate. A 10 mm symbol stands for 35 m. Streets draw as one line; crossings, side paths and landmarks leave.'
+    );
+    expect(document.getElementById('tactileMapRadius')).toBeNull();
     expect(
       document.querySelector('#tactileMapLandmarks legend').textContent
     ).toBe('Landmarks to show');
@@ -1211,34 +1257,35 @@ describe('the map data row', () => {
     });
   });
 
-  it('Make the map pulls within the radius, keeps the data, shows the counts without saying them, and drafts', async () => {
+  it('Make the map pulls the ground of the chosen scale, keeps the data, shows the counts without saying them, and drafts', async () => {
     const pullArea = answered();
     await pickPlace({ pullArea });
-    radius().value = '300';
-    radius().dispatchEvent(new Event('change', { bubbles: true }));
+    chooseScale('blocks');
     make().click();
     expect(addressStatus()).toBe(
-      `Getting map data within 300 m of ${PLACE.name}...`
+      `Getting map data for 960 by 720 m around ${PLACE.name}...`
     );
     expect(make().disabled).toBe(true);
     await vi.waitFor(() => expect(opened).not.toBeNull());
     expect(addressStatus()).toMatch(/^Draft map ready: /);
     expect(announce).not.toHaveBeenCalledWith(
-      '21 map features within 300 m: 11 walkways, 4 crossings, 3 buildings, 3 landmarks.',
+      '21 map features in 960 by 720 m: 11 walkways, 4 crossings, 3 buildings, 3 landmarks.',
       expect.anything()
     );
     expect(make().disabled).toBe(false);
+    // The ground of 1:2000 on a 480 x 360 mm plate, centered on the place.
     const call = pullArea.mock.calls[0][0];
-    expect([call.lat, call.lon, call.radiusM]).toEqual([
-      PLACE.lat,
-      PLACE.lon,
-      300,
-    ]);
+    const [west, south] = projectLatLon(call.box.south, call.box.west, PLACE);
+    const [east, north] = projectLatLon(call.box.north, call.box.east, PLACE);
+    expect(east - west).toBeCloseTo(960, 0);
+    expect(north - south).toBeCloseTo(720, 0);
+    expect(east + west).toBeCloseTo(0, 3);
     expect(typeof call.onWait).toBe('function');
     const osm = getMapData();
     expect(osm.elements).toHaveLength(21);
     expect(osm.center).toEqual({ lat: PLACE.lat, lon: PLACE.lon });
-    expect(osm.radiusM).toBe(300);
+    expect([osm.scale.key, osm.scale.ratio]).toEqual(['blocks', 2000]);
+    expect(osm.radiusM).toBe(480);
     expect(osm.source).toBe('overpass');
     expect(osm.place).toEqual(PLACE);
     expect(osm.landmarks).toEqual(['entrance', 'transit-stop']);
@@ -1286,8 +1333,86 @@ describe('the map data row', () => {
     make().click();
     await vi.waitFor(() => expect(opened).not.toBeNull());
     expect(addressStatus()).toMatch(
-      /^Draft map ready: .* Choose what stays\. 2\.5 MB of map data arrived\. A smaller radius makes a lighter map\.$/
+      /^Draft map ready: .* Choose what stays\. 2\.5 MB of map data arrived\. A scale with less ground makes a lighter map\.$/
     );
+  });
+
+  it('says how many far features a draft left out to stay within what the editor lists', async () => {
+    // 1100 sidewalks around the library, 6 m each, all on the plate, and
+    // one beside it, which the draft turns on.
+    const many = [
+      {
+        type: 'way',
+        id: 4999,
+        tags: { highway: 'footway', footway: 'sidewalk' },
+        geometry: [
+          { lat: PLACE.lat + 5 / 110540, lon: PLACE.lon - 0.0001 },
+          { lat: PLACE.lat + 5 / 110540, lon: PLACE.lon + 0.0001 },
+        ],
+      },
+    ];
+    for (let i = 0; i < 1100; i += 1) {
+      const r = 40 + i * 0.12;
+      const a = (i * 137.5 * Math.PI) / 180;
+      const lat = PLACE.lat + (r * Math.sin(a)) / 110540;
+      const lon =
+        PLACE.lon +
+        (r * Math.cos(a)) / (111320 * Math.cos((PLACE.lat * Math.PI) / 180));
+      many.push({
+        type: 'way',
+        id: 5000 + i,
+        tags: { highway: 'footway', footway: 'sidewalk' },
+        geometry: [
+          { lat, lon },
+          {
+            lat,
+            lon: lon + 6 / (111320 * Math.cos((PLACE.lat * Math.PI) / 180)),
+          },
+        ],
+      });
+    }
+    const pullArea = vi.fn(async () => ({
+      elements: many,
+      bytes: 1000,
+      ms: 10,
+    }));
+    await pickPlace({ pullArea });
+    make().click();
+    await vi.waitFor(() => expect(opened).not.toBeNull(), { timeout: 15000 });
+    expect(getMapPlan().features).toHaveLength(1000);
+    expect(addressStatus()).toMatch(
+      / 102 features far from the address were left out: the editor works with 1,000 at a time\.$/
+    );
+  });
+
+  it('a new scale asks for its ground again; the same scale does not', async () => {
+    const pullArea = answered();
+    await pickPlace({ pullArea });
+    make().click();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    expect(pullArea).toHaveBeenCalledTimes(1);
+    opened = null;
+    make().click();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    expect(pullArea).toHaveBeenCalledTimes(1);
+    opened = null;
+    chooseScale('blocks');
+    make().click();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    expect(pullArea).toHaveBeenCalledTimes(2);
+    expect(getMapData().scale.key).toBe('blocks');
+    expect(getMapPlan().meta.geo.mmPerM).toBe(0.5);
+    // Over a neighborhood only streets draw, and this data has none.
+    opened = null;
+    chooseScale('neighborhood');
+    make().click();
+    await vi.waitFor(() =>
+      expect(addressStatus()).toBe(
+        'No streets in the map data at this scale. Try another scale or another address.'
+      )
+    );
+    expect(opened).toBeNull();
+    expect(pullArea).toHaveBeenCalledTimes(3);
   });
 
   it('a second press for the same place drafts again without asking the server again', async () => {
@@ -1311,7 +1436,9 @@ describe('the map data row', () => {
     expect(osm.source).toBe('file');
     expect(osm.elements).toHaveLength(5);
     expect(osm.center).toEqual({ lat: PLACE.lat, lon: PLACE.lon });
-    expect(osm.radiusM).toBe(250);
+    // The file is drafted at the scale chosen; its ground reaches 240 m.
+    expect(osm.scale.key).toBe('block');
+    expect(osm.radiusM).toBe(240);
     expect(document.getElementById('tactileMapOsmFile').value).toBe('');
   });
 
@@ -1466,7 +1593,7 @@ describe('the map Make the map drafts', () => {
     await pullData(far);
     await vi.waitFor(() =>
       expect(addressStatus()).toBe(
-        'No sidewalks within 30 m of the address. Try a larger radius or another address.'
+        'No sidewalks within 30 m of the address. Try a scale with more ground, or another address.'
       )
     );
     expect(announceError).toHaveBeenCalledWith(addressStatus(), {

@@ -1,7 +1,7 @@
 /**
  * The Tactile Map Designer's address controls: a typed address or place
  * name, a Search press, up to five places to pick from (and, for a route
- * map, where the walk ends); the map's radius; the steps on the way; the
+ * map, where the walk ends); the map's scale; the steps on the way; the
  * landmarks to show; Make the map, which gets the data and drafts in one
  * press; and a door for an OpenStreetMap export kept on the device. The
  * panel lays these parts out in its numbered steps (`parts`). Nothing is
@@ -13,20 +13,31 @@
  * lazy chunk on the first press; a test stubs them):
  * - `searchPlaces(query)` resolves `[{ name, lat, lon, kind }]`, or rejects
  *   with a `code`: 'empty', 'rate', 'no-answer';
- * - `pullArea({ lat, lon, radiusM, onWait })` resolves `{ elements, bytes,
+ * - `pullArea({ box, onWait })` resolves `{ elements, bytes,
  *   host }`, calling `onWait(seconds)` before each back-off and
  *   `onWait(0, nextServer, { from, reason })` when it moves to the next
  *   server at once, or rejects with 'busy' or 'no-answer';
  * - `readOsmFile(file)` resolves `{ elements, center }` or rejects with
  *   'not-osm'.
  *
- * The data kept for the draft: `{ elements, center, radiusM, source, place,
- * landmarks, bytes, host, key }` with `source` 'overpass' or 'file', `host`
+ * The data kept for the draft: `{ elements, center, radiusM, scale, source,
+ * place, landmarks, bytes, host, key }` with `scale` the choice's `{ key,
+ * name, ratio, rules }`, `radiusM` how far its ground reaches, `source`
+ * 'overpass' or 'file', `host`
  * the name of the source that answered, and `key` what was asked for, so a
  * second press for the same place reuses it.
  *
  * @license GPL-3.0-or-later
  */
+import {
+  SCALES,
+  CUSTOM_RANGE,
+  scaleChoice as scaleChoiceOf,
+  nearestRule,
+  groundAcrossM,
+  groundBox,
+  sentenceFor,
+} from './scales.js';
 
 /** How a server failed, as the middle of the switch sentence. */
 const HOST_FAILED = Object.freeze({
@@ -70,9 +81,12 @@ export const ADDRESS_STRINGS = Object.freeze({
   toFound: 'Destinations found',
   /** A11Y: after a destination is picked. */
   toPicked: (name) => `${name} picked as where the walk ends.`,
-  radiusLabel: 'Map radius (m)',
-  radiusHelp:
-    'How far from the address the map reaches, 100 to 600 m. The map is twice this wide.',
+  /** A11Y: the scale choices' group name. */
+  scaleLegend: 'Map scale',
+  /** A11Y: a scale choice's name, with its ratio. */
+  scaleLabel: (name, ratio) => `${name}, 1:${ratio}`,
+  /** A11Y: Custom's ratio field. */
+  customLabel: 'Custom scale, 1 to',
   /** A11Y: the route's steps choice, its group name and its two answers. */
   stepsLegend: 'Steps on the way',
   stepsAllow: 'Allowed, and marked on the map',
@@ -81,14 +95,15 @@ export const ADDRESS_STRINGS = Object.freeze({
   /** The one button: gets the data, drafts, opens the editor. */
   make: 'Make the map',
   /** A11Y: the status line while a pull runs. */
-  getting: (r, place) => `Getting map data within ${r} m of ${place}...`,
+  getting: (w, h, place) =>
+    `Getting map data for ${w} by ${h} m around ${place}...`,
   /** A11Y: the status line while a pull for two places runs. */
   gettingRoute: (from, to) => `Getting map data around ${from} and ${to}...`,
   /** A11Y: the status line after a pull for two places. */
   gotRoute: (n, from, to) => `${n} map features around ${from} and ${to}.`,
   /** A11Y: the status line after a pull. */
-  got: (n, r, w, c, b, l) =>
-    `${n} map features within ${r} m: ${w} walkways, ${c} crossings, ${b} buildings, ${l} landmarks.`,
+  got: (n, gw, gh, w, c, b, l) =>
+    `${n} map features in ${gw} by ${gh} m: ${w} walkways, ${c} crossings, ${b} buildings, ${l} landmarks.`,
   /** A11Y: one server failed and the pull moves to the next, in one breath. */
   hostSwitch: (from, next, reason) =>
     `${from} ${HOST_FAILED[reason] || HOST_FAILED.refused}. Trying ${next}; this can take half a minute.`,
@@ -114,7 +129,7 @@ export const ADDRESS_STRINGS = Object.freeze({
     `${name} loaded; the map centers on the middle of the file. Pick an address first to center it there.`,
   /** A11Y: the pull's size warning. */
   big: (mb) =>
-    `${mb} MB of map data arrived. A smaller radius makes a lighter map.`,
+    `${mb} MB of map data arrived. A scale with less ground makes a lighter map.`,
   /** A11Y: the status line after a route draft. */
   routeReady: (m, from, to, crossings, steps, w, h) =>
     `Route map ready: a ${m} m walk from ${from} to ${to}, ${crossings === 1 ? '1 crossing' : `${crossings} crossings`} and ${steps === 1 ? '1 flight of steps' : `${steps} flights of steps`} on the way. The map is ${w} x ${h} mm, fitted to the walk.`,
@@ -131,7 +146,13 @@ export const ADDRESS_STRINGS = Object.freeze({
     `Draft map ready: ${on} of ${total} features on; no warnings. Choose what stays.`,
   /** A11Y: nothing near the address. */
   nothingNear: (d) =>
-    `No sidewalks within ${d} m of the address. Try a larger radius or another address.`,
+    `No sidewalks within ${d} m of the address. Try a scale with more ground, or another address.`,
+  /** A11Y: after the ready sentence when a draft was over the editor's limit. */
+  leftOut: (n) =>
+    ` ${n} features far from the address were left out: the editor works with 1,000 at a time.`,
+  /** A11Y: a scale that draws no sidewalks found no street either. */
+  nothingDrawn:
+    'No streets in the map data at this scale. Try another scale or another address.',
   /** The draft's name in the editor's header. */
   draftName: (place) => `Draft map of ${place}`,
   steepLabel: 'Mark steep sidewalks',
@@ -155,12 +176,9 @@ export const GRADE = Object.freeze({ min: 3, max: 12, step: 0.5, value: 5 });
 
 export const ATTRIBUTION_URL = 'https://www.openstreetmap.org/copyright';
 export const TILES_CREDIT_URL = 'https://tiles.openstreetmap.us';
-export const RADIUS = Object.freeze({
-  min: 100,
-  max: 600,
-  step: 10,
-  value: 250,
-});
+/** The scale a place map starts at, and Custom's first ratio. */
+export const SCALE_START = 'block';
+export const CUSTOM_START = 1500;
 /** Row 37's threshold: a pull heavier than this gets the size warning. */
 export const BIG_BYTES = 2 * 1024 * 1024;
 export const FILE_ACCEPT = '.osm,.geojson,.json,application/json,text/xml';
@@ -242,6 +260,7 @@ export function createAddressSection({
   onDraft,
   onSteep,
   onChange = () => {},
+  plateSize = () => ({ w: 480, h: 360 }),
 }) {
   const S = ADDRESS_STRINGS;
   // A holder for the parts until the panel's steps take them.
@@ -313,25 +332,58 @@ export function createAddressSection({
   toResults.appendChild(el('legend', '', S.toFound));
   section.appendChild(toResults);
 
-  const radiusRow = el('div', 'braille-panel-field-row tactile-map-radius-row');
-  const radiusLabel = el('label', '', S.radiusLabel);
-  radiusLabel.htmlFor = 'tactileMapRadius';
-  const radius = document.createElement('input');
-  radius.type = 'number';
-  radius.id = 'tactileMapRadius';
-  radius.className = 'braille-panel-number';
-  radius.min = String(RADIUS.min);
-  radius.max = String(RADIUS.max);
-  radius.step = String(RADIUS.step);
-  radius.value = String(RADIUS.value);
-  radius.inputMode = 'numeric';
-  radius.setAttribute('aria-describedby', 'tactileMapRadiusHelp');
-  radiusRow.appendChild(radiusLabel);
-  radiusRow.appendChild(radius);
-  section.appendChild(radiusRow);
-  const radiusHelp = el('p', 'braille-panel-help', S.radiusHelp);
-  radiusHelp.id = 'tactileMapRadiusHelp';
-  section.appendChild(radiusHelp);
+  // The scale: named for the ground it fits, each saying what it fits on
+  // the plate and what draws; Custom takes a ratio.
+  const scaleChoice = el('fieldset', 'braille-panel-choice tactile-map-scale');
+  scaleChoice.id = 'tactileMapScale';
+  scaleChoice.appendChild(el('legend', '', S.scaleLegend));
+  const placeScales = SCALES.filter((c) => c.key !== 'route');
+  const scaleSentences = new Map();
+  const scaleRadios = placeScales.map((choice) => {
+    const line = el('div', 'braille-panel-toggle-row tactile-map-scale-row');
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'tactileMapScale';
+    radio.id = `tactileMapScale-${choice.key}`;
+    radio.value = choice.key;
+    radio.checked = choice.key === SCALE_START;
+    const words = el(
+      'label',
+      '',
+      choice.ratio ? S.scaleLabel(choice.name, choice.ratio) : choice.name
+    );
+    words.htmlFor = radio.id;
+    const sentence = el('p', 'braille-panel-help tactile-map-scale-sentence');
+    sentence.id = `${radio.id}-sentence`;
+    radio.setAttribute('aria-describedby', sentence.id);
+    scaleSentences.set(choice.key, sentence);
+    line.appendChild(radio);
+    line.appendChild(words);
+    scaleChoice.appendChild(line);
+    scaleChoice.appendChild(sentence);
+    return radio;
+  });
+  const customRow = el(
+    'div',
+    'braille-panel-field-row tactile-map-scale-custom'
+  );
+  const customLabel = el('label', '', S.customLabel);
+  customLabel.htmlFor = 'tactileMapScaleCustom';
+  const custom = document.createElement('input');
+  custom.type = 'number';
+  custom.id = 'tactileMapScaleCustom';
+  custom.className = 'braille-panel-number';
+  custom.min = String(CUSTOM_RANGE.min);
+  custom.max = String(CUSTOM_RANGE.max);
+  custom.step = '50';
+  custom.value = String(CUSTOM_START);
+  custom.inputMode = 'numeric';
+  custom.setAttribute('aria-describedby', 'tactileMapScale-custom-sentence');
+  customRow.appendChild(customLabel);
+  customRow.appendChild(custom);
+  customRow.hidden = true;
+  scaleChoice.appendChild(customRow);
+  section.appendChild(scaleChoice);
 
   // A route on foot: may it take steps? Allowed and marked is the default.
   const stepsChoice = el(
@@ -479,7 +531,7 @@ export function createAddressSection({
   const parts = {
     where: [label, help, row, results],
     to: [toLabel, toHelp, toRow, toResults],
-    radius: [radiusRow, radiusHelp],
+    scale: [scaleChoice],
     steps: [stepsChoice],
     landmarks: [landmarks, steepRow, steepHelp, gradeRow, gradeHelp],
     make: [makeRow, status, fileRow, fileHelp, attribution],
@@ -625,11 +677,48 @@ export function createAddressSection({
     };
   }
 
-  /** The radius the input holds, kept inside its range. */
-  function radiusM() {
-    const n = Number(radius.value);
-    if (!Number.isFinite(n)) return RADIUS.value;
-    return Math.min(RADIUS.max, Math.max(RADIUS.min, n));
+  /** Custom's ratio, kept inside its range. */
+  function customRatio() {
+    const n = Number(custom.value);
+    if (!Number.isFinite(n)) return CUSTOM_START;
+    return Math.min(CUSTOM_RANGE.max, Math.max(CUSTOM_RANGE.min, n));
+  }
+
+  /** The scale chosen: its key, name, ratio and drawing rules. */
+  function currentScale() {
+    const key = scaleRadios.find((r) => r.checked)?.value || SCALE_START;
+    const choice = scaleChoiceOf(key);
+    const ratio = choice.ratio || customRatio();
+    return {
+      key,
+      name: choice.name,
+      ratio,
+      rules: choice.rules || nearestRule(ratio),
+    };
+  }
+
+  /** The ground the chosen scale covers on the plate, in whole meters. */
+  function ground() {
+    const { ratio } = currentScale();
+    const plate = plateSize();
+    return {
+      w: Math.round(groundAcrossM(ratio, plate.w)),
+      h: Math.round(groundAcrossM(ratio, plate.h)),
+    };
+  }
+
+  /** Each choice's sentence for the plate as it is now; Custom's ratio. */
+  function refreshScale() {
+    const plate = plateSize();
+    for (const radio of scaleRadios) {
+      const choice = scaleChoiceOf(radio.value);
+      scaleSentences.get(choice.key).textContent = sentenceFor(
+        choice,
+        plate,
+        choice.ratio || customRatio()
+      );
+    }
+    customRow.hidden = currentScale().key !== 'custom';
   }
 
   const ticked = () => boxes.filter((b) => b.checked).map((b) => b.value);
@@ -639,9 +728,10 @@ export function createAddressSection({
   function pullKey() {
     if (!place) return null;
     const at = `${place.lat},${place.lon}`;
+    const plate = plateSize();
     return isRoute()
       ? `route:${at}:${dest.lat},${dest.lon}`
-      : `place:${at}:${radiusM()}`;
+      : `place:${at}:${currentScale().ratio}:${plate.w}x${plate.h}`;
   }
 
   function keep(data) {
@@ -651,11 +741,11 @@ export function createAddressSection({
   }
 
   /** Row 27, shown, not said: the draft's sentence follows at once. */
-  function countsSentence(elements, r) {
+  function countsSentence(elements, g) {
     const c = countFeatures(elements);
     return isRoute()
       ? S.gotRoute(c.n, short(place), short(dest))
-      : S.got(c.n, r, c.walkways, c.crossings, c.buildings, c.landmarks);
+      : S.got(c.n, g.w, g.h, c.walkways, c.crossings, c.buildings, c.landmarks);
   }
 
   /** A back-off's seconds, or the move to the next server (0 seconds). */
@@ -672,11 +762,14 @@ export function createAddressSection({
     const key = pullKey();
     const at = place;
     const to = isRoute() ? dest : null;
-    const r = radiusM();
+    const scale = currentScale();
+    const g = ground();
     const where = to
       ? { box: boxAround(at, to) }
-      : { lat: at.lat, lon: at.lon, radiusM: r };
-    say(to ? S.gettingRoute(short(at), short(to)) : S.getting(r, at.name));
+      : { box: groundBox(at, scale.ratio, plateSize()) };
+    say(
+      to ? S.gettingRoute(short(at), short(to)) : S.getting(g.w, g.h, at.name)
+    );
     try {
       const { elements, bytes, host } = await pullArea({
         ...where,
@@ -687,7 +780,9 @@ export function createAddressSection({
         center: to
           ? { lat: (at.lat + to.lat) / 2, lon: (at.lon + to.lon) / 2 }
           : { lat: at.lat, lon: at.lon },
-        radiusM: to ? null : r,
+        // How far the ground reaches from the place, for the height tiles.
+        radiusM: to ? null : Math.max(g.w, g.h) / 2,
+        scale: to ? null : scale,
         box: where.box,
         source: 'overpass',
         place: at,
@@ -698,7 +793,7 @@ export function createAddressSection({
         key,
       });
       // The draft's sentence follows at once and is the one said.
-      say(countsSentence(elements, r), false, { quiet: true });
+      say(countsSentence(elements, g), false, { quiet: true });
       return true;
     } catch (error) {
       say(error?.code === 'busy' ? S.busy : S.noData, true);
@@ -736,7 +831,8 @@ export function createAddressSection({
       keep({
         elements,
         center: at ? { lat: at.lat, lon: at.lon } : center,
-        radiusM: radiusM(),
+        radiusM: Math.max(ground().w, ground().h) / 2,
+        scale: currentScale(),
         source: 'file',
         place: at,
         to: isRoute() ? dest : null,
@@ -786,6 +882,16 @@ export function createAddressSection({
     if (!Number.isFinite(n)) return GRADE.value;
     return Math.min(GRADE.max, Math.max(GRADE.min, n));
   }
+  for (const radio of scaleRadios) {
+    radio.addEventListener('change', () => {
+      refreshScale();
+      onChange();
+    });
+  }
+  custom.addEventListener('input', () => refreshScale());
+  custom.addEventListener('change', () => refreshScale());
+  refreshScale();
+
   steep.addEventListener('change', () => {
     onSteep?.(steep.checked, gradePct());
   });
@@ -809,7 +915,8 @@ export function createAddressSection({
       toInput,
       toButton,
       toResults,
-      radius,
+      scale: scaleChoice,
+      custom,
       stepsChoice,
       landmarks,
       make,
@@ -830,6 +937,9 @@ export function createAddressSection({
     getDest: () => (mode === 'route' ? dest : null),
     getData: () => osm,
     avoidSteps: () => stepsRadios[1].checked,
+    getScale: () => currentScale(),
+    /** The plate's size changed: the ground each choice covers did too. */
+    refreshScale,
     steepWanted: () => ({ on: steep.checked, gradePct: gradePct() }),
     destroy() {
       section.remove();

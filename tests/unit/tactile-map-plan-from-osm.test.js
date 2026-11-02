@@ -12,7 +12,12 @@
  * @license GPL-3.0-or-later
  */
 import { describe, it, expect } from 'vitest';
-import { draftPlan } from '../../src/js/tactile-map/plan-from-osm.js';
+import {
+  draftPlan,
+  DRAFT_LIMIT,
+} from '../../src/js/tactile-map/plan-from-osm.js';
+import { SHAPE_LIST_CAP } from '../../src/js/svg-preparer.js';
+import { scaleChoice, nearestRule } from '../../src/js/tactile-map/scales.js';
 import {
   MAP_CLASSES,
   ROAD_WIDTHS_M,
@@ -333,6 +338,7 @@ describe('draftPlan', () => {
       landmarks: 4,
       total: 19,
       on: 7,
+      leftOut: 0,
     });
     expect(plan.features.filter((f) => f.on).length).toBe(counts.on);
   });
@@ -358,5 +364,179 @@ describe('draftPlan', () => {
       size: { w: 480, h: 360 },
     });
     expect(plan.features.map((f) => f.id)).toEqual(['you-are-here']);
+  });
+});
+
+describe('a draft at a named scale', () => {
+  // A residential street (6 m) and a primary road (10 m) east to west, a
+  // sidewalk beside the address, a marked and an unmarked crossing.
+  const STREETS = [
+    way(10, { highway: 'residential', name: 'Lane' }, [
+      [-200, 40],
+      [200, 40],
+    ]),
+    way(11, { highway: 'primary', name: 'Avenue' }, [
+      [-200, -60],
+      [200, -60],
+    ]),
+    way(12, { highway: 'footway', footway: 'sidewalk', name: 'Walk' }, [
+      [-60, 10],
+      [60, 10],
+    ]),
+    way(13, { highway: 'footway', footway: 'crossing', crossing: 'marked' }, [
+      [0, 10],
+      [0, 34],
+    ]),
+    way(14, { highway: 'footway', footway: 'crossing', crossing: 'unmarked' }, [
+      [60, 10],
+      [60, 34],
+    ]),
+  ];
+  const draftAt = (key, ratio) =>
+    draftPlan({
+      elements: STREETS,
+      center: CENTER,
+      scale: {
+        ratio: ratio ?? scaleChoice(key).ratio,
+        rules: scaleChoice(key)?.rules ?? nearestRule(ratio),
+      },
+      landmarks: [],
+      size: { w: 480, h: 360 },
+    }).plan;
+  const byId = (plan, prefix) =>
+    plan.features.filter(
+      (f) => f.id === prefix || f.id.startsWith(`${prefix}-`)
+    );
+
+  it('takes its millimeters per meter from the ratio: 1 at 1:1000, 0.25 at 1:4000', () => {
+    expect(draftAt('block').meta.geo.mmPerM).toBe(1);
+    expect(draftAt('neighborhood').meta.geo.mmPerM).toBe(0.25);
+    expect(draftAt('building').meta.geo.mmPerM).toBe(2);
+    // The sidewalk 10 m north of the address, 60 m each way: 120 mm long at 1:1000.
+    const walk = byId(draftAt('block'), 'osm-way-12')[0];
+    expect(walk.points[0][0]).toBeCloseTo(240 - 60, 1);
+    expect(walk.points[walk.points.length - 1][0]).toBeCloseTo(240 + 60, 1);
+  });
+
+  it('draws every street as an off pair of curb lines near a block, and as one line, on, over a neighborhood', () => {
+    const block = draftAt('block');
+    expect(byId(block, 'osm-way-10').map((f) => f.id)).toEqual([
+      'osm-way-10-left',
+      'osm-way-10-right',
+    ]);
+    expect(byId(block, 'osm-way-10').every((f) => !f.on)).toBe(true);
+    const hood = draftAt('neighborhood');
+    const lane = byId(hood, 'osm-way-10');
+    expect(lane.map((f) => [f.id, f.class, f.on])).toEqual([
+      ['osm-way-10', 'curb', true],
+    ]);
+    // Side paths and crossings leave: no sidewalk, no crossing.
+    expect(byId(hood, 'osm-way-12')).toEqual([]);
+    expect(hood.features.filter((f) => f.class === 'crossing')).toEqual([]);
+    expect(hood.features.filter((f) => f.class === 'walkway' && f.on)).toEqual(
+      []
+    );
+  });
+
+  it('draws a street as one line over a few blocks where its curbs would fall 3 mm apart or closer', () => {
+    const blocks = draftAt('blocks');
+    // 6 m at 1:2000 is 3 mm: one line; 10 m is 5 mm: a pair.
+    expect(byId(blocks, 'osm-way-10').map((f) => f.id)).toEqual(['osm-way-10']);
+    expect(byId(blocks, 'osm-way-11').map((f) => f.id)).toEqual([
+      'osm-way-11-left',
+      'osm-way-11-right',
+    ]);
+  });
+
+  it('keeps a crossing marking near a building: an unmarked crossing dashed, a marked one in its ticks; one style at a block', () => {
+    const near = draftAt('building');
+    expect(byId(near, 'osm-way-13')[0].style).toBeUndefined();
+    expect(byId(near, 'osm-way-14')[0].style).toBe('dashed');
+    const block = draftAt('block');
+    expect(byId(block, 'osm-way-14')[0].style).toBeUndefined();
+  });
+
+  it('starts the ticked landmarks on only where their symbols fit: every one near a block, transit stops over a few blocks, none over a neighborhood', () => {
+    const marks = [
+      ...STREETS,
+      node(20, { entrance: 'main', name: 'Door' }, [10, 20]),
+      node(
+        21,
+        { highway: 'bus_stop', public_transport: 'platform', name: 'Stop' },
+        [-30, 20]
+      ),
+    ];
+    const at = (key) =>
+      draftPlan({
+        elements: marks,
+        center: CENTER,
+        scale: { ratio: scaleChoice(key).ratio, rules: scaleChoice(key).rules },
+        landmarks: ['entrance', 'transit-stop'],
+        size: { w: 480, h: 360 },
+      }).plan;
+    const on = (plan, id) => plan.features.find((f) => f.id === id)?.on;
+    expect([
+      on(at('block'), 'osm-node-20'),
+      on(at('block'), 'osm-node-21'),
+    ]).toEqual([true, true]);
+    expect([
+      on(at('blocks'), 'osm-node-20'),
+      on(at('blocks'), 'osm-node-21'),
+    ]).toEqual([false, true]);
+    expect([
+      on(at('neighborhood'), 'osm-node-20'),
+      on(at('neighborhood'), 'osm-node-21'),
+    ]).toEqual([false, false]);
+  });
+
+  it('draws a custom ratio by the rules of the nearest named choice', () => {
+    const custom = draftAt('custom', 3500);
+    expect(custom.meta.geo.mmPerM).toBeCloseTo(1000 / 3500, 6);
+    expect(byId(custom, 'osm-way-10').map((f) => f.id)).toEqual(['osm-way-10']);
+  });
+});
+
+describe('a draft within the editor', () => {
+  it('keeps every feature on and the off ones nearest the address, up to what the editor lists, and counts the rest', () => {
+    // 1200 off sidewalks spiraling outward, all on the plate, and one on
+    // sidewalk by the address.
+    const elements = [];
+    for (let i = 0; i < 1200; i += 1) {
+      const r = 40 + i * 0.1;
+      const a = (i * 137.5 * Math.PI) / 180;
+      const e = r * Math.cos(a);
+      const n = r * Math.sin(a);
+      elements.push(
+        way(1000 + i, { highway: 'footway', footway: 'sidewalk' }, [
+          [e, n],
+          [e + 6, n],
+        ])
+      );
+    }
+    elements.push(
+      way(9, { highway: 'footway', footway: 'sidewalk' }, [
+        [-10, 5],
+        [10, 5],
+      ])
+    );
+    const { plan, counts } = draftPlan({
+      elements,
+      center: CENTER,
+      scale: { ratio: 1000, rules: scaleChoice('block').rules },
+      landmarks: [],
+      size: { w: 480, h: 360 },
+    });
+    expect(plan.features.length).toBe(DRAFT_LIMIT);
+    expect(counts.total).toBe(DRAFT_LIMIT);
+    expect(counts.leftOut).toBe(1201 + 1 - DRAFT_LIMIT);
+    // The on sidewalk near the address stays; the kept off ones are the nearest.
+    expect(plan.features.find((f) => f.id === 'osm-way-9').on).toBe(true);
+    const kept = new Set(plan.features.map((f) => f.id));
+    expect(kept.has('osm-way-1000')).toBe(true);
+    expect(kept.has('osm-way-2199')).toBe(false);
+  });
+
+  it('lists no more than the editor works with', () => {
+    expect(DRAFT_LIMIT).toBeLessThanOrEqual(SHAPE_LIST_CAP);
   });
 });

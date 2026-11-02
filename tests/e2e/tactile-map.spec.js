@@ -288,7 +288,7 @@ test.describe('the map data row', () => {
       'The Seattle Public Library - Central Library, 1000, 4th Avenue, Seattle, King County, Washington, 98104, United States',
   };
 
-  test('shows the radius and the landmarks at the floor in their steps, makes the map through a routed Overpass answer, and the file door takes an export', async ({
+  test('shows the scales and the landmarks at the floor in their steps, makes the map through a routed Overpass answer, and the file door takes an export', async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -333,14 +333,23 @@ test.describe('the map data row', () => {
     await page.locator('#tactileMapSearch').click();
     await page.locator('#tactileMapPlace1').check();
 
-    // Step 2: how much ground.
+    // Step 2: how much ground: the scales by the ground they fit, A block
+    // first, each row at the floor, the arrow keys moving the choice.
     await goToStep(page, 2);
-    const radius = page.locator('#tactileMapRadius');
-    await expect(radius).toHaveAttribute('min', '100');
-    await expect(radius).toHaveAttribute('max', '600');
-    await expect(radius).toHaveAttribute('step', '10');
-    await expect(radius).toHaveValue('250');
-    expect((await radius.boundingBox()).height).toBeGreaterThanOrEqual(floor);
+    await expect(
+      page.locator('#tactileMapScale input[type="radio"]')
+    ).toHaveCount(5);
+    await expect(page.locator('#tactileMapScale-block')).toBeChecked();
+    for (const row of await page
+      .locator('#tactileMapScale .tactile-map-scale-row')
+      .all()) {
+      expect((await row.boundingBox()).height).toBeGreaterThanOrEqual(floor);
+    }
+    await page.locator('#tactileMapScale-block').focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('#tactileMapScale-blocks')).toBeChecked();
+    await page.keyboard.press('ArrowUp');
+    await expect(page.locator('#tactileMapScale-block')).toBeChecked();
 
     // Step 3: what to show.
     await goToStep(page, 3);
@@ -379,7 +388,10 @@ test.describe('the map data row', () => {
     await make.click();
     const status = page.locator('#tactileMapAddressStatus');
     await expect(status).toContainText('Draft map ready: ', { timeout: 15000 });
-    expect(pulled).toContain('around%3A250%2C47.6067142%2C-122.3326983');
+    // The ground of 1:1000 on the 480 x 360 mm plate: 180 m south of the
+    // library is its south edge.
+    expect(pulled).not.toContain('around');
+    expect(decodeURIComponent(pulled)).toContain('way(47.60508');
     await page.locator('#drawingEditorSurface .drawing-editor-close').click();
     await expect(page.locator('#drawingEditorSurface')).toBeHidden();
 
