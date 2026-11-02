@@ -59,6 +59,8 @@ const NODE_TAGS = [
   'public_transport',
   'amenity',
   'shop',
+  // A curb: barrier=kerb with kerb=lowered, raised, flush or rolled.
+  'kerb',
 ];
 
 function fail(code, message) {

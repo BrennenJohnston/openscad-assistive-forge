@@ -11,13 +11,16 @@
  *
  * @license GPL-3.0-or-later
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   draftPlan,
   DRAFT_LIMIT,
 } from '../../src/js/tactile-map/plan-from-osm.js';
 import { SHAPE_LIST_CAP } from '../../src/js/svg-preparer.js';
 import { scaleChoice, nearestRule } from '../../src/js/tactile-map/scales.js';
+import { pullTiles, TILE_URL } from '../../src/js/tactile-map/osm-tiles.js';
+import { projectLatLon, toMm } from '../../src/js/tactile-map/osm-geometry.js';
 import {
   MAP_CLASSES,
   ROAD_WIDTHS_M,
@@ -130,11 +133,14 @@ describe("the class table's osm lists", () => {
       'walkway',
       'crossing',
       'track',
+      'traffic-island',
       'area',
       'stairs',
       'entrance',
       'landmark',
       'transit-stop',
+      'curb-ramp',
+      'raised-curb',
     ]);
     for (const c of withOsm) {
       for (const rule of c.osm) {
@@ -538,5 +544,213 @@ describe('a draft within the editor', () => {
 
   it('lists no more than the editor works with', () => {
     expect(DRAFT_LIMIT).toBeLessThanOrEqual(SHAPE_LIST_CAP);
+  });
+});
+
+describe('the pedestrian base near a building', () => {
+  // A sidewalk 10 m north of the address, split where three crossings
+  // leave it: a zebra, one with no markings, one painted in lines. Curb
+  // nodes stand on the crossings as OpenStreetMap maps them; a traffic
+  // island continues the unmarked crossing.
+  const BASE = [
+    way(20, { highway: 'footway', footway: 'sidewalk' }, [
+      [-60, 10],
+      [-40, 10],
+    ]),
+    way(21, { highway: 'footway', footway: 'sidewalk' }, [
+      [-40, 10],
+      [0, 10],
+    ]),
+    way(22, { highway: 'footway', footway: 'sidewalk' }, [
+      [0, 10],
+      [40, 10],
+    ]),
+    way(23, { highway: 'footway', footway: 'sidewalk' }, [
+      [40, 10],
+      [60, 10],
+    ]),
+    way(
+      24,
+      {
+        highway: 'footway',
+        footway: 'crossing',
+        crossing: 'marked',
+        'crossing:markings': 'zebra',
+      },
+      [
+        [0, 10],
+        [0, 34],
+      ]
+    ),
+    way(
+      25,
+      {
+        highway: 'footway',
+        footway: 'crossing',
+        crossing: 'uncontrolled',
+        'crossing:markings': 'no',
+      },
+      [
+        [40, 10],
+        [40, 34],
+      ]
+    ),
+    way(
+      26,
+      {
+        highway: 'footway',
+        footway: 'crossing',
+        'crossing:markings': 'lines',
+      },
+      [
+        [-40, 10],
+        [-40, 34],
+      ]
+    ),
+    way(27, { highway: 'footway', footway: 'traffic_island' }, [
+      [40, 34],
+      [40, 40],
+    ]),
+    node(31, { barrier: 'kerb', kerb: 'lowered' }, [0, 12]),
+    node(32, { barrier: 'kerb', kerb: 'lowered' }, [0, 32]),
+    node(33, { barrier: 'kerb', kerb: 'raised' }, [40, 12]),
+    node(34, { barrier: 'kerb', kerb: 'lowered' }, [-40, 12]),
+    // 2.5 m from the one before: 5 mm apart at 1:500, too close to read.
+    node(35, { barrier: 'kerb', kerb: 'lowered' }, [-40, 14.5]),
+    node(36, { barrier: 'kerb', kerb: 'flush' }, [-40, 30]),
+    // On no line the draft shows.
+    node(37, { barrier: 'kerb', kerb: 'lowered' }, [100, 60]),
+    // On the sidewalk, at a driveway.
+    node(38, { barrier: 'kerb', kerb: 'lowered' }, [20, 10]),
+  ];
+  const draftAt = (key) =>
+    draftPlan({
+      elements: BASE,
+      center: CENTER,
+      scale: { ratio: scaleChoice(key).ratio, rules: scaleChoice(key).rules },
+      landmarks: [],
+      size: { w: 480, h: 360 },
+    });
+  const one = (plan, id) => plan.features.find((f) => f.id === id);
+  const at2 = (e, n) => [240 + e * 2, 180 - n * 2];
+
+  it('draws curb ramps and raised curbs as symbols at their nodes, on where they stand on a sidewalk or crossing the draft shows and do not crowd', () => {
+    const { plan, counts } = draftAt('building');
+    const curbs = plan.features
+      .filter((f) => f.class === 'curb-ramp' || f.class === 'raised-curb')
+      .map((f) => [f.id, f.class, f.kind, f.on]);
+    expect(curbs).toEqual([
+      ['osm-node-31', 'curb-ramp', 'point', true],
+      ['osm-node-32', 'curb-ramp', 'point', true],
+      ['osm-node-33', 'raised-curb', 'point', true],
+      ['osm-node-34', 'curb-ramp', 'point', true],
+      ['osm-node-35', 'curb-ramp', 'point', false],
+      ['osm-node-37', 'curb-ramp', 'point', false],
+      ['osm-node-38', 'curb-ramp', 'point', true],
+    ]);
+    expect(one(plan, 'osm-node-31').at).toEqual(at2(0, 12));
+    expect(one(plan, 'osm-node-33').at).toEqual(at2(40, 12));
+    // A flush curb is neither a ramp nor a raised curb.
+    expect(one(plan, 'osm-node-36')).toBeUndefined();
+    // Curbs are not counted as landmarks.
+    expect(counts.landmarks).toBe(0);
+    expect(validatePlan(plan).ok).toBe(true);
+    // The draft starts with no symbols too close to read.
+    const { warnings } = buildLevelRings(plan);
+    expect(warnings.filter((w) => w.code === 'too-close')).toEqual([]);
+  });
+
+  it('draws a crossing in its markings: zebra and lines in ticks, none dashed; a traffic island as its own line, on with its crossing', () => {
+    const { plan } = draftAt('building');
+    expect(one(plan, 'osm-way-24').style).toBeUndefined();
+    expect(one(plan, 'osm-way-26').style).toBeUndefined();
+    expect(one(plan, 'osm-way-25').style).toBe('dashed');
+    expect(one(plan, 'osm-way-25').on).toBe(true);
+    const island = one(plan, 'osm-way-27');
+    expect([island.class, island.kind, island.on]).toEqual([
+      'traffic-island',
+      'line',
+      true,
+    ]);
+  });
+
+  it('leaves the curbs out from a block up, and keeps the island', () => {
+    const { plan } = draftAt('block');
+    expect(
+      plan.features.filter(
+        (f) => f.class === 'curb-ramp' || f.class === 'raised-curb'
+      )
+    ).toEqual([]);
+    expect(one(plan, 'osm-way-27').class).toBe('traffic-island');
+    expect(one(plan, 'osm-way-25').style).toBeUndefined();
+  });
+
+  it('reads the real tiles around the Gates Center at 1:500: curb ramps where the lowered curbs stand, a zebra in ticks; none at 1:1000', async () => {
+    const tile = (x) =>
+      readFileSync(`tests/fixtures/tactile-map/sourdough-15-${x}-11437.mvt`);
+    const TILE = { 5251: tile(5251), 5252: tile(5252) };
+    const fetch = vi.fn(async (url) => {
+      const x = Object.keys(TILE).find(
+        (k) =>
+          url ===
+          TILE_URL.replace('{z}', 15).replace('{x}', k).replace('{y}', 11437)
+      );
+      const bytes = x ? TILE[x] : new Uint8Array(0);
+      return {
+        ok: true,
+        status: x ? 200 : 204,
+        arrayBuffer: async () =>
+          bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength
+          ),
+      };
+    });
+    const GATES = { lat: 47.652873, lon: -122.3044814 };
+    const { elements } = await pullTiles({
+      box: { south: 47.651, west: -122.308, north: 47.657, east: -122.295 },
+      fetch,
+    });
+    const draft = (key) =>
+      draftPlan({
+        elements,
+        center: GATES,
+        scale: {
+          ratio: scaleChoice(key).ratio,
+          rules: scaleChoice(key).rules,
+        },
+        landmarks: ['entrance', 'transit-stop', 'crossing'],
+        size: { w: 480, h: 360 },
+      }).plan;
+    const near = draft('building');
+    const ramps = near.features.filter((f) => f.class === 'curb-ramp');
+    expect(ramps.length).toBeGreaterThan(0);
+    expect(ramps.some((f) => f.on)).toBe(true);
+    const lowered = elements.filter(
+      (e) => e.type === 'node' && e.tags.kerb === 'lowered'
+    );
+    for (const f of ramps) {
+      const id = Number(f.id.replace('osm-node-', ''));
+      const el = lowered.find((e) => e.id === id);
+      expect(el).toBeTruthy();
+      const [x, y] = toMm(projectLatLon(el.lat, el.lon, GATES), near.size, 2);
+      expect(f.at[0]).toBeCloseTo(x, 2);
+      expect(f.at[1]).toBeCloseTo(y, 2);
+    }
+    const zebra = elements.find(
+      (e) =>
+        e.type === 'way' &&
+        /^zebra/.test(e.tags['crossing:markings'] || '') &&
+        near.features.some((f) => f.id === `osm-way-${e.id}`)
+    );
+    expect(zebra).toBeTruthy();
+    const drawn = near.features.find((f) => f.id === `osm-way-${zebra.id}`);
+    expect([drawn.class, drawn.style]).toEqual(['crossing', undefined]);
+    const block = draft('block');
+    expect(
+      block.features.filter(
+        (f) => f.class === 'curb-ramp' || f.class === 'raised-curb'
+      )
+    ).toEqual([]);
   });
 });

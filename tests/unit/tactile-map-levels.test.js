@@ -423,3 +423,39 @@ describe('the chevrons style', () => {
     expect(warnings.filter((w) => w.code === 'line-too-wide')).toEqual([]);
   });
 });
+
+describe('the pedestrian base classes', () => {
+  it('puts a curb ramp and a raised curb on the symbol level as the triangle and the square, and a traffic island as a plain line on level 2', () => {
+    expect(LEVELS_BY_CLASS['curb-ramp']).toEqual({
+      kind: 'point',
+      level: 2,
+      symbol: 'landmark-triangle',
+    });
+    expect(LEVELS_BY_CLASS['raised-curb']).toEqual({
+      kind: 'point',
+      level: 2,
+      symbol: 'landmark-square',
+    });
+    expect(LEVELS_BY_CLASS['traffic-island']).toEqual({
+      kind: 'line',
+      level: 2,
+      width: 1.5,
+      style: 'solid',
+    });
+    const area = (cls) => {
+      const plan = emptyPlan(200, 150);
+      plan.features.push({
+        id: 'c',
+        class: cls,
+        kind: 'point',
+        at: [100, 75],
+        on: true,
+      });
+      return regionArea(ringsOf(groupsOf(buildLevelsSvg(plan).svg).level2));
+    };
+    // The library's triangle, side 10 mm: 43.3 square millimeters; its
+    // square, 9 mm a side: 81.
+    expect(Math.abs(area('curb-ramp') - 43.3) / 43.3).toBeLessThan(0.02);
+    expect(Math.abs(area('raised-curb') - 81) / 81).toBeLessThan(0.02);
+  });
+});

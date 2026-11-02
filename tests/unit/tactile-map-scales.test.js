@@ -54,11 +54,14 @@ describe('the scale choices', () => {
     expect(rules('building')).toMatchObject({
       streetsAsOneLine: false,
       crossingMarkings: true,
+      curbRamps: true,
     });
     expect(rules('block')).toMatchObject({
       streetsAsOneLine: false,
       crossingMarkings: false,
     });
+    for (const key of ['block', 'blocks', 'neighborhood'])
+      expect(rules(key).curbRamps).toBeFalsy();
     expect(rules('blocks')).toMatchObject({
       streetsAsOneLine: 'whereUnder3mm',
     });
@@ -102,7 +105,7 @@ describe('the scale choices', () => {
       '480 m across on this plate. A 10 mm symbol stands for 10 m. Sidewalks and crossings draw.'
     );
     expect(sentenceFor(scaleChoice('building'), plate)).toBe(
-      '240 m across on this plate. A 10 mm symbol stands for 5 m. Every sidewalk draws, and a crossing without markings is dashed.'
+      '240 m across on this plate. A 10 mm symbol stands for 5 m. Every sidewalk, curb ramp and raised curb draws, and a crossing without markings is dashed.'
     );
     expect(sentenceFor(scaleChoice('blocks'), plate)).toBe(
       '960 m across on this plate. A 10 mm symbol stands for 20 m. Narrow streets draw as one line; entrances leave.'

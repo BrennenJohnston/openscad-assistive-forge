@@ -18,8 +18,10 @@ const RULES = {
     streetsAsOneLine: false,
     crossings: true,
     crossingMarkings: true,
+    curbRamps: true,
     sidePaths: true,
-    drawn: 'Every sidewalk draws, and a crossing without markings is dashed.',
+    drawn:
+      'Every sidewalk, curb ramp and raised curb draws, and a crossing without markings is dashed.',
   }),
   block: Object.freeze({
     streetsAsOneLine: false,

@@ -72,6 +72,7 @@ describe('buildQuery', () => {
       'node(around:250,47.6,-122.33)[public_transport]',
       'node(around:250,47.6,-122.33)[amenity]',
       'node(around:250,47.6,-122.33)[shop]',
+      'node(around:250,47.6,-122.33)[kerb]',
     ]) {
       expect(q).toContain(sel + ';');
     }

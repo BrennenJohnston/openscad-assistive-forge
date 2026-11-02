@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   saying how much ground fits on the plate and what draws at it.
 - A route map can be a trip by bus and train, planned by Transitous, the
   open journey planner, as well as a walk.
+- A place map near a building shows curb ramps and raised curbs, a traffic
+  island as part of its crossing, and a crossing with no paint dashed, all
+  read from the map data.
 
 ### Fixed
 

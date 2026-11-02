@@ -137,6 +137,17 @@ export const MAP_CLASSES = Object.freeze([
       'Ungar 2005 (arrows read by their point); OpenSidewalks incline as rise over run',
   },
   {
+    key: 'traffic-island',
+    name: 'Traffic island',
+    kind: 'line',
+    level: 2,
+    widthMm: 1.5,
+    style: 'solid',
+    source:
+      "OpenSidewalks: the part of a crossing on a traffic island, mapped as a line; drawn plain on the crossing's level, so the ticks pause where the island stands",
+    osm: [{ tag: 'footway', values: ['traffic_island'], kind: 'way' }],
+  },
+  {
     key: 'area',
     name: 'Area',
     kind: 'area',
@@ -223,6 +234,26 @@ export const MAP_CLASSES = Object.freeze([
         kind: 'node',
       },
     ],
+  },
+  {
+    key: 'curb-ramp',
+    name: 'Curb ramp',
+    kind: 'point',
+    level: 2,
+    symbolKey: 'landmark-triangle',
+    source:
+      'OpenSidewalks curb ramps (barrier=kerb, kerb=lowered); the library triangle, a wedge for a slope (Jehoel 2009: identified at 6.4 mm)',
+    osm: [{ tag: 'kerb', values: ['lowered'], kind: 'node' }],
+  },
+  {
+    key: 'raised-curb',
+    name: 'Raised curb',
+    kind: 'point',
+    level: 2,
+    symbolKey: 'landmark-square',
+    source:
+      'OpenSidewalks raised curbs (barrier=kerb, kerb=raised), a step a wheel cannot take; the library square (Jehoel 2009: identified at 5.0 mm)',
+    osm: [{ tag: 'kerb', values: ['raised'], kind: 'node' }],
   },
   {
     key: 'text',

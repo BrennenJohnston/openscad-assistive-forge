@@ -56,6 +56,7 @@ describe('trimElement', () => {
     });
     expect(el.geometry).toHaveLength(2);
     expect(KEPT_TAGS).toContain('footway');
+    expect(KEPT_TAGS).toContain('crossing:markings');
     expect(KEPT_TAGS).not.toContain('source');
   });
 

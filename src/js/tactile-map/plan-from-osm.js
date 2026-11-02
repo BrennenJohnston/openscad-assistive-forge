@@ -11,7 +11,10 @@
  * a stairs point at its middle AND a walkway line, so the path continues;
  * a road is two curb lines offset half its width each side; a path needs
  * foot=yes or designated; shops and benches enter the plan only when their
- * box is ticked; a named amenity is an off landmark.
+ * box is ticked; a named amenity is an off landmark; curb ramps and raised
+ * curbs enter only at a scale whose rules draw them, on where they stand on
+ * a sidewalk or crossing that is on and leave room for the symbols already
+ * on.
  *
  * No DOM here: a worker may import this file.
  *
@@ -23,6 +26,7 @@ import { MAP_CLASSES, ROAD_WIDTHS_M } from './map-classes.js';
 import { mmPerMeter, projectLatLon, toMm } from './osm-geometry.js';
 import { intersect, simplify } from '../ring-geometry.js';
 import { mmPerMeterAt, sidewalksAsOneLine } from './scales.js';
+import { DEFAULT_SETTINGS } from './levels-svg.js';
 
 /** A walkway with a point this close to the address starts on. */
 export const NEAR_M = 30;
@@ -43,6 +47,18 @@ const ROAD_VALUES = Object.keys(ROAD_WIDTHS_M);
 const FOOT_PATH = ['yes', 'designated'];
 /** A crossing tagged with no marking on the road. */
 const UNMARKED = ['unmarked', 'no'];
+const CURB_CLASSES = new Set(['curb-ramp', 'raised-curb']);
+
+/**
+ * Is a crossing painted? `crossing:markings` says it outright and wins;
+ * without it, `crossing=unmarked` or `no` says it is not. Every painted
+ * pattern (zebra, ladder, lines, dashes) reads as one: the ticks.
+ */
+function unmarked(tags) {
+  const markings = tags['crossing:markings'];
+  if (markings !== undefined) return markings === 'no';
+  return UNMARKED.includes(tags.crossing);
+}
 
 const round3 = (v) => Math.round(v * 1000) / 1000;
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -395,7 +411,7 @@ export function draftPlan({
         addLine(id, 'crossing', points, ticked.has('crossing'), name);
         // Near a building the crossing's marking is kept: one with none is
         // dashed, a marked one keeps the class's ticks.
-        if (rules.crossingMarkings && UNMARKED.includes(t.crossing)) {
+        if (rules.crossingMarkings && unmarked(t)) {
           for (const f of features) {
             if (f.id === id || f.id.startsWith(`${id}-`)) f.style = 'dashed';
           }
@@ -403,6 +419,9 @@ export function draftPlan({
       } else if (cls === 'walkway') {
         if (!rules.sidePaths) continue;
         addLine(id, 'walkway', points, nearCenter(points), name);
+      } else if (cls === 'traffic-island') {
+        if (!rules.crossings) continue;
+        addLine(id, cls, points, false, name);
       } else {
         addLine(id, cls, points, false, name);
       }
@@ -431,6 +450,10 @@ export function draftPlan({
           addPoint(id, 'crossing', at, ticked.has('crossing'), name);
         continue;
       }
+      if (CURB_CLASSES.has(cls)) {
+        if (rules.curbRamps) addPoint(id, cls, at, false, name);
+        continue;
+      }
       addPoint(id, cls, at, landmarkOn(cls), name);
     }
   }
@@ -445,6 +468,50 @@ export function draftPlan({
     const ends =
       f.kind === 'line' ? [f.points[0], f.points[f.points.length - 1]] : [f.at];
     if (ends.some(touches)) f.on = true;
+  }
+
+  // An island starts on where it meets a crossing that is on.
+  const crossingEnds = features
+    .filter((f) => f.class === 'crossing' && f.on && f.kind === 'line')
+    .flatMap((f) => [f.points[0], f.points[f.points.length - 1]]);
+  for (const f of features) {
+    if (f.class !== 'traffic-island') continue;
+    const ends = [f.points[0], f.points[f.points.length - 1]];
+    if (ends.some((p) => crossingEnds.some((e) => dist(e, p) <= TOUCH_MM)))
+      f.on = true;
+  }
+
+  // A curb starts on where it stands on a sidewalk or crossing that is on,
+  // unless its symbol would come closer to a symbol already on than the
+  // levels builder's gap (the same square measure its warning uses).
+  const onPaths = features.filter(
+    (f) =>
+      (f.class === 'crossing' || f.class === 'walkway') &&
+      f.on &&
+      f.kind === 'line'
+  );
+  const reach = DEFAULT_SETTINGS.symbolSizeMm + DEFAULT_SETTINGS.minGapMm;
+  const placed = [
+    middle,
+    ...features
+      .filter((f) => f.kind === 'point' && f.on && !CURB_CLASSES.has(f.class))
+      .map((f) => f.at),
+  ];
+  const roomAt = (p) =>
+    placed.every(
+      (q) => Math.max(Math.abs(p[0] - q[0]), Math.abs(p[1] - q[1])) >= reach
+    );
+  for (const f of features) {
+    if (!CURB_CLASSES.has(f.class)) continue;
+    const onPath = onPaths.some((c) =>
+      c.points.some(
+        (p, i) => i > 0 && segmentDistance(f.at, c.points[i - 1], p) <= TOUCH_MM
+      )
+    );
+    if (onPath && roomAt(f.at)) {
+      f.on = true;
+      placed.push(f.at);
+    }
   }
 
   // Over the editor's limit: every feature on stays, then the off ones
@@ -489,7 +556,8 @@ export function draftPlan({
     } else if (
       f.kind === 'point' &&
       f.class !== 'you-are-here' &&
-      f.class !== 'crossing'
+      f.class !== 'crossing' &&
+      !CURB_CLASSES.has(f.class)
     ) {
       counts.landmarks += 1;
     }
