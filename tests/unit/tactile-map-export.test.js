@@ -173,6 +173,31 @@ describe('the README says what the map is', () => {
     expect(readme.split('\n')[0]).toBe('A map from a drawing.');
     expect(readme).not.toMatch(/OpenStreetMap/);
   });
+
+  it('names the key plates and lists each one’s label tape, top to bottom', () => {
+    const readme = readmeText({
+      ...base,
+      about: { type: 'drawing' },
+      keyIds: ['key-1', 'key-2'],
+      keyText: 'Key\n\nSymbols, You are here first:\n- You are here: a disc\n',
+      keyTape: [
+        { id: 'key-1', texts: ['key: station', 'you are here'] },
+        { id: 'key-2', texts: ['pc restaurant: plaza cafe'] },
+      ],
+    });
+    expect(readme).toMatch(
+      /The key prints on its own plates, key-1, key-2, to read before the map\.\n/
+    );
+    expect(readme.trimEnd().split('\n').slice(-7)).toEqual([
+      '- You are here: a disc',
+      '',
+      'Key 1 plate, label tape top to bottom:',
+      '- key: station',
+      '- you are here',
+      'Key 2 plate, label tape top to bottom:',
+      '- pc restaurant: plaza cafe',
+    ]);
+  });
 });
 
 describe('the archive and its README', () => {

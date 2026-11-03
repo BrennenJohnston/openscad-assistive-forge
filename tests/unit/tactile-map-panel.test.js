@@ -107,10 +107,10 @@ const click = (id) => document.getElementById(id).click();
 let files;
 let downloads;
 
-function mount({ type = 'drawing', ...options } = {}) {
+function mount({ type = 'drawing', config = {}, ...options } = {}) {
   destroyMapPanel();
   initMapPanel(
-    { ...CONFIG, type },
+    { ...CONFIG, ...config, type },
     {
       plan: sampleStationPlan(),
       setFile: vi.fn((name, fileName, svg) => {
@@ -556,6 +556,39 @@ describe('the map panel', () => {
     await vi.waitFor(() => expect(params().plate_id).toBe('B2'), SETTLE);
     expect(files[files.length - 1].svg).toMatch(/viewBox="0 0 240 190"/);
     expect(files[files.length - 1].svg).toMatch(/<g id="cutouts"><\/g>/);
+  });
+
+  it('offers Key words with Braille only first when the model has a Key mode: a key plate starts with channels and no raised words, and Print and braille raises them', async () => {
+    expect(document.getElementById('tactileMapKeyWords')).toBeNull();
+    mount({
+      config: {
+        plateKindParam: 'plate_kind',
+        keyPrintParam: 'key_print',
+        keyLetterParam: 'key_letter_height_mm',
+      },
+    });
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const words = document.getElementById('tactileMapKeyWords');
+    expect(words.value).toBe('braille');
+    expect([...words.options].map((o) => o.textContent)).toEqual([
+      'Braille only',
+      'Print and braille',
+      'Print only',
+    ]);
+    expect(
+      document.querySelector('label[for="tactileMapKeyWords"]').textContent
+    ).toBe('Key words');
+    const key = document.querySelector('#tactileMapPlates input[value^="key"]');
+    key.checked = true;
+    key.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(params().plate_kind).toBe('Key'), SETTLE);
+    expect(params().key_print).toBe('');
+    expect(files[files.length - 1].svg).toMatch(
+      /<g id="channels"><path d="[^"]+"\/><\/g>/
+    );
+    words.value = 'both';
+    words.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(params().key_print).toMatch(/:KEY/), SETTLE);
   });
 
   it('refuses a bed that cuts the map into plates under 100 x 75 mm, and keeps the whole map', async () => {
@@ -1340,7 +1373,7 @@ describe('the map data row', () => {
     make().click();
     await vi.waitFor(() => expect(opened).not.toBeNull());
     expect(addressStatus()).toMatch(
-      /^Draft map ready: .* Choose what stays\. 2\.5 MB of map data arrived\. A scale with less ground makes a lighter map\.$/
+      /^Draft map ready: .* Choose what stays\. 2\.5 MB of map data arrived\. A scale with less ground makes a lighter map\. The key has \d+ symbols? and \d+ abbreviations?\.$/
     );
   });
 
@@ -1388,7 +1421,7 @@ describe('the map data row', () => {
     await vi.waitFor(() => expect(opened).not.toBeNull(), { timeout: 15000 });
     expect(getMapPlan().features).toHaveLength(1000);
     expect(addressStatus()).toMatch(
-      / 102 features far from the address were left out: the editor works with 1,000 at a time\.$/
+      / 102 features far from the address were left out: the editor works with 1,000 at a time\. The key has \d+ symbols? and \d+ abbreviations?\.$/
     );
   });
 
@@ -1540,7 +1573,7 @@ describe('the map Make the map drafts', () => {
     await pullData();
     await vi.waitFor(() => expect(opened).not.toBeNull());
     expect(addressStatus()).toMatch(
-      /^Draft map ready: \d+ of 20 features on; (\d+ warnings|no warnings)\. Choose what stays\.$/
+      /^Draft map ready: \d+ of 20 features on; (\d+ warnings|no warnings)\. Choose what stays\. The key has \d+ symbols? and \d+ abbreviations?\.$/
     );
     expect(announce).toHaveBeenCalledWith(addressStatus(), {
       source: 'tactile-map',
@@ -1587,9 +1620,7 @@ describe('the map Make the map drafts', () => {
     regions[onRow].class = 'ignore';
     regions[offRow].class = 'area';
     const onIndex = before.features.findIndex((f) => f.id === rows[onRow].id);
-    const offIndex = before.features.findIndex(
-      (f) => f.id === rows[offRow].id
-    );
+    const offIndex = before.features.findIndex((f) => f.id === rows[offRow].id);
     opened.options.onApply({ regions, svg: opened.svg });
     const after = getMapPlan();
     expect(after.features[onIndex].on).toBe(false);
