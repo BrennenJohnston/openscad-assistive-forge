@@ -120,7 +120,12 @@ export function plateParameterSets({
   });
 }
 
-const GRID_FILLS = { level1: '#cfcfcf', level2: '#8f8f8f', level3: '#3a3a3a' };
+const GRID_FILLS = {
+  level1: '#cfcfcf',
+  level2: '#8f8f8f',
+  level3: '#3a3a3a',
+  here: '#000000',
+};
 const GRID_RED = '#c81e1e';
 const GRID_BLUE = '#1b6ac9';
 const GRID_FONT = 'Liberation Sans, Arial, sans-serif';
@@ -146,7 +151,7 @@ const escapeXml = (text) =>
 export function plateGridSvg({ rings, layout, size, bedName }) {
   const { w, h } = size;
   let body = '';
-  for (const level of ['level1', 'level2', 'level3']) {
+  for (const level of ['level1', 'level2', 'level3', 'here']) {
     const list = rings[level] || [];
     if (list.length) {
       body += `<path d="${ringsToPathData(list, 3)}" fill="${GRID_FILLS[level]}" fill-rule="nonzero"/>`;

@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- You are here on a tactile map no longer feels like a landmark: it keeps its
+  10 mm disc and gains a center dot one step higher than any other symbol.
 - Get map data works from the published site: the Tactile Map Designer
   reads OpenStreetMap US's map tiles first, and only when they fail asks
   OpenStreetMap's main Overpass server, then VK Maps' server, saying which

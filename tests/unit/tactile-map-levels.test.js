@@ -109,7 +109,7 @@ describe('the plan', () => {
 });
 
 describe('the levels file', () => {
-  it('puts each class on its level, with the four groups and the letters box', () => {
+  it('puts each class on its level, with the six groups and the letters box', () => {
     const plan = emptyPlan(480, 360);
     plan.meta.title = 'STATION';
     plan.features.push(
@@ -145,6 +145,7 @@ describe('the levels file', () => {
       'level1',
       'level2',
       'level3',
+      'here',
       'channels',
       'cutouts',
       'letters',
@@ -292,6 +293,40 @@ describe('the levels file', () => {
     expect(Math.abs(regionArea(stroked) - expected) / expected).toBeLessThan(
       0.03
     );
+  });
+});
+
+describe('You are here, the most prominent mark', () => {
+  it('stands a full disc on the symbol level and a center dot 0.4 of its size in the here group, counted as the same level', () => {
+    const plan = emptyPlan(200, 150);
+    plan.features.push({
+      id: 'you-are-here',
+      class: 'you-are-here',
+      kind: 'point',
+      name: 'You are here',
+      at: [100, 75],
+      on: true,
+    });
+    const { rings, stats } = buildLevelRings(plan);
+    const disc = regionArea(rings.level2);
+    const dot = regionArea(rings.here);
+    // A 10 mm disc with no hole (78.5 mm2) and a 4 mm dot (12.6 mm2).
+    expect(Math.abs(disc - 25 * Math.PI) / (25 * Math.PI)).toBeLessThan(0.03);
+    expect(Math.abs(dot - 4 * Math.PI) / (4 * Math.PI)).toBeLessThan(0.03);
+    const xs = rings.here.flat().map((p) => p.x);
+    const ys = rings.here.flat().map((p) => p.y);
+    expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(100, 1);
+    expect((Math.min(...ys) + Math.max(...ys)) / 2).toBeCloseTo(75, 1);
+    expect(stats.levelsUsed).toBe(1);
+    const { svg } = buildLevelsSvg(plan);
+    expect(svg).toMatch(/<g id="here"><path d="[^"]+"\/><\/g>/);
+  });
+
+  it('writes the here group empty on a map without You are here, since the model imports every group', () => {
+    const plan = emptyPlan(200, 150);
+    plan.features.push(triangle('a', 100, 75));
+    const { svg } = buildLevelsSvg(plan);
+    expect(svg).toContain('<g id="here"></g>');
   });
 });
 

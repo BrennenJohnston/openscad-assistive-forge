@@ -88,9 +88,11 @@ describe('the built-in symbols', () => {
     });
     const { svg, stats } = buildLevelsSvg(plan);
     expect(stats.unknownSymbols).toEqual([]);
-    // A disc with a square hole: two rings in level 2.
+    // A whole disc in level 2, its center dot in the here group.
     const d = svg.match(/<g id="level2"><path d="([^"]*)"/)[1];
-    expect(ringsFromPathData(d)).toHaveLength(2);
+    expect(ringsFromPathData(d)).toHaveLength(1);
+    const dot = svg.match(/<g id="here"><path d="([^"]*)"/)[1];
+    expect(ringsFromPathData(dot)).toHaveLength(1);
   });
 });
 

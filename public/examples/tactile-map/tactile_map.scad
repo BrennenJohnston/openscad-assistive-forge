@@ -223,6 +223,17 @@ module levels() {
                     import(map_file, id = str("level", n), center = false);
 }
 
+// The part of a symbol that stands one symbol step above the symbol level,
+// the levels file's here group: You are here's center dot, so the reader's
+// place is the highest mark on the map (ISO 19028 6.5.1; BANA 2022 8.5.6:
+// the most prominent symbol). Only where the symbol level is drawn.
+module here_mark() {
+    if (map_file_kind == "levels" && levels_used >= 2)
+        translate([0, 0, base_eff - _fuse])
+            linear_extrude(height = level_z(2) + symbol_step_mm - base_eff + _fuse)
+                import(map_file, id = "here", center = false);
+}
+
 // The title: uppercase, left-aligned 9.525 mm in from the left edge, clipped
 // to the face so a long title never runs off the plate or under the arrow.
 // A split map draws it on its top-left plate only.
@@ -326,6 +337,7 @@ module tactile_map() {
         union() {
             cube([map_width_mm, map_height_mm, base_eff]);
             levels();
+            here_mark();
             title();
             north_cue();
             border_frame();

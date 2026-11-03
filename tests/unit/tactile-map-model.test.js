@@ -120,6 +120,19 @@ describe('the Tactile Map tile', () => {
     expect(src).toMatch(/import\s*\(\s*map_file\s*,\s*center\s*=\s*false\s*\)/);
   });
 
+  it('raises the here group one symbol step above the symbol level, only where the symbol level is drawn', () => {
+    const src = source();
+    expect(src).toMatch(/import\s*\(\s*map_file\s*,\s*id\s*=\s*"here"/);
+    expect(src).toMatch(/level_z\(2\)\s*\+\s*symbol_step_mm/);
+    expect(src).toMatch(/levels_used\s*>=\s*2/);
+    // Every group the model imports is in the sample it opens with.
+    const sample = readFileSync(
+      'public/examples/tactile-map/sample_station.svg',
+      'utf8'
+    );
+    expect(sample).toMatch(/<g id="here"/);
+  });
+
   it('ships the sample levels file it defaults to', () => {
     const m = manifest();
     const p = params();

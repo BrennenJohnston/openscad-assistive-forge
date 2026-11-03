@@ -2,7 +2,9 @@
  * The levels builder: a map plan in, the levels file out.
  *
  * The levels file is one SVG in millimeters with a group per height,
- * <g id="level1"> to <g id="level3">, <g id="channels"> and
+ * <g id="level1"> to <g id="level3">, <g id="here"> (the part of a symbol
+ * that stands one symbol step above the symbol level: You are here's center
+ * dot), <g id="channels"> and
  * <g id="cutouts"> (what is cut right through the plate: a plate's name as
  * notches, added by the plate splitter), which the Tactile Map tile imports
  * one group at a time by id; every group is written, empty or not, since a
@@ -574,6 +576,13 @@ export function buildLevelRings(plan, settings = {}) {
         shape = symbols.circle || BUILTIN_SYMBOLS.circle;
       }
       built.push({ f, level, rings: symbolRings(shape, size, f.at) });
+      if (typeof shape.raisedPathData === 'string') {
+        built.push({
+          f,
+          level: 'here',
+          rings: symbolRings({ pathData: shape.raisedPathData }, size, f.at),
+        });
+      }
       points.push({ f, size });
       if (size < s.minSymbolMm) {
         warn(
@@ -735,8 +744,11 @@ export function buildLevelRings(plan, settings = {}) {
       `The map is ${say(h)} mm tall; more than ${say(s.maxHeightMm)} mm is beyond a hand span.`
     );
   }
+  // A raised part stands on its symbol: the same level, by the count.
   const levelsUsed = new Set(
-    built.filter((b) => b.level !== 'channels').map((b) => b.level)
+    built
+      .filter((b) => b.level !== 'channels' && b.level !== 'here')
+      .map((b) => b.level)
   );
   if (levelsUsed.size > s.maxLevels) {
     warn(
@@ -753,11 +765,15 @@ export function buildLevelRings(plan, settings = {}) {
     level1: [],
     level2: [],
     level3: [],
+    here: [],
     channels: [],
     cutouts: [],
   };
   for (const b of built) {
-    const key = b.level === 'channels' ? 'channels' : `level${b.level}`;
+    const key =
+      b.level === 'channels' || b.level === 'here'
+        ? b.level
+        : `level${b.level}`;
     if (!groupRings[key]) groupRings[key] = [];
     groupRings[key].push(...b.rings);
   }
