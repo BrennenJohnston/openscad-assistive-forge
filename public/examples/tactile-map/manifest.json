@@ -15,7 +15,10 @@
     "plateShowsTitleParam": "plate_shows_title",
     "plateShowsNorthParam": "plate_shows_north",
     "titleParam": "title_text",
-    "mapFileKindParam": "map_file_kind"
+    "mapFileKindParam": "map_file_kind",
+    "plateKindParam": "plate_kind",
+    "keyPrintParam": "key_print",
+    "keyLetterParam": "key_letter_height_mm"
   },
   "tactile": [
     "base_thickness_mm",
@@ -27,7 +30,8 @@
     "label_tape_width_mm",
     "label_channel_depth_mm",
     "map_width_mm",
-    "map_height_mm"
+    "map_height_mm",
+    "key_letter_height_mm"
   ],
   "tags": ["tactile", "map", "accessibility", "orientation", "mobility", "braille"],
   "inspired_by": {

@@ -78,6 +78,14 @@ label_tape_width_mm = 12.7; // [9.5, 12.7]
 // How deep the label channels sink below the surface (mm): 0.3 lets the tape sit nearly flush.
 label_channel_depth_mm = 0.3; // [0.2:0.05:0.5]
 
+/* [Key plate] */
+// Map draws a plate of the map; Key draws the map's key plate: its words raised, its braille on label tape in channels of the levels file. The Tactile Map Designer panel sets it.
+plate_kind = "Map"; // [Map, Key]
+// The key's raised words, written by the panel: rows of x:y:WORDS, x and y the start of the row's baseline in tenths of a millimeter from the plate's bottom left, rows split by |.
+key_print = "";
+// Height of the capital I in the key's raised words (mm). ADA 703.2.5: 16 to 50.8, as the title and the Braille Sign.
+key_letter_height_mm = 16; // [16:0.1:50.8]
+
 /* [Hidden] */
 $fn = 32;
 
@@ -124,6 +132,7 @@ TAPE_WIDTHS_MM = [9.5, 12.7];          // 3/8 in and 1/2 in label tape
 CHANNEL_DEPTH_RANGE_MM = [0.2, 0.5];   // my printed maps (0.3)
 MAP_WIDTH_RANGE_MM = [100, 600];       // a plate of a split map at the least; about two hand spans at most
 MAP_HEIGHT_RANGE_MM = [75, 450];       // a plate at the least; about one hand span at most
+KEY_LETTER_RANGE_MM = [16, 50.8];      // ADA 703.2.5, 5/8 to 2 in, as the title
 
 function in_range(v, r) = v >= r[0] && v <= r[1];
 
@@ -155,6 +164,9 @@ assert(in_range(map_height_mm, MAP_HEIGHT_RANGE_MM),
        str("map_height_mm is ", map_height_mm, " mm, outside 75 to 450 mm."));
 assert(map_file_kind == "levels" || map_file_kind == "drawing",
        "map_file_kind must be levels or drawing.");
+assert(plate_kind == "Map" || plate_kind == "Key", "plate_kind must be Map or Key.");
+assert(in_range(key_letter_height_mm, KEY_LETTER_RANGE_MM),
+       str("key_letter_height_mm is ", key_letter_height_mm, " mm; ADA 703.2.5 asks for 16 to 50.8 mm."));
 
 // =============================================================================
 // HEIGHTS
@@ -332,16 +344,49 @@ module cutouts() {
 // THE MAP
 // =============================================================================
 
+// =============================================================================
+// THE KEY PLATE: rows of raised words the panel lays out; its samples, its
+// frame and the channels for its braille on label tape come with the levels
+// file, as a map plate's do
+// =============================================================================
+
+// Rows of "x:y:content" split by "|", x and y in tenths of a millimeter.
+function _at(s, c, i = 0) = i >= len(s) ? -1 : s[i] == c ? i : _at(s, c, i + 1);
+function _sub(s, a, b) = a >= b ? "" : chr([for (i = [a : b - 1]) ord(s[i])]);
+function _split(s, c) =
+    let(k = _at(s, c))
+    k < 0 ? [s] : concat([_sub(s, 0, k)], _split(_sub(s, k + 1, len(s)), c));
+function _int(s, i = 0, n = 0) =
+    i >= len(s) ? n : _int(s, i + 1, n * 10 + ord(s[i]) - 48);
+function _row(r) =
+    let(a = _at(r, ":"), rest = _sub(r, a + 1, len(r)), b = _at(rest, ":"))
+    [_int(_sub(r, 0, a)) / 10, _int(_sub(rest, 0, b)) / 10, _sub(rest, b + 1, len(rest))];
+function _rows(s) = len(s) == 0 ? [] : [for (r = _split(s, "|")) if (len(r) > 0) _row(r)];
+
+module key_words() {
+    translate([0, 0, base_eff - _fuse])
+        linear_extrude(height = title_raise_mm + _fuse)
+            for (row = _rows(key_print))
+                translate([row[0], row[1]])
+                    text(row[2], size = key_letter_height_mm / LETTER_CAP_FACTOR,
+                         font = "Liberation Sans", spacing = TITLE_LETTER_SPACING,
+                         halign = "left", valign = "baseline");
+}
+
 module tactile_map() {
     difference() {
         union() {
             cube([map_width_mm, map_height_mm, base_eff]);
             levels();
             here_mark();
-            title();
-            north_cue();
-            border_frame();
-            plate_name();
+            if (plate_kind == "Key") {
+                key_words();
+            } else {
+                title();
+                north_cue();
+                border_frame();
+                plate_name();
+            }
         }
         channels();
         cutouts();
