@@ -109,7 +109,7 @@ describe('the plan', () => {
 });
 
 describe('the levels file', () => {
-  it('puts each class on its level, with the four groups and the letters box', () => {
+  it('puts each class on its level, with the six groups and the letters box', () => {
     const plan = emptyPlan(480, 360);
     plan.meta.title = 'STATION';
     plan.features.push(
@@ -145,6 +145,7 @@ describe('the levels file', () => {
       'level1',
       'level2',
       'level3',
+      'here',
       'channels',
       'cutouts',
       'letters',
@@ -295,6 +296,40 @@ describe('the levels file', () => {
   });
 });
 
+describe('You are here, the most prominent mark', () => {
+  it('stands a full disc on the symbol level and a center dot 0.4 of its size in the here group, counted as the same level', () => {
+    const plan = emptyPlan(200, 150);
+    plan.features.push({
+      id: 'you-are-here',
+      class: 'you-are-here',
+      kind: 'point',
+      name: 'You are here',
+      at: [100, 75],
+      on: true,
+    });
+    const { rings, stats } = buildLevelRings(plan);
+    const disc = regionArea(rings.level2);
+    const dot = regionArea(rings.here);
+    // A 10 mm disc with no hole (78.5 mm2) and a 4 mm dot (12.6 mm2).
+    expect(Math.abs(disc - 25 * Math.PI) / (25 * Math.PI)).toBeLessThan(0.03);
+    expect(Math.abs(dot - 4 * Math.PI) / (4 * Math.PI)).toBeLessThan(0.03);
+    const xs = rings.here.flat().map((p) => p.x);
+    const ys = rings.here.flat().map((p) => p.y);
+    expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(100, 1);
+    expect((Math.min(...ys) + Math.max(...ys)) / 2).toBeCloseTo(75, 1);
+    expect(stats.levelsUsed).toBe(1);
+    const { svg } = buildLevelsSvg(plan);
+    expect(svg).toMatch(/<g id="here"><path d="[^"]+"\/><\/g>/);
+  });
+
+  it('writes the here group empty on a map without You are here, since the model imports every group', () => {
+    const plan = emptyPlan(200, 150);
+    plan.features.push(triangle('a', 100, 75));
+    const { svg } = buildLevelsSvg(plan);
+    expect(svg).toContain('<g id="here"></g>');
+  });
+});
+
 describe('the clutter checks', () => {
   it('names both symbols when two are closer than the minimum gap', () => {
     const plan = emptyPlan(200, 150);
@@ -305,6 +340,55 @@ describe('the clutter checks', () => {
     expect(close[0].text).toBe(
       'Landmark and Landmark (2) are 2 mm apart, closer than the 3 mm minimum. Move one or turn one off.'
     );
+  });
+
+  it('says three or more symbols at one spot in one warning: one kind, keep one; several kinds, move them apart', () => {
+    const hall = {
+      id: 'hall',
+      class: 'area',
+      kind: 'area',
+      name: 'The Hall',
+      ring: [
+        [20, 20],
+        [60, 20],
+        [60, 50],
+        [20, 50],
+      ],
+      on: true,
+    };
+    const bench = (id, x, y) => ({
+      id,
+      class: 'furniture',
+      kind: 'point',
+      what: 'Bench',
+      at: [x, y],
+      on: true,
+    });
+    const plan = emptyPlan(200, 150);
+    plan.features.push(
+      hall,
+      bench('b1', 100, 75),
+      bench('b2', 101, 75),
+      bench('b3', 100, 76),
+      bench('b4', 101, 76),
+      triangle('t1', 150, 20),
+      triangle('t2', 160, 20),
+      {
+        id: 's1',
+        class: 'stairs',
+        kind: 'point',
+        at: [170, 20],
+        on: true,
+      }
+    );
+    const { warnings } = buildLevelsSvg(plan);
+    const close = warnings.filter((w) => w.code === 'too-close');
+    expect(close.map((w) => w.text)).toEqual([
+      '4 benches within 3 mm of one another near The Hall. Keep one and turn the others off.',
+      '3 symbols within 3 mm of one another near The Hall. Move them apart or turn some off.',
+    ]);
+    expect(close[0].featureIds).toEqual(['b1', 'b2', 'b3', 'b4']);
+    expect(close[1].featureIds).toEqual(['t1', 't2', 's1']);
   });
 
   it('counts the symbol keys and warns past fifteen', () => {

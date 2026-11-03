@@ -1188,6 +1188,10 @@ export function createDrawingEditor({
       workspace.open(svgString, analysis, {
         ...rest,
         hosted: true,
+        // The workspace's width help names the map, and a map draft (never
+        // traced) gets no too-small-to-trace marks.
+        purpose,
+        draft: isDraft,
         onApply: (...args) => finish('onApply', ...args),
         onKeepOriginal: (...args) => finish('onKeepOriginal', ...args),
       });

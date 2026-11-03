@@ -4,12 +4,14 @@
  * re-traced: the editor only decides which features are on and what class
  * each has, and the plan keeps every point.
  *
- * `drawingFromPlan` writes ONE path per feature in feature order, each
+ * `drawingFromPlan` writes ONE path per feature, in feature order or in the
+ * order given (`rowOrder`: what is on before what is off, curbs last), each
  * marked `data-feature="<id>"`, off features included so the editor can
  * switch them on. The analyzer lists a path that carries `data-colour` as
  * one element (its outer ring) whatever its holes, so every path carries
  * it: a stroked loop or an area with holes stays one row, at the feature's
- * index. `applyRowsToPlan` reads the rows back by that index.
+ * index. `applyRowsToPlan` reads the rows back by that index, through the
+ * same order; the plan's own order never changes.
  *
  * No DOM here: a worker may import this file.
  *
@@ -85,13 +87,16 @@ function ringsOf(f, settings, symbols) {
  * @param {object} [settings] - the levels builder's settings (sizes)
  * @returns {string} SVG
  */
-export function drawingFromPlan(plan, settings = {}) {
+export function drawingFromPlan(plan, settings = {}, { order = null } = {}) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
   const symbols = symbolMap(s.symbols || activeLibrary());
   const w = plan.size.w;
   const h = plan.size.h;
-  const names = featureNames(plan.features || []);
-  const paths = (plan.features || []).map((f, i) => {
+  const all = plan.features || [];
+  const names = featureNames(all);
+  const rows = order || all.map((_, i) => i);
+  const paths = rows.map((i) => {
+    const f = all[i];
     const rings = ringsOf(f, s, symbols).filter((r) => r && r.length >= 3);
     const d = ringsToPathData(rings);
     const fillRule = f.kind === 'area' ? ' fill-rule="evenodd"' : '';
@@ -109,6 +114,22 @@ export function drawingFromPlan(plan, settings = {}) {
 }
 
 /**
+ * The order the editor lists a plan's features in, as indexes into the
+ * plan: what is on first, then what is off, and the curbs last within each
+ * (a draft has scores of road edges; a person reads what is on the map
+ * before what is not). The plan's order is kept within each group.
+ *
+ * @param {object[]} features
+ * @returns {number[]}
+ */
+export function rowOrder(features = []) {
+  const rank = (f) => (f.on === false ? 2 : 0) + (f.class === 'curb' ? 1 : 0);
+  return features
+    .map((_, i) => i)
+    .sort((a, b) => rank(features[a]) - rank(features[b]) || a - b);
+}
+
+/**
  * The editor's rows laid back over the plan by index: a row classed
  * `ignore` switches its feature off (the class kept, so switching it back
  * on restores it); any other class switches it on with that class. The
@@ -116,12 +137,14 @@ export function drawingFromPlan(plan, settings = {}) {
  *
  * @param {object} plan
  * @param {Array<{index: number, class: string}>} regions
+ * @param {number[]|null} [order] - the rows' order the drawing was written in
  * @returns {object}
  */
-export function applyRowsToPlan(plan, regions) {
+export function applyRowsToPlan(plan, regions, order = null) {
   const features = (plan.features || []).map((f) => ({ ...f }));
   for (const region of regions || []) {
-    const i = Number(region?.index);
+    const row = Number(region?.index);
+    const i = order && Number.isInteger(row) ? order[row] : row;
     const f = Number.isInteger(i) ? features[i] : null;
     if (!f) continue;
     const cls = typeof region.class === 'string' ? region.class : 'ignore';

@@ -50,6 +50,7 @@ import {
   trimElement,
 } from '../../src/js/tactile-map/osm-geometry.js';
 import { setParameterValue } from '../../src/js/ui-generator.js';
+import { rowOrder } from '../../src/js/tactile-map/plan-drawing.js';
 import { announce, announceError } from '../../src/js/announcer.js';
 import { stateManager } from '../../src/js/state.js';
 import { sampleStationPlan } from '../../src/js/tactile-map/plan.js';
@@ -1552,11 +1553,21 @@ describe('the map Make the map drafts', () => {
     const classes = opened.options.initialClasses;
     expect(Object.keys(classes)).toHaveLength(20);
     const plan = getMapPlan();
-    plan.features.forEach((f, i) => {
+    // The rows: what is on first, then what is off, curbs last within each;
+    // the editor gets the features in that order and the map's own width.
+    const rows = opened.options.features;
+    expect(rows.map((f) => f.id)).toEqual(
+      rowOrder(plan.features).map((i) => plan.features[i].id)
+    );
+    rows.forEach((f, i) => {
       expect(classes[i]).toBe(f.on ? f.class : 'ignore');
     });
-    expect(classes[19]).toBe('you-are-here');
-    expect(opened.options.features).toBe(plan.features);
+    const firstOff = rows.findIndex((f) => !f.on);
+    expect(rows.slice(firstOff).every((f) => !f.on)).toBe(true);
+    expect(classes[rows.findIndex((f) => f.id === 'you-are-here')]).toBe(
+      'you-are-here'
+    );
+    expect(opened.options.designWidthMm).toBe(plan.size.w);
     expect(plan.meta.title).toBe('Central Library');
   });
 
@@ -1565,16 +1576,20 @@ describe('the map Make the map drafts', () => {
     await vi.waitFor(() => expect(opened).not.toBeNull());
     const before = JSON.parse(JSON.stringify(getMapPlan()));
     const filesBefore = files.length;
-    const regions = before.features.map((f, index) => ({
+    // The regions come back by the editor's row, which is not the plan's.
+    const rows = opened.options.features;
+    const regions = rows.map((f, index) => ({
       index,
       class: f.on ? f.class : 'ignore',
     }));
-    const onIndex = before.features.findIndex((f) => f.on && f.kind === 'line');
+    const onRow = rows.findIndex((f) => f.on && f.kind === 'line');
+    const offRow = rows.findIndex((f) => !f.on && f.kind === 'area');
+    regions[onRow].class = 'ignore';
+    regions[offRow].class = 'area';
+    const onIndex = before.features.findIndex((f) => f.id === rows[onRow].id);
     const offIndex = before.features.findIndex(
-      (f) => !f.on && f.kind === 'area'
+      (f) => f.id === rows[offRow].id
     );
-    regions[onIndex].class = 'ignore';
-    regions[offIndex].class = 'area';
     opened.options.onApply({ regions, svg: opened.svg });
     const after = getMapPlan();
     expect(after.features[onIndex].on).toBe(false);

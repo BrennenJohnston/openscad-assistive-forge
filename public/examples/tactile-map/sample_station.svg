@@ -3,6 +3,7 @@
     <path fill-rule="evenodd" d="M 20 40 L 320 40 L 320 240 L 20 240 Z M 21.5 41.5 L 21.5 238.5 L 318.5 238.5 L 318.5 41.5 Z"/>
     <path d="M 40 60 L 160 60 L 160 140 L 40 140 Z"/>
   </g>
+  <g id="here"></g>
   <g id="level2">
     <path d="M 60 195 L 65 205 L 55 205 Z"/>
     <path d="M 100 195 L 105 205 L 95 205 Z"/>

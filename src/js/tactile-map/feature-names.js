@@ -1,9 +1,13 @@
 /**
  * What a map's features are called where a person reads them: the editor's
- * rows and the warnings. A feature's own name (a street, a building); else
- * its class near the nearest named feature ("Stairs near Husky Union
- * Building"); else its class alone. A name used twice is numbered from its
- * second use, so every row reads apart.
+ * rows and the warnings. A point that says what it is (`what`, from
+ * feature-kinds.js) says it first: "Cafe: Lobby Espresso", "Bus stop 29405:
+ * NE Pacific St", unless the name says it already ("Health Sciences
+ * Library"). Else a feature's own name (a street, a building); else what it
+ * is, or its class, near the nearest named feature ("Bench near Northeast
+ * San Juan Road", "Stairs near Husky Union Building"); else that word
+ * alone. A name used twice is numbered from its second use, so every row
+ * reads apart.
  *
  * No DOM here: a worker may import this file.
  *
@@ -13,6 +17,26 @@ import { MAP_CLASSES } from './map-classes.js';
 
 const classWord = (key) =>
   MAP_CLASSES.find((c) => c.key === key)?.name || 'Shape';
+
+/** A stop's number as said: "99604;99605" is "99604 and 99605". */
+const refWords = (ref) =>
+  String(ref)
+    .split(';')
+    .map((r) => r.trim())
+    .filter(Boolean)
+    .join(' and ');
+
+/** Does the name already say the word ("Health Sciences Library")? */
+function saysItself(name, word) {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\b`, 'i').test(name);
+}
+
+/** What a point is, with a stop's number: "Bus stop 29405", "Cafe". */
+function whatWord(f) {
+  if (!f.what) return null;
+  return f.ref ? `${f.what} ${refWords(f.ref)}` : f.what;
+}
 
 /** A point that stands for the feature: its place, its middle, or its box's center. */
 function anchorOf(f) {
@@ -77,14 +101,14 @@ function distanceTo(f, p) {
 }
 
 /**
- * The names of the features, in their order.
+ * A finder of the named feature nearest a point, by its own name.
  *
  * @param {object[]} features - a plan's features
- * @returns {string[]}
+ * @returns {(at: [number, number]) => string|null}
  */
-export function featureNames(features = []) {
+export function placeFinder(features = []) {
   const places = features.filter((f) => f.name && !NOT_A_PLACE.has(f.class));
-  const nearestName = (at) => {
+  return (at) => {
     let best = null;
     let bestD = Infinity;
     for (const f of places) {
@@ -96,13 +120,32 @@ export function featureNames(features = []) {
     }
     return best;
   };
+}
+
+/**
+ * The names of the features, in their order.
+ *
+ * @param {object[]} features - a plan's features
+ * @returns {string[]}
+ */
+export function featureNames(features = []) {
+  const nearestName = placeFinder(features);
   const seen = new Map();
   return features.map((f) => {
-    let base = f.name;
-    if (!base) {
+    const what = whatWord(f);
+    let base;
+    if (f.name) {
+      base =
+        what && (f.ref || !saysItself(f.name, f.what))
+          ? `${what}: ${f.name}`
+          : f.name;
+    } else if (what && f.ref) {
+      base = what;
+    } else {
+      const word = what || classWord(f.class);
       const at = anchorOf(f);
       const near = at ? nearestName(at) : null;
-      base = near ? `${classWord(f.class)} near ${near}` : classWord(f.class);
+      base = near ? `${word} near ${near}` : word;
     }
     const times = (seen.get(base) || 0) + 1;
     seen.set(base, times);

@@ -597,6 +597,8 @@ class MapPanel {
       purpose: 'map',
       sourceName: drawing.name,
       initialClasses: drawing.classes,
+      designWidthMm: this.drawingWidthMm,
+      designWidthKnown: true,
       onApply: (result) => {
         this.takeRegions(result);
         backTo(opener);
@@ -1314,13 +1316,17 @@ class MapPanel {
       this.sayAddress('The drawing editor is not on this page.', true);
       return;
     }
-    const { drawingFromPlan, applyRowsToPlan } =
+    const { drawingFromPlan, applyRowsToPlan, rowOrder } =
       await import('./plan-drawing.js');
     const { joinRoute } = await import('./route.js');
     const { analyzeSvg } = await import('../svg-preparer.js');
-    const svg = drawingFromPlan(this.plan);
+    // The rows in the editor's order; Apply lays them back on this plan.
+    const opened = this.plan;
+    const order = rowOrder(opened.features);
+    const rows = order.map((i) => opened.features[i]);
+    const svg = drawingFromPlan(opened, {}, { order });
     const initialClasses = Object.fromEntries(
-      this.plan.features.map((f, i) => [i, f.on ? f.class : 'ignore'])
+      rows.map((f, i) => [i, f.on ? f.class : 'ignore'])
     );
     const place =
       this.plan.meta?.title || this.osm?.place?.name || 'the address';
@@ -1332,10 +1338,13 @@ class MapPanel {
         ? ADDRESS_STRINGS.routeName(route.from, route.to)
         : ADDRESS_STRINGS.draftName(place),
       initialClasses,
-      features: this.plan.features,
-      mmPerM: this.plan.meta?.geo?.mmPerM ?? null,
+      features: rows,
+      mmPerM: opened.meta?.geo?.mmPerM ?? null,
+      // The thin-shape check measures the map at its own width.
+      designWidthMm: opened.size.w,
+      designWidthKnown: true,
       onApply: (result) => {
-        const applied = applyRowsToPlan(this.plan, result?.regions || []);
+        const applied = applyRowsToPlan(opened, result?.regions || [], order);
         // The route's segments that meet become one Route line.
         this.plan = { ...applied, features: joinRoute(applied.features) };
         this.plate = 'whole';

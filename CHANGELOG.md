@@ -26,9 +26,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gives a number, and the grade's help says what 5, 8 and 15 % feel like.
 - The Tactile Map Designer guide follows the three map types, and the
   README in a plate zip says what the map is and carries its data credits.
+- A place map names what each point is, such as "Restaurant: Plaza Cafe"
+  or "Bus stop 29405", starts named places on and leaves unnamed benches
+  and bins to a street furniture class, and says several symbols crowded
+  at one spot in one warning.
 
 ### Fixed
 
+- You are here on a tactile map no longer feels like a landmark: it keeps its
+  10 mm disc and gains a center dot one step higher than any other symbol.
+- A draft map opens in the editor with what is on first and the curbs last,
+  measured at the map's own width: it no longer calls hundreds of shapes too
+  thin at 14 mm or marks every row too small to trace.
 - Get map data works from the published site: the Tactile Map Designer
   reads OpenStreetMap US's map tiles first, and only when they fail asks
   OpenStreetMap's main Overpass server, then VK Maps' server, saying which

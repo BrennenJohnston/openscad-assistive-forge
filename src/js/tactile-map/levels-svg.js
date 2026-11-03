@@ -2,7 +2,9 @@
  * The levels builder: a map plan in, the levels file out.
  *
  * The levels file is one SVG in millimeters with a group per height,
- * <g id="level1"> to <g id="level3">, <g id="channels"> and
+ * <g id="level1"> to <g id="level3">, <g id="here"> (the part of a symbol
+ * that stands one symbol step above the symbol level: You are here's center
+ * dot), <g id="channels"> and
  * <g id="cutouts"> (what is cut right through the plate: a plate's name as
  * notches, added by the plate splitter), which the Tactile Map tile imports
  * one group at a time by id; every group is written, empty or not, since a
@@ -38,8 +40,8 @@ import {
   ringsToPathData,
 } from '../ring-geometry.js';
 import { activeLibrary } from './symbol-library.js';
-import { levelsByClass } from './map-classes.js';
-import { featureNames } from './feature-names.js';
+import { levelsByClass, mapClass } from './map-classes.js';
+import { featureNames, placeFinder } from './feature-names.js';
 
 /** How lines are stroked (the plan allowed offsetRing first; see above). */
 export const STROKE_METHOD = 'segments-and-discs';
@@ -451,6 +453,40 @@ const say = (n) => String(Math.round(n * 10) / 10);
 let names = new Map();
 const nameOf = (f) => names.get(f.id) || f.name || f.id;
 
+/** Words with no plural of their own: said as "{n} drinking water symbols". */
+const NO_PLURAL = /(water|parking|furniture|information|fast food)$/i;
+const IRREGULAR = Object.freeze({
+  'Elevator up': 'elevators up',
+  'Elevator down': 'elevators down',
+});
+
+/** The plural of a kind or class word, in lowercase but for capitals (ATMs). */
+function plural(word) {
+  if (IRREGULAR[word]) return IRREGULAR[word];
+  const aside = word.match(/^(.*?) (\(.*\))$/);
+  if (aside) return `${plural(aside[1])} ${aside[2]}`;
+  if (/^[A-Z0-9]+$/.test(word)) return `${word}s`;
+  const w = word.charAt(0).toLowerCase() + word.slice(1);
+  if (NO_PLURAL.test(w)) return `${w} symbols`;
+  if (/s$/.test(w)) return w;
+  if (/[^aeiou]y$/.test(w)) return `${w.slice(0, -1)}ies`;
+  if (/(ch|sh|x|z)$/.test(w)) return `${w}es`;
+  return `${w}s`;
+}
+
+/**
+ * The word for a spot whose symbols are all one thing ("benches", "bus
+ * stops", "landmarks"), or null when they are not.
+ */
+function spotWord(features) {
+  const whats = new Set(features.map((f) => f.what || ''));
+  if (whats.size === 1 && !whats.has('')) return plural([...whats][0]);
+  const classes = new Set(features.map((f) => f.class));
+  if (classes.size !== 1) return null;
+  const name = mapClass([...classes][0])?.name;
+  return name ? plural(name) : null;
+}
+
 // ---------------------------------------------------------------------------
 // The builder
 // ---------------------------------------------------------------------------
@@ -540,6 +576,13 @@ export function buildLevelRings(plan, settings = {}) {
         shape = symbols.circle || BUILTIN_SYMBOLS.circle;
       }
       built.push({ f, level, rings: symbolRings(shape, size, f.at) });
+      if (typeof shape.raisedPathData === 'string') {
+        built.push({
+          f,
+          level: 'here',
+          rings: symbolRings({ pathData: shape.raisedPathData }, size, f.at),
+        });
+      }
       points.push({ f, size });
       if (size < s.minSymbolMm) {
         warn(
@@ -616,6 +659,12 @@ export function buildLevelRings(plan, settings = {}) {
       `${textures.size} area textures. More than ${s.maxTextures} read as noise; consider plain areas.`
     );
   }
+  // Symbols closer than the gap, gathered into spots: a pair is named, a
+  // spot of three or more is said once (six benches at one place are one
+  // thing to fix, not fifteen).
+  const spotOf = points.map((_, i) => i);
+  const root = (i) => (spotOf[i] === i ? i : (spotOf[i] = root(spotOf[i])));
+  const pairs = [];
   for (let i = 0; i < points.length; i++) {
     for (let j = i + 1; j < points.length; j++) {
       const a = points[i];
@@ -624,14 +673,48 @@ export function buildLevelRings(plan, settings = {}) {
       const dy = Math.abs(a.f.at[1] - b.f.at[1]);
       const gap = Math.max(0, Math.max(dx, dy) - (a.size + b.size) / 2);
       if (gap < s.minGapMm) {
-        warn(
-          'too-close',
-          a.f.id,
-          `${nameOf(a.f)} and ${nameOf(b.f)} are ${say(gap)} mm apart, closer than the ${say(s.minGapMm)} mm minimum. Move one or turn one off.`,
-          { featureIds: [a.f.id, b.f.id] }
-        );
+        pairs.push({ a, b, gap });
+        spotOf[root(j)] = root(i);
       }
     }
+  }
+  const crowded = new Set(pairs.flatMap(({ a, b }) => [a, b]));
+  const spots = new Map();
+  points.forEach((p, i) => {
+    if (!crowded.has(p)) return;
+    const key = root(i);
+    if (!spots.has(key)) spots.set(key, []);
+    spots.get(key).push(p);
+  });
+  const nearestPlace = placeFinder(list);
+  for (const spot of spots.values()) {
+    if (spot.length === 2) {
+      const { a, b, gap } = pairs.find(
+        (q) => spot.includes(q.a) && spot.includes(q.b)
+      );
+      warn(
+        'too-close',
+        a.f.id,
+        `${nameOf(a.f)} and ${nameOf(b.f)} are ${say(gap)} mm apart, closer than the ${say(s.minGapMm)} mm minimum. Move one or turn one off.`,
+        { featureIds: [a.f.id, b.f.id] }
+      );
+      continue;
+    }
+    const middle = [0, 1].map(
+      (axis) => spot.reduce((sum, p) => sum + p.f.at[axis], 0) / spot.length
+    );
+    const place = nearestPlace(middle);
+    const near = place ? ` near ${place}` : '';
+    const word = spotWord(spot.map((p) => p.f));
+    const within = `within ${say(s.minGapMm)} mm of one another${near}.`;
+    warn(
+      'too-close',
+      spot[0].f.id,
+      word
+        ? `${spot.length} ${word} ${within} Keep one and turn the others off.`
+        : `${spot.length} symbols ${within} Move them apart or turn some off.`,
+      { featureIds: spot.map((p) => p.f.id) }
+    );
   }
   for (const c of channels) {
     for (const b of built) {
@@ -661,8 +744,11 @@ export function buildLevelRings(plan, settings = {}) {
       `The map is ${say(h)} mm tall; more than ${say(s.maxHeightMm)} mm is beyond a hand span.`
     );
   }
+  // A raised part stands on its symbol: the same level, by the count.
   const levelsUsed = new Set(
-    built.filter((b) => b.level !== 'channels').map((b) => b.level)
+    built
+      .filter((b) => b.level !== 'channels' && b.level !== 'here')
+      .map((b) => b.level)
   );
   if (levelsUsed.size > s.maxLevels) {
     warn(
@@ -679,11 +765,15 @@ export function buildLevelRings(plan, settings = {}) {
     level1: [],
     level2: [],
     level3: [],
+    here: [],
     channels: [],
     cutouts: [],
   };
   for (const b of built) {
-    const key = b.level === 'channels' ? 'channels' : `level${b.level}`;
+    const key =
+      b.level === 'channels' || b.level === 'here'
+        ? b.level
+        : `level${b.level}`;
     if (!groupRings[key]) groupRings[key] = [];
     groupRings[key].push(...b.rings);
   }

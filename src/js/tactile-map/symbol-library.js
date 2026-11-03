@@ -39,6 +39,9 @@ export const SYMBOL_CHECK_SIZE_MM = 10;
 
 const S3 = Math.sqrt(3);
 const DISC = 'M 0.5 0 A 0.5 0.5 0 1 1 0.5 1 A 0.5 0.5 0 1 1 0.5 0 Z';
+/** A center dot 0.4 of the symbol across: 4 mm on a 10 mm symbol. */
+const CENTER_DOT =
+  'M 0.5 0.3 A 0.2 0.2 0 1 1 0.5 0.7 A 0.2 0.2 0 1 1 0.5 0.3 Z';
 
 /**
  * The shipped set. Names are the words a key sheet and a screen reader use.
@@ -104,10 +107,14 @@ export const BUILT_IN_SYMBOLS = [
   {
     key: 'you-are-here',
     name: 'You are here',
-    pathData: `${DISC} M 0.35 0.35 H 0.65 V 0.65 H 0.35 Z`,
+    pathData: DISC,
+    // The part that stands one symbol step higher than every other symbol
+    // (the levels file's here group), so the reader's place is the highest
+    // mark on the map and no disc feels like it.
+    raisedPathData: CENTER_DOT,
     minSizeMm: SYMBOL_MIN_SIZE_MM,
     source:
-      'BANA 2022 8.5.6 (the most prominent symbol, first in the key); ISO 19028 via Wabinski, Moscicka and Touya 2024',
+      'BANA 2022 8.5.6 (the most prominent symbol, first in the key); ISO 19028 6.5.1 (the present location higher than the other marks), via Wabinski, Moscicka and Touya 2024: a disc with a 4 mm center dot one symbol step higher',
   },
   {
     key: 'transit-stop',
@@ -270,13 +277,31 @@ export function validateSymbolLibrary(data, fileName = 'the file') {
       warnings.push(
         `Symbol ${name} has no source; say where its shape comes from.`
       );
-    symbols.push({
+    const symbol = {
       key: entry.key,
       name,
       pathData: entry.pathData,
       minSizeMm,
       source,
-    });
+    };
+    if (entry.raisedPathData !== undefined) {
+      if (
+        typeof entry.raisedPathData !== 'string' ||
+        !ringsFromPathData(entry.raisedPathData).length
+      ) {
+        refuse(`${name} has no shape in its raisedPathData.`);
+      }
+      if (
+        thinnestFeatureMm(entry.raisedPathData, SYMBOL_CHECK_SIZE_MM) <
+        SYMBOL_MIN_FEATURE_MM
+      ) {
+        throw new Error(
+          `Symbol ${name} has a raised part thinner than ${SYMBOL_MIN_FEATURE_MM.toFixed(1)} mm, which a 0.4 mm nozzle cannot print.`
+        );
+      }
+      symbol.raisedPathData = entry.raisedPathData;
+    }
+    symbols.push(symbol);
   });
   return { symbols, warnings };
 }

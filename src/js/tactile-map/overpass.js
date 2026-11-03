@@ -61,6 +61,10 @@ const NODE_TAGS = [
   'shop',
   // A curb: barrier=kerb with kerb=lowered, raised, flush or rolled.
   'kerb',
+  // Clinics, visitor centers and offices: what a named place is.
+  'healthcare',
+  'tourism',
+  'office',
 ];
 
 function fail(code, message) {

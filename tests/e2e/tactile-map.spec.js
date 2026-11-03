@@ -541,6 +541,131 @@ test.describe('the draft map', () => {
       violations.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`).join('\n')
     ).toEqual([]);
   });
+
+  test('names each point by what it is at 3600 Ferry Pl NE: a restaurant by its name, a bus stop by its number, benches as benches', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    // Real tiles over the address (fetched 2026-11-02; map data from
+    // OpenStreetMap contributors, ODbL).
+    const TILES = {
+      5250: readFileSync(
+        'tests/fixtures/tactile-map/sourdough-15-5250-11438.mvt'
+      ),
+      5251: readFileSync(
+        'tests/fixtures/tactile-map/sourdough-15-5251-11438.mvt'
+      ),
+    };
+    await page.route('https://nominatim.openstreetmap.org/search*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify([
+          {
+            place_id: 1,
+            lat: '47.6481285',
+            lon: '-122.3086726',
+            type: 'building',
+            importance: 0.5,
+            display_name:
+              'Center on Human Development and Disability South, 3600, Ferry Place Northeast, Seattle, Washington, 98195, United States',
+          },
+        ]),
+      })
+    );
+    await page.route('https://tiles.openstreetmap.us/**', (route) => {
+      const x = route.request().url().match(/\/15\/(\d+)\/11438\.mvt$/)?.[1];
+      const body = TILES[x];
+      return route.fulfill({
+        status: body ? 200 : 204,
+        contentType: 'application/vnd.mapbox-vector-tile',
+        headers: { 'access-control-allow-origin': '*' },
+        body: body || '',
+      });
+    });
+    await openTactileMap(page, 'place');
+    await page.locator('#tactileMapAddress').fill('3600 Ferry Pl NE, Seattle');
+    await page.locator('#tactileMapSearch').click();
+    await page.locator('#tactileMapPlace1').check();
+    await goToStep(page, 3);
+    await page.locator('#tactileMapLandmark-benches').check();
+    await goToStep(page, 4);
+    await page.locator('#tactileMapMake').click();
+    await expect(page.locator('#tactileMapAddressStatus')).toContainText(
+      'Draft map ready: ',
+      { timeout: 15000 }
+    );
+    const editor = page.locator('#drawingEditorSurface .drawing-editor');
+    await expect(editor.first()).toHaveAttribute('data-purpose', 'map', {
+      timeout: 60000,
+    });
+    const rowOf = (name) =>
+      page
+        .locator('#drawingEditorSurface .svg-prep-object')
+        .filter({
+          has: page.locator('.svg-prep-object-name', { hasText: name }),
+        })
+        .first();
+    const cafe = rowOf('Restaurant: Plaza Cafe');
+    await expect(cafe.locator('.svg-prep-object-name')).toHaveText(
+      'Restaurant: Plaza Cafe'
+    );
+    await expect(cafe.locator('.drawing-editor-class-select')).toHaveValue(
+      'landmark'
+    );
+    await expect(
+      rowOf('Bus stop 29405: NE Pacific St & Montlake Blvd NE').locator(
+        '.drawing-editor-class-select'
+      )
+    ).toHaveValue('transit-stop');
+    await expect(
+      rowOf('Bench near Northeast San Juan Road').locator(
+        '.drawing-editor-class-select'
+      )
+    ).toHaveValue('furniture');
+    const names = await page
+      .locator('#drawingEditorSurface .svg-prep-object-name')
+      .allTextContents();
+    expect(names.filter((n) => /^Landmark\b/.test(n))).toEqual([]);
+
+    // The editor measures the draft at the map's own width, and lists what is
+    // on before what is off, curbs last.
+    // At 14 mm, the editor's own default, it called 284 shapes too thin; at
+    // the map's 480 mm none is (MEASURED 2026-11-02), so no notice shows.
+    await expect(
+      page.locator('#drawingEditorSurface .svg-prep-design-width-input')
+    ).toHaveValue('480');
+    const notice = page.locator('#drawingEditorSurface .svg-prep-thin-notice');
+    await expect(notice).toBeHidden();
+    await expect(notice).not.toContainText('14 mm');
+    await expect(
+      page.locator('#drawingEditorSurface .svg-prep-design-width-help')
+    ).toHaveText(
+      'The map sets this from its size. Type a width only to see what would change.'
+    );
+    // A draft is never traced: no row is marked too small to trace.
+    await expect(
+      page.locator('#drawingEditorSurface .svg-prep-thin-mark')
+    ).toHaveCount(0);
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor-class-select').first()
+    ).not.toHaveValue('curb');
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor-class-select').first()
+    ).not.toHaveValue('ignore');
+
+    const results = await new AxeBuilder({ page })
+      .include('#drawingEditorSurface')
+      .analyze();
+    const violations = results.violations.filter(
+      (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)
+    );
+    expect(
+      violations,
+      violations.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`).join('\n')
+    ).toEqual([]);
+  });
 });
 
 test.describe('steep sidewalks', () => {

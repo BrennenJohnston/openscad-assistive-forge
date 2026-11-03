@@ -11,10 +11,16 @@
  * a stairs point at its middle AND a walkway line, so the path continues;
  * a road is two curb lines offset half its width each side; a path needs
  * foot=yes or designated; shops and benches enter the plan only when their
- * box is ticked; a named amenity is an off landmark; curb ramps and raised
- * curbs enter only at a scale whose rules draw them, on where they stand on
- * a sidewalk or crossing that is on and leave room for the symbols already
- * on.
+ * box is ticked; a named place is a landmark, on where the scale draws
+ * landmarks, and street furniture with a name an off point of its own
+ * class; the entrance nearest the address within NEAR_M starts on at every
+ * scale while entrances are ticked; a stop position starts off where its
+ * platform stands within NEAR_M; curb ramps and raised curbs enter only at
+ * a scale whose rules draw them, on where they stand on a sidewalk or
+ * crossing that is on and leave room for the symbols already on.
+ *
+ * A point says what it is (`what`, feature-kinds.js) and a stop keeps its
+ * number (`ref`), so the editor and the warnings name it.
  *
  * No DOM here: a worker may import this file.
  *
@@ -27,6 +33,7 @@ import { mmPerMeter, projectLatLon, toMm } from './osm-geometry.js';
 import { intersect, simplify } from '../ring-geometry.js';
 import { mmPerMeterAt, sidewalksAsOneLine } from './scales.js';
 import { DEFAULT_SETTINGS } from './levels-svg.js';
+import { kindOf, isFurniture } from './feature-kinds.js';
 
 /** A walkway with a point this close to the address starts on. */
 export const NEAR_M = 30;
@@ -353,12 +360,20 @@ export function draftPlan({
       features.push(f);
     }
   };
-  const addPoint = (id, cls, at, on, name) => {
+  const addPoint = (id, cls, at, on, name, tags = {}) => {
     if (!insideBox(at)) return;
     const f = { id, class: cls, kind: 'point', at, on };
     if (name) f.name = name;
+    const what = kindOf(tags);
+    if (what) f.what = what;
+    if (cls === 'transit-stop' && typeof tags.ref === 'string' && tags.ref) {
+      f.ref = tags.ref;
+    }
     features.push(f);
+    return f;
   };
+  // Stop positions, read against their platforms once every stop is in.
+  const stopPositions = new Set();
 
   for (const el of elements) {
     const t = el.tags || {};
@@ -431,18 +446,19 @@ export function draftPlan({
       const id = `osm-node-${el.id}`;
       if (t.shop !== undefined) {
         if (ticked.has('shop'))
-          addPoint(id, 'landmark', at, fits('landmark'), name);
+          addPoint(id, 'landmark', at, !!name && fits('landmark'), name, t);
         continue;
       }
-      if (t.amenity === 'bench') {
-        if (ticked.has('bench'))
-          addPoint(id, 'landmark', at, fits('landmark'), name);
+      if (isFurniture(t)) {
+        if (t.amenity === 'bench' && ticked.has('bench'))
+          addPoint(id, 'furniture', at, fits('furniture'), name, t);
+        else if (name) addPoint(id, 'furniture', at, false, name, t);
         continue;
       }
       const cls = classFromTable(t, 'node');
       if (!cls) continue;
       if (cls === 'landmark') {
-        if (name) addPoint(id, 'landmark', at, false, name);
+        if (name) addPoint(id, 'landmark', at, fits('landmark'), name, t);
         continue;
       }
       if (cls === 'crossing') {
@@ -454,7 +470,44 @@ export function draftPlan({
         if (rules.curbRamps) addPoint(id, cls, at, false, name);
         continue;
       }
-      addPoint(id, cls, at, landmarkOn(cls), name);
+      const f = addPoint(id, cls, at, landmarkOn(cls), name, t);
+      if (f && cls === 'transit-stop' && t.public_transport === 'stop_position')
+        stopPositions.add(f);
+    }
+  }
+
+  // The address's own entrance: the one nearest it within NEAR_M, on at
+  // every scale while entrances are ticked (it is where the map leads).
+  if (ticked.has('entrance')) {
+    let door = null;
+    let doorD = NEAR_M * k;
+    for (const f of features) {
+      if (f.class !== 'entrance') continue;
+      const d = dist(f.at, middle);
+      if (d <= doorD) {
+        door = f;
+        doorD = d;
+      }
+    }
+    if (door) door.on = true;
+  }
+
+  // A stop position is where the vehicle halts; its platform, where people
+  // wait, is the stop on a map. One with a platform of the same number (or
+  // the same name, without numbers) within NEAR_M starts off.
+  const sameStop = (a, b) =>
+    a.ref && b.ref ? a.ref === b.ref : !!a.name && a.name === b.name;
+  for (const f of stopPositions) {
+    if (
+      features.some(
+        (g) =>
+          g.class === 'transit-stop' &&
+          !stopPositions.has(g) &&
+          sameStop(f, g) &&
+          dist(f.at, g.at) <= NEAR_M * k
+      )
+    ) {
+      f.on = false;
     }
   }
 

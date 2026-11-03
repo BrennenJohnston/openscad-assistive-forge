@@ -55,6 +55,10 @@ const LAYERS = [
   'shops',
   // Curbs: barrier=kerb points with their kerb value.
   'barriers',
+  // Clinics, visitor centers and offices: what a named place is.
+  'healthcare',
+  'tourism',
+  'offices',
 ];
 const WAY_KEYS = ['highway', 'building', 'railway', 'leisure', 'amenity'];
 const wantedNode = (t) =>
@@ -64,7 +68,10 @@ const wantedNode = (t) =>
   'public_transport' in t ||
   'amenity' in t ||
   'shop' in t ||
-  'kerb' in t;
+  'kerb' in t ||
+  'healthcare' in t ||
+  'tourism' in t ||
+  'office' in t;
 
 function fail(code, message) {
   const error = new Error(message);
@@ -210,6 +217,10 @@ function collect(tiles, origin) {
   const lines = [];
   const points = [];
   const areas = new Map();
+  // One OpenStreetMap point can sit in two layers (a bus stop in highways
+  // and public_transport, a clinic in amenities and healthcare) under one
+  // feature id: it is one point, with the tags of both.
+  const pointById = new Map();
   for (const { tile, layers } of tiles) {
     const left = tile.x * UNITS - origin[0];
     const top = tile.y * UNITS - origin[1];
@@ -235,7 +246,14 @@ function collect(tiles, origin) {
             const [x, y] = place(pt);
             // Half-open, so a point on the edge between two tiles is one.
             if (x >= left && x < left + UNITS && y >= top && y < top + UNITS) {
-              points.push({ tags, x, y });
+              const same = f.id !== undefined && pointById.get(f.id);
+              if (same && same.x === x && same.y === y) {
+                same.tags = { ...tags, ...same.tags };
+                continue;
+              }
+              const point = { tags, x, y };
+              points.push(point);
+              if (f.id !== undefined) pointById.set(f.id, point);
             }
           }
         } else if (f.type === 2) {

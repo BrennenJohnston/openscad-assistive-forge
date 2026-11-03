@@ -93,12 +93,13 @@ describe('pullTiles', () => {
     expect(tagged(ways, 'highway', 'steps').length).toBeGreaterThan(30);
     expect(tagged(nodes, 'highway', 'crossing').length).toBeGreaterThan(40);
     // Counted in the box by an independent decoder (Python
-    // mapbox-vector-tile): 134 entrance points and 18 stops.
+    // mapbox-vector-tile): 134 entrance points and 18 stop features, which
+    // are 12 stops: 6 sit in both the highways and the transit layers.
     expect(nodes.filter((n) => n.tags.entrance).length).toBe(134);
     expect(
       nodes.filter((n) => n.tags.highway === 'bus_stop' || n.tags.public_transport)
         .length
-    ).toBe(18);
+    ).toBe(12);
     const gates = ways.find((w) => w.tags.name === 'Bill & Melinda Gates Center');
     expect(gates.tags.building).toBeTruthy();
     expect(gates.geometry[0]).toEqual(gates.geometry[gates.geometry.length - 1]);
@@ -163,6 +164,48 @@ describe('pullTiles', () => {
       seen.set(k, (seen.get(k) || 0) + 1);
     }
     expect([...seen.values()].every((n) => n === 1)).toBe(true);
+  });
+
+  it('keeps a point two layers both carry once, with the tags of both (a stop in the highways and the transit layers)', async () => {
+    const FERRY_TILE = readFileSync(
+      'tests/fixtures/tactile-map/sourdough-15-5251-11438.mvt'
+    );
+    const fetch = vi.fn(async (url) => {
+      const bytes =
+        url === urlOf(15, 5251, 11438) ? FERRY_TILE : new Uint8Array(0);
+      return {
+        ok: true,
+        status: bytes.length ? 200 : 204,
+        arrayBuffer: async () =>
+          bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength
+          ),
+      };
+    });
+    const { elements } = await pullTiles({
+      box: { south: 47.646, west: -122.31, north: 47.65, east: -122.302 },
+      fetch,
+    });
+    const stop = elements.filter(
+      (e) => e.type === 'node' && e.tags.ref === '29405' && e.tags.highway
+    );
+    expect(stop).toHaveLength(1);
+    expect(stop[0].tags).toMatchObject({
+      highway: 'bus_stop',
+      public_transport: 'platform',
+      name: 'NE Pacific St & Montlake Blvd NE',
+    });
+    const clinic = elements.filter(
+      (e) =>
+        e.type === 'node' &&
+        e.tags.name === 'University of Washington Medical Center - Montlake'
+    );
+    expect(clinic).toHaveLength(1);
+    expect(clinic[0].tags).toMatchObject({
+      amenity: 'doctors',
+      healthcare: 'doctor',
+    });
   });
 
   it('meets the walks at the tile edge, so the walk graph runs from one tile into the next', async () => {
