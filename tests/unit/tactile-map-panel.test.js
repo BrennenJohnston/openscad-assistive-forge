@@ -235,7 +235,8 @@ describe('the map types and their steps', () => {
     expect(step(1).querySelector('#tactileMapTo')).toBeNull();
     expect(document.getElementById('tactileMapTo')).toBeNull();
     expect(step(2).querySelector('#tactileMapScale')).toBeTruthy();
-    expect(step(3).querySelector('#tactileMapLandmarks')).toBeTruthy();
+    expect(step(3).querySelector('#tactileMapDetail')).toBeTruthy();
+    expect(step(3).querySelector('#tactileMapGroups')).toBeTruthy();
     expect(step(3).querySelector('#tactileMapSteep')).toBeTruthy();
     expect(step(4).querySelector('#tactileMapMake')).toBeTruthy();
     expect(step(4).querySelector('#tactileMapLoadFile')).toBeTruthy();
@@ -1124,9 +1125,11 @@ describe('the map data row', () => {
     opened = null;
     mount({ type: 'place', getEditor: async () => editor });
   });
-  const boxes = () => [
-    ...document.querySelectorAll('#tactileMapLandmarks input[type="checkbox"]'),
+  const tiers = () => [
+    ...document.querySelectorAll('#tactileMapDetail input[type="radio"]'),
   ];
+  const labelOf = (control) =>
+    document.querySelector(`label[for="${control.id}"]`).textContent;
 
   async function pickPlace(options) {
     mount({
@@ -1157,7 +1160,7 @@ describe('the map data row', () => {
     fileInput.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  it('offers the scales by the ground they fit, A block ticked, each saying what it fits on the plate; a custom ratio from 200 to 10000; six landmark boxes; the attribution link', () => {
+  it('offers the scales by the ground they fit, A block ticked, each saying what it fits on the plate; a custom ratio from 200 to 10000; the detail tiers; the attribution link', () => {
     expect(document.querySelector('#tactileMapScale legend').textContent).toBe(
       'Map scale'
     );
@@ -1204,22 +1207,19 @@ describe('the map data row', () => {
       '1680 m across on this plate. A 10 mm symbol stands for 35 m. Streets draw as one line; crossings, side paths and landmarks leave.'
     );
     expect(document.getElementById('tactileMapRadius')).toBeNull();
-    expect(
-      document.querySelector('#tactileMapLandmarks legend').textContent
-    ).toBe('Landmarks to show');
-    expect(
-      boxes().map((b) => [
-        document.querySelector(`label[for="${b.id}"]`).textContent,
-        b.checked,
-      ])
-    ).toEqual([
-      ['Entrances', true],
-      ['Transit stops', true],
-      ['Crossings', false],
-      ['Steps and stairs', false],
-      ['Shops', false],
-      ['Benches', false],
+    expect(document.querySelector('#tactileMapDetail legend').textContent).toBe(
+      'How much to show'
+    );
+    expect(tiers().map((r) => [labelOf(r), r.checked])).toEqual([
+      ['The way and its doors', false],
+      ['Named places', true],
+      ['Every building', false],
+      ['Everything in the data', false],
     ]);
+    expect(said(tiers()[1])).toBe(
+      'The way, the named places and transit stops the scale has room for, and the buildings along the way.'
+    );
+    expect(document.getElementById('tactileMapDetailCount').hidden).toBe(true);
     expect(make().textContent).toBe('Make the map');
     expect(make().disabled).toBe(false);
     expect(document.getElementById('tactileMapLoadFile').textContent).toBe(
@@ -1268,17 +1268,26 @@ describe('the map data row', () => {
     const pullArea = answered();
     await pickPlace({ pullArea });
     chooseScale('blocks');
+    const shown = [];
+    const watcher = new MutationObserver(() => shown.push(addressStatus()));
+    watcher.observe(document.getElementById('tactileMapAddressStatus'), {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
     make().click();
     expect(addressStatus()).toBe(
       `Getting map data for 960 by 720 m around ${PLACE.name}...`
     );
     expect(make().disabled).toBe(true);
     await vi.waitFor(() => expect(opened).not.toBeNull());
+    watcher.disconnect();
     expect(addressStatus()).toMatch(/^Draft map ready: /);
-    expect(announce).not.toHaveBeenCalledWith(
-      '21 map features in 960 by 720 m: 11 walkways, 4 crossings, 3 buildings, 3 landmarks.',
-      expect.anything()
-    );
+    // The points are named by what they are in the draft, not all landmarks.
+    const counts =
+      '21 map features in 960 by 720 m: 11 walkways, 4 crossings, 3 buildings, 3 other points.';
+    expect(shown).toContain(counts);
+    expect(announce).not.toHaveBeenCalledWith(counts, expect.anything());
     expect(make().disabled).toBe(false);
     // The ground of 1:2000 on a 480 x 360 mm plate, centered on the place.
     const call = pullArea.mock.calls[0][0];
@@ -1433,6 +1442,56 @@ describe('the map data row', () => {
     expect(pullArea).toHaveBeenCalledTimes(1);
   });
 
+  it('puts one choice a group under the tier, each with its words; a group changed marks the tier, and another tier puts the groups back', () => {
+    const groups = document.getElementById('tactileMapGroups');
+    expect(groups.tagName).toBe('DETAILS');
+    expect(groups.querySelector('summary').textContent).toBe('Change a group');
+    const selects = [...groups.querySelectorAll('select')];
+    expect(
+      selects.map((s) => [
+        labelOf(s),
+        s.value,
+        [...s.options].map((o) => o.textContent),
+      ])
+    ).toEqual([
+      ['Sidewalks', 'way', ['Near the address', 'All']],
+      ['Crossings', 'way', ['Near the address', 'All']],
+      ['Entrances', 'address', ["The address's door", 'All']],
+      ['Buildings', 'along', ['None', 'Along the way', 'Named ones', 'All']],
+      [
+        'Named places and points',
+        'named',
+        ['None', 'Named places', 'All points'],
+      ],
+      ['Transit stops', 'on', ['Off', 'On']],
+      ['Benches, bins and racks', 'off', ['Off', 'On']],
+      ['Curb ramps and raised curbs', 'on', ['Off', 'On']],
+    ]);
+    const furniture = document.getElementById('tactileMapGroup-furniture');
+    furniture.value = 'on';
+    furniture.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(labelOf(tiers()[1])).toBe('Named places (changed)');
+    tiers()[2].click();
+    expect(labelOf(tiers()[1])).toBe('Named places');
+    expect(labelOf(tiers()[2])).toBe('Every building');
+    expect(furniture.value).toBe('off');
+    expect(document.getElementById('tactileMapGroup-buildings').value).toBe(
+      'all'
+    );
+    // Everything shows each group at its most.
+    tiers()[3].click();
+    expect(selects.map((s) => s.value)).toEqual([
+      'all',
+      'all',
+      'all',
+      'all',
+      'all',
+      'on',
+      'on',
+      'on',
+    ]);
+  });
+
   it('the file door takes an export, centered on the picked place', async () => {
     await pickPlace({ pullArea: answered() });
     dropFile('export.osm', OSM);
@@ -1571,6 +1630,51 @@ describe('the map Make the map drafts', () => {
     expect(plan.meta.title).toBe('Central Library');
   });
 
+  it("drafts at step 3's tier: the live line says what is on once the data is here, a new tier is said once and the next draft takes it", async () => {
+    await pullData();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    const line = document.getElementById('tactileMapDetailCount');
+    const plan = getMapPlan();
+    const on = plan.features.filter((f) => f.on).length;
+    expect(line.hidden).toBe(false);
+    expect(line.textContent).toMatch(
+      new RegExp(`^${on} features on, \\d+ different symbols?\\.`)
+    );
+    // Named places: no building away from the way, no bench.
+    expect(
+      plan.features.filter((f) => f.class === 'furniture' && f.on)
+    ).toEqual([]);
+
+    announce.mockClear();
+    document.getElementById('tactileMapDetail-everything').click();
+    await vi.waitFor(() =>
+      expect(line.textContent).toMatch(
+        /^21 features on, \d+ different symbols?\./
+      )
+    );
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(announce).toHaveBeenCalledWith(line.textContent, {
+      source: 'tactile-map',
+    });
+    opened = null;
+    make().click();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    expect(getMapPlan().features.every((f) => f.on)).toBe(true);
+    expect(addressStatus()).toMatch(/^Draft map ready: 21 of 21 features on;/);
+
+    document.getElementById('tactileMapDetail-way').click();
+    await vi.waitFor(() => expect(line.textContent).not.toMatch(/^21 /));
+    opened = null;
+    make().click();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    const way = getMapPlan().features.filter((f) => f.on);
+    expect(
+      way.filter((f) => ['landmark', 'area', 'transit-stop'].includes(f.class))
+    ).toEqual([]);
+    expect(way.some((f) => f.class === 'walkway')).toBe(true);
+    expect(way.some((f) => f.class === 'you-are-here')).toBe(true);
+  });
+
   it('takes the rows back by index: a feature off keeps its class, one on takes the class, and the plan is rebuilt', async () => {
     await pullData();
     await vi.waitFor(() => expect(opened).not.toBeNull());
@@ -1587,9 +1691,7 @@ describe('the map Make the map drafts', () => {
     regions[onRow].class = 'ignore';
     regions[offRow].class = 'area';
     const onIndex = before.features.findIndex((f) => f.id === rows[onRow].id);
-    const offIndex = before.features.findIndex(
-      (f) => f.id === rows[offRow].id
-    );
+    const offIndex = before.features.findIndex((f) => f.id === rows[offRow].id);
     opened.options.onApply({ regions, svg: opened.svg });
     const after = getMapPlan();
     expect(after.features[onIndex].on).toBe(false);

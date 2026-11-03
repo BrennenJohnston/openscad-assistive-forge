@@ -83,6 +83,21 @@ describe('the detail levels', () => {
     }
   });
 
+  it("keeps a route's buildings to its two ends until Every building along it, as each sentence says", () => {
+    expect(
+      DETAIL_LEVELS.route.map((l) => [
+        l.switches.buildings,
+        l.switches.landmarks,
+        l.switches.transit,
+      ])
+    ).toEqual([
+      ['none', 'none', 'off'],
+      ['none', 'named', 'on'],
+      ['along', 'named', 'on'],
+      ['all', 'all', 'on'],
+    ]);
+  });
+
   it('shows more at each tier at 3600 Ferry Pl NE, the first only the way, the address door and You are here', async () => {
     const { plan, scale } = await ferry();
     const counts = DETAIL_LEVELS.place.map(

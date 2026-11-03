@@ -16565,7 +16565,6 @@ body.tutorial-body-locked {
   align-items: center;
 }
 
-.tactile-map-landmarks input[type='checkbox'],
 .tactile-map-steep-row input[type='checkbox'] {
   flex-shrink: 0;
   width: var(--size-icon-md);
@@ -16573,7 +16572,6 @@ body.tutorial-body-locked {
   margin: 0;
 }
 
-.tactile-map-landmarks input[type='checkbox']:focus-visible,
 .tactile-map-steep-row input[type='checkbox']:focus-visible {
   outline: var(--focus-ring-width, 3px) solid var(--color-focus);
   outline-offset: var(--focus-ring-offset, 2px);
@@ -16582,6 +16580,21 @@ body.tutorial-body-locked {
 .tactile-map-file-row {
   flex-wrap: wrap;
   align-items: center;
+}
+
+/* Step 3's groups under the tier: one labelled choice a row, the choice at
+   the touch floor, the words on the left and the choice on the right. */
+.tactile-map-groups {
+  margin: var(--space-sm) 0;
+}
+
+.tactile-map-group-row {
+  justify-content: space-between;
+  padding: var(--space-xs) var(--space-md);
+}
+
+.tactile-map-group-row select {
+  min-height: var(--size-touch-target);
 }
 
 /* The status box under the buttons: what the last press did, in a frame a
@@ -18163,6 +18176,70 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
    The menu stands where the role switches stand for the relief purpose, at
    the row's trailing edge, 44 px tall. Its ring is a solid one, as the
    buttons wear, not the app's translucent select halo. */
+/* A draft's class switches above the list: wrapping, each at the touch
+   floor; pressed as the editor's tools are, a ring inside the accent edge,
+   and some on drawn with a dashed edge, so a state is never colour alone. */
+.drawing-editor-map-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0 0 var(--space-sm);
+}
+
+.drawing-editor-map-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.drawing-editor-map-switches legend {
+  margin-bottom: var(--space-xs);
+  padding: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.drawing-editor-map-switch {
+  min-height: var(--size-touch-target);
+}
+
+.drawing-editor-map-switch[aria-pressed='true'] {
+  background: var(--color-hover-bg);
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.drawing-editor-map-switch[aria-pressed='mixed'] {
+  border-style: dashed;
+}
+
+.drawing-editor-map-show {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-map-show select {
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-map-show select:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
 .drawing-editor-class-heading {
   margin: 0 0 var(--space-xs);
   font-size: var(--font-size-sm);

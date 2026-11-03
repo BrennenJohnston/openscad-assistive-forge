@@ -330,6 +330,22 @@ export const EDITOR_STRINGS = Object.freeze({
   classReverted: (name, cls) => `Class of ${name} back to ${cls}.`,
   /** The command label, heard again on redo. */
   labelSetClass: (name, cls) => `${name} set to ${cls}`,
+  /** A draft's switches above the list: one per class. A11Y. */
+  mapGroupsLegend: 'Turn a whole class on or off',
+  /** A switch's words: the class and how many shapes have it. A11Y. */
+  mapGroupSwitch: (cls, n) => `${cls} (${n})`,
+  /** After a switch. A11Y. */
+  groupSet: (cls, n, on) =>
+    `${cls}: ${count(n, 'shape', 'shapes')} ${on ? 'on' : 'off'}.`,
+  /** After Undo takes a switch back. A11Y. */
+  groupReverted: (cls, n) =>
+    `${cls}: ${count(n, 'shape', 'shapes')} back as they were.`,
+  /** The switch's command label, heard again on redo. */
+  labelSetGroup: (cls, on) => `${cls} ${on ? 'on' : 'off'}`,
+  /** Which rows the list shows. A11Y. */
+  mapShow: 'Show',
+  mapShowAll: 'All shapes',
+  mapShowOn: 'Only the shapes that are on',
 
   // ── The colors section ────────────────────────────────────────────────
   /** How many regions a swatch is on (two shapes). */

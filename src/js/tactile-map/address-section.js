@@ -29,6 +29,7 @@
  *
  * @license GPL-3.0-or-later
  */
+import { DETAIL_LEVELS, SWITCHES, switchesFor } from './detail-levels.js';
 import {
   SCALES,
   CUSTOM_RANGE,
@@ -115,7 +116,36 @@ export const ADDRESS_STRINGS = Object.freeze({
     'The journey planner did not answer. Check your connection and try again, or go on foot.',
   /** A11Y: after a route's ready sentence, the journey the walk is part of. */
   journeyNote: (words) => ` The journey: ${words}`,
-  landmarks: 'Landmarks to show',
+  /** A11Y: step 3's choice of how much the map shows, and its groups. */
+  detailLegend: 'How much to show',
+  changed: (name) => `${name} (changed)`,
+  groupsTitle: 'Change a group',
+  groupLabels: {
+    sidewalks: 'Sidewalks',
+    crossings: 'Crossings',
+    entrances: 'Entrances',
+    buildings: 'Buildings',
+    landmarks: 'Named places and points',
+    transit: 'Transit stops',
+    furniture: 'Benches, bins and racks',
+    curbs: 'Curb ramps and raised curbs',
+  },
+  groupChoices: {
+    way: 'Near the address',
+    all: 'All',
+    address: "The address's door",
+    none: 'None',
+    along: 'Along the way',
+    named: 'Named ones',
+    off: 'Off',
+    on: 'On',
+  },
+  landmarkChoices: { none: 'None', named: 'Named places', all: 'All points' },
+  /** A11Y: the live line under the choices, once the data is here. */
+  detailCount: (on, symbols) =>
+    `${on} features on, ${symbols} different ${symbols === 1 ? 'symbol' : 'symbols'}.`,
+  /** A11Y: the same line past 10 symbols, the warning naming the count. */
+  detailCountWarned: (on, warning) => `${on} features on, ${warning}`,
   /** The one button: gets the data, drafts, opens the editor. */
   make: 'Make the map',
   /** A11Y: the status line while a pull runs. */
@@ -126,8 +156,8 @@ export const ADDRESS_STRINGS = Object.freeze({
   /** A11Y: the status line after a pull for two places. */
   gotRoute: (n, from, to) => `${n} map features around ${from} and ${to}.`,
   /** A11Y: the status line after a pull. */
-  got: (n, gw, gh, w, c, b, l) =>
-    `${n} map features in ${gw} by ${gh} m: ${w} walkways, ${c} crossings, ${b} buildings, ${l} landmarks.`,
+  got: (n, gw, gh, w, c, b, p) =>
+    `${n} map features in ${gw} by ${gh} m: ${w} walkways, ${c} crossings, ${b} buildings, ${p} other points.`,
   /** A11Y: one server failed and the pull moves to the next, in one breath. */
   hostSwitch: (from, next, reason) =>
     `${from} ${HOST_FAILED[reason] || HOST_FAILED.refused}. Trying ${next}; this can take half a minute.`,
@@ -203,14 +233,17 @@ export const ATTRIBUTION_URL = 'https://www.openstreetmap.org/copyright';
 export const TILES_CREDIT_URL = 'https://tiles.openstreetmap.us';
 /** The scale a place map starts at, and Custom's first ratio. */
 export const SCALE_START = 'block';
+/** The tier a map starts at: the named places (detail-levels.js). */
+export const DETAIL_START = 'named';
 export const CUSTOM_START = 1500;
 /** Row 37's threshold: a pull heavier than this gets the size warning. */
 export const BIG_BYTES = 2 * 1024 * 1024;
 export const FILE_ACCEPT = '.osm,.geojson,.json,application/json,text/xml';
 
 /**
- * The landmark boxes in their order; `on` is the default tick; `value` is
- * the map class the box turns on in the draft (the class table's key).
+ * The classes the draft builder may start on, in their order; `on` marks
+ * the ones a draft starts with (its first ticks) before step 3's tier
+ * decides what is on (detail-levels.js); `value` is the class table's key.
  */
 export const LANDMARKS = Object.freeze([
   { key: 'entrances', value: 'entrance', label: 'Entrances', on: true },
@@ -223,20 +256,21 @@ export const LANDMARKS = Object.freeze([
 
 /**
  * The counts row 27 says: walkways (ways with a highway tag), crossings
- * (crossing nodes and crossing footways), buildings, and the other tagged
- * nodes as landmarks.
+ * (crossing nodes and crossing footways), buildings, and the other nodes as
+ * points (entrances, stops, benches and named places alike: what each one
+ * is waits for the draft).
  *
  * @param {object[]} elements
- * @returns {{n: number, walkways: number, crossings: number, buildings: number, landmarks: number}}
+ * @returns {{n: number, walkways: number, crossings: number, buildings: number, points: number}}
  */
 export function countFeatures(elements) {
-  const out = { n: 0, walkways: 0, crossings: 0, buildings: 0, landmarks: 0 };
+  const out = { n: 0, walkways: 0, crossings: 0, buildings: 0, points: 0 };
   for (const e of elements || []) {
     const t = e?.tags || {};
     out.n += 1;
     if (e.type === 'node') {
       if (t.highway === 'crossing') out.crossings += 1;
-      else out.landmarks += 1;
+      else out.points += 1;
     } else if (t.building) {
       out.buildings += 1;
     } else if (t.highway) {
@@ -284,6 +318,7 @@ export function createAddressSection({
   onData,
   onDraft,
   onSteep,
+  onDetail = () => {},
   onChange = () => {},
   plateSize = () => ({ w: 480, h: 360 }),
   planJourneys = null,
@@ -545,27 +580,50 @@ export function createAddressSection({
   });
   section.appendChild(stepsChoice);
 
-  const landmarks = el(
+  // What to show: a whole tier at a time (detail-levels.js), and under it
+  // one choice per group of features. The draft gets every feature; the
+  // tier and the groups decide what is on.
+  const detailChoice = el(
     'fieldset',
-    'braille-panel-choice tactile-map-landmarks'
+    'braille-panel-choice tactile-map-detail'
   );
-  landmarks.id = 'tactileMapLandmarks';
-  landmarks.appendChild(el('legend', '', S.landmarks));
-  const boxes = LANDMARKS.map((item) => {
-    const line = el('div', 'braille-panel-toggle-row');
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.id = `tactileMapLandmark-${item.key}`;
-    box.value = item.value;
-    box.checked = item.on;
-    const text = el('label', '', item.label);
-    text.htmlFor = box.id;
-    line.appendChild(box);
-    line.appendChild(text);
-    landmarks.appendChild(line);
-    return box;
-  });
-  section.appendChild(landmarks);
+  detailChoice.id = 'tactileMapDetail';
+  let detailRadios = [];
+  const groups = el('details', 'forge-disclosure tactile-map-groups');
+  groups.id = 'tactileMapGroups';
+  const groupsSummary = el('summary');
+  groupsSummary.appendChild(
+    el('span', 'forge-disclosure-title', S.groupsTitle)
+  );
+  groups.appendChild(groupsSummary);
+  const groupSelects = {};
+  const groupRows = {};
+  for (const [key, choices] of Object.entries(SWITCHES)) {
+    const row = el('div', 'braille-panel-field-row tactile-map-group-row');
+    const select = document.createElement('select');
+    select.id = `tactileMapGroup-${key}`;
+    select.className = 'braille-panel-select';
+    for (const value of choices) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent =
+        key === 'landmarks' ? S.landmarkChoices[value] : S.groupChoices[value];
+      select.appendChild(option);
+    }
+    const words = el('label', '', S.groupLabels[key]);
+    words.htmlFor = select.id;
+    row.appendChild(words);
+    row.appendChild(select);
+    groups.appendChild(row);
+    groupSelects[key] = select;
+    groupRows[key] = row;
+  }
+  const detailCount = el('p', 'braille-panel-help tactile-map-detail-count');
+  detailCount.id = 'tactileMapDetailCount';
+  detailCount.hidden = true;
+  section.appendChild(detailChoice);
+  section.appendChild(groups);
+  section.appendChild(detailCount);
 
   const steepRow = el('div', 'braille-panel-toggle-row tactile-map-steep-row');
   const steep = document.createElement('input');
@@ -676,7 +734,15 @@ export function createAddressSection({
     scale: [scaleChoice],
     travel: [travelChoice, transitBox],
     steps: [stepsChoice],
-    landmarks: [landmarks, steepRow, steepHelp, gradeRow, gradeHelp],
+    landmarks: [
+      detailChoice,
+      groups,
+      detailCount,
+      steepRow,
+      steepHelp,
+      gradeRow,
+      gradeHelp,
+    ],
     make: [makeRow, status, fileRow, fileHelp, attribution],
   };
 
@@ -864,7 +930,96 @@ export function createAddressSection({
     customRow.hidden = currentScale().key !== 'custom';
   }
 
-  const ticked = () => boxes.filter((b) => b.checked).map((b) => b.value);
+  const ticked = () =>
+    LANDMARKS.filter((item) => item.on).map((item) => item.value);
+
+  // The tier chosen and its groups; a group changed by hand marks the tier.
+  const levelsFor = () =>
+    DETAIL_LEVELS[mode === 'route' ? 'route' : 'place'] || [];
+  const detailKey = () =>
+    detailRadios.find((r) => r.checked)?.value || DETAIL_START;
+  const switchesNow = () =>
+    Object.fromEntries(
+      Object.entries(groupSelects).map(([key, select]) => [key, select.value])
+    );
+  const detailChanged = () => {
+    const base = switchesFor(mode === 'route' ? 'route' : 'place', detailKey());
+    if (base.everything) return false;
+    return Object.entries(switchesNow()).some(([k, v]) => base[k] !== v);
+  };
+  const getDetail = () => {
+    const base = switchesFor(mode === 'route' ? 'route' : 'place', detailKey());
+    return {
+      type: mode === 'route' ? 'route' : 'place',
+      level: detailKey(),
+      changed: detailChanged(),
+      switches: base.everything && !detailChanged() ? base : switchesNow(),
+    };
+  };
+  const markChanged = () => {
+    for (const radio of detailRadios) {
+      const level = levelsFor().find((l) => l.key === radio.value);
+      const words = detailChoice.querySelector(`label[for="${radio.id}"]`);
+      if (level && words) {
+        words.textContent =
+          radio.checked && detailChanged() ? S.changed(level.name) : level.name;
+      }
+    }
+  };
+  const setGroups = (key) => {
+    const base = switchesFor(mode === 'route' ? 'route' : 'place', key);
+    for (const [k, select] of Object.entries(groupSelects)) {
+      const choices = SWITCHES[k];
+      select.value = base.everything
+        ? choices[choices.length - 1]
+        : (base[k] ?? choices[0]);
+    }
+    markChanged();
+  };
+  const buildDetail = () => {
+    const keep = detailRadios.find((r) => r.checked)?.value || DETAIL_START;
+    detailChoice.replaceChildren(el('legend', '', S.detailLegend));
+    detailRadios = levelsFor().map((level) => {
+      const line = el('div', 'braille-panel-toggle-row tactile-map-detail-row');
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'tactileMapDetail';
+      radio.id = `tactileMapDetail-${level.key}`;
+      radio.value = level.key;
+      radio.checked = level.key === keep;
+      const words = el('label', '', level.name);
+      words.htmlFor = radio.id;
+      const sentence = el(
+        'p',
+        'braille-panel-help tactile-map-detail-sentence',
+        level.sentence
+      );
+      sentence.id = `${radio.id}-sentence`;
+      radio.setAttribute('aria-describedby', sentence.id);
+      radio.addEventListener('change', () => {
+        if (!radio.checked) return;
+        setGroups(level.key);
+        onDetail(getDetail());
+      });
+      line.appendChild(radio);
+      line.appendChild(words);
+      detailChoice.appendChild(line);
+      detailChoice.appendChild(sentence);
+      return radio;
+    });
+    // A route decides its own sidewalks, crossings and doors.
+    for (const key of ['sidewalks', 'crossings', 'entrances']) {
+      groupRows[key].hidden = mode === 'route';
+    }
+    setGroups(detailKey());
+  };
+  for (const select of Object.values(groupSelects)) {
+    select.addEventListener('change', () => {
+      markChanged();
+      onDetail(getDetail());
+    });
+  }
+  buildDetail();
   const isRoute = () => mode === 'route' && Boolean(dest);
 
   let journeys = [];
@@ -988,7 +1143,7 @@ export function createAddressSection({
     const c = countFeatures(elements);
     return to
       ? S.gotRoute(c.n, short(from), short(to))
-      : S.got(c.n, g.w, g.h, c.walkways, c.crossings, c.buildings, c.landmarks);
+      : S.got(c.n, g.w, g.h, c.walkways, c.crossings, c.buildings, c.points);
   }
 
   /** A back-off's seconds, or the move to the next server (0 seconds). */
@@ -1182,7 +1337,10 @@ export function createAddressSection({
       scale: scaleChoice,
       custom,
       stepsChoice,
-      landmarks,
+      detail: detailChoice,
+      groups,
+      groupSelects,
+      detailCount,
       make,
       loadFile,
       fileInput,
@@ -1196,6 +1354,28 @@ export function createAddressSection({
     setMode(next) {
       mode = next === 'route' ? 'route' : 'place';
       label.textContent = mode === 'route' ? S.fromLabel : S.label;
+      buildDetail();
+    },
+    /** The tier and the groups chosen in step 3. */
+    getDetail,
+    /** The count under the choices, once a draft exists. */
+    setDetailCount(text) {
+      detailCount.textContent = text || '';
+      detailCount.hidden = !text;
+    },
+    /** Put a tier and its groups back (a refusal), as getDetail gave them. */
+    setDetail(detail) {
+      if (!detail) return;
+      for (const radio of detailRadios) {
+        radio.checked = radio.value === detail.level;
+      }
+      setGroups(detailKey());
+      for (const [key, value] of Object.entries(detail.switches || {})) {
+        if (groupSelects[key] && SWITCHES[key].includes(value)) {
+          groupSelects[key].value = value;
+        }
+      }
+      markChanged();
     },
     getPlace: () => place,
     getDest: () => (mode === 'route' ? dest : null),

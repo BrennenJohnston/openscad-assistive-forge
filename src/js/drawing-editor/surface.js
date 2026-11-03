@@ -801,12 +801,40 @@ export function createDrawingEditor({
   classHeading.className = 'drawing-editor-class-heading';
   classHeading.textContent = S.colClass;
   classHeading.hidden = true;
+  // A draft's whole classes, one press each, and which rows the list shows.
+  const mapGroups = document.createElement('div');
+  mapGroups.className = 'drawing-editor-map-groups';
+  mapGroups.hidden = true;
+  const groupSwitches = document.createElement('fieldset');
+  groupSwitches.className = 'drawing-editor-map-switches';
+  const groupLegend = document.createElement('legend');
+  groupLegend.textContent = S.mapGroupsLegend;
+  groupSwitches.appendChild(groupLegend);
+  const showRow = document.createElement('div');
+  showRow.className = 'drawing-editor-map-show';
+  const showSelect = document.createElement('select');
+  showSelect.id = `${canvasLabelId}-show`;
+  for (const [value, words] of [
+    ['all', S.mapShowAll],
+    ['on', S.mapShowOn],
+  ]) {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = words;
+    showSelect.appendChild(opt);
+  }
+  const showLabel = document.createElement('label');
+  showLabel.htmlFor = showSelect.id;
+  showLabel.textContent = S.mapShow;
+  showRow.append(showLabel, showSelect);
+  mapGroups.append(groupSwitches, showRow);
   const shapesBlock = document.createElement('div');
   shapesBlock.className = 'drawing-editor-shapes';
   shapesBlock.append(
     refs.thinNotice,
     refs.layerSummary,
     refs.bulkBar,
+    mapGroups,
     classHeading,
     refs.objects
   );
@@ -1207,6 +1235,7 @@ export function createDrawingEditor({
         routePrev.clear();
         seedClasses(savedClasses);
         ensureClassSelects();
+        buildMapGroups();
         setCount('regions', mapElements.length);
         feedMapCanvas(svgString).catch((err) => {
           console.error(
@@ -1451,6 +1480,7 @@ export function createDrawingEditor({
       mapClasses.clear();
       mapElements = [];
       removeClassSelects();
+      mapGroups.hidden = true;
     }
     if (!stencil) {
       regionsBlock.replaceChildren();
@@ -2076,6 +2106,8 @@ export function createDrawingEditor({
       select.value = mapClasses.get(orig) || 'ignore';
     });
     paintMapCanvas();
+    syncMapSwitches();
+    filterMapRows();
   }
 
   function removeClassSelects() {
@@ -2095,7 +2127,103 @@ export function createDrawingEditor({
         const at = parseInt(select.dataset.original, 10);
         select.value = mapClasses.get(at) || 'ignore';
       });
+    syncMapSwitches();
   }
+
+  /** A draft feature's own class, the one its switch is named by. */
+  const featureClass = (orig) => callbacks.features?.[orig]?.class || null;
+
+  /**
+   * One switch per class the draft has, in the class table's order; You
+   * are here has its own row and no switch. A drawing has no features and
+   * no switches.
+   */
+  function buildMapGroups() {
+    const features = Array.isArray(callbacks.features)
+      ? callbacks.features
+      : null;
+    groupSwitches
+      .querySelectorAll('button')
+      .forEach((button) => button.remove());
+    showSelect.value = 'all';
+    mapGroups.hidden = !(purpose === 'map' && features);
+    if (mapGroups.hidden) return;
+    const present = new Set(originalIndices().map(featureClass));
+    for (const c of MAP_CLASSES) {
+      if (!present.has(c.key) || c.key === 'you-are-here') continue;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-secondary drawing-editor-map-switch';
+      button.dataset.mapClass = c.key;
+      button.addEventListener('click', () => pressGroup(c.key));
+      groupSwitches.appendChild(button);
+    }
+    syncMapSwitches();
+    filterMapRows();
+  }
+
+  /** Each switch's count and state: pressed when every shape is on. */
+  function syncMapSwitches() {
+    if (mapGroups.hidden) return;
+    const originals = originalIndices();
+    groupSwitches.querySelectorAll('button').forEach((button) => {
+      const key = button.dataset.mapClass;
+      const shapes = originals.filter((o) => featureClass(o) === key);
+      const on = shapes.filter((o) => mapClasses.has(o)).length;
+      button.textContent = S.mapGroupSwitch(className(key), shapes.length);
+      button.setAttribute(
+        'aria-pressed',
+        on === 0 ? 'false' : on === shapes.length ? 'true' : 'mixed'
+      );
+      button.hidden = shapes.length === 0;
+    });
+  }
+
+  /**
+   * The list shows every row, or the rows that are on. A row turned off by
+   * its own menu stays until the next switch or filter, so focus is never
+   * taken from under the person.
+   */
+  function filterMapRows() {
+    const onlyOn = !mapGroups.hidden && showSelect.value === 'on';
+    const originals = originalIndices();
+    refs.objects.querySelectorAll('.svg-prep-object').forEach((item) => {
+      const orig = originals[parseInt(item.dataset.index, 10)];
+      item.hidden = onlyOn && !mapClasses.has(orig);
+    });
+  }
+
+  /**
+   * A switch pressed: every shape of its class on, or, when all are on
+   * already, every one off; one command Undo takes back as one step.
+   */
+  function pressGroup(key) {
+    const shapes = originalIndices().filter((o) => featureClass(o) === key);
+    const turnOn = !shapes.every((o) => mapClasses.has(o));
+    const changing = shapes.filter((o) => mapClasses.has(o) !== turnOn);
+    if (changing.length === 0) return;
+    const before = new Map(changing.map((o) => [o, mapClasses.get(o)]));
+    const name = className(key);
+    const write = (pick) => {
+      for (const o of changing) {
+        const next = pick(o);
+        if (next) mapClasses.set(o, next);
+        else mapClasses.delete(o);
+      }
+      syncClassSelects();
+      paintMapCanvas();
+      filterMapRows();
+    };
+    stack.run({
+      label: S.labelSetGroup(name, turnOn),
+      do: () => write(() => (turnOn ? key : null)),
+      undo: () => write((o) => before.get(o) || null),
+      undoSentence: S.groupReverted(name, changing.length),
+    });
+    say(S.groupSet(name, changing.length, turnOn));
+  }
+
+  showSelect.addEventListener('change', () => filterMapRows());
 
   function nameOfOriginal(orig) {
     const live = originalIndices().indexOf(orig);

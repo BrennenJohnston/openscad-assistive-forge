@@ -613,3 +613,101 @@ describe('the route tool', () => {
     expect(status()).toBe('1 segment on the route, 0 m long.');
   });
 });
+
+describe("a draft's class switches", () => {
+  /** Three circles: two buildings, one on, and a named place, off. */
+  const FEATURES = [
+    { id: 'a', class: 'area', kind: 'area', on: true },
+    { id: 'b', class: 'area', kind: 'area', on: false },
+    { id: 'c', class: 'landmark', kind: 'point', on: false },
+  ];
+  const switches = () => [
+    ...surface.querySelectorAll('.drawing-editor-map-switches button'),
+  ];
+  const switchFor = (name) =>
+    switches().find((b) => b.textContent.startsWith(name));
+  const showSelect = () =>
+    surface.querySelector('.drawing-editor-map-show select');
+  const undoButton = () =>
+    surface.querySelector('.drawing-editor-history [data-action="undo"]');
+
+  function openDraft() {
+    openMap({
+      draft: true,
+      initialClasses: { 0: 'area' },
+      features: FEATURES,
+      mmPerM: 0.5,
+    });
+  }
+
+  it('offers one switch per class the draft has, in the class table order, each saying its count and whether it is on', () => {
+    openDraft();
+    const fieldset = surface.querySelector('.drawing-editor-map-switches');
+    expect(fieldset.tagName).toBe('FIELDSET');
+    expect(fieldset.querySelector('legend').textContent).toBe(
+      S.mapGroupsLegend
+    );
+    expect(
+      switches().map((b) => [b.textContent, b.getAttribute('aria-pressed')])
+    ).toEqual([
+      [S.mapGroupSwitch('Area', 2), 'mixed'],
+      [S.mapGroupSwitch('Landmark', 1), 'false'],
+    ]);
+    expect(S.mapGroupSwitch('Area', 2)).toBe('Area (2)');
+    expect(surface.querySelector('.drawing-editor-map-groups').hidden).toBe(
+      false
+    );
+  });
+
+  it('one press turns every shape of a class on, says how many, and one Undo takes them all back', () => {
+    openDraft();
+    switchFor('Area').click();
+    expect([selectOf(0).value, selectOf(1).value]).toEqual(['area', 'area']);
+    expect(switchFor('Area').getAttribute('aria-pressed')).toBe('true');
+    expect(status()).toBe(S.groupSet('Area', 1, true));
+    expect(S.groupSet('Area', 1, true)).toBe('Area: 1 shape on.');
+    undoButton().click();
+    expect([selectOf(0).value, selectOf(1).value]).toEqual(['area', 'ignore']);
+    expect(switchFor('Area').getAttribute('aria-pressed')).toBe('mixed');
+    expect(status()).toBe(S.groupReverted('Area', 1));
+    // Pressed when every shape is on, it turns them all off.
+    switchFor('Area').click();
+    switchFor('Area').click();
+    expect([selectOf(0).value, selectOf(1).value]).toEqual([
+      'ignore',
+      'ignore',
+    ]);
+    expect(status()).toBe(S.groupSet('Area', 2, false));
+    // A row's own menu moves its class's switch too.
+    choose(2, 'landmark');
+    expect(switchFor('Landmark').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('shows every row, or only the rows that are on', () => {
+    openDraft();
+    const select = showSelect();
+    expect(surface.querySelector(`label[for="${select.id}"]`).textContent).toBe(
+      S.mapShow
+    );
+    expect([...select.options].map((o) => o.textContent)).toEqual([
+      S.mapShowAll,
+      S.mapShowOn,
+    ]);
+    expect(select.value).toBe('all');
+    select.value = 'on';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(rows().map((r) => r.hidden)).toEqual([false, true, true]);
+    switchFor('Landmark').click();
+    expect(rows().map((r) => r.hidden)).toEqual([false, true, false]);
+    select.value = 'all';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(rows().map((r) => r.hidden)).toEqual([false, false, false]);
+  });
+
+  it('has no switches for a drawing, which has no features', () => {
+    openMap();
+    expect(surface.querySelector('.drawing-editor-map-groups').hidden).toBe(
+      true
+    );
+  });
+});

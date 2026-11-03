@@ -73,6 +73,11 @@ test.describe('the three map types end to end', () => {
     await axeClean(page, 'place step 2');
     await nextStep(page, 3, 'What to show');
     await axeClean(page, 'place step 3');
+    // Everything in the data, by arrow keys: a map that full has warnings.
+    await page.locator('#tactileMapDetail-named').focus();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('#tactileMapDetail-everything')).toBeChecked();
     await nextStep(page, 4, 'Make the map');
     await tabTo(page, '#tactileMapMake');
     await page.keyboard.press('Enter');
@@ -166,6 +171,10 @@ test.describe('the three map types end to end', () => {
     await nextStep(page, 4, 'Make the map');
     await tabTo(page, '#tactileMapMake');
     await page.keyboard.press('Enter');
+    // The sentence comes before the editor opens: Escape waits for it.
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor').first()
+    ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });
     await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
       /^Route map ready: a \d+ m walk from Husky Union Building to East Stevens Way NE & Benton Ln, .* The journey: 22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony\.$/,
       { timeout: 60000 }
@@ -180,6 +189,7 @@ test.describe('the three map types end to end', () => {
     );
     expect(stop).toBe('East Stevens Way NE & Benton Ln, 72');
     await page.keyboard.press('Escape');
+    await expect(page.locator('#tactileMapMake')).toBeFocused();
     await nextStep(page, 5, 'Check and print');
     await axeClean(page, 'route step 5');
   });

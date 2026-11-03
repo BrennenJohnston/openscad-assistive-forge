@@ -21,6 +21,7 @@
  *
  * @license GPL-3.0-or-later
  */
+import { ALONG_M, wantsArea, wantsPoint } from './detail-levels.js';
 import { draftPlan } from './plan-from-osm.js';
 import { projectLatLon, toMm } from './osm-geometry.js';
 import { pointKey, walkBetween } from './walk-graph.js';
@@ -205,6 +206,9 @@ const shortName = (place, fallback) =>
  *   (a walk from a bus or train): a Transit stop there, not You are here
  * @param {{name: string}|null} [args.toStop] - the walk ends at this stop: a
  *   Transit stop there, not a door
+ * @param {Record<string, string|boolean>|null} [args.switches] - a detail
+ *   tier's switches (detail-levels.js): the places, stops and buildings
+ *   they want are the ones kept beside the route; without them, the ticks
  * @returns {{ plan: object|null, walk: object|null, counts: object|null }}
  */
 export function draftRoutePlan({
@@ -216,6 +220,7 @@ export function draftRoutePlan({
   avoidSteps = false,
   fromStop = null,
   toStop = null,
+  switches = null,
 } = {}) {
   const walk = walkBetween({ elements, from, to, avoidSteps });
   if (!walk || walk.points.length < 2) {
@@ -276,7 +281,7 @@ export function draftRoutePlan({
     if (f.id === 'you-are-here') continue;
     const copy = { ...f, on: false };
     if (
-      f.on &&
+      (switches ? wantsPoint(f, switches) : f.on) &&
       f.kind === 'point' &&
       POINT_CLASSES_NEAR.has(f.class) &&
       near(f.at, CORRIDOR_M * k)
@@ -311,6 +316,11 @@ export function draftRoutePlan({
   );
   for (const id of [walk.from.buildingId, walk.to.buildingId]) {
     if (id != null) switchOn((f) => f.kind === 'area' && idMatches(f, id));
+  }
+  if (switches) {
+    switchOn(
+      (f) => f.kind === 'area' && wantsArea(f, switches, [route], ALONG_M * k)
+    );
   }
 
   // The paths that meet the walk, as stubs.
@@ -480,6 +490,9 @@ export function draftRoutePlan({
     f.on = true;
     symbols.push(f);
   }
+
+  // Everything: the rest of the data around the route too, where it is.
+  if (switches?.everything) switchOn(() => true);
 
   const plan = {
     ...base,

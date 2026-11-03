@@ -58,54 +58,50 @@ const FULL = Object.freeze({
   everything: true,
 });
 
-const tiers = (names, sentences) => [
+const WAY = Object.freeze({
+  sidewalks: 'way',
+  crossings: 'way',
+  entrances: 'address',
+  buildings: 'none',
+  landmarks: 'none',
+  transit: 'off',
+  furniture: 'off',
+  curbs: 'on',
+});
+
+const PLACE_SWITCHES = [
+  WAY,
+  { ...WAY, buildings: 'along', landmarks: 'named', transit: 'on' },
   {
-    key: 'way',
-    name: names[0],
-    sentence: sentences[0],
-    switches: {
-      sidewalks: 'way',
-      crossings: 'way',
-      entrances: 'address',
-      buildings: 'none',
-      landmarks: 'none',
-      transit: 'off',
-      furniture: 'off',
-      curbs: 'on',
-    },
+    ...WAY,
+    sidewalks: 'all',
+    crossings: 'all',
+    entrances: 'all',
+    buildings: 'all',
+    landmarks: 'named',
+    transit: 'on',
   },
-  {
-    key: 'named',
-    name: names[1],
-    sentence: sentences[1],
-    switches: {
-      sidewalks: 'way',
-      crossings: 'way',
-      entrances: 'address',
-      buildings: 'along',
-      landmarks: 'named',
-      transit: 'on',
-      furniture: 'off',
-      curbs: 'on',
-    },
-  },
-  {
-    key: 'buildings',
-    name: names[2],
-    sentence: sentences[2],
-    switches: {
-      sidewalks: 'all',
-      crossings: 'all',
-      entrances: 'all',
-      buildings: 'all',
-      landmarks: 'named',
-      transit: 'on',
-      furniture: 'off',
-      curbs: 'on',
-    },
-  },
-  { key: 'everything', name: names[3], sentence: sentences[3], switches: FULL },
+  FULL,
 ];
+
+// A route decides its own sidewalks, crossings and doors, and keeps its
+// buildings to its two ends until a tier names more (plan-from-route.js).
+const ROUTE_SWITCHES = [
+  WAY,
+  { ...WAY, landmarks: 'named', transit: 'on' },
+  { ...WAY, buildings: 'along', landmarks: 'named', transit: 'on' },
+  FULL,
+];
+
+const KEYS = ['way', 'named', 'buildings', 'everything'];
+
+const tiers = (names, sentences, switches) =>
+  KEYS.map((key, i) => ({
+    key,
+    name: names[i],
+    sentence: sentences[i],
+    switches: switches[i],
+  }));
 
 /** The tiers per map type; a map from a drawing has none. */
 export const DETAIL_LEVELS = Object.freeze({
@@ -121,7 +117,8 @@ export const DETAIL_LEVELS = Object.freeze({
       'The way, the named places and transit stops the scale has room for, and the buildings along the way.',
       'Every sidewalk, crossing, building and entrance, and the named places.',
       'Every feature in the data, for you to turn off what a reader does not need.',
-    ]
+    ],
+    PLACE_SWITCHES
   ),
   route: tiers(
     [
@@ -135,7 +132,8 @@ export const DETAIL_LEVELS = Object.freeze({
       'The route, and the named places and transit stops along it.',
       'The route, the named places along it and every building beside it.',
       'Every feature in the data around the route.',
-    ]
+    ],
+    ROUTE_SWITCHES
   ),
   drawing: [],
 });
@@ -185,6 +183,45 @@ function nearLines(ring, lines, reach) {
   return false;
 }
 
+/**
+ * Whether a tier's switches want a point of a named-place group (a
+ * landmark, a transit stop, street furniture), the scale aside.
+ *
+ * @param {object} f - a feature
+ * @param {Record<string, string|boolean>} sw - the switches
+ * @returns {boolean}
+ */
+export function wantsPoint(f, sw) {
+  if (sw.everything) return true;
+  if (f.class === 'landmark') {
+    return sw.landmarks === 'all' || (sw.landmarks === 'named' && !!f.name);
+  }
+  if (f.class === 'transit-stop') return sw.transit === 'on' && !f.twin;
+  if (f.class === 'furniture') return sw.furniture === 'on';
+  return false;
+}
+
+/**
+ * Whether a tier's switches want a building or a park: along the way is
+ * within `reach` mm of one of the lines.
+ *
+ * @param {object} f - an area feature
+ * @param {Record<string, string|boolean>} sw - the switches
+ * @param {number[][][]} lines - the way's lines, in mm
+ * @param {number} reach - in mm
+ * @returns {boolean}
+ */
+export function wantsArea(f, sw, lines, reach) {
+  if (sw.everything) return true;
+  if (f.what === 'Park') return sw.buildings === 'all';
+  if (sw.buildings === 'all') return true;
+  if (sw.buildings === 'named') return !!f.name;
+  if (sw.buildings === 'along') {
+    return Array.isArray(f.ring) && nearLines(f.ring, lines, reach);
+  }
+  return false;
+}
+
 /** The switch a reader may lower first, said in a refusal. */
 function lowerFirst(switches) {
   const ways = [];
@@ -216,9 +253,9 @@ export function applyDetail(features, { switches, scale, mmPerM }) {
   const rules = scale?.rules || null;
   const generalized = Array.isArray(rules?.landmarks);
   const fits = (cls) => !generalized || rules.landmarks.includes(cls);
-  const way = features.filter(
-    (f) => f.way && f.kind === 'line' && Array.isArray(f.points)
-  );
+  const lines = features
+    .filter((f) => f.way && f.kind === 'line' && Array.isArray(f.points))
+    .map((f) => f.points);
   const reach = ALONG_M * (mmPerM || 1);
 
   const decide = (f) => {
@@ -238,29 +275,11 @@ export function applyDetail(features, { switches, scale, mmPerM }) {
       case 'entrance':
         return !!f.address || (sw.entrances === 'all' && fits('entrance'));
       case 'area':
-        if (generalized) return false;
-        if (f.what === 'Park') return sw.buildings === 'all';
-        if (sw.buildings === 'all') return true;
-        if (sw.buildings === 'named') return !!f.name;
-        if (sw.buildings === 'along') {
-          return (
-            Array.isArray(f.ring) &&
-            nearLines(
-              f.ring,
-              way.map((w) => w.points),
-              reach
-            )
-          );
-        }
-        return false;
+        return !generalized && wantsArea(f, sw, lines, reach);
       case 'landmark':
-        if (!fits('landmark')) return false;
-        if (sw.landmarks === 'all') return true;
-        return sw.landmarks === 'named' && !!f.name;
       case 'transit-stop':
-        return sw.transit === 'on' && !f.twin && fits('transit-stop');
       case 'furniture':
-        return sw.furniture === 'on' && fits('furniture');
+        return fits(f.class) && wantsPoint(f, sw);
       case 'curb-ramp':
       case 'raised-curb':
         return sw.curbs === 'on' && !!f.roomy;
@@ -278,9 +297,22 @@ export function applyDetail(features, { switches, scale, mmPerM }) {
   };
 
   const out = features.map((f) => ({ ...f, on: decide(f) }));
+  return { features: out, ...judgeSymbols(out, sw) };
+}
+
+/**
+ * The count on, the different symbols on (the classes, without channels
+ * and words), and a warning or a refusal about them.
+ *
+ * @param {object[]} features
+ * @param {Record<string, string|boolean>} switches
+ * @returns {{ on: number, symbols: number, warning: string|null, refusal: string|null }}
+ */
+export function judgeSymbols(features, switches) {
+  const on = features.filter((f) => f.on);
   const symbols = new Set(
-    out
-      .filter((f) => f.on && f.kind !== 'channel' && f.kind !== 'text')
+    on
+      .filter((f) => f.kind !== 'channel' && f.kind !== 'text')
       .map((f) => f.class)
   ).size;
   const warning =
@@ -289,13 +321,7 @@ export function applyDetail(features, { switches, scale, mmPerM }) {
       : null;
   const refusal =
     symbols > SYMBOLS_MAX
-      ? `${symbols} different symbols: more than ${SYMBOLS_MAX} cannot be told apart. ${lowerFirst(sw)}`
+      ? `${symbols} different symbols: more than ${SYMBOLS_MAX} cannot be told apart. ${lowerFirst(switches || {})}`
       : null;
-  return {
-    features: out,
-    on: out.filter((f) => f.on).length,
-    symbols,
-    warning,
-    refusal,
-  };
+  return { on: on.length, symbols, warning, refusal };
 }

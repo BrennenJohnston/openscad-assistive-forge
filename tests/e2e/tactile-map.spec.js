@@ -351,18 +351,44 @@ test.describe('the map data row', () => {
     await page.keyboard.press('ArrowUp');
     await expect(page.locator('#tactileMapScale-block')).toBeChecked();
 
-    // Step 3: what to show.
+    // Step 3: what to show, a tier at a time and then a group at a time;
+    // each row at the floor, the arrow keys moving the tier.
     await goToStep(page, 3);
-    const boxes = page.locator('#tactileMapLandmarks input[type="checkbox"]');
-    await expect(boxes).toHaveCount(6);
-    await expect(page.locator('#tactileMapLandmark-entrances')).toBeChecked();
-    await expect(page.locator('#tactileMapLandmark-transit')).toBeChecked();
-    await expect(page.locator('#tactileMapLandmark-shops')).not.toBeChecked();
+    await expect(
+      page.locator('#tactileMapDetail input[type="radio"]')
+    ).toHaveCount(4);
+    await expect(page.locator('#tactileMapDetail-named')).toBeChecked();
     for (const row of await page
-      .locator('#tactileMapLandmarks .braille-panel-toggle-row')
+      .locator('#tactileMapDetail .braille-panel-toggle-row')
       .all()) {
       expect((await row.boundingBox()).height).toBeGreaterThanOrEqual(floor);
     }
+    const namedWords = page.locator('label[for="tactileMapDetail-named"]');
+    await page.locator('#tactileMapDetail-named').focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('#tactileMapDetail-buildings')).toBeChecked();
+    await page.keyboard.press('ArrowUp');
+    await expect(page.locator('#tactileMapDetail-named')).toBeChecked();
+    await page.locator('#tactileMapGroups summary').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#tactileMapGroups')).toHaveAttribute('open', '');
+    for (const select of await page.locator('#tactileMapGroups select').all()) {
+      expect((await select.boundingBox()).height).toBeGreaterThanOrEqual(floor);
+    }
+    const furniture = page.locator('#tactileMapGroup-furniture');
+    await furniture.selectOption('on');
+    await expect(namedWords).toHaveText('Named places (changed)');
+    await furniture.selectOption('off');
+    await expect(namedWords).toHaveText('Named places');
+    const stepThree = await new AxeBuilder({ page })
+      .include('#tactileMapSteps-step-3')
+      .analyze();
+    expect(
+      stepThree.violations,
+      stepThree.violations
+        .map((v) => `${v.id}: ${v.help} (${v.nodes.length})`)
+        .join('\n')
+    ).toEqual([]);
 
     // Step 4: make the map.
     await goToStep(page, 4);
@@ -473,7 +499,9 @@ test.describe('the draft map', () => {
     const selects = page.locator(
       '#drawingEditorSurface .drawing-editor-class-select'
     );
-    await expect(selects).toHaveCount(20);
+    // Every feature in the data has a row, the off ones too (a group switch
+    // turns them on): the fixture's 20 drawn features and its bakery.
+    await expect(selects).toHaveCount(21);
     // The last entry of a draft's Class menu reads Off, not Ignore.
     await expect(selects.first().locator('option').last()).toHaveText('Off');
     await expect(
@@ -575,7 +603,10 @@ test.describe('the draft map', () => {
       })
     );
     await page.route('https://tiles.openstreetmap.us/**', (route) => {
-      const x = route.request().url().match(/\/15\/(\d+)\/11438\.mvt$/)?.[1];
+      const x = route
+        .request()
+        .url()
+        .match(/\/15\/(\d+)\/11438\.mvt$/)?.[1];
       const body = TILES[x];
       return route.fulfill({
         status: body ? 200 : 204,
@@ -589,7 +620,8 @@ test.describe('the draft map', () => {
     await page.locator('#tactileMapSearch').click();
     await page.locator('#tactileMapPlace1').check();
     await goToStep(page, 3);
-    await page.locator('#tactileMapLandmark-benches').check();
+    await page.locator('#tactileMapGroups summary').click();
+    await page.locator('#tactileMapGroup-furniture').selectOption('on');
     await goToStep(page, 4);
     await page.locator('#tactileMapMake').click();
     await expect(page.locator('#tactileMapAddressStatus')).toContainText(
@@ -654,6 +686,49 @@ test.describe('the draft map', () => {
     await expect(
       page.locator('#drawingEditorSurface .drawing-editor-class-select').first()
     ).not.toHaveValue('ignore');
+
+    // One press turns every building on, and one Undo takes them back off.
+    const areaSwitch = page.locator(
+      '#drawingEditorSurface .drawing-editor-map-switch[data-map-class="area"]'
+    );
+    await expect(areaSwitch).toHaveAttribute('aria-pressed', /false|mixed/);
+    const areas = Number(
+      (await areaSwitch.textContent()).match(/\((\d+)\)/)[1]
+    );
+    const areaRows = page.locator(
+      '#drawingEditorSurface .drawing-editor-class-select'
+    );
+    const onAreas = async () =>
+      (await areaRows.evaluateAll((all) => all.map((s) => s.value))).filter(
+        (v) => v === 'area'
+      ).length;
+    const before = await onAreas();
+    await areaSwitch.focus();
+    await page.keyboard.press('Enter');
+    await expect(areaSwitch).toHaveAttribute('aria-pressed', 'true');
+    expect(await onAreas()).toBe(areas);
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor-status')
+    ).toHaveText(`Area: ${areas - before} shapes on.`);
+    await page
+      .locator(
+        '#drawingEditorSurface .drawing-editor-history [data-action="undo"]'
+      )
+      .click();
+    expect(await onAreas()).toBe(before);
+    // Only the rows that are on, then every row again.
+    const show = page.locator(
+      '#drawingEditorSurface .drawing-editor-map-show select'
+    );
+    await show.selectOption('on');
+    await expect(
+      page.locator('#drawingEditorSurface .svg-prep-object:visible')
+    ).toHaveCount(
+      (await areaRows.evaluateAll((all) => all.map((s) => s.value))).filter(
+        (v) => v !== 'ignore'
+      ).length
+    );
+    await show.selectOption('all');
 
     const results = await new AxeBuilder({ page })
       .include('#drawingEditorSurface')
