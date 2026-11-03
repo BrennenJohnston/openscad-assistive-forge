@@ -209,6 +209,7 @@ const shortName = (place, fallback) =>
  * @param {Record<string, string|boolean>|null} [args.switches] - a detail
  *   tier's switches (detail-levels.js): the places, stops and buildings
  *   they want are the ones kept beside the route; without them, the ticks
+ * @param {number} [args.symbolSizeMm] - the symbol set's size, for the spacing
  * @returns {{ plan: object|null, walk: object|null, counts: object|null }}
  */
 export function draftRoutePlan({
@@ -221,6 +222,7 @@ export function draftRoutePlan({
   fromStop = null,
   toStop = null,
   switches = null,
+  symbolSizeMm = DEFAULT_SETTINGS.symbolSizeMm,
 } = {}) {
   const walk = walkBetween({ elements, from, to, avoidSteps });
   if (!walk || walk.points.length < 2) {
@@ -387,7 +389,7 @@ export function draftRoutePlan({
 
   // "You are here" stands at the start door, moved back into the start
   // building, away from the walk, only as far as the other symbols need.
-  const clear = DEFAULT_SETTINGS.symbolSizeMm + DEFAULT_SETTINGS.minGapMm;
+  const clear = symbolSizeMm + DEFAULT_SETTINGS.minGapMm;
   const others = [...features, ...extra].filter(
     (f) => f.on && f.kind === 'point'
   );
@@ -459,7 +461,7 @@ export function draftRoutePlan({
   // symbol already on and, where it really stands, of every landmark kept:
   // of a pair facing each other across a street, the nearer that can stand
   // clear (one inside a bend of the route may not).
-  const half = DEFAULT_SETTINGS.symbolSizeMm / 2;
+  const half = symbolSizeMm / 2;
   const routeEdge =
     (DEFAULT_SETTINGS.classes.route?.width ?? 0) / 2 + ROUTE_GAP_MM;
   const dense = densify(route, DENSIFY_MM / 2);

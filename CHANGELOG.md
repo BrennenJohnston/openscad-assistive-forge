@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A map can draw with the University of Oregon's published tactile symbols
+  (Lobben and Lawrence 2012, GPL-3): **Symbol set** in step 3 chooses the
+  basic shapes, the Oregon set at its 13 mm with its street, sidewalk and
+  railroad lines, or a file of your own; the key and the README name the
+  set in use. A sheet in `docs/guides/symbol-sheet/` prints a set to feel.
 - The Tactile Map Designer starts by asking what map to make: a place map,
   a route map, or a map from your drawing, also chosen on its welcome card
   or in a link. Each walks you through its own numbered steps, one at a

@@ -21,6 +21,7 @@ import {
   SYMBOL_MIN_FEATURE_MM,
   SYMBOL_MIN_SIZE_MM,
   activeLibrary,
+  activeSet,
   activeSetKey,
   librarySymbolsFor,
   setActiveSet,
@@ -183,6 +184,22 @@ describe('symbol sets in the library', () => {
     ];
     setLibrary(own);
     expect(activeLibrary()).toBe(own);
+  });
+
+  it('names the set in use, and a loaded file as your own set', () => {
+    expect(activeSet()).toEqual({
+      key: 'forge-basic',
+      name: 'Forge basic shapes',
+    });
+    setActiveSet('oregon-2012');
+    expect(activeSet()).toEqual({
+      key: 'oregon-2012',
+      name: 'University of Oregon symbols',
+    });
+    setLibrary([
+      { key: 'circle', name: 'Mine', pathData: 'M 0 0 H 1 V 1 H 0 Z' },
+    ]);
+    expect(activeSet()).toEqual({ key: 'file', name: 'Your own set' });
   });
 });
 

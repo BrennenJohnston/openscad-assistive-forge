@@ -30,6 +30,7 @@
  * @license GPL-3.0-or-later
  */
 import { DETAIL_LEVELS, SWITCHES, switchesFor } from './detail-levels.js';
+import { BUILT_IN_SETS } from './symbol-library.js';
 import {
   SCALES,
   CUSTOM_RANGE,
@@ -146,6 +147,17 @@ export const ADDRESS_STRINGS = Object.freeze({
     `${on} features on, ${symbols} different ${symbols === 1 ? 'symbol' : 'symbols'}.`,
   /** A11Y: the same line past 10 symbols, the warning naming the count. */
   detailCountWarned: (on, warning) => `${on} features on, ${warning}`,
+  /** A11Y: step 3's choice of the shapes the map draws with. */
+  symbolSetLegend: 'Symbol set',
+  symbolSetOwn: 'Your own set (a file)',
+  symbolSetSentences: {
+    'forge-basic': 'Ten simple shapes at 10 mm.',
+    'oregon-2012':
+      'Fourteen symbols from a University of Oregon study at 13 mm, with its street, sidewalk and railroad lines.',
+    file: 'A JSON file of symbols of your own; the symbols guide says how to write one.',
+  },
+  /** A11Y: said once when the set changes. */
+  symbolsSet: (name) => `Symbols: ${name}.`,
   /** The one button: gets the data, drafts, opens the editor. */
   make: 'Make the map',
   /** A11Y: the status line while a pull runs. */
@@ -319,6 +331,7 @@ export function createAddressSection({
   onDraft,
   onSteep,
   onDetail = () => {},
+  onSymbolSet = () => {},
   onChange = () => {},
   plateSize = () => ({ w: 480, h: 360 }),
   planJourneys = null,
@@ -625,6 +638,56 @@ export function createAddressSection({
   section.appendChild(groups);
   section.appendChild(detailCount);
 
+  // The shapes the map draws with: one set for the whole map, a built-in
+  // set or a file of your own; the file door stands under its choice.
+  const symbolSet = el(
+    'fieldset',
+    'braille-panel-choice tactile-map-symbol-set'
+  );
+  symbolSet.id = 'tactileMapSymbolSet';
+  symbolSet.appendChild(el('legend', '', S.symbolSetLegend));
+  const symbolDoor = el('div', 'tactile-map-symbol-door');
+  symbolDoor.id = 'tactileMapSymbolDoor';
+  symbolDoor.hidden = true;
+  const setChoices = [
+    ...BUILT_IN_SETS.map((s) => ({ key: s.key, name: s.name })),
+    { key: 'file', name: S.symbolSetOwn },
+  ];
+  const symbolRadios = setChoices.map((choice, i) => {
+    const line = el(
+      'div',
+      'braille-panel-toggle-row tactile-map-symbol-set-row'
+    );
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'tactileMapSymbolSet';
+    radio.id = `tactileMapSymbolSet-${choice.key}`;
+    radio.value = choice.key;
+    radio.checked = i === 0;
+    const words = el('label', '', choice.name);
+    words.htmlFor = radio.id;
+    const sentence = el(
+      'p',
+      'braille-panel-help tactile-map-symbol-set-sentence',
+      S.symbolSetSentences[choice.key] || ''
+    );
+    sentence.id = `${radio.id}-sentence`;
+    radio.setAttribute('aria-describedby', sentence.id);
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      symbolDoor.hidden = choice.key !== 'file';
+      refreshScale();
+      onSymbolSet(choice.key);
+    });
+    line.appendChild(radio);
+    line.appendChild(words);
+    symbolSet.appendChild(line);
+    symbolSet.appendChild(sentence);
+    if (choice.key === 'file') symbolSet.appendChild(symbolDoor);
+    return radio;
+  });
+  section.appendChild(symbolSet);
+
   const steepRow = el('div', 'braille-panel-toggle-row tactile-map-steep-row');
   const steep = document.createElement('input');
   steep.type = 'checkbox';
@@ -738,12 +801,15 @@ export function createAddressSection({
       detailChoice,
       groups,
       detailCount,
+      symbolSet,
       steepRow,
       steepHelp,
       gradeRow,
       gradeHelp,
     ],
     make: [makeRow, status, fileRow, fileHelp, attribution],
+    // A map from a drawing has no step 3 of its own: the set choice alone.
+    symbolSet: [symbolSet],
   };
 
   let mode = 'place';
@@ -919,12 +985,15 @@ export function createAddressSection({
   /** Each choice's sentence for the plate as it is now; Custom's ratio. */
   function refreshScale() {
     const plate = plateSize();
+    const chosen = symbolRadios.find((r) => r.checked)?.value;
+    const symbolMm = BUILT_IN_SETS.find((s) => s.key === chosen)?.symbolSizeMm;
     for (const radio of scaleRadios) {
       const choice = scaleChoiceOf(radio.value);
       scaleSentences.get(choice.key).textContent = sentenceFor(
         choice,
         plate,
-        choice.ratio || customRatio()
+        choice.ratio || customRatio(),
+        symbolMm
       );
     }
     customRow.hidden = currentScale().key !== 'custom';
@@ -1341,6 +1410,8 @@ export function createAddressSection({
       groups,
       groupSelects,
       detailCount,
+      symbolSet,
+      symbolDoor,
       make,
       loadFile,
       fileInput,
@@ -1358,6 +1429,10 @@ export function createAddressSection({
     },
     /** The tier and the groups chosen in step 3. */
     getDetail,
+    /** The symbol set chosen in step 3: a built-in set's key, or 'file'. */
+    getSymbolSet() {
+      return symbolRadios.find((r) => r.checked)?.value || setChoices[0].key;
+    },
     /** The count under the choices, once a draft exists. */
     setDetailCount(text) {
       detailCount.textContent = text || '';

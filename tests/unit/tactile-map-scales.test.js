@@ -122,4 +122,12 @@ describe('the scale choices', () => {
       'The plate is fitted to the walk and its two buildings.'
     );
   });
+
+  it('says the size of the symbol set in use', () => {
+    expect(
+      sentenceFor(scaleChoice('block'), { w: 480, h: 360 }, undefined, 13)
+    ).toBe(
+      '480 m across on this plate. A 13 mm symbol stands for 13 m. Sidewalks and crossings draw.'
+    );
+  });
 });

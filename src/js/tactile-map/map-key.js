@@ -21,7 +21,11 @@
  */
 import { MAP_CLASSES } from './map-classes.js';
 import { featureNames } from './feature-names.js';
-import { activeLibrary } from './symbol-library.js';
+import {
+  activeLibrary,
+  activeSet,
+  BUILT_IN_SYMBOLS,
+} from './symbol-library.js';
 import {
   BUILTIN_SYMBOLS,
   DEFAULT_SETTINGS,
@@ -266,6 +270,7 @@ export function keyFor(plan, settings = {}, { needsKey = new Set() } = {}) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
   const classes = s.classes || {};
   const symbols = symbolMap(s.symbols || activeLibrary());
+  const basicShapes = symbolMap(BUILT_IN_SYMBOLS);
   const all = plan?.features || [];
   const on = all.filter((f) => f.on !== false);
   const className = (key) =>
@@ -295,11 +300,15 @@ export function keyFor(plan, settings = {}, { needsKey = new Set() } = {}) {
   const points = [...bySymbol.values()].map((e) => {
     e.classes.sort((a, b) => rank(POINT_ORDER, a) - rank(POINT_ORDER, b));
     const shape = shapeOf(e.symbolKey);
+    // The basic shape in words; a set's or a file's shape by its own name.
+    const basic =
+      SHAPE_WORDS[e.symbolKey] &&
+      shape?.pathData === basicShapes[e.symbolKey]?.pathData;
     return {
       ...e,
       name: e.classes.map(className).join(' or '),
       raised: typeof shape?.raisedPathData === 'string',
-      shape: SHAPE_WORDS[e.symbolKey]
+      shape: basic
         ? SHAPE_WORDS[e.symbolKey](say(e.sizeMm))
         : `${shape?.name || e.symbolKey}, ${say(e.sizeMm)} mm`,
     };
@@ -362,7 +371,11 @@ export function keyFor(plan, settings = {}, { needsKey = new Set() } = {}) {
   }
   abbreviations.sort((a, b) => a.key.localeCompare(b.key));
 
-  return { entries: [...points, ...lines, ...areas], abbreviations };
+  return {
+    entries: [...points, ...lines, ...areas],
+    abbreviations,
+    set: activeSet(),
+  };
 }
 
 /**
@@ -372,7 +385,9 @@ export function keyFor(plan, settings = {}, { needsKey = new Set() } = {}) {
  * @returns {string}
  */
 export function keyText(key) {
-  const out = ['Key', '', 'Symbols, You are here first:'];
+  const out = ['Key'];
+  if (key.set?.name) out.push(`Symbols: ${key.set.name}.`);
+  out.push('', 'Symbols, You are here first:');
   for (const e of key.entries) out.push(`- ${e.name}: ${e.shape}`);
   if (key.abbreviations.length) {
     out.push('', 'Abbreviations on the map, alphabetically:');

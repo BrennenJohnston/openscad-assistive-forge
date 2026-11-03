@@ -790,6 +790,26 @@ describe('the pedestrian base near a building', () => {
     expect(warnings.filter((w) => w.code === 'too-close')).toEqual([]);
   });
 
+  it("spaces the curb symbols for the set's size: 14 mm from the next is room at 10 mm, not at 13 mm", () => {
+    const options = {
+      elements: [
+        ...BASE,
+        node(39, { barrier: 'kerb', kerb: 'lowered' }, [-40, 23]),
+      ],
+      center: CENTER,
+      scale: {
+        ratio: scaleChoice('building').ratio,
+        rules: scaleChoice('building').rules,
+      },
+      landmarks: [],
+      size: { w: 480, h: 360 },
+    };
+    expect(one(draftPlan(options).plan, 'osm-node-39').on).toBe(true);
+    expect(
+      one(draftPlan({ ...options, symbolSizeMm: 13 }).plan, 'osm-node-39').on
+    ).toBe(false);
+  });
+
   it('draws a crossing in its markings: zebra and lines in ticks, none dashed; a traffic island as its own line, on with its crossing', () => {
     const { plan } = draftAt('building');
     expect(one(plan, 'osm-way-24').style).toBeUndefined();
