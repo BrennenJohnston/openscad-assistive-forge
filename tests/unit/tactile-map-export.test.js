@@ -174,6 +174,23 @@ describe('the README says what the map is', () => {
     expect(readme).not.toMatch(/OpenStreetMap/);
   });
 
+  it("credits a published symbol set's authors last, when the map uses one", () => {
+    const readme = readmeText({
+      ...base,
+      about: {
+        type: 'place',
+        place: 'Central Library',
+        ratio: 1000,
+        symbolsCredit:
+          'Symbols: Lobben and Lawrence 2012, University of Oregon, GPL-3',
+      },
+    });
+    expect(readme.trim().split('\n').slice(-2)).toEqual([
+      'Map data from OpenStreetMap contributors, ODbL: https://www.openstreetmap.org/copyright',
+      'Symbols: Lobben and Lawrence 2012, University of Oregon, GPL-3',
+    ]);
+  });
+
   it('names the key plates and lists each one’s label tape, top to bottom', () => {
     const readme = readmeText({
       ...base,
