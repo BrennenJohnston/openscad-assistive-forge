@@ -1340,7 +1340,7 @@ describe('the map data row', () => {
     make().click();
     await vi.waitFor(() => expect(opened).not.toBeNull());
     expect(addressStatus()).toMatch(
-      /^Draft map ready: .* Choose what stays\. 2\.5 MB of map data arrived\. A scale with less ground makes a lighter map\.$/
+      /^Draft map ready: .* Choose what stays\. 2\.5 MB of map data arrived\. A scale with less ground makes a lighter map\. The key has \d+ symbols? and \d+ abbreviations?\.$/
     );
   });
 
@@ -1388,7 +1388,7 @@ describe('the map data row', () => {
     await vi.waitFor(() => expect(opened).not.toBeNull(), { timeout: 15000 });
     expect(getMapPlan().features).toHaveLength(1000);
     expect(addressStatus()).toMatch(
-      / 102 features far from the address were left out: the editor works with 1,000 at a time\.$/
+      / 102 features far from the address were left out: the editor works with 1,000 at a time\. The key has \d+ symbols? and \d+ abbreviations?\.$/
     );
   });
 
@@ -1540,7 +1540,7 @@ describe('the map Make the map drafts', () => {
     await pullData();
     await vi.waitFor(() => expect(opened).not.toBeNull());
     expect(addressStatus()).toMatch(
-      /^Draft map ready: \d+ of 20 features on; (\d+ warnings|no warnings)\. Choose what stays\.$/
+      /^Draft map ready: \d+ of 20 features on; (\d+ warnings|no warnings)\. Choose what stays\. The key has \d+ symbols? and \d+ abbreviations?\.$/
     );
     expect(announce).toHaveBeenCalledWith(addressStatus(), {
       source: 'tactile-map',

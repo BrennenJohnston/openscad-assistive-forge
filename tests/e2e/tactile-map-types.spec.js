@@ -167,7 +167,7 @@ test.describe('the three map types end to end', () => {
     await tabTo(page, '#tactileMapMake');
     await page.keyboard.press('Enter');
     await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
-      /^Route map ready: a \d+ m walk from Husky Union Building to East Stevens Way NE & Benton Ln, .* The journey: 22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony\.$/,
+      /^Route map ready: a \d+ m walk from Husky Union Building to East Stevens Way NE & Benton Ln, .* The journey: 22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony\. The key has \d+ symbols? and \d+ abbreviations?\.$/,
       { timeout: 60000 }
     );
     const stop = await page.evaluate(
@@ -241,7 +241,7 @@ test.describe('the three map types end to end', () => {
     await nextStep(page, 4, 'Apply classes');
     await nextStep(page, 5, 'Check and print');
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '2 plates of 151 x 202 mm, A1 to A2.',
+      /^2 plates of 151 x 202 mm, A1 to A2\. The key takes (one plate|\d+ plates)\.$/,
       { timeout: 10000 }
     );
     await axeClean(page, 'drawing step 5');

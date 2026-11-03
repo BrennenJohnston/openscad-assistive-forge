@@ -251,10 +251,10 @@ describe('Make a route map', () => {
         1,
         172,
         360
-      )
+      ) + ' The key has 10 symbols and 5 abbreviations.'
     );
     expect(addressStatus()).toBe(
-      'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk.'
+      'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk. The key has 10 symbols and 5 abbreviations.'
     );
     // The model is told the fitted size.
     await vi.waitFor(() => {
@@ -556,7 +556,7 @@ describe('a route by bus and train', () => {
     const end = getMapPlan().features.find((f) => f.id === 'destination-stop');
     expect(end.name).toBe('East Stevens Way NE & Benton Ln, 72');
     expect(addressStatus()).toMatch(
-      /^Route map ready: a \d+ m walk from Husky Union Building to East Stevens Way NE & Benton Ln, .* The journey: 22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony\.$/
+      /^Route map ready: a \d+ m walk from Husky Union Building to East Stevens Way NE & Benton Ln, .* The journey: 22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony\. The key has \d+ symbols? and \d+ abbreviations?\.$/
     );
     expect(getMapData().travel).toMatchObject({ mode: 'transit', walk: 'to' });
   });

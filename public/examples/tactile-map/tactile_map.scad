@@ -78,6 +78,28 @@ label_tape_width_mm = 12.7; // [9.5, 12.7]
 // How deep the label channels sink below the surface (mm): 0.3 lets the tape sit nearly flush.
 label_channel_depth_mm = 0.3; // [0.2:0.05:0.5]
 
+/* [Key plate] */
+// Map draws a plate of the map; Key draws the map's key plate. The Tactile Map Designer panel sets it.
+plate_kind = "Map"; // [Map, Key]
+// The key's raised words, written by the panel: rows of x:y:WORDS, x and y the start of the row's baseline in tenths of a millimeter from the plate's bottom left, rows split by |.
+key_print = "";
+// The key's braille, written by the panel: rows of x:y:cells, x and y the center of the row's first cell in tenths of a millimeter, rows split by |.
+key_braille = "";
+// Height of the capital I in the key's raised words (mm). The map's title uses ADA 703.2.5's 16 mm; a key's words may be smaller: 6 to 50.8.
+key_letter_height_mm = 8; // [6:0.1:50.8]
+// The key's braille cells, as the Braille Sign makes them. Distance between cells (mm). ADA 703.3.1: 6.1 to 7.6.
+key_cell_spacing_mm = 7.0; // [6.13:0.01:7.6]
+// Distance between dots in a cell (mm). ADA 703.3.1: 2.3 to 2.5.
+key_dot_spacing_mm = 2.5; // [2.3:0.01:2.5]
+// Dot base diameter (mm). ADA 703.3.1: 1.5 to 1.6.
+key_dot_base_diameter_mm = 1.6; // [1.5:0.01:1.6]
+// Height of the dot's base (mm); base and dome together rise 0.6 to 0.9 mm above the plate (ADA 703.3.1).
+key_dot_base_height_mm = 0.35; // [0:0.01:2]
+// Dome diameter (mm).
+key_dot_dome_diameter_mm = 1.4; // [0.5:0.01:3]
+// Dome height (mm).
+key_dot_dome_height_mm = 0.35; // [0.1:0.01:2]
+
 /* [Hidden] */
 $fn = 32;
 
@@ -124,6 +146,14 @@ TAPE_WIDTHS_MM = [9.5, 12.7];          // 3/8 in and 1/2 in label tape
 CHANNEL_DEPTH_RANGE_MM = [0.2, 0.5];   // my printed maps (0.3)
 MAP_WIDTH_RANGE_MM = [100, 600];       // a plate of a split map at the least; about two hand spans at most
 MAP_HEIGHT_RANGE_MM = [75, 450];       // a plate at the least; about one hand span at most
+KEY_LETTER_RANGE_MM = [6, 50.8];       // BANA 2022 3.4.3.11's 6 mm floor for a point symbol; ADA 703.2.5's 50.8 mm top
+// The key's braille, the Braille Sign's ranges (ADA 703.3.1, in inches and printed millimeters).
+KEY_CELL_SPACING_MM = [6.1214, 7.6];
+KEY_DOT_SPACING_MM = [2.3, 2.5];
+KEY_DOT_BASE_MM = [1.5, 1.6];
+KEY_DOT_HEIGHT_MM = [0.635, 0.9];
+// How far a dot sinks into the plate so the two fuse (the Braille Sign's).
+KEY_DOT_EMBED = 0.02;
 
 function in_range(v, r) = v >= r[0] && v <= r[1];
 
@@ -155,6 +185,19 @@ assert(in_range(map_height_mm, MAP_HEIGHT_RANGE_MM),
        str("map_height_mm is ", map_height_mm, " mm, outside 75 to 450 mm."));
 assert(map_file_kind == "levels" || map_file_kind == "drawing",
        "map_file_kind must be levels or drawing.");
+assert(plate_kind == "Map" || plate_kind == "Key", "plate_kind must be Map or Key.");
+assert(in_range(key_letter_height_mm, KEY_LETTER_RANGE_MM),
+       str("key_letter_height_mm is ", key_letter_height_mm, " mm, outside 6 to 50.8 mm."));
+assert(in_range(key_cell_spacing_mm, KEY_CELL_SPACING_MM),
+       str("key_cell_spacing_mm is ", key_cell_spacing_mm, " mm, outside ADA 703.3.1's 6.1 to 7.6 mm."));
+assert(in_range(key_dot_spacing_mm, KEY_DOT_SPACING_MM),
+       str("key_dot_spacing_mm is ", key_dot_spacing_mm, " mm, outside ADA 703.3.1's 2.3 to 2.5 mm."));
+assert(in_range(key_dot_base_diameter_mm, KEY_DOT_BASE_MM),
+       str("key_dot_base_diameter_mm is ", key_dot_base_diameter_mm, " mm, outside ADA 703.3.1's 1.5 to 1.6 mm."));
+assert(key_dot_base_height_mm >= 0 && key_dot_dome_height_mm > 0 && key_dot_dome_diameter_mm > 0,
+       "key_dot_base_height_mm, key_dot_dome_height_mm and key_dot_dome_diameter_mm must be above 0.");
+assert(in_range(key_dot_base_height_mm + key_dot_dome_height_mm - KEY_DOT_EMBED, KEY_DOT_HEIGHT_MM),
+       str("The key's dots rise ", key_dot_base_height_mm + key_dot_dome_height_mm - KEY_DOT_EMBED, " mm; ADA 703.3.1 asks 0.6 to 0.9 mm: key_dot_base_height_mm plus key_dot_dome_height_mm."));
 
 // =============================================================================
 // HEIGHTS
@@ -332,16 +375,86 @@ module cutouts() {
 // THE MAP
 // =============================================================================
 
+// =============================================================================
+// THE KEY PLATE: rows of raised words and braille the panel lays out
+// =============================================================================
+
+// Rows of "x:y:content" split by "|", x and y in tenths of a millimeter.
+function _at(s, c, i = 0) = i >= len(s) ? -1 : s[i] == c ? i : _at(s, c, i + 1);
+function _sub(s, a, b) = a >= b ? "" : chr([for (i = [a : b - 1]) ord(s[i])]);
+function _split(s, c) =
+    let(k = _at(s, c))
+    k < 0 ? [s] : concat([_sub(s, 0, k)], _split(_sub(s, k + 1, len(s)), c));
+function _int(s, i = 0, n = 0) =
+    i >= len(s) ? n : _int(s, i + 1, n * 10 + ord(s[i]) - 48);
+function _row(r) =
+    let(a = _at(r, ":"), rest = _sub(r, a + 1, len(r)), b = _at(rest, ":"))
+    [_int(_sub(r, 0, a)) / 10, _int(_sub(rest, 0, b)) / 10, _sub(rest, b + 1, len(rest))];
+function _rows(s) = len(s) == 0 ? [] : [for (r = _split(s, "|")) if (len(r) > 0) _row(r)];
+
+// A Unicode braille cell (U+2800 to U+28FF) as its six dots, 1 to 6.
+function _dots(c) =
+    let(code = ord(c))
+    (code >= 10240 && code <= 10495)
+        ? let(p = code - 10240) [for (b = [0 : 5]) floor(p / pow(2, b)) % 2]
+        : [0, 0, 0, 0, 0, 0];
+KEY_DOT_XY = [[-1, 1], [-1, 0], [-1, -1], [1, 1], [1, 0], [1, -1]];
+
+// The Braille Sign's rounded dot: a short cone and a spherical cap, its base
+// on z = 0.
+module key_dot() {
+    r_dome = key_dot_dome_diameter_mm / 2;
+    r_sphere = (r_dome * r_dome + key_dot_dome_height_mm * key_dot_dome_height_mm)
+        / (2 * key_dot_dome_height_mm);
+    z_center = key_dot_base_height_mm + key_dot_dome_height_mm - r_sphere;
+    union() {
+        cylinder(h = key_dot_base_height_mm + _fuse,
+                 r1 = key_dot_base_diameter_mm / 2, r2 = r_dome, $fn = 40);
+        intersection() {
+            translate([0, 0, z_center]) sphere(r = r_sphere, $fn = 32);
+            translate([-r_sphere * 2, -r_sphere * 2, key_dot_base_height_mm])
+                cube([r_sphere * 4, r_sphere * 4, r_sphere * 2]);
+        }
+    }
+}
+
+module key_braille_dots() {
+    for (row = _rows(key_braille))
+        for (i = [0 : len(row[2]) - 1])
+            let(d = _dots(row[2][i]))
+            for (j = [0 : 5])
+                if (d[j] == 1)
+                    translate([row[0] + i * key_cell_spacing_mm + KEY_DOT_XY[j][0] * key_dot_spacing_mm / 2,
+                               row[1] + KEY_DOT_XY[j][1] * key_dot_spacing_mm,
+                               base_eff - KEY_DOT_EMBED])
+                        key_dot();
+}
+
+module key_words() {
+    translate([0, 0, base_eff - _fuse])
+        linear_extrude(height = title_raise_mm + _fuse)
+            for (row = _rows(key_print))
+                translate([row[0], row[1]])
+                    text(row[2], size = key_letter_height_mm / LETTER_CAP_FACTOR,
+                         font = "Liberation Sans", spacing = TITLE_LETTER_SPACING,
+                         halign = "left", valign = "baseline");
+}
+
 module tactile_map() {
     difference() {
         union() {
             cube([map_width_mm, map_height_mm, base_eff]);
             levels();
             here_mark();
-            title();
-            north_cue();
-            border_frame();
-            plate_name();
+            if (plate_kind == "Key") {
+                key_words();
+                key_braille_dots();
+            } else {
+                title();
+                north_cue();
+                border_frame();
+                plate_name();
+            }
         }
         channels();
         cutouts();

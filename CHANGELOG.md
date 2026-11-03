@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gives a number, and the grade's help says what 5, 8 and 15 % feel like.
 - The Tactile Map Designer guide follows the three map types, and the
   README in a plate zip says what the map is and carries its data credits.
+- A tactile map comes with its key: every symbol, line and area it draws,
+  You are here first, with the 2-letter abbreviations of named places,
+  printed on key plates in raised capitals and braille and written into the
+  README.
 - A place map names what each point is, such as "Restaurant: Plaza Cafe"
   or "Bus stop 29405", starts named places on and leaves unnamed benches
   and bins to a street furniture class, and says several symbols crowded

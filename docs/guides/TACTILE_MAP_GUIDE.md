@@ -157,6 +157,14 @@ Plates are named by row letter and column number, A1 at the top left. The **Plat
 
 To assemble: print one of each plate, lay them out as the grid reads, row A at the top and column 1 at the left, and glue them edge to edge onto a backing board of the map's size. I use 4 mm corrugated plastic and spray adhesive; the plates butt against each other with no tabs.
 
+## The key
+
+Every map gets a key, made from what the map draws, to read before the map (BANA 2022 8.5.9). It lists each symbol, line and area the map uses, You are here first and the rest in order of importance (ISO 19028 6.4.2), each shown at the size and height it prints; shapes that print alike share one entry, so a finger never meets two names for one shape. Then come the 2-letter abbreviations of the named places whose names do not fit a label beside their symbol, alphabetically: "pc: Restaurant: Plaza Cafe". The letters follow BANA 2022 5.8.1: the first letter of the place's name, then a letter of its next word where that works, always one letter from k to z (a letter with dot 3 or 6 in braille), never a pair braille writes as a shortform or as one contracted cell.
+
+The key prints on its own plates, the size of the map's plates: a sample of each symbol, line or area at the left, its name in raised capitals, and the braille under the words, translated in your browser with the braille tools' UEB uncontracted table; a 1 mm raised line frames each plate. A key too long for one plate continues on the next, Key 1, Key 2 and on. **Check and print** lists the key's plates after the map's, the summary says how many it takes, **Render every plate and download** adds them to the zip, and the README carries the key as text. If the braille cannot be made in your browser, the key is print only and the summary says so.
+
+The key's raised capitals are 8 mm tall by default, the **Key letter height** in the model's Key plate controls; its braille uses the Braille Sign's cells and dots (ADA 703.3.1), each a control with its range.
+
 ## Label tape channels
 
 A channel is a recess the width of your tape plus 0.4 mm and 0.3 mm deep, so a strip of braille label tape sits nearly flush with the surface. Set the tape width the model asks for, 9.5 or 12.7 mm, to the tape your labeler uses. The sample carries two channels; a plan places a channel by its center and length, horizontal or vertical. The builder warns when a channel comes within 3 mm of another feature.

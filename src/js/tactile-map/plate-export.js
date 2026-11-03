@@ -242,6 +242,8 @@ export function mapAbout(about = {}) {
  * @param {{ base: number, tops: number[] }} input.heights
  * @param {number} input.tapeWidthMm
  * @param {object} [input.about] - what the map is (`mapAbout`)
+ * @param {string[]} [input.keyIds] - the key plates' ids
+ * @param {string} [input.keyText] - the key as text (map-key.js `keyText`)
  * @returns {string}
  */
 export function readmeText({
@@ -252,6 +254,8 @@ export function readmeText({
   heights,
   tapeWidthMm,
   about,
+  keyIds = [],
+  keyText = '',
 }) {
   const n = layout.plates.length;
   const ids = layout.plates.map((plate) => plate.id).join(', ');
@@ -267,7 +271,11 @@ export function readmeText({
     `then ${heights.tops.map(mm).join(', ')} mm. ` +
     `Label channels take ${tapeWidthMm} mm tape. ` +
     'The picture plate_grid.svg shows the layout.\n' +
-    credits.map((line) => `${line}\n`).join('')
+    (keyIds.length
+      ? `The key prints on its own ${keyIds.length === 1 ? 'plate' : 'plates'}, ${keyIds.join(', ')}, to read before the map.\n`
+      : '') +
+    credits.map((line) => `${line}\n`).join('') +
+    (keyText ? `\n${keyText}` : '')
   );
 }
 

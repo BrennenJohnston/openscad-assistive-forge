@@ -61,6 +61,9 @@ import {
   scaleSentence,
 } from './plan-from-drawing.js';
 import { buildLevelRings, levelsSvgFromRings } from './levels-svg.js';
+import { keyFor, keySentence, keyText } from './map-key.js';
+import { keyPlates, keyTexts } from './key-layout.js';
+import { svgToDataUrl } from '../svg-text-encoding.js';
 import {
   BED_PRESETS,
   ID_STYLES,
@@ -107,6 +110,12 @@ let panel = null;
  * @param {Function|undefined} getController - Returns the AutoPreviewController, or null
  * @returns {(parameters: Object, options: {format: string, timeoutMs: number}) => Promise<ArrayBuffer|Uint8Array>}
  */
+/** The key's braille: the braille tools' default table, UEB uncontracted. */
+const KEY_BRAILLE_TABLE = 'en-ueb-g1.ctb';
+/** A key plate's id: 'key', or 'key-1' and on when the key takes several. */
+const isKeyId = (id) => /^key(-\d+)?$/.test(String(id));
+const keyLabel = (id) => (id === 'key' ? 'Key' : `Key ${id.slice(4)}`);
+
 function renderThroughEngine(getController) {
   return (parameters, { format, timeoutMs }) => {
     const controller = getController?.();
@@ -295,6 +304,11 @@ class MapPanel {
     this.cancelRequested = false;
     this.timer = null;
     this.layout = null;
+    // The key's plates and its braille by text (translated in the page).
+    this.keyPages = [];
+    this.keyBraille = new Map();
+    this.keyBrailleBusy = false;
+    this.keyBrailleFailed = false;
     this.lastTape = null;
     this.lastCue = null;
     this.refs = {};
@@ -1245,7 +1259,8 @@ class MapPanel {
         ? ADDRESS_STRINGS.draftReady(counts.on, counts.total, warnings.length)
         : ADDRESS_STRINGS.draftReadyClean(counts.on, counts.total)) +
         (counts.leftOut ? ADDRESS_STRINGS.leftOut(counts.leftOut) : '') +
-        this.bigNote(osm)
+        this.bigNote(osm) +
+        ` ${keySentence(keyFor(this.plan))}`
     );
     await this.steepIfWanted();
     await this.openDraft();
@@ -1298,7 +1313,8 @@ class MapPanel {
         plan.size.h
       ) +
         (travel?.words ? ADDRESS_STRINGS.journeyNote(travel.words) : '') +
-        this.bigNote(osm)
+        this.bigNote(osm) +
+        ` ${keySentence(keyFor(this.plan))}`
     );
     await this.steepIfWanted();
     await this.openDraft();
@@ -1464,14 +1480,17 @@ class MapPanel {
     const stem = projectStem(state.uploadedFile?.name || 'tactile_map');
     const parameters = state.parameters || {};
     const built = buildLevelRings(this.plan, { tapeWidthMm: this.tapeWidth() });
-    const sets = plateParameterSets({
-      rings: built.rings,
-      layout: this.layout,
-      idStyle: this.idStyle,
-      northCue: this.northCue(),
-      config: this.config,
-      parameters,
-    });
+    const sets = [
+      ...plateParameterSets({
+        rings: built.rings,
+        layout: this.layout,
+        idStyle: this.idStyle,
+        northCue: this.northCue(),
+        config: this.config,
+        parameters: this.mapKindParameters(parameters),
+      }),
+      ...this.keyParameterSets(parameters),
+    ];
     const n = sets.length;
     const { renderAll, cancel } = this.refs;
 
@@ -1574,6 +1593,8 @@ class MapPanel {
       heights: levelHeights(parameters),
       tapeWidthMm: this.tapeWidth(),
       about: this.mapAbout(),
+      keyIds: this.keyPages.map((p) => p.id),
+      keyText: this.keyPages.length ? keyText(keyFor(this.plan)) : '',
     });
     const grid = plateGridSvg({
       rings,
@@ -1614,6 +1635,7 @@ class MapPanel {
     const ids = [
       'whole',
       ...(this.layout ? this.layout.plates.map((p) => p.id) : []),
+      ...this.keyPages.map((p) => p.id),
     ];
     if (!ids.includes(this.plate)) this.plate = 'whole';
     for (const id of ids) {
@@ -1628,7 +1650,11 @@ class MapPanel {
         if (!input.checked) return;
         this.plate = id;
         announce(
-          id === 'whole' ? 'Showing the whole map.' : `Showing plate ${id}.`,
+          id === 'whole'
+            ? 'Showing the whole map.'
+            : isKeyId(id)
+              ? `Showing the ${keyLabel(id).toLowerCase()} plate.`
+              : `Showing plate ${id}.`,
           {
             source: SOURCE,
           }
@@ -1638,7 +1664,11 @@ class MapPanel {
       const label = el(
         'label',
         '',
-        id === 'whole' ? 'Whole map' : `Plate ${id}`
+        id === 'whole'
+          ? 'Whole map'
+          : isKeyId(id)
+            ? keyLabel(id)
+            : `Plate ${id}`
       );
       label.htmlFor = input.id;
       row.appendChild(input);
@@ -1649,6 +1679,106 @@ class MapPanel {
     if (hadFocus && !ids.includes(hadFocus)) {
       fieldset.querySelector(`input[value="${this.plate}"]`)?.focus();
     }
+  }
+
+  /** The map's title for the key: the title control, else the plan's. */
+  keyTitle() {
+    const parameters = stateManager.getState().parameters || {};
+    return (
+      String(parameters[this.config.titleParam] || '').trim() ||
+      this.plan.meta?.title ||
+      ''
+    );
+  }
+
+  /**
+   * The key's plates at the map's plate size; the braille they need is
+   * translated in the background and the plates follow when it arrives.
+   */
+  buildKeyPages(layout) {
+    if (!this.config.plateKindParam) return [];
+    const key = keyFor(this.plan);
+    const title = this.keyTitle();
+    if (!this.keyBrailleFailed) this.translateKey(keyTexts(key, title));
+    const parameters = stateManager.getState().parameters || {};
+    return keyPlates(key, {
+      plateW: layout.plateW,
+      plateH: layout.plateH,
+      title,
+      brailleOf: this.keyBrailleFailed
+        ? null
+        : (text) => this.keyBraille.get(text) || '',
+      letterHeightMm: Number(parameters[this.config.keyLetterParam]) || 8,
+      cellMm: Number(parameters[this.config.keyCellParam]) || 7,
+    });
+  }
+
+  /** Translate the key's texts not translated yet, then draw again. */
+  async translateKey(texts) {
+    const missing = texts.filter((t) => !this.keyBraille.has(t));
+    if (!missing.length || this.keyBrailleBusy) return;
+    this.keyBrailleBusy = true;
+    try {
+      const { translateText } = await import('../braille-translator.js');
+      for (const text of missing) {
+        const { braille } = await translateText(text, KEY_BRAILLE_TABLE);
+        this.keyBraille.set(text, braille);
+      }
+    } catch (err) {
+      // Said in the plates' summary: the key is print only.
+      this.keyBrailleFailed = true;
+      console.warn('[MapPanel] The key braille could not be made:', err);
+    } finally {
+      this.keyBrailleBusy = false;
+    }
+    this.schedule(0);
+  }
+
+  /** The parameters of a map plate: the tile in its Map mode. */
+  mapKindParameters(parameters) {
+    if (!this.config.plateKindParam) return parameters;
+    return {
+      ...parameters,
+      [this.config.plateKindParam]: 'Map',
+      [this.config.keyPrintParam]: '',
+      [this.config.keyBrailleParam]: '',
+    };
+  }
+
+  /** The key's plates as render sets, in the tile's Key mode. */
+  keyParameterSets(parameters) {
+    if (!this.config.plateKindParam) return [];
+    return this.keyPages.map((page) => {
+      const fileName = `levels_${page.id}.svg`;
+      const next = {
+        ...parameters,
+        [this.config.widthParam]: page.size.w,
+        [this.config.heightParam]: page.size.h,
+        [this.config.mapFileParam]: {
+          name: fileName,
+          data: svgToDataUrl(page.svg),
+          type: 'image/svg+xml',
+        },
+        [this.config.plateKindParam]: 'Key',
+        [this.config.keyPrintParam]: page.print,
+        [this.config.keyBrailleParam]: page.braille,
+      };
+      if (this.config.plateIdParam) next[this.config.plateIdParam] = '';
+      if (this.config.plateShowsTitleParam)
+        next[this.config.plateShowsTitleParam] = 'no';
+      if (this.config.plateShowsNorthParam)
+        next[this.config.plateShowsNorthParam] = 'no';
+      if (this.config.mapFileKindParam)
+        next[this.config.mapFileKindParam] = 'levels';
+      return {
+        id: page.id,
+        size: page.size,
+        svg: page.svg,
+        fileName,
+        parameters: next,
+        roles: { title: false, north: false },
+      };
+    });
   }
 
   update() {
@@ -1674,6 +1804,11 @@ class MapPanel {
     } else {
       sentence = `${n} plates of ${pw} x ${ph} mm, ${layout.plates[0].id} to ${layout.plates[n - 1].id}.`;
     }
+    this.keyPages = this.layout ? this.buildKeyPages(layout) : [];
+    const k = this.keyPages.length;
+    if (k) {
+      sentence += ` The key takes ${k === 1 ? 'one plate' : `${k} plates`}${this.keyBrailleFailed ? ', print only: its braille could not be made' : ''}.`;
+    }
     if (this.refs.summary.textContent !== sentence)
       this.refs.summary.textContent = sentence;
     this.rebuildPlates();
@@ -1692,10 +1827,18 @@ class MapPanel {
     let plateId = '';
     let showTitle = 'yes';
     let showNorth = 'yes';
+    let keyPage = null;
     if (this.plate === 'whole') {
       svg = levelsSvgFromRings(built.rings, this.plan.size, built.textBoxes);
       size = this.plan.size;
       fileName = 'levels_whole.svg';
+    } else if (isKeyId(this.plate)) {
+      keyPage = this.keyPages.find((p) => p.id === this.plate);
+      svg = keyPage.svg;
+      size = keyPage.size;
+      fileName = `levels_${keyPage.id}.svg`;
+      showTitle = 'no';
+      showNorth = 'no';
     } else {
       const plate = this.layout.plates.find((p) => p.id === this.plate);
       const out = plateLevelsSvg(built.rings, plate, { id: this.idStyle });
@@ -1715,6 +1858,11 @@ class MapPanel {
       setParameterValue(this.config.plateShowsTitleParam, showTitle);
     if (this.config.plateShowsNorthParam)
       setParameterValue(this.config.plateShowsNorthParam, showNorth);
+    if (this.config.plateKindParam) {
+      setParameterValue(this.config.plateKindParam, keyPage ? 'Key' : 'Map');
+      setParameterValue(this.config.keyPrintParam, keyPage?.print || '');
+      setParameterValue(this.config.keyBrailleParam, keyPage?.braille || '');
+    }
     this.setFileKind('levels');
     if (!this.setFile(this.config.mapFileParam, fileName, svg)) {
       console.warn(

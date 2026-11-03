@@ -55,11 +55,17 @@ test.describe('Tactile Map tile', () => {
       'A map from your drawing'
     );
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 240 x 180 mm, A1 to B2.',
+      /^4 plates of 240 x 180 mm, A1 to B2\. The key takes (one plate|\d+ plates)\.$/,
       { timeout: 10000 }
     );
-    const radios = page.locator('#tactileMapPlates input[type="radio"]');
+    // The whole map, its four plates, then the key's plates.
+    const radios = page.locator(
+      '#tactileMapPlates input[type="radio"]:not([value^="key"])'
+    );
     await expect(radios).toHaveCount(5);
+    await expect(
+      page.locator('#tactileMapPlates input[type="radio"][value^="key"]')
+    ).not.toHaveCount(0);
   });
 
   test('lays no picture of its own map file over the preview: the map file is the model, not a reference', async ({
@@ -120,7 +126,7 @@ test.describe('Tactile Map tile', () => {
     );
   });
 
-  test('the button renders the four plates and downloads them as one zip', async ({
+  test('the button renders the four plates and the key and downloads them as one zip', async ({
     page,
   }) => {
     test.setTimeout(300_000);
@@ -143,12 +149,24 @@ test.describe('Tactile Map tile', () => {
     expect(download.suggestedFilename()).toBe('tactile_map_plates.zip');
     const zip = await JSZip.loadAsync(readFileSync(await download.path()));
     const names = Object.keys(zip.files).sort();
-    expect(names.filter((name) => name.endsWith('.stl'))).toEqual([
-      'tactile_map_A1.stl',
-      'tactile_map_A2.stl',
-      'tactile_map_B1.stl',
-      'tactile_map_B2.stl',
-    ]);
+    const keyIds = await page.evaluate(() =>
+      document
+        .getElementById('tactileMapPanel')
+        .__forgeMapPanel.keyPages.map((p) => p.id)
+    );
+    expect(keyIds.length).toBeGreaterThan(0);
+    expect(names.filter((name) => name.endsWith('.stl'))).toEqual(
+      [
+        'tactile_map_A1.stl',
+        'tactile_map_A2.stl',
+        'tactile_map_B1.stl',
+        'tactile_map_B2.stl',
+        ...keyIds.map((id) => `tactile_map_${id}.stl`),
+      ].sort()
+    );
+    for (const id of keyIds) expect(names).toContain(`levels_${id}.svg`);
+    const readme = await zip.file('README.txt').async('string');
+    expect(readme).toMatch(/\nKey\n\nSymbols, You are here first:\n/);
     expect(names).toContain('map_plan.json');
     expect(names).toContain('README.txt');
     expect(names).toContain('levels_A1.svg');
@@ -169,7 +187,7 @@ test.describe('Tactile Map tile', () => {
     expect(size[1]).toBeCloseTo(180, 1);
     expect(size[2]).toBeCloseTo(2.4, 1);
     await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
-      'All 4 plates are in tactile_map_plates.zip.'
+      `All ${4 + keyIds.length} plates are in tactile_map_plates.zip.`
     );
     await expect(page.locator('#tactileMapRenderAll')).toBeVisible();
     await expect(page.locator('#tactileMapRenderCancel')).toBeHidden();
@@ -181,7 +199,7 @@ test.describe('Tactile Map tile', () => {
     test.setTimeout(300_000);
     await openTactileMap(page);
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 240 x 180 mm, A1 to B2.',
+      /^4 plates of 240 x 180 mm, A1 to B2\. The key takes (one plate|\d+ plates)\.$/,
       { timeout: 10000 }
     );
     // A drawing at 340 x 240 mm whose shapes, a 300 x 2 mm bar and a
@@ -237,7 +255,7 @@ test.describe('Tactile Map tile', () => {
     await page.locator('#drawingEditorSurface .drawing-editor-apply').click();
     await expect(page.locator('#drawingEditorSurface')).toBeHidden();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '2 plates of 151 x 202 mm, A1 to A2.',
+      /^2 plates of 151 x 202 mm, A1 to A2\. The key takes (one plate|\d+ plates)\.$/,
       { timeout: 10000 }
     );
     await expect(page.locator('#param-map_width_mm-spinbox')).toHaveValue(
@@ -254,8 +272,13 @@ test.describe('Tactile Map tile', () => {
       )
       .toBe('levels_whole.svg');
     await expect(page.locator('#tactileMapWarnings li')).toHaveCount(0);
-    const radios = page.locator('#tactileMapPlates input[type="radio"]');
+    const radios = page.locator(
+      '#tactileMapPlates input[type="radio"]:not([value^="key"])'
+    );
     await expect(radios).toHaveCount(3);
+    await expect(
+      page.locator('#tactileMapPlates input[type="radio"][value^="key"]')
+    ).not.toHaveCount(0);
   });
 
   test('the page with the panel passes an axe scan', async ({ page }) => {
@@ -657,6 +680,125 @@ test.describe('the draft map', () => {
 
     const results = await new AxeBuilder({ page })
       .include('#drawingEditorSurface')
+      .analyze();
+    const violations = results.violations.filter(
+      (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)
+    );
+    expect(
+      violations,
+      violations.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`).join('\n')
+    ).toEqual([]);
+  });
+
+  test('the key at 3600 Ferry Pl NE: listed after the plates, its braille from the page, previewed in the tile Key mode', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const TILES = {
+      5250: readFileSync(
+        'tests/fixtures/tactile-map/sourdough-15-5250-11438.mvt'
+      ),
+      5251: readFileSync(
+        'tests/fixtures/tactile-map/sourdough-15-5251-11438.mvt'
+      ),
+    };
+    await page.route('https://nominatim.openstreetmap.org/search*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify([
+          {
+            place_id: 1,
+            lat: '47.6481285',
+            lon: '-122.3086726',
+            type: 'building',
+            importance: 0.5,
+            display_name:
+              'Center on Human Development and Disability South, 3600, Ferry Place Northeast, Seattle, Washington, 98195, United States',
+          },
+        ]),
+      })
+    );
+    await page.route('https://tiles.openstreetmap.us/**', (route) => {
+      const x = route.request().url().match(/\/15\/(\d+)\/11438\.mvt$/)?.[1];
+      const body = TILES[x];
+      return route.fulfill({
+        status: body ? 200 : 204,
+        contentType: 'application/vnd.mapbox-vector-tile',
+        headers: { 'access-control-allow-origin': '*' },
+        body: body || '',
+      });
+    });
+    await openTactileMap(page, 'place');
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await page.locator('#tactileMapAddress').fill('3600 Ferry Pl NE, Seattle');
+    await page.locator('#tactileMapSearch').click();
+    await page.locator('#tactileMapPlace1').check();
+    await goToStep(page, 4);
+    await page.locator('#tactileMapMake').click();
+    const status = page.locator('#tactileMapAddressStatus');
+    await expect(status).toContainText('Draft map ready: ', { timeout: 15000 });
+    await expect(status).toHaveText(
+      / The key has \d+ symbols and \d+ abbreviations\.$/
+    );
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor').first()
+    ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });
+    await page.keyboard.press('Escape');
+    await goToStep(page, 5);
+    await expect(page.locator('#tactileMapSummary')).toContainText(
+      'The key takes'
+    );
+    // The braille comes from the page's own translator, UEB uncontracted:
+    // read cell by cell for the cafe's row.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() =>
+            document
+              .getElementById('tactileMapPanel')
+              .__forgeMapPanel.keyBraille.get('pc restaurant: plaza cafe')
+          ),
+        { timeout: 30000 }
+      )
+      .toBeTruthy();
+    const cafe = await page.evaluate(() =>
+      document
+        .getElementById('tactileMapPanel')
+        .__forgeMapPanel.keyBraille.get('pc restaurant: plaza cafe')
+    );
+    expect(cafe.replace(/[\u2800 ]/g, ' ')).toBe(
+      '\u280f\u2809 \u2817\u2811\u280e\u281e\u2801\u2825\u2817\u2801\u281d\u281e\u2812 \u280f\u2807\u2801\u2835\u2801 \u2809\u2801\u280b\u2811'
+    );
+    const keyRadio = page.locator('input[name="tactileMapPlate"][value^="key"]');
+    expect(await keyRadio.count()).toBeGreaterThan(0);
+    await keyRadio.first().check();
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => window.stateManager?.getState()?.parameters?.plate_kind
+          ),
+        { timeout: 15000 }
+      )
+      .toBe('Key');
+    const params = await page.evaluate(() => {
+      const p = window.stateManager.getState().parameters;
+      return { file: p.map_file?.name, print: p.key_print, braille: p.key_braille };
+    });
+    expect(params.file).toMatch(/^levels_key(-1)?\.svg$/);
+    expect(params.print).toMatch(/:KEY: /);
+    expect(params.braille.length).toBeGreaterThan(10);
+    await expect(page.locator('.preview-state-indicator')).toHaveClass(
+      /state-current/,
+      { timeout: PREVIEW_TIMEOUT }
+    );
+    const results = await new AxeBuilder({ page })
+      .include('#tactileMapPanel')
       .analyze();
     const violations = results.violations.filter(
       (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)
