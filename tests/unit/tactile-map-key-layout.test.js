@@ -137,6 +137,26 @@ describe('keyPlates', () => {
     expect([frame.class, frame.width]).toEqual(['curb', 1]);
   });
 
+  it('never sets a line off the plate: a row taller than the plate goes on, line by line, on the next', () => {
+    const pages = keyPlates(keyFor(plan()), {
+      plateW: 200,
+      plateH: 75,
+      title: 'Ferry Place',
+      brailleOf: fakeBraille,
+      letterHeightMm: 16,
+    });
+    for (const page of pages) {
+      for (const r of rowsOf(page.print)) {
+        expect(r.y).toBeGreaterThanOrEqual(KEY_MARGIN_MM - 0.06);
+        expect(r.y + 16).toBeLessThanOrEqual(75 - KEY_MARGIN_MM + 0.06);
+      }
+      for (const r of rowsOf(page.braille)) {
+        expect(r.y - 3.3).toBeGreaterThanOrEqual(KEY_MARGIN_MM - 0.06);
+        expect(r.y + 3.3).toBeLessThanOrEqual(75 - KEY_MARGIN_MM + 0.06);
+      }
+    }
+  });
+
   it('carries print only when there is no braille', () => {
     const [page] = keyPlates(keyFor(plan()), {
       ...PLATE,

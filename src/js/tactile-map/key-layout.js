@@ -237,24 +237,62 @@ export function keyPlates(
       );
     };
     if (page.rows.length && page.y + height(page.y) > bottomLimit) newPage();
-    const top = page.y;
-    const bottom = top + height(top);
-    printLines.forEach((text, k) => {
-      const base = top + letterHeightMm + k * pitch;
-      page.print.push(`${tenths(textX)}:${tenths(plateH - base)}:${text}`);
-    });
-    const lastBase = top + letterHeightMm + (printLines.length - 1) * pitch;
-    brailleLines.forEach((text, k) => {
-      const center =
-        lastBase + PRINT_TO_BRAILLE_MM + CELL_HALF_MM + k * BRAILLE_LINE_MM;
-      page.braille.push(`${tenths(textX)}:${tenths(plateH - center)}:${text}`);
-    });
-    if (row.sample) {
-      const at = [KEY_MARGIN_MM + KEY_SYMBOL_COLUMN_MM / 2, (top + bottom) / 2];
-      page.rows.push(sampleOf(row.sample, `key-sample-${i}`, at));
-    } else {
-      page.rows.push(null);
+    // Line by line, so a row taller than a plate goes on on the next one and
+    // nothing is set past the margin: each line's top and bottom, then where
+    // the next one starts.
+    const lines = [
+      ...printLines.map((text) => ({ text, braille: false })),
+      ...brailleLines.map((text) => ({ text, braille: true })),
+    ];
+    let first = { page, top: page.y };
+    let bottom = page.y;
+    let previous = null;
+    for (const line of lines) {
+      const lead =
+        previous === null
+          ? 0
+          : line.braille && !previous.braille
+            ? PRINT_TO_BRAILLE_MM
+            : line.braille
+              ? BRAILLE_LINE_MM - 2 * CELL_HALF_MM
+              : pitch - letterHeightMm;
+      const tall = line.braille ? 2 * CELL_HALF_MM : letterHeightMm;
+      let top = previous === null ? page.y : bottom + lead;
+      if (top + tall > bottomLimit && (page.rows.length || previous)) {
+        if (previous === null) {
+          newPage();
+          first = { page, top: page.y };
+        } else {
+          newPage();
+        }
+        top = page.y;
+      }
+      if (line.braille) {
+        const center = top + CELL_HALF_MM;
+        page.braille.push(
+          `${tenths(textX)}:${tenths(plateH - center)}:${line.text}`
+        );
+      } else {
+        const base = top + letterHeightMm;
+        page.print.push(
+          `${tenths(textX)}:${tenths(plateH - base)}:${line.text}`
+        );
+      }
+      bottom = top + tall;
+      previous = line;
     }
+    // The sample stands beside the row's first lines, on the row's first plate.
+    const sampleBottom = first.page === page ? bottom : bottomLimit;
+    if (row.sample) {
+      const at = [
+        KEY_MARGIN_MM + KEY_SYMBOL_COLUMN_MM / 2,
+        (first.top + sampleBottom) / 2,
+      ];
+      first.page.rows.push(sampleOf(row.sample, `key-sample-${i}`, at));
+    } else {
+      first.page.rows.push(null);
+    }
+    if (page !== first.page) page.rows.push(null);
     page.y = bottom + KEY_GAP_MM;
   });
 
