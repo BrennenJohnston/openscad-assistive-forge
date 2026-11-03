@@ -48,6 +48,9 @@ export { flattenWithRings };
 // svg-limits.js, which the parameter UI reads without loading this module.
 export { DEFAULT_DESIGN_WIDTH_MM };
 
+/** The Design width box's own ceiling; a host's wider width raises it. */
+const DESIGN_WIDTH_MAX_MM = 200;
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /**
@@ -286,7 +289,7 @@ function buildWorkspaceDom() {
   designWidthInput.type = 'number';
   designWidthInput.className = 'svg-prep-design-width-input';
   designWidthInput.min = '1';
-  designWidthInput.max = '200';
+  designWidthInput.max = String(DESIGN_WIDTH_MAX_MM);
   designWidthInput.step = '1';
   designWidthInput.value = String(DEFAULT_DESIGN_WIDTH_MM);
 
@@ -3151,9 +3154,11 @@ export function createSvgPrepWorkspace(containerEl) {
    */
   function updateDesignWidthHelp() {
     refs.designWidthHelp.textContent =
-      currentCallbacks.designWidthKnown !== false
-        ? 'The charm sets this from its size. Type a width only to see what would change.'
-        : "The editor's default width. Type the width your design prints at.";
+      currentCallbacks.designWidthKnown === false
+        ? "The editor's default width. Type the width your design prints at."
+        : currentCallbacks.purpose === 'map'
+          ? 'The map sets this from its size. Type a width only to see what would change.'
+          : 'The charm sets this from its size. Type a width only to see what would change.';
   }
 
   /**
@@ -3351,7 +3356,9 @@ export function createSvgPrepWorkspace(containerEl) {
           viewBoxWidth: vb.w,
           designWidthMm: currentDesignWidthMm(),
           thinPrintMm: thinFloorMm(),
-          thinPicturePx: THIN_PICTURE_PX,
+          // A map draft is drawn from its data and never traced, so no row
+          // of it is too small to trace.
+          thinPicturePx: currentCallbacks.draft ? 0 : THIN_PICTURE_PX,
         }
       );
     }
@@ -3851,10 +3858,16 @@ export function createSvgPrepWorkspace(containerEl) {
 
     // A host that knows how wide the design prints says so,
     // and the box starts there rather than at the editor's default.
+    // A map is wider than any charm: the box's ceiling grows to the width a
+    // host gives and returns to its own on the next open.
+    refs.designWidthInput.max = String(DESIGN_WIDTH_MAX_MM);
     if (
       Number.isFinite(callbacks.designWidthMm) &&
       callbacks.designWidthMm > 0
     ) {
+      if (callbacks.designWidthMm > DESIGN_WIDTH_MAX_MM) {
+        refs.designWidthInput.max = String(Math.ceil(callbacks.designWidthMm));
+      }
       refs.designWidthInput.value = String(+callbacks.designWidthMm.toFixed(2));
     }
     // How thin the thinnest lines are, at the width this will be printed. The

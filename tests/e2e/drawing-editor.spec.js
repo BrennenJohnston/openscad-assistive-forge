@@ -2976,6 +2976,22 @@ test.describe('the route tool', () => {
       page.locator(
         `#drawingEditorSurface .drawing-editor-canvas-svg [data-layer="regions"] path[data-region="${key}"]`
       );
+    // The editor lists what is on first, then what is off, curbs last within
+    // each, the plan's order kept inside a group: a plan feature's row.
+    const rowOf = (planIndex) =>
+      page.evaluate((i) => {
+        const fs =
+          document.getElementById('tactileMapPanel').__forgeMapPanel.plan
+            .features;
+        const rank = (f) =>
+          (f.on === false ? 2 : 0) + (f.class === 'curb' ? 1 : 0);
+        const order = fs
+          .map((_, k) => k)
+          .sort((a, b) => rank(fs[a]) - rank(fs[b]) || a - b);
+        return order.indexOf(i);
+      }, planIndex);
+    // The first sidewalk is on, so it is the first row too.
+    expect(await rowOf(0)).toBe(0);
 
     // By keyboard: the tool, then Home on the canvas and Enter.
     const walk = page.locator(
@@ -3002,16 +3018,16 @@ test.describe('the route tool', () => {
     // tenth sidewalk of the fixture lies past the map and is clipped away, so
     // the connector is region 9), then the second sidewalk it reaches, which
     // joins reversed.
-    await region(9).click({ force: true });
+    await region(await rowOf(9)).click({ force: true });
     await expect(statusLine).toHaveText(
       /^2 segments on the route, \d+ m long\.$/
     );
-    await region(1).click({ force: true });
+    await region(await rowOf(1)).click({ force: true });
     await expect(statusLine).toHaveText(
       /^3 segments on the route, \d+ m long\.$/
     );
     // A sidewalk that touches nothing on the route.
-    await region(5).click({ force: true });
+    await region(await rowOf(5)).click({ force: true });
     await expect(statusLine).toHaveText(
       'That segment does not touch the route yet. Pick the one between them first.'
     );

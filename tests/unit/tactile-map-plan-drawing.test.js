@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import {
   drawingFromPlan,
   applyRowsToPlan,
+  rowOrder,
 } from '../../src/js/tactile-map/plan-drawing.js';
 import { analyzeSvg } from '../../src/js/svg-preparer.js';
 import { ringsFromPathData } from '../../src/js/ring-geometry.js';
@@ -196,5 +197,67 @@ describe('applyRowsToPlan', () => {
     const before = plan();
     const after = applyRowsToPlan(before, [{ index: 99, class: 'wall' }]);
     expect(after.features).toEqual(before.features);
+  });
+});
+
+describe('the order of the editor rows', () => {
+  const feature = (id, cls, on) => ({
+    id,
+    class: cls,
+    kind: 'line',
+    points: [
+      [0, 0],
+      [10, 0],
+    ],
+    on,
+  });
+  const PLAN = () => {
+    const plan = emptyPlan(100, 100);
+    plan.features.push(
+      feature('curb-off', 'curb', false),
+      feature('walk-off', 'walkway', false),
+      feature('curb-on', 'curb', true),
+      feature('walk-on', 'walkway', true),
+      feature('cross-on', 'crossing', true),
+      feature('walk-off-2', 'walkway', false)
+    );
+    return plan;
+  };
+
+  it('lists what is on first, then what is off, curbs last within each, the plan order kept inside a group', () => {
+    const plan = PLAN();
+    const order = rowOrder(plan.features);
+    expect(order.map((i) => plan.features[i].id)).toEqual([
+      'walk-on',
+      'cross-on',
+      'curb-on',
+      'walk-off',
+      'walk-off-2',
+      'curb-off',
+    ]);
+  });
+
+  it('writes the drawing in that order and lays the rows back on the right features, the plan order unchanged', () => {
+    const plan = PLAN();
+    const order = rowOrder(plan.features);
+    const svg = drawingFromPlan(plan, {}, { order });
+    const ids = [...svg.matchAll(/data-feature="([^"]+)"/g)].map((m) => m[1]);
+    expect(ids).toEqual(order.map((i) => plan.features[i].id));
+    // Row 0 (walk-on) off; row 5 (curb-off) on as a curb.
+    const after = applyRowsToPlan(
+      plan,
+      [
+        { index: 0, class: 'ignore' },
+        { index: 5, class: 'curb' },
+      ],
+      order
+    );
+    expect(after.features.map((f) => f.id)).toEqual(
+      plan.features.map((f) => f.id)
+    );
+    const byId = (id) => after.features.find((f) => f.id === id);
+    expect(byId('walk-on').on).toBe(false);
+    expect(byId('curb-off').on).toBe(true);
+    expect(byId('walk-off').on).toBe(false);
   });
 });

@@ -298,7 +298,8 @@ describe('Edit drawing as a map', () => {
     $('tactileMapMake').click();
     await vi.waitFor(() => expect(opened).not.toBeNull(), SETTLE);
     const first = opened;
-    const regions = getMapPlan().features.map((f, index) => ({
+    // The editor's rows, in the order it was handed them.
+    const regions = first.options.features.map((f, index) => ({
       index,
       class: f.on ? f.class : 'ignore',
     }));
@@ -311,9 +312,12 @@ describe('Edit drawing as a map', () => {
     expect(Object.keys(opened.options.initialClasses)).toHaveLength(
       plan.features.length
     );
-    plan.features.forEach((f, i) => {
+    opened.options.features.forEach((f, i) => {
       expect(opened.options.initialClasses[i]).toBe(f.on ? f.class : 'ignore');
     });
+    expect(new Set(opened.options.features.map((f) => f.id))).toEqual(
+      new Set(plan.features.map((f) => f.id))
+    );
   });
 
   it('opens the sample station with its classes, not every shape at Ignore', async () => {

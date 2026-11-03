@@ -629,6 +629,32 @@ test.describe('the draft map', () => {
       .allTextContents();
     expect(names.filter((n) => /^Landmark\b/.test(n))).toEqual([]);
 
+    // The editor measures the draft at the map's own width, and lists what is
+    // on before what is off, curbs last.
+    // At 14 mm, the editor's own default, it called 284 shapes too thin; at
+    // the map's 480 mm none is (MEASURED 2026-11-02), so no notice shows.
+    await expect(
+      page.locator('#drawingEditorSurface .svg-prep-design-width-input')
+    ).toHaveValue('480');
+    const notice = page.locator('#drawingEditorSurface .svg-prep-thin-notice');
+    await expect(notice).toBeHidden();
+    await expect(notice).not.toContainText('14 mm');
+    await expect(
+      page.locator('#drawingEditorSurface .svg-prep-design-width-help')
+    ).toHaveText(
+      'The map sets this from its size. Type a width only to see what would change.'
+    );
+    // A draft is never traced: no row is marked too small to trace.
+    await expect(
+      page.locator('#drawingEditorSurface .svg-prep-thin-mark')
+    ).toHaveCount(0);
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor-class-select').first()
+    ).not.toHaveValue('curb');
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor-class-select').first()
+    ).not.toHaveValue('ignore');
+
     const results = await new AxeBuilder({ page })
       .include('#drawingEditorSurface')
       .analyze();
