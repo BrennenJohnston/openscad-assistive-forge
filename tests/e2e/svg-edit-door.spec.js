@@ -1438,14 +1438,12 @@ test.describe('the picture can be pointed at', () => {
     // Invisible, and still hittable. `pointer-events: all` is what buys that:
     // it means "answer for your fill and your stroke whatever they are
     // painted", which is the only way a stroke-only drawing - every CAD
-    // export - can be pointed at at all.
-    const paint = await shape(page, 2).evaluate((el) => {
-      const c = getComputedStyle(el)
-      return { fill: c.fill, stroke: c.stroke, events: c.pointerEvents }
-    })
-    expect(paint.fill).toBe('none')
-    expect(paint.stroke).toBe('none')
-    expect(paint.events).toBe('all')
+    // export - can be pointed at at all. Each check finds the shape again:
+    // the picture is redrawn as it settles, and a shape held across a redraw
+    // has left the page and reads as having no style at all.
+    await expect(shape(page, 2)).toHaveCSS('fill', 'none')
+    await expect(shape(page, 2)).toHaveCSS('stroke', 'none')
+    await expect(shape(page, 2)).toHaveCSS('pointer-events', 'all')
   })
 
   test('hovering the drawing marks the row, and pressing it chooses', async ({
