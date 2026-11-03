@@ -1246,10 +1246,16 @@ class MapPanel {
       );
       return;
     }
-    const { warnings } = buildLevelRings(plan);
     this.plan = plan;
-    this.draft = { counts, warnings: warnings.length };
     this.source = 'draft';
+    // Counted as step 5 lists them: the labels' and the plates' warnings.
+    const labeled = this.labeled();
+    const warnings = [
+      ...labeled.warnings,
+      ...buildLevelRings(labeled.plan, { tapeWidthMm: this.tapeWidth() })
+        .warnings,
+    ];
+    this.draft = { counts, warnings: warnings.length };
     this.planWarnings = [];
     this.plate = 'whole';
     this.leaveWaiting();

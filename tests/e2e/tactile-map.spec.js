@@ -764,6 +764,11 @@ test.describe('the draft map', () => {
     await expect(page.locator('#tactileMapWarnings li')).toContainText([
       "No room for Parking: South Campus Garage's label; it is in the key as sc.",
     ]);
+    // The ready sentence counts the warnings step 5 lists, labels included.
+    const said = Number(
+      (await status.textContent()).match(/; (\d+) warnings?\./)?.[1] ?? 0
+    );
+    expect(said).toBe(await page.locator('#tactileMapWarnings li').count());
     // The braille comes from the page's own translator, UEB uncontracted:
     // read cell by cell for the cafe's row.
     await expect
