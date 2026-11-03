@@ -598,7 +598,10 @@ test.describe('the draft map', () => {
       })
     );
     await page.route('https://tiles.openstreetmap.us/**', (route) => {
-      const x = route.request().url().match(/\/15\/(\d+)\/11438\.mvt$/)?.[1];
+      const x = route
+        .request()
+        .url()
+        .match(/\/15\/(\d+)\/11438\.mvt$/)?.[1];
       const body = TILES[x];
       return route.fulfill({
         status: body ? 200 : 204,
@@ -690,7 +693,7 @@ test.describe('the draft map', () => {
     ).toEqual([]);
   });
 
-  test('the key and the labels at 3600 Ferry Pl NE: channels beside the named places, the key listed after the plates, its braille from the page, previewed in the tile Key mode', async ({
+  test('the key and the labels at 3600 Ferry Pl NE: channels beside the named places, the key listed after the plates, its braille on tape in channels, previewed in the tile Key mode', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -721,7 +724,10 @@ test.describe('the draft map', () => {
       })
     );
     await page.route('https://tiles.openstreetmap.us/**', (route) => {
-      const x = route.request().url().match(/\/15\/(\d+)\/11438\.mvt$/)?.[1];
+      const x = route
+        .request()
+        .url()
+        .match(/\/15\/(\d+)\/11438\.mvt$/)?.[1];
       const body = TILES[x];
       return route.fulfill({
         status: body ? 200 : 204,
@@ -769,28 +775,17 @@ test.describe('the draft map', () => {
       (await status.textContent()).match(/; (\d+) warnings?\./)?.[1] ?? 0
     );
     expect(said).toBe(await page.locator('#tactileMapWarnings li').count());
-    // The braille comes from the page's own translator, UEB uncontracted:
-    // read cell by cell for the cafe's row.
-    await expect
-      .poll(
-        () =>
-          page.evaluate(() =>
-            document
-              .getElementById('tactileMapPanel')
-              .__forgeMapPanel.keyBraille.get('pc restaurant: plaza cafe')
-          ),
-        { timeout: 30000 }
-      )
-      .toBeTruthy();
-    const cafe = await page.evaluate(() =>
+    // The key's braille goes on label tape: each row's text is listed for
+    // its channel, the cafe's among them.
+    const tape = await page.evaluate(() =>
       document
         .getElementById('tactileMapPanel')
-        .__forgeMapPanel.keyBraille.get('pc restaurant: plaza cafe')
+        .__forgeMapPanel.keyPages.flatMap((p) => p.tape)
     );
-    expect(cafe.replace(/[\u2800 ]/g, ' ')).toBe(
-      '\u280f\u2809 \u2817\u2811\u280e\u281e\u2801\u2825\u2817\u2801\u281d\u281e\u2812 \u280f\u2807\u2801\u2835\u2801 \u2809\u2801\u280b\u2811'
+    expect(tape).toContain('pc restaurant: plaza cafe');
+    const keyRadio = page.locator(
+      'input[name="tactileMapPlate"][value^="key"]'
     );
-    const keyRadio = page.locator('input[name="tactileMapPlate"][value^="key"]');
     expect(await keyRadio.count()).toBeGreaterThan(0);
     await keyRadio.first().check();
     await expect
@@ -804,11 +799,30 @@ test.describe('the draft map', () => {
       .toBe('Key');
     const params = await page.evaluate(() => {
       const p = window.stateManager.getState().parameters;
-      return { file: p.map_file?.name, print: p.key_print, braille: p.key_braille };
+      const d = p.map_file?.data || '';
+      const body = d.split(',')[1] || '';
+      return {
+        file: p.map_file?.name,
+        print: p.key_print,
+        levels: d.includes(';base64,') ? atob(body) : decodeURIComponent(body),
+      };
     });
     expect(params.file).toMatch(/^levels_key(-1)?\.svg$/);
-    expect(params.print).toMatch(/:KEY: /);
-    expect(params.braille.length).toBeGreaterThan(10);
+    expect(params.print).toBe('');
+    expect(params.levels).toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
+    // Key words: braille only to start; Print and braille raises the words.
+    const keyWords = page.locator('#tactileMapKeyWords');
+    await expect(keyWords).toHaveValue('braille');
+    await keyWords.selectOption('both');
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => window.stateManager.getState().parameters.key_print
+          ),
+        { timeout: 15000 }
+      )
+      .toMatch(/:KEY:/);
     await expect(page.locator('.preview-state-indicator')).toHaveClass(
       /state-current/,
       { timeout: PREVIEW_TIMEOUT }

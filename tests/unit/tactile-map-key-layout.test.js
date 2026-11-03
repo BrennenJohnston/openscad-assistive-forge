@@ -1,20 +1,32 @@
 /**
  * The key plate's layout: the key's entries as rows on plates of the map's
  * plate size, each row a sample of the symbol, line or area at the left at
- * its printed size, the words in raised capitals and the braille under
- * them, wrapped to the plate and carried onto a second key plate when the
- * first is full; a 1 mm frame; the rows written as the model reads them.
+ * its printed size, the words in raised capitals built to the Braille
+ * Sign's rules, and under the words a channel for the braille on label
+ * tape, as the map's own labels are; the rows carried onto a second key
+ * plate when the first is full; a 1 mm frame; the words written as the
+ * model reads them and the tape texts listed in order.
  *
  * @license GPL-3.0-or-later
  */
 import { describe, it, expect } from 'vitest';
-import { keyFor } from '../../src/js/tactile-map/map-key.js';
+import { keyFor, labelCells } from '../../src/js/tactile-map/map-key.js';
+import { channelLengthMm } from '../../src/js/tactile-map/map-labels.js';
 import {
+  keyLabel,
   keyPlates,
-  keyTexts,
+  KEY_CLEARANCE_MM,
+  KEY_FRAME_INSET_MM,
+  KEY_FRAME_WIDTH_MM,
   KEY_MARGIN_MM,
+  KEY_WORDS,
 } from '../../src/js/tactile-map/key-layout.js';
-import { signRowWidthMm } from '../../src/js/sign-letter-metrics.js';
+import {
+  SIGN_LETTER_CAP_FACTOR,
+  SIGN_LETTER_METRICS,
+  SIGN_LETTER_UNKNOWN,
+  signRowWidthMm,
+} from '../../src/js/sign-letter-metrics.js';
 import { emptyPlan } from '../../src/js/tactile-map/plan.js';
 
 function plan() {
@@ -52,87 +64,250 @@ function plan() {
   return p;
 }
 
-// A stand-in braille: one cell per character (the real one is liblouis's).
-const fakeBraille = (text) =>
-  [...text.toLowerCase()].map((c) => (c === ' ' ? '⠀' : '⠁')).join('');
+/** The plate, with the words raised beside the tape. */
+const PLATE = { plateW: 240, plateH: 180, words: 'both' };
+const LETTER = 16;
+/** The default tape, 12.7 mm, in a channel 0.4 mm wider. */
+const ACROSS = 13.1;
 
-const rowsOf = (s) =>
-  s
-    ? s.split('|').map((r) => {
+/** The raised words of a page: x, the baseline from the top, the text. */
+const wordsOf = (page) =>
+  page.print
+    ? page.print.split('|').map((r) => {
         const [x, y, ...rest] = r.split(':');
-        return { x: Number(x) / 10, y: Number(y) / 10, text: rest.join(':') };
+        return {
+          x: Number(x) / 10,
+          baseline: page.size.h - Number(y) / 10,
+          text: rest.join(':'),
+        };
       })
     : [];
 
-describe('keyTexts', () => {
-  it('names every text the key will need in braille, once', () => {
-    const texts = keyTexts(keyFor(plan()), 'Ferry Place');
-    expect(texts).toContain('key: ferry place');
-    expect(texts).toContain('you are here');
-    expect(texts).toContain('pc restaurant: plaza cafe');
-    expect(new Set(texts).size).toBe(texts.length);
+const channelsOf = (page) =>
+  page.plan.features.filter((f) => f.kind === 'channel');
+
+const samplesOf = (page) =>
+  page.plan.features.filter((f) => f.id.startsWith('key-sample-'));
+
+/** How far below its baseline a row's ink reaches, as the sign measures it. */
+function descentMm(text) {
+  const size = LETTER / SIGN_LETTER_CAP_FACTOR;
+  let lowest = 0;
+  for (const c of text) {
+    const m = SIGN_LETTER_METRICS[c] || SIGN_LETTER_UNKNOWN;
+    lowest = Math.min(lowest, m[3]);
+  }
+  return -lowest * size;
+}
+
+const CLINIC = 'uw clinic: university of washington medical center - montlake';
+
+describe('keyLabel', () => {
+  it('names a key plate as the plate list does', () => {
+    expect(keyLabel('key')).toBe('Key');
+    expect(keyLabel('key-2')).toBe('Key 2');
   });
 });
 
 describe('keyPlates', () => {
-  const PLATE = { plateW: 240, plateH: 180 };
+  it('offers the words three ways, braille only first', () => {
+    expect(KEY_WORDS.map((w) => [w.key, w.name])).toEqual([
+      ['braille', 'Braille only'],
+      ['both', 'Print and braille'],
+      ['print', 'Print only'],
+    ]);
+  });
 
-  it('lays the key in rows, the title first, words in capitals, braille under them, inside the margins', () => {
+  it('starts with braille only: no raised words, a channel per text, the sample beside its row, rows 9.525 mm apart, four plates at most for this key', () => {
     const pages = keyPlates(keyFor(plan()), {
-      ...PLATE,
+      plateW: 240,
+      plateH: 180,
       title: 'Ferry Place',
-      brailleOf: fakeBraille,
     });
+    expect(pages.length).toBeLessThanOrEqual(2);
+    for (const page of pages) {
+      expect(page.print).toBe('');
+      expect(channelsOf(page).length).toBe(page.tape.length);
+    }
+    expect(pages.flatMap((p) => p.tape)).toContain('you are here');
+    const [page] = pages;
+    const channels = channelsOf(page);
+    const here = samplesOf(page).find((s) => s.class === 'you-are-here');
+    const hereRow = channels.find(
+      (c) => Math.abs(c.at[1] - here.at[1]) < here.size
+    );
+    expect(hereRow).toBeTruthy();
+    expect(
+      hereRow.at[0] - hereRow.length / 2 - (here.at[0] + here.size / 2)
+    ).toBeGreaterThanOrEqual(KEY_CLEARANCE_MM - 0.01);
+    const tops = channels
+      .map((c) => c.at[1] - ACROSS / 2)
+      .sort((a, b) => a - b);
+    for (let i = 1; i < tops.length; i += 1) {
+      const gap = tops[i] - (tops[i - 1] + ACROSS);
+      expect(gap === 3 || gap >= KEY_CLEARANCE_MM - 0.01).toBe(true);
+    }
+  });
+
+  it('print only: the words raised, no channel and nothing to write', () => {
+    const pages = keyPlates(keyFor(plan()), {
+      plateW: 240,
+      plateH: 180,
+      title: 'Ferry Place',
+      words: 'print',
+    });
+    for (const page of pages) {
+      expect(channelsOf(page)).toEqual([]);
+      expect(page.tape).toEqual([]);
+      expect(page.svg).toMatch(/<g id="channels"><\/g>/);
+    }
+    expect(wordsOf(pages[0])[0].text).toBe('KEY: FERRY');
+  });
+
+  it('keeps the words and the tape 9.525 mm inside the raised frame, as the Braille Sign keeps its border', () => {
+    expect(KEY_CLEARANCE_MM).toBe(9.525);
+    expect(KEY_MARGIN_MM).toBe(
+      KEY_FRAME_INSET_MM + KEY_FRAME_WIDTH_MM + KEY_CLEARANCE_MM
+    );
+  });
+
+  it('lays the key in rows: the title first, words in 16 mm capitals, a tape channel under each, inside the margins', () => {
+    const pages = keyPlates(keyFor(plan()), { ...PLATE, title: 'Ferry Place' });
     expect(pages.length).toBeGreaterThanOrEqual(1);
     expect(pages[0].id).toBe(pages.length === 1 ? 'key' : 'key-1');
-    const print = rowsOf(pages[0].print);
-    expect(print[0].text).toBe('KEY: FERRY PLACE');
-    expect(print.map((r) => r.text)).toContain('YOU ARE HERE');
+    const words = wordsOf(pages[0]);
+    // At 16 mm the title wraps: the plate's words column is 183 mm.
+    expect(words[0].text).toBe('KEY: FERRY');
+    expect(words[1].text).toBe('PLACE');
+    expect(words.map((r) => r.text)).toContain('YOU ARE');
+    expect(pages[0].tape[0]).toBe('key: ferry place');
+    expect(pages.flatMap((p) => p.tape)).toContain('you are here');
     for (const page of pages) {
       expect(page.size).toEqual({ w: 240, h: 180 });
-      for (const r of rowsOf(page.print)) {
+      expect(page.braille).toBeUndefined();
+      for (const r of wordsOf(page)) {
         expect(r.text).toBe(r.text.toUpperCase());
         expect(r.x).toBeGreaterThanOrEqual(KEY_MARGIN_MM);
         expect(
-          r.x + signRowWidthMm(r.text, { charHeightMm: 8, letterSpacing: 1.21 })
+          r.x +
+            signRowWidthMm(r.text, {
+              charHeightMm: LETTER,
+              letterSpacing: 1.21,
+            })
         ).toBeLessThanOrEqual(240 - KEY_MARGIN_MM + 0.01);
-        expect(r.y).toBeGreaterThanOrEqual(KEY_MARGIN_MM);
-        expect(r.y).toBeLessThanOrEqual(180 - KEY_MARGIN_MM);
+        expect(r.baseline - LETTER).toBeGreaterThanOrEqual(
+          KEY_MARGIN_MM - 0.01
+        );
+        expect(r.baseline + descentMm(r.text)).toBeLessThanOrEqual(
+          180 - KEY_MARGIN_MM + 0.01
+        );
       }
-      for (const r of rowsOf(page.braille)) {
-        expect(r.x + [...r.text].length * 7).toBeLessThanOrEqual(
+      const channels = channelsOf(page);
+      expect(channels.length).toBe(page.tape.length);
+      for (const c of channels) {
+        expect(c.at[0] - c.length / 2).toBeGreaterThanOrEqual(
+          KEY_MARGIN_MM - 0.01
+        );
+        expect(c.at[0] + c.length / 2).toBeLessThanOrEqual(
           240 - KEY_MARGIN_MM + 0.01
         );
-        expect(r.y).toBeGreaterThanOrEqual(KEY_MARGIN_MM);
+        expect(c.at[1] - ACROSS / 2).toBeGreaterThanOrEqual(
+          KEY_MARGIN_MM - 0.01
+        );
+        expect(c.at[1] + ACROSS / 2).toBeLessThanOrEqual(
+          180 - KEY_MARGIN_MM + 0.01
+        );
       }
     }
   });
 
-  it('wraps a long name over lines and carries the rows onto a second key plate when the first is full', () => {
+  it('keeps every channel 9.525 mm from the raised words above and below it and from the sample beside it (ADA 703.3.2)', () => {
+    const pages = keyPlates(keyFor(plan()), { ...PLATE, title: 'Ferry Place' });
+    let checked = 0;
+    for (const page of pages) {
+      const words = wordsOf(page);
+      for (const c of channelsOf(page)) {
+        const top = c.at[1] - ACROSS / 2;
+        const bottom = c.at[1] + ACROSS / 2;
+        for (const r of words) {
+          const inkBottom = r.baseline + descentMm(r.text);
+          const inkTop = r.baseline - LETTER;
+          if (inkBottom <= top) {
+            expect(top - inkBottom).toBeGreaterThanOrEqual(
+              KEY_CLEARANCE_MM - 0.01
+            );
+          } else {
+            expect(inkTop - bottom).toBeGreaterThanOrEqual(
+              KEY_CLEARANCE_MM - 0.01
+            );
+          }
+          checked += 1;
+        }
+        for (const s of samplesOf(page)) {
+          const right =
+            s.kind === 'line'
+              ? Math.max(...s.points.map((p) => p[0]))
+              : s.kind === 'area'
+                ? Math.max(...s.ring.map((p) => p[0]))
+                : s.at[0] + s.size / 2;
+          expect(c.at[0] - c.length / 2 - right).toBeGreaterThanOrEqual(
+            KEY_CLEARANCE_MM - 0.01
+          );
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(5);
+  });
+
+  it('cuts each channel to its text’s cells, divides a long text over channels at a space, 3 mm apart, and lists the texts in order', () => {
+    const pages = keyPlates(keyFor(plan()), { ...PLATE, title: 'Ferry Place' });
+    const texts = pages.flatMap((p) => p.tape);
+    const channels = pages.flatMap((p) => channelsOf(p));
+    expect(channels.length).toBe(texts.length);
+    texts.forEach((text, i) => {
+      expect(channels[i].length).toBe(channelLengthMm(labelCells(text)));
+    });
+    const first = texts.findIndex((t) => CLINIC.startsWith(t));
+    expect(first).toBeGreaterThan(0);
+    const parts = [];
+    for (let i = first; i < texts.length; i += 1) {
+      parts.push(texts[i]);
+      if (parts.join(' ') === CLINIC) break;
+    }
+    expect(parts.join(' ')).toBe(CLINIC);
+    expect(parts.length).toBeGreaterThan(1);
+    for (let i = 1; i < parts.length; i += 1) {
+      const a = channels[first + i - 1];
+      const b = channels[first + i];
+      if (a.at[1] < b.at[1]) {
+        expect(b.at[1] - ACROSS / 2 - (a.at[1] + ACROSS / 2)).toBeCloseTo(3, 2);
+      }
+    }
+  });
+
+  it('wraps a long name over lines of words and carries the rows onto a second key plate when the first is full', () => {
     const small = keyPlates(keyFor(plan()), {
-      plateW: 160,
+      plateW: 240,
       plateH: 100,
       title: 'Ferry Place',
-      brailleOf: fakeBraille,
+      words: 'both',
     });
     expect(small.length).toBeGreaterThan(1);
-    expect(small.map((p) => p.id)).toEqual(
-      small.map((_, i) => `key-${i + 1}`)
-    );
-    const all = small.flatMap((p) => rowsOf(p.print).map((r) => r.text));
+    expect(small.map((p) => p.id)).toEqual(small.map((_, i) => `key-${i + 1}`));
+    const all = small.flatMap((p) => wordsOf(p).map((r) => r.text));
     expect(all.some((t) => t.startsWith('UW CLINIC'))).toBe(true);
     expect(all.some((t) => /MONTLAKE$/.test(t))).toBe(true);
   });
 
-  it('draws the samples on their own levels, You are here with its raised dot, and a 1 mm frame', () => {
+  it('draws the samples on their own levels, You are here with its raised dot, the channels in their group, and a 1 mm frame', () => {
     const [page] = keyPlates(keyFor(plan()), {
       ...PLATE,
       title: 'Ferry Place',
-      brailleOf: fakeBraille,
     });
     expect(page.svg).toMatch(/<g id="here"><path d="[^"]+"\/><\/g>/);
     expect(page.svg).toMatch(/<g id="level2"><path d="[^"]+"\/><\/g>/);
     expect(page.svg).toMatch(/<g id="level1"><path d="[^"]+"\/><\/g>/);
+    expect(page.svg).toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
     const frame = page.plan.features.find((f) => f.id === 'key-frame');
     expect([frame.class, frame.width]).toEqual(['curb', 1]);
   });
@@ -142,28 +317,46 @@ describe('keyPlates', () => {
       plateW: 200,
       plateH: 75,
       title: 'Ferry Place',
-      brailleOf: fakeBraille,
-      letterHeightMm: 16,
+      words: 'both',
     });
     for (const page of pages) {
-      for (const r of rowsOf(page.print)) {
-        expect(r.y).toBeGreaterThanOrEqual(KEY_MARGIN_MM - 0.06);
-        expect(r.y + 16).toBeLessThanOrEqual(75 - KEY_MARGIN_MM + 0.06);
+      for (const r of wordsOf(page)) {
+        expect(r.baseline - LETTER).toBeGreaterThanOrEqual(
+          KEY_MARGIN_MM - 0.06
+        );
+        expect(r.baseline + descentMm(r.text)).toBeLessThanOrEqual(
+          75 - KEY_MARGIN_MM + 0.06
+        );
       }
-      for (const r of rowsOf(page.braille)) {
-        expect(r.y - 3.3).toBeGreaterThanOrEqual(KEY_MARGIN_MM - 0.06);
-        expect(r.y + 3.3).toBeLessThanOrEqual(75 - KEY_MARGIN_MM + 0.06);
+      for (const c of channelsOf(page)) {
+        expect(c.at[1] - ACROSS / 2).toBeGreaterThanOrEqual(
+          KEY_MARGIN_MM - 0.06
+        );
+        expect(c.at[1] + ACROSS / 2).toBeLessThanOrEqual(
+          75 - KEY_MARGIN_MM + 0.06
+        );
       }
     }
   });
 
-  it('carries print only when there is no braille', () => {
-    const [page] = keyPlates(keyFor(plan()), {
+  it('cuts the channels for the tape the map uses', () => {
+    const [narrow] = keyPlates(keyFor(plan()), {
       ...PLATE,
       title: 'Ferry Place',
-      brailleOf: null,
+      settings: { tapeWidthMm: 9.5 },
     });
-    expect(page.braille).toBe('');
-    expect(rowsOf(page.print).length).toBeGreaterThan(3);
+    const [wide] = keyPlates(keyFor(plan()), {
+      ...PLATE,
+      title: 'Ferry Place',
+    });
+    const tall = (page) => {
+      const d = page.svg.match(/<g id="channels"><path d="([^"]+)"/)[1];
+      const ys = [...d.matchAll(/[ML] [\d.]+ ([\d.]+)/g)].map((m) =>
+        Number(m[1])
+      );
+      return Math.max(...ys) - Math.min(...ys);
+    };
+    expect(channelsOf(narrow).length).toBeGreaterThan(0);
+    expect(tall(wide)).toBeGreaterThan(tall(narrow));
   });
 });

@@ -31,8 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the README lists the labels to write.
 - A tactile map comes with its key: every symbol, line and area it draws,
   You are here first, with the 2-letter abbreviations of named places,
-  printed on key plates in raised capitals and braille and written into the
-  README.
+  printed on key plates in 16 mm raised capitals with a channel for each
+  entry's braille on label tape, and written into the README with the tape
+  texts.
 - A place map names what each point is, such as "Restaurant: Plaza Cafe"
   or "Bus stop 29405", starts named places on and leaves unnamed benches
   and bins to a street furniture class, and says several symbols crowded

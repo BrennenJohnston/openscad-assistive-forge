@@ -18,9 +18,7 @@
     "mapFileKindParam": "map_file_kind",
     "plateKindParam": "plate_kind",
     "keyPrintParam": "key_print",
-    "keyBrailleParam": "key_braille",
-    "keyLetterParam": "key_letter_height_mm",
-    "keyCellParam": "key_cell_spacing_mm"
+    "keyLetterParam": "key_letter_height_mm"
   },
   "tactile": [
     "base_thickness_mm",
@@ -33,13 +31,7 @@
     "label_channel_depth_mm",
     "map_width_mm",
     "map_height_mm",
-    "key_letter_height_mm",
-    "key_cell_spacing_mm",
-    "key_dot_spacing_mm",
-    "key_dot_base_diameter_mm",
-    "key_dot_base_height_mm",
-    "key_dot_dome_diameter_mm",
-    "key_dot_dome_height_mm"
+    "key_letter_height_mm"
   ],
   "tags": ["tactile", "map", "accessibility", "orientation", "mobility", "braille"],
   "inspired_by": {

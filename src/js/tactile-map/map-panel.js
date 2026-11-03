@@ -62,7 +62,7 @@ import {
 } from './plan-from-drawing.js';
 import { buildLevelRings, levelsSvgFromRings } from './levels-svg.js';
 import { keyFor, keySentence, keyText } from './map-key.js';
-import { keyPlates, keyTexts } from './key-layout.js';
+import { keyLabel, keyPlates, KEY_LETTER_MM, KEY_WORDS } from './key-layout.js';
 import { labelPlan } from './map-labels.js';
 import { svgToDataUrl } from '../svg-text-encoding.js';
 import {
@@ -111,11 +111,8 @@ let panel = null;
  * @param {Function|undefined} getController - Returns the AutoPreviewController, or null
  * @returns {(parameters: Object, options: {format: string, timeoutMs: number}) => Promise<ArrayBuffer|Uint8Array>}
  */
-/** The key's braille: the braille tools' default table, UEB uncontracted. */
-const KEY_BRAILLE_TABLE = 'en-ueb-g1.ctb';
 /** A key plate's id: 'key', or 'key-1' and on when the key takes several. */
 const isKeyId = (id) => /^key(-\d+)?$/.test(String(id));
-const keyLabel = (id) => (id === 'key' ? 'Key' : `Key ${id.slice(4)}`);
 
 function renderThroughEngine(getController) {
   return (parameters, { format, timeoutMs }) => {
@@ -208,7 +205,7 @@ function isLevelsFile(svg) {
  * Mount the panel for a tile whose manifest declares `tactileMap`.
  *
  * @param {{ mapFileParam: string, widthParam: string, heightParam: string, plateIdParam?: string }} config
- * @param {{ plan?: object, setFile?: Function, bedKey?: string, idStyle?: string, getAutoPreviewController?: Function, render?: Function, download?: Function, getEditor?: Function }} [options]
+ * @param {{ plan?: object, setFile?: Function, bedKey?: string, idStyle?: string, keyWords?: string, getAutoPreviewController?: Function, render?: Function, download?: Function, getEditor?: Function }} [options]
  *   `render(parameters, { format, timeoutMs })` and `download(bytes, name,
  *   format)` stand in for the engine and the file save in a test;
  *   `getEditor()` resolves to the drawing editor the door opens.
@@ -271,6 +268,9 @@ class MapPanel {
     this.idStyle = ID_STYLES.some((s) => s.key === options.idStyle)
       ? options.idStyle
       : ID_STYLES[0].key;
+    this.keyWords = KEY_WORDS.some((w) => w.key === options.keyWords)
+      ? options.keyWords
+      : KEY_WORDS[0].key;
     this.render =
       options.render || renderThroughEngine(options.getAutoPreviewController);
     this.download = options.download || downloadFile;
@@ -305,11 +305,7 @@ class MapPanel {
     this.cancelRequested = false;
     this.timer = null;
     this.layout = null;
-    // The key's plates and its braille by text (translated in the page).
     this.keyPages = [];
-    this.keyBraille = new Map();
-    this.keyBrailleBusy = false;
-    this.keyBrailleFailed = false;
     this.lastTape = null;
     this.lastCue = null;
     this.refs = {};
@@ -808,6 +804,27 @@ class MapPanel {
     });
     add('bed', styleSelect);
     this.refs.idStyle = styleSelect;
+
+    if (this.config.plateKindParam) {
+      const wordsLabel = el('label', 'braille-panel-label', 'Key words');
+      wordsLabel.htmlFor = 'tactileMapKeyWords';
+      add('bed', wordsLabel);
+      const wordsSelect = el('select', 'braille-panel-select');
+      wordsSelect.id = 'tactileMapKeyWords';
+      for (const choice of KEY_WORDS) {
+        const option = document.createElement('option');
+        option.value = choice.key;
+        option.textContent = choice.name;
+        wordsSelect.appendChild(option);
+      }
+      wordsSelect.value = this.keyWords;
+      wordsSelect.addEventListener('change', () => {
+        this.keyWords = wordsSelect.value;
+        this.schedule(0);
+      });
+      add('bed', wordsSelect);
+      this.refs.keyWords = wordsSelect;
+    }
 
     // The plan's warnings, folded: a draft of a whole block can carry fifty,
     // and the plates and the render button stand after them.
@@ -1605,6 +1622,7 @@ class MapPanel {
       about: this.mapAbout(),
       keyIds: this.keyPages.map((p) => p.id),
       keyText: this.keyPages.length ? keyText(this.labeled().key) : '',
+      keyTape: this.keyPages.map((p) => ({ id: p.id, texts: p.tape })),
     });
     const grid = plateGridSvg({
       rings,
@@ -1714,46 +1732,21 @@ class MapPanel {
   }
 
   /**
-   * The key's plates at the map's plate size; the braille they need is
-   * translated in the background and the plates follow when it arrives.
+   * The key's plates at the map's plate size, their channels cut for the
+   * tape the map's labels use.
    */
   buildKeyPages(layout) {
     if (!this.config.plateKindParam) return [];
-    const key = this.labeled().key;
-    const title = this.keyTitle();
-    if (!this.keyBrailleFailed) this.translateKey(keyTexts(key, title));
     const parameters = stateManager.getState().parameters || {};
-    return keyPlates(key, {
+    return keyPlates(this.labeled().key, {
       plateW: layout.plateW,
       plateH: layout.plateH,
-      title,
-      brailleOf: this.keyBrailleFailed
-        ? null
-        : (text) => this.keyBraille.get(text) || '',
-      letterHeightMm: Number(parameters[this.config.keyLetterParam]) || 8,
-      cellMm: Number(parameters[this.config.keyCellParam]) || 7,
+      title: this.keyTitle(),
+      words: this.keyWords,
+      letterHeightMm:
+        Number(parameters[this.config.keyLetterParam]) || KEY_LETTER_MM,
+      settings: { tapeWidthMm: this.tapeWidth() },
     });
-  }
-
-  /** Translate the key's texts not translated yet, then draw again. */
-  async translateKey(texts) {
-    const missing = texts.filter((t) => !this.keyBraille.has(t));
-    if (!missing.length || this.keyBrailleBusy) return;
-    this.keyBrailleBusy = true;
-    try {
-      const { translateText } = await import('../braille-translator.js');
-      for (const text of missing) {
-        const { braille } = await translateText(text, KEY_BRAILLE_TABLE);
-        this.keyBraille.set(text, braille);
-      }
-    } catch (err) {
-      // Said in the plates' summary: the key is print only.
-      this.keyBrailleFailed = true;
-      console.warn('[MapPanel] The key braille could not be made:', err);
-    } finally {
-      this.keyBrailleBusy = false;
-    }
-    this.schedule(0);
   }
 
   /** The parameters of a map plate: the tile in its Map mode. */
@@ -1763,7 +1756,6 @@ class MapPanel {
       ...parameters,
       [this.config.plateKindParam]: 'Map',
       [this.config.keyPrintParam]: '',
-      [this.config.keyBrailleParam]: '',
     };
   }
 
@@ -1783,7 +1775,6 @@ class MapPanel {
         },
         [this.config.plateKindParam]: 'Key',
         [this.config.keyPrintParam]: page.print,
-        [this.config.keyBrailleParam]: page.braille,
       };
       if (this.config.plateIdParam) next[this.config.plateIdParam] = '';
       if (this.config.plateShowsTitleParam)
@@ -1829,7 +1820,7 @@ class MapPanel {
     this.keyPages = this.layout ? this.buildKeyPages(layout) : [];
     const k = this.keyPages.length;
     if (k) {
-      sentence += ` The key takes ${k === 1 ? 'one plate' : `${k} plates`}${this.keyBrailleFailed ? ', print only: its braille could not be made' : ''}.`;
+      sentence += ` The key takes ${k === 1 ? 'one plate' : `${k} plates`}.`;
     }
     if (this.refs.summary.textContent !== sentence)
       this.refs.summary.textContent = sentence;
@@ -1890,7 +1881,6 @@ class MapPanel {
     if (this.config.plateKindParam) {
       setParameterValue(this.config.plateKindParam, keyPage ? 'Key' : 'Map');
       setParameterValue(this.config.keyPrintParam, keyPage?.print || '');
-      setParameterValue(this.config.keyBrailleParam, keyPage?.braille || '');
     }
     this.setFileKind('levels');
     if (!this.setFile(this.config.mapFileParam, fileName, svg)) {

@@ -10,6 +10,7 @@
 
 import { svgToDataUrl } from '../svg-text-encoding.js';
 import { ringsToPathData } from '../ring-geometry.js';
+import { keyLabel } from './key-layout.js';
 import { plateLevelsSvg } from './plate-tiling.js';
 import { ATTRIBUTION } from './overpass.js';
 import { TRANSIT_STRINGS } from './transit.js';
@@ -244,6 +245,8 @@ export function mapAbout(about = {}) {
  * @param {object} [input.about] - what the map is (`mapAbout`)
  * @param {string[]} [input.keyIds] - the key plates' ids
  * @param {string} [input.keyText] - the key as text (map-key.js `keyText`)
+ * @param {Array<{id: string, texts: string[]}>} [input.keyTape] - each key
+ *   plate's texts to write on label tape, top to bottom
  * @returns {string}
  */
 export function readmeText({
@@ -256,7 +259,9 @@ export function readmeText({
   about,
   keyIds = [],
   keyText = '',
+  keyTape = [],
 }) {
+  const tape = keyTape.filter((k) => k.texts.length);
   const n = layout.plates.length;
   const ids = layout.plates.map((plate) => plate.id).join(', ');
   const { lead, credits } = mapAbout(about);
@@ -275,7 +280,15 @@ export function readmeText({
       ? `The key prints on its own ${keyIds.length === 1 ? 'plate' : 'plates'}, ${keyIds.join(', ')}, to read before the map.\n`
       : '') +
     credits.map((line) => `${line}\n`).join('') +
-    (keyText ? `\n${keyText}` : '')
+    (keyText ? `\n${keyText}` : '') +
+    (tape.length ? '\n' : '') +
+    tape
+      .map(
+        (k) =>
+          `${keyLabel(k.id)} plate, label tape top to bottom:\n` +
+          k.texts.map((t) => `- ${t}\n`).join('')
+      )
+      .join('')
   );
 }
 
