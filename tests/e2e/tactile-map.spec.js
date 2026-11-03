@@ -690,7 +690,7 @@ test.describe('the draft map', () => {
     ).toEqual([]);
   });
 
-  test('the key at 3600 Ferry Pl NE: listed after the plates, its braille from the page, previewed in the tile Key mode', async ({
+  test('the key and the labels at 3600 Ferry Pl NE: channels beside the named places, the key listed after the plates, its braille from the page, previewed in the tile Key mode', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -753,6 +753,17 @@ test.describe('the draft map', () => {
     await expect(page.locator('#tactileMapSummary')).toContainText(
       'The key takes'
     );
+    // The named places get channels for their braille labels; the one with
+    // no room is said and keyed.
+    const levels = await page.evaluate(() => {
+      const d = window.stateManager.getState().parameters.map_file?.data || '';
+      const body = d.split(',')[1] || '';
+      return d.includes(';base64,') ? atob(body) : decodeURIComponent(body);
+    });
+    expect(levels).toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
+    await expect(page.locator('#tactileMapWarnings li')).toContainText([
+      "No room for Parking: South Campus Garage's label; it is in the key as sc.",
+    ]);
     // The braille comes from the page's own translator, UEB uncontracted:
     // read cell by cell for the cafe's row.
     await expect

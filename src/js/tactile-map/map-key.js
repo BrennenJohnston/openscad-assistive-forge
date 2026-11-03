@@ -227,13 +227,42 @@ export function keyLetters(name, taken) {
 }
 
 /**
+ * The named places on a plan that are on, in order of importance: by
+ * class (POINT_ORDER), then nearer the address first. The key's letters
+ * and the labels on the map are given in this order, so the most
+ * important places get the most suggestive keys and the first room.
+ *
+ * @param {object} plan
+ * @returns {object[]}
+ */
+export function namedPoints(plan) {
+  const center = [plan.size.w / 2, plan.size.h / 2];
+  const near = (f) => Math.hypot(f.at[0] - center[0], f.at[1] - center[1]);
+  const rank = (key) => {
+    const i = POINT_ORDER.indexOf(key);
+    return i < 0 ? POINT_ORDER.length : i;
+  };
+  return (plan.features || [])
+    .filter(
+      (f) =>
+        f.on !== false &&
+        f.kind === 'point' &&
+        f.class !== 'you-are-here' &&
+        f.name
+    )
+    .sort((a, b) => rank(a.class) - rank(b.class) || near(a) - near(b));
+}
+
+/**
  * The key of a plan: its entries and its abbreviations.
  *
  * @param {object} plan
  * @param {object} [settings] - the levels builder's (symbols, size)
+ * @param {{ needsKey?: Set<string> }} [options] - places keyed although
+ *   their names fit a label (a label with no room on the map)
  * @returns {{ entries: Array<object>, abbreviations: Array<{key: string, featureId: string, name: string}> }}
  */
-export function keyFor(plan, settings = {}) {
+export function keyFor(plan, settings = {}, { needsKey = new Set() } = {}) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
   const classes = s.classes || {};
   const symbols = symbolMap(s.symbols || activeLibrary());
@@ -316,26 +345,13 @@ export function keyFor(plan, settings = {}) {
     shape: `a raised area, ${LEVEL_WORDS[classes[c]?.level] || 'low'}`,
   }));
 
-  // Abbreviations: the named places on the map whose names do not fit a
-  // label, in order of importance (nearer the address first), keyed in
-  // that order so the most important get the most suggestive keys.
+  // Abbreviations: the named places whose names do not fit a label (or
+  // whose label found no room), in order of importance.
   const names = featureNames(all);
   const saidById = new Map(all.map((f, i) => [f.id, names[i]]));
-  const center = [plan.size.w / 2, plan.size.h / 2];
-  const near = (f) => Math.hypot(f.at[0] - center[0], f.at[1] - center[1]);
-  const named = on
-    .filter(
-      (f) =>
-        f.kind === 'point' &&
-        f.class !== 'you-are-here' &&
-        f.name &&
-        labelCells(f.name) > LABEL_CELLS
-    )
-    .sort(
-      (a, b) =>
-        rank(POINT_ORDER, a.class) - rank(POINT_ORDER, b.class) ||
-        near(a) - near(b)
-    );
+  const named = namedPoints(plan).filter(
+    (f) => labelCells(f.name) > LABEL_CELLS || needsKey.has(f.id)
+  );
   const taken = new Set();
   const abbreviations = [];
   for (const f of named) {
@@ -361,6 +377,10 @@ export function keyText(key) {
   if (key.abbreviations.length) {
     out.push('', 'Abbreviations on the map, alphabetically:');
     for (const a of key.abbreviations) out.push(`- ${a.key}: ${a.name}`);
+  }
+  if (key.labels?.length) {
+    out.push('', 'Labels to write on braille tape, each for its channel:');
+    for (const l of key.labels) out.push(`- ${l.text}: beside ${l.name}`);
   }
   return out.join('\n') + '\n';
 }

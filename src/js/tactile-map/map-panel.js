@@ -63,6 +63,7 @@ import {
 import { buildLevelRings, levelsSvgFromRings } from './levels-svg.js';
 import { keyFor, keySentence, keyText } from './map-key.js';
 import { keyPlates, keyTexts } from './key-layout.js';
+import { labelPlan } from './map-labels.js';
 import { svgToDataUrl } from '../svg-text-encoding.js';
 import {
   BED_PRESETS,
@@ -1260,7 +1261,7 @@ class MapPanel {
         : ADDRESS_STRINGS.draftReadyClean(counts.on, counts.total)) +
         (counts.leftOut ? ADDRESS_STRINGS.leftOut(counts.leftOut) : '') +
         this.bigNote(osm) +
-        ` ${keySentence(keyFor(this.plan))}`
+        ` ${keySentence(this.labeled().key)}`
     );
     await this.steepIfWanted();
     await this.openDraft();
@@ -1314,7 +1315,7 @@ class MapPanel {
       ) +
         (travel?.words ? ADDRESS_STRINGS.journeyNote(travel.words) : '') +
         this.bigNote(osm) +
-        ` ${keySentence(keyFor(this.plan))}`
+        ` ${keySentence(this.labeled().key)}`
     );
     await this.steepIfWanted();
     await this.openDraft();
@@ -1479,7 +1480,10 @@ class MapPanel {
     const format = state.outputFormat === '3mf' ? '3mf' : 'stl';
     const stem = projectStem(state.uploadedFile?.name || 'tactile_map');
     const parameters = state.parameters || {};
-    const built = buildLevelRings(this.plan, { tapeWidthMm: this.tapeWidth() });
+    const labeled = this.labeled();
+    const built = buildLevelRings(labeled.plan, {
+      tapeWidthMm: this.tapeWidth(),
+    });
     const sets = [
       ...plateParameterSets({
         rings: built.rings,
@@ -1594,7 +1598,7 @@ class MapPanel {
       tapeWidthMm: this.tapeWidth(),
       about: this.mapAbout(),
       keyIds: this.keyPages.map((p) => p.id),
-      keyText: this.keyPages.length ? keyText(keyFor(this.plan)) : '',
+      keyText: this.keyPages.length ? keyText(this.labeled().key) : '',
     });
     const grid = plateGridSvg({
       rings,
@@ -1681,6 +1685,18 @@ class MapPanel {
     }
   }
 
+  /**
+   * The plan as it prints: a draft's named places get channels for their
+   * braille labels (map-labels.js), with the key that goes with them; a
+   * map from your own drawing keeps the channels you drew.
+   */
+  labeled() {
+    if (this.source !== 'draft') {
+      return { plan: this.plan, key: keyFor(this.plan), warnings: [] };
+    }
+    return labelPlan(this.plan, { tapeWidthMm: this.tapeWidth() });
+  }
+
   /** The map's title for the key: the title control, else the plan's. */
   keyTitle() {
     const parameters = stateManager.getState().parameters || {};
@@ -1697,7 +1713,7 @@ class MapPanel {
    */
   buildKeyPages(layout) {
     if (!this.config.plateKindParam) return [];
-    const key = keyFor(this.plan);
+    const key = this.labeled().key;
     const title = this.keyTitle();
     if (!this.keyBrailleFailed) this.translateKey(keyTexts(key, title));
     const parameters = stateManager.getState().parameters || {};
@@ -1813,8 +1829,15 @@ class MapPanel {
       this.refs.summary.textContent = sentence;
     this.rebuildPlates();
 
-    const built = buildLevelRings(this.plan, { tapeWidthMm: this.tapeWidth() });
-    const allWarnings = [...this.planWarnings, ...built.warnings];
+    const labeled = this.labeled();
+    const built = buildLevelRings(labeled.plan, {
+      tapeWidthMm: this.tapeWidth(),
+    });
+    const allWarnings = [
+      ...this.planWarnings,
+      ...labeled.warnings,
+      ...built.warnings,
+    ];
     this.refs.warnings.replaceChildren(
       ...allWarnings.map((warning) => el('li', '', warning.text))
     );

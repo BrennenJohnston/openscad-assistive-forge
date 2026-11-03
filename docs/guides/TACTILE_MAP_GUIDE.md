@@ -169,6 +169,8 @@ The key's raised capitals are 8 mm tall by default, the **Key letter height** in
 
 A channel is a recess the width of your tape plus 0.4 mm and 0.3 mm deep, so a strip of braille label tape sits nearly flush with the surface. Set the tape width the model asks for, 9.5 or 12.7 mm, to the tape your labeler uses. The sample carries two channels; a plan places a channel by its center and length, horizontal or vertical. The builder warns when a channel comes within 3 mm of another feature.
 
+A place map or a route map lays in a channel beside each named place it shows: for the name itself when it fits a label of six cells, as "Pine" does, and for its 2-letter key when it is longer, as "pc" for Plaza Cafe, the full name in [the key](#the-key) (BANA 2022 8.5.10). A channel goes right, left, below or above the symbol, or at a corner, wherever it keeps 3 mm from every symbol, line, area, the title and the other channels (BANA 2022 8.5.3); the places nearest the address and most important come first. Its length is the label's cells at 6.2 mm each, a braille labeler's spacing, and 4 mm of tape at each end. A place with no room at all is in the key, and a warning says so: "No room for Parking: South Campus Garage's label; it is in the key as sc." The README in the zip lists the labels to write on tape and where each goes. The channels are not rows in the editor: they follow the places you keep on. A map from your own drawing keeps the channels you drew.
+
 ## The warnings
 
 Check and print lists the builder's warnings under one line that counts them ("3 warnings"), folded until you open it. Each names the feature so you can move it, resize it or switch it off:

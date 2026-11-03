@@ -177,7 +177,14 @@ test('a route map from the Husky Union Building to the Bill & Melinda Gates Cent
       expect(toLine(p, route)).toBeGreaterThanOrEqual(3 - 0.05);
     }
   }
-  await expect(page.locator('#tactileMapWarnings li')).toHaveCount(0);
+  // No symbol, line or channel crowds another. A place beside the route may
+  // find no room for its label: then it is keyed and said (the cafe here).
+  const warned = await page.locator('#tactileMapWarnings li').allTextContents();
+  for (const text of warned) {
+    expect(text).toMatch(
+      /^No room for .+'s label; it is in the key as [a-z]{2}\.$/
+    );
+  }
 
   // The model takes the fitted size and renders with no warning.
   // Escape leaves the editor, and focus goes back to the button that opened it.

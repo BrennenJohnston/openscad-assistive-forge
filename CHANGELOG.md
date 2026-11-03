@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gives a number, and the grade's help says what 5, 8 and 15 % feel like.
 - The Tactile Map Designer guide follows the three map types, and the
   README in a plate zip says what the map is and carries its data credits.
+- A place or route map lays a channel for a braille label beside each
+  named place, for its name or its 2-letter key, 3 mm clear of everything,
+  and the README lists the labels to write.
 - A tactile map comes with its key: every symbol, line and area it draws,
   You are here first, with the 2-letter abbreviations of named places,
   printed on key plates in raised capitals and braille and written into the
