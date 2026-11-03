@@ -276,6 +276,7 @@ function clipRing(ring, w, h) {
  *   transit-stop, crossing, stairs, shop, bench
  * @param {{w: number, h: number}} [args.size] - the map in mm
  * @param {{name?: string}|null} [args.place] - the place picked, for the title
+ * @param {number} [args.symbolSizeMm] - the symbol set's size, for the spacing
  * @returns {{ plan: object, counts: {walkways: number, crossings: number, buildings: number, landmarks: number, total: number, on: number} }}
  */
 export function draftPlan({
@@ -286,6 +287,7 @@ export function draftPlan({
   landmarks = [],
   size = { w: 480, h: 360 },
   place = null,
+  symbolSizeMm = DEFAULT_SETTINGS.symbolSizeMm,
 } = {}) {
   const w = size.w;
   const h = size.h;
@@ -582,7 +584,7 @@ export function draftPlan({
       f.on &&
       f.kind === 'line'
   );
-  const reach = DEFAULT_SETTINGS.symbolSizeMm + DEFAULT_SETTINGS.minGapMm;
+  const reach = symbolSizeMm + DEFAULT_SETTINGS.minGapMm;
   const placed = [
     middle,
     ...features

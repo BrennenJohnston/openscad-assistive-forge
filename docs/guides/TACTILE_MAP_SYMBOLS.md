@@ -79,7 +79,7 @@ Its line symbols are a plain line for a street (the Curb or edge class), two lin
 
 ## Loading a set of your own
 
-Choose **Load a symbol library** in the Tactile Map Designer panel and pick a JSON file. The file is a list, one entry per symbol:
+Under **Symbol set** in the Tactile Map Designer's step 3, choose **Your own set (a file)**, then **Load a symbol library** and pick a JSON file. The file is a list, one entry per symbol:
 
 ```json
 [

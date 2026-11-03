@@ -50,10 +50,20 @@ import {
   trimElement,
 } from '../../src/js/tactile-map/osm-geometry.js';
 import { setParameterValue } from '../../src/js/ui-generator.js';
-import { rowOrder } from '../../src/js/tactile-map/plan-drawing.js';
+import {
+  drawingFromPlan,
+  rowOrder,
+} from '../../src/js/tactile-map/plan-drawing.js';
+import { settingsForSet } from '../../src/js/tactile-map/levels-svg.js';
 import { announce, announceError } from '../../src/js/announcer.js';
 import { stateManager } from '../../src/js/state.js';
 import { sampleStationPlan } from '../../src/js/tactile-map/plan.js';
+import {
+  BUILT_IN_SYMBOLS,
+  activeLibrary,
+  activeSetKey,
+  setActiveSet,
+} from '../../src/js/tactile-map/symbol-library.js';
 import { analyzeSvg } from '../../src/js/svg-preparer.js';
 import { ringsFromPathData } from '../../src/js/ring-geometry.js';
 import { svgToDataUrl, dataUrlToText } from '../../src/js/svg-text-encoding.js';
@@ -1592,13 +1602,14 @@ describe('the map Make the map drafts', () => {
     }),
   };
 
-  async function pullData(elements = trimmed()) {
+  async function pullData(elements = trimmed(), options = {}) {
     opened = null;
     mount({
       type: 'place',
       searchPlaces: vi.fn(async () => [PLACE]),
       pullArea: vi.fn(async () => ({ elements, bytes: 5363, ms: 1 })),
       getEditor: async () => editor,
+      ...options,
     });
     const input = document.getElementById('tactileMapAddress');
     input.value = 'Central Library';
@@ -1661,6 +1672,109 @@ describe('the map Make the map drafts', () => {
     );
     expect(opened.options.designWidthMm).toBe(plan.size.w);
     expect(plan.meta.title).toBe('Central Library');
+  });
+
+  it('offers the symbol set in step 3, the basic shapes first: a set chosen is said once and redraws the levels with its shapes, and Your own set reveals the file door', async () => {
+    await pullData();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    const choice = document.getElementById('tactileMapSymbolSet');
+    expect(choice.parentElement).toBe(
+      document.getElementById('tactileMapDetail').parentElement
+    );
+    expect(choice.querySelector('legend').textContent).toBe('Symbol set');
+    const radios = [...choice.querySelectorAll('input[type="radio"]')];
+    expect(radios.map((r) => r.value)).toEqual([
+      'forge-basic',
+      'oregon-2012',
+      'file',
+    ]);
+    expect(
+      radios.map(
+        (r) => choice.querySelector(`label[for="${r.id}"]`).textContent
+      )
+    ).toEqual([
+      'Forge basic shapes',
+      'University of Oregon symbols',
+      'Your own set (a file)',
+    ]);
+    expect(radios[0].checked).toBe(true);
+    const door = document.getElementById('tactileMapSymbolDoor');
+    expect(door.hidden).toBe(true);
+    try {
+      const before = files[files.length - 1].svg;
+      announce.mockClear();
+      radios[1].click();
+      expect(activeSetKey()).toBe('oregon-2012');
+      await vi.waitFor(
+        () => expect(files[files.length - 1].svg).not.toBe(before),
+        SETTLE
+      );
+      expect(announce).toHaveBeenCalledTimes(1);
+      expect(announce).toHaveBeenCalledWith(
+        'Symbols: University of Oregon symbols.',
+        { source: 'tactile-map' }
+      );
+      expect(
+        document.getElementById('tactileMapAddressStatus').textContent
+      ).toBe('Symbols: University of Oregon symbols.');
+      radios[2].click();
+      expect(door.hidden).toBe(false);
+      expect(
+        door.contains(document.getElementById('tactileMapSymbolFile'))
+      ).toBe(true);
+      expect(activeSetKey()).toBe('forge-basic');
+      // No file yet: the map goes back to the basic shapes, nothing said.
+      await vi.waitFor(
+        () => expect(files[files.length - 1].svg).toBe(before),
+        SETTLE
+      );
+      expect(announce).toHaveBeenCalledTimes(1);
+      radios[0].click();
+      expect(door.hidden).toBe(true);
+    } finally {
+      setActiveSet('forge-basic');
+    }
+  });
+
+  it('draws the set at its own size: step 2 says 13 mm, the editor draws 13 mm, the README names the set, and closing the panel puts the basic shapes back', async () => {
+    await pullData(undefined, {
+      config: {
+        plateKindParam: 'plate_kind',
+        keyPrintParam: 'key_print',
+        keyLetterParam: 'key_letter_height_mm',
+      },
+    });
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    const block = document.getElementById('tactileMapScale-block');
+    const said = () =>
+      document.getElementById(block.getAttribute('aria-describedby'))
+        .textContent;
+    expect(said()).toContain('A 10 mm symbol stands for 10 m.');
+    try {
+      document.getElementById('tactileMapSymbolSet-oregon-2012').click();
+      expect(said()).toContain('A 13 mm symbol stands for 13 m.');
+      opened = null;
+      make().click();
+      await vi.waitFor(() => expect(opened).not.toBeNull());
+      const plan = getMapPlan();
+      const order = rowOrder(plan.features);
+      expect(opened.svg).toBe(
+        drawingFromPlan(plan, settingsForSet('oregon-2012'), { order })
+      );
+      document.getElementById('tactileMapRenderAll').click();
+      const { readme } = await readZip();
+      expect(readme).toContain(
+        '\nKey\nSymbols: University of Oregon symbols.\n'
+      );
+      expect(readme).toContain(
+        'Symbols: Lobben and Lawrence 2012, University of Oregon, GPL-3'
+      );
+      destroyMapPanel();
+      expect(activeSetKey()).toBe('forge-basic');
+      expect(activeLibrary()).toBe(BUILT_IN_SYMBOLS);
+    } finally {
+      setActiveSet('forge-basic');
+    }
   });
 
   it("drafts at step 3's tier: the live line says what is on once the data is here, a new tier is said once and the next draft takes it", async () => {

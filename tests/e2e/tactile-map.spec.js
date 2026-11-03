@@ -166,7 +166,9 @@ test.describe('Tactile Map tile', () => {
     );
     for (const id of keyIds) expect(names).toContain(`levels_${id}.svg`);
     const readme = await zip.file('README.txt').async('string');
-    expect(readme).toMatch(/\nKey\n\nSymbols, You are here first:\n/);
+    expect(readme).toMatch(
+      /\nKey\nSymbols: Forge basic shapes\.\n\nSymbols, You are here first:\n/
+    );
     expect(names).toContain('map_plan.json');
     expect(names).toContain('README.txt');
     expect(names).toContain('levels_A1.svg');

@@ -21,7 +21,10 @@ import {
   ROUTE_GAP_MM,
 } from '../../src/js/tactile-map/plan-from-route.js';
 import { trimElement } from '../../src/js/tactile-map/osm-geometry.js';
-import { buildLevelRings } from '../../src/js/tactile-map/levels-svg.js';
+import {
+  buildLevelRings,
+  settingsForSet,
+} from '../../src/js/tactile-map/levels-svg.js';
 
 const FIXTURE = JSON.parse(
   readFileSync('tests/fixtures/tactile-map/uw-hub-gates.json', 'utf8')
@@ -212,6 +215,18 @@ describe('a route map draft', () => {
       }
     }
     expect(inside).toBe(true);
+  });
+
+  it("keeps a set's larger symbols clear of each other too: at 13 mm nothing that is on stands too close", () => {
+    const { plan } = draftRoutePlan({
+      elements: ELEMENTS,
+      from: HUB,
+      to: GATES,
+      size: SIZE,
+      symbolSizeMm: 13,
+    });
+    const { warnings } = buildLevelRings(plan, settingsForSet('oregon-2012'));
+    expect(warnings.filter((w) => w.code === 'too-close')).toEqual([]);
   });
 
   it('with the bus stops ticked, keeps one stop of each pair facing across a street, beside the route and 3 mm clear of it, with no warning', () => {

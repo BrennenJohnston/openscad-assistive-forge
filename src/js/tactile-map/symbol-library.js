@@ -386,6 +386,13 @@ export function activeSetKey() {
   return setKey;
 }
 
+/** The set in use, by key and name: a loaded file's, or the built-in set's. */
+export function activeSet() {
+  if (loaded) return { key: 'file', name: 'Your own set' };
+  const set = BUILT_IN_SETS.find((s) => s.key === setKey);
+  return { key: set.key, name: set.name };
+}
+
 /**
  * Put a built-in set in use by its key; an unknown key changes nothing.
  *

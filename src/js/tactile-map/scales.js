@@ -144,11 +144,17 @@ export function sidewalksAsOneLine(ratio, streetWidthM) {
  * @param {object} choice - an entry of SCALES
  * @param {{ w: number, h: number }} plate - the map's size in millimeters
  * @param {number} [ratio] - Custom's typed ratio
+ * @param {number} [symbolMm] - the size of the symbol set in use
  */
-export function sentenceFor(choice, plate, ratio = choice.ratio) {
+export function sentenceFor(
+  choice,
+  plate,
+  ratio = choice.ratio,
+  symbolMm = DEFAULT_SETTINGS.symbolSizeMm
+) {
   if (!ratio) return ROUTE_SENTENCE;
   const rules = choice.rules || nearestRule(ratio);
   const ground = Math.round(groundAcrossM(ratio, plate.w));
-  const symbol = Math.round(symbolMeters(ratio) * 10) / 10;
-  return `${ground} m across on this plate. A ${DEFAULT_SETTINGS.symbolSizeMm} mm symbol stands for ${symbol} m. ${rules.drawn}`;
+  const symbol = Math.round(symbolMeters(ratio, symbolMm) * 10) / 10;
+  return `${ground} m across on this plate. A ${symbolMm} mm symbol stands for ${symbol} m. ${rules.drawn}`;
 }

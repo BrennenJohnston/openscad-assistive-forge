@@ -48,7 +48,9 @@ test.describe('the map workflows by keyboard', () => {
     await axeClean(page, 'place step 1');
 
     await searchByKeyboard(page, '#tactileMapAddress', '3800 E Stevens Way NE');
-    const first = page.locator('#tactileMapResults input[type="radio"]').first();
+    const first = page
+      .locator('#tactileMapResults input[type="radio"]')
+      .first();
     await expect(first).toBeFocused({ timeout: 15000 });
     await page.keyboard.press('Space');
     await expect(first).toBeChecked();
@@ -57,6 +59,15 @@ test.describe('the map workflows by keyboard', () => {
     await axeClean(page, 'place step 2');
     await nextStep(page, 3, 'What to show');
     await axeClean(page, 'place step 3');
+    // The symbol set, by keyboard: the next set, said once.
+    await tabTo(page, '#tactileMapSymbolSet-forge-basic');
+    await page.keyboard.press('ArrowDown');
+    await expect(
+      page.locator('#tactileMapSymbolSet-oregon-2012')
+    ).toBeChecked();
+    await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
+      'Symbols: University of Oregon symbols.'
+    );
     await nextStep(page, 4, 'Make the map');
     await axeClean(page, 'place step 4');
 
@@ -74,6 +85,14 @@ test.describe('the map workflows by keyboard', () => {
 
     await nextStep(page, 5, 'Check and print');
     await axeClean(page, 'place step 5');
+    // The key follows the set.
+    expect(
+      await page.evaluate(
+        () =>
+          document.getElementById('tactileMapPanel').__forgeMapPanel.labeled()
+            .key.set.name
+      )
+    ).toBe('University of Oregon symbols');
   });
 
   test('a route map from the chooser to the editor by keyboard, both places picked first', async ({

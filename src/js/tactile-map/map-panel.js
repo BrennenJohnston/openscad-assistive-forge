@@ -60,7 +60,11 @@ import {
   scaleFromWidth,
   scaleSentence,
 } from './plan-from-drawing.js';
-import { buildLevelRings, levelsSvgFromRings } from './levels-svg.js';
+import {
+  buildLevelRings,
+  levelsSvgFromRings,
+  settingsForSet,
+} from './levels-svg.js';
 import { keyFor, keySentence, keyText } from './map-key.js';
 import { keyLabel, keyPlates, KEY_LETTER_MM, KEY_WORDS } from './key-layout.js';
 import { labelPlan } from './map-labels.js';
@@ -74,8 +78,10 @@ import {
 } from './plate-tiling.js';
 import {
   BUILT_IN_SETS,
+  activeSet,
   activeSetKey,
   loadSymbolLibraryFile,
+  setActiveSet,
   setLibrary,
 } from './symbol-library.js';
 import {
@@ -356,6 +362,7 @@ class MapPanel {
         this.detailChanged(detail).catch((err) => {
           this.sayAddress(err?.message || String(err), true);
         }),
+      onSymbolSet: (key) => this.symbolSetChanged(key),
       onDraft: () =>
         this.makeDraft().catch((err) => {
           this.sayAddress(err?.message || String(err), true);
@@ -902,6 +909,8 @@ class MapPanel {
     add('door', drawingStatus);
     this.refs.drawingStatus = drawingStatus;
 
+    // Your own set: the file door under step 3's Symbol set choice. A file
+    // loaded stays yours to come back to; a built-in set puts it aside.
     const symbols = el('div', 'braille-translate-row tactile-map-symbols');
     const load = el(
       'button',
@@ -909,12 +918,6 @@ class MapPanel {
       'Load a symbol library'
     );
     load.type = 'button';
-    const reset = el(
-      'button',
-      'btn btn-secondary braille-translate-btn',
-      'Use the built-in symbols'
-    );
-    reset.type = 'button';
     const file = document.createElement('input');
     file.type = 'file';
     file.accept = '.json,application/json';
@@ -931,8 +934,10 @@ class MapPanel {
       if (!chosen) return;
       loadSymbolLibraryFile(chosen)
         .then(({ symbols: set, warnings: notes }) => {
+          this.ownSymbols = set;
+          setActiveSet(BUILT_IN_SETS[0].key);
           setLibrary(set);
-          const sentence = `Loaded ${set.length} symbols from ${chosen.name}. They replace the built-in set until you clear them.`;
+          const sentence = `Loaded ${set.length} symbols from ${chosen.name}. They draw the map until you choose a set above.`;
           status.textContent = [sentence, ...notes].join(' ');
           announce(status.textContent, { source: SOURCE });
           this.schedule(0);
@@ -945,15 +950,9 @@ class MapPanel {
           file.value = '';
         });
     });
-    reset.addEventListener('click', () => {
-      setLibrary(null);
-      status.textContent = 'Using the built-in symbols.';
-      announce(status.textContent, { source: SOURCE });
-      this.schedule(0);
-    });
     symbols.appendChild(load);
-    symbols.appendChild(reset);
     symbols.appendChild(file);
+    this.refs.symbolStatus = status;
     add('symbols', symbols);
     add('symbols', status);
 
@@ -1035,13 +1034,18 @@ class MapPanel {
     });
     const a = this.address?.parts || {};
     const p = this.parts;
+    // Your own set's file door lives under step 3's Symbol set choice.
+    const symbolDoor = this.address?.refs?.symbolDoor;
+    if (symbolDoor) {
+      for (const node of p.symbols || []) symbolDoor.appendChild(node);
+    }
     const note = (text) => [el('p', 'braille-panel-help', text)];
     const fill = (section, groups) => {
       for (const group of groups) {
         for (const node of group || []) section.appendChild(node);
       }
     };
-    const plates = [p.intro, p.bed, p.warnings, p.door, p.symbols, p.render];
+    const plates = [p.intro, p.bed, p.warnings, p.door, p.render];
     const [s1, s2, s3, s4, s5] = this.steps.sections;
     this.fileSlot = null;
     if (type.key === 'place') {
@@ -1060,7 +1064,7 @@ class MapPanel {
       this.fileSlot = el('div', 'tactile-map-file-slot');
       fill(s1, [note(WORKFLOW_STRINGS.drawingChoose), [this.fileSlot]]);
       fill(s2, [p.width]);
-      fill(s3, [p.door, p.symbols]);
+      fill(s3, [p.door, a.symbolSet]);
       fill(s4, [note(WORKFLOW_STRINGS.drawingApply)]);
       fill(s5, [p.intro, p.bed, p.warnings, p.render]);
     }
@@ -1269,6 +1273,7 @@ class MapPanel {
   async placeDraft(osm, detail) {
     const { draftPlan, NEAR_M } = await import('./plan-from-osm.js');
     const { plan, counts } = draftPlan({
+      symbolSizeMm: this.levelSettings().symbolSizeMm,
       elements: osm.elements,
       center: osm.center,
       radiusM: osm.radiusM,
@@ -1306,6 +1311,7 @@ class MapPanel {
     const travel = osm.travel;
     const stop = travel?.stopName ? { name: travel.stopName } : null;
     const { plan, counts } = draftRoutePlan({
+      symbolSizeMm: this.levelSettings().symbolSizeMm,
       elements: osm.elements,
       from: osm.place,
       to: osm.to,
@@ -1393,8 +1399,7 @@ class MapPanel {
     const labeled = this.labeled();
     const warnings = [
       ...labeled.warnings,
-      ...buildLevelRings(labeled.plan, { tapeWidthMm: this.tapeWidth() })
-        .warnings,
+      ...buildLevelRings(labeled.plan, this.levelSettings()).warnings,
     ];
     this.draft = { counts, warnings: warnings.length };
     this.planWarnings = [];
@@ -1437,7 +1442,7 @@ class MapPanel {
       this.sayAddress(judged.refusal, true);
       return;
     }
-    const { warnings } = buildLevelRings(plan);
+    const { warnings } = buildLevelRings(plan, this.levelSettings());
     this.plan = plan;
     this.draft = { counts, warnings: warnings.length };
     this.source = 'draft';
@@ -1485,7 +1490,7 @@ class MapPanel {
     const opened = this.plan;
     const order = rowOrder(opened.features);
     const rows = order.map((i) => opened.features[i]);
-    const svg = drawingFromPlan(opened, {}, { order });
+    const svg = drawingFromPlan(opened, this.levelSettings(), { order });
     const initialClasses = Object.fromEntries(
       rows.map((f, i) => [i, f.on ? f.class : 'ignore'])
     );
@@ -1626,7 +1631,7 @@ class MapPanel {
     const parameters = state.parameters || {};
     const labeled = this.labeled();
     const built = buildLevelRings(labeled.plan, {
-      tapeWidthMm: this.tapeWidth(),
+      ...this.levelSettings(),
     });
     const sets = [
       ...plateParameterSets({
@@ -1847,9 +1852,44 @@ class MapPanel {
    */
   labeled() {
     if (this.source !== 'draft') {
-      return { plan: this.plan, key: keyFor(this.plan), warnings: [] };
+      return {
+        plan: this.plan,
+        key: keyFor(this.plan, this.levelSettings()),
+        warnings: [],
+      };
     }
-    return labelPlan(this.plan, { tapeWidthMm: this.tapeWidth() });
+    return labelPlan(this.plan, this.levelSettings());
+  }
+
+  /**
+   * The levels builder's settings: the tape the labels take and the symbol
+   * set in use (its shapes, its size, its line styles).
+   */
+  levelSettings() {
+    return {
+      tapeWidthMm: this.tapeWidth(),
+      ...settingsForSet(activeSetKey()),
+    };
+  }
+
+  /**
+   * Step 3's symbol set changed: a built-in set is put in use and said
+   * once; Your own set shows the file door and brings a loaded file back.
+   */
+  symbolSetChanged(key) {
+    const own = key === 'file';
+    setActiveSet(own ? BUILT_IN_SETS[0].key : key);
+    setLibrary(own ? this.ownSymbols || null : null);
+    if (!own && this.refs.symbolStatus) {
+      this.refs.symbolStatus.textContent = '';
+    }
+    this.schedule(0);
+    this.countDetail().catch((err) => {
+      this.sayAddress(err?.message || String(err), true);
+    });
+    // Your own set with no file yet: the door's own button speaks next.
+    if (own && !this.ownSymbols) return;
+    this.sayAddress(ADDRESS_STRINGS.symbolsSet(activeSet().name));
   }
 
   /** The map's title for the key: the title control, else the plan's. */
@@ -1876,7 +1916,7 @@ class MapPanel {
       words: this.keyWords,
       letterHeightMm:
         Number(parameters[this.config.keyLetterParam]) || KEY_LETTER_MM,
-      settings: { tapeWidthMm: this.tapeWidth() },
+      settings: this.levelSettings(),
     });
   }
 
@@ -1959,7 +1999,7 @@ class MapPanel {
 
     const labeled = this.labeled();
     const built = buildLevelRings(labeled.plan, {
-      tapeWidthMm: this.tapeWidth(),
+      ...this.levelSettings(),
     });
     const allWarnings = [
       ...this.planWarnings,
@@ -2039,6 +2079,9 @@ class MapPanel {
 
   destroy() {
     clearTimeout(this.timer);
+    // The next panel starts on its first set, as its radios say.
+    setLibrary(null);
+    setActiveSet(BUILT_IN_SETS[0].key);
     this.altObserver?.disconnect();
     this.altObserver = null;
     this.customizerObserver?.disconnect();

@@ -7,7 +7,7 @@
  *
  * @license GPL-3.0-or-later
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   keyFor,
   keyText,
@@ -17,6 +17,8 @@ import {
   LABEL_CELLS,
 } from '../../src/js/tactile-map/map-key.js';
 import { emptyPlan } from '../../src/js/tactile-map/plan.js';
+import { setActiveSet } from '../../src/js/tactile-map/symbol-library.js';
+import { settingsForSet } from '../../src/js/tactile-map/levels-svg.js';
 
 const point = (id, cls, at, extra = {}) => ({
   id,
@@ -198,10 +200,39 @@ describe('the key as words', () => {
     const key = keyFor(fixture());
     const text = keyText(key);
     expect(text).toMatch(/^Key\n/);
-    expect(text).toContain('You are here: a disc 10 mm across with a center dot one step higher');
+    expect(text).toContain(
+      'You are here: a disc 10 mm across with a center dot one step higher'
+    );
     expect(text).toContain('pc: Restaurant: Plaza Cafe');
     expect(text).toContain('Walkway: a solid line 1.5 mm wide, low');
     expect(text).toContain('Area: a raised area, low');
     expect(keySentence(key)).toBe('The key has 9 symbols and 3 abbreviations.');
+  });
+});
+
+describe('the key with a published set in use', () => {
+  afterEach(() => setActiveSet('forge-basic'));
+
+  it("names the set's shapes by their own names at the set's size, and names the set", () => {
+    expect(keyFor(fixture()).set).toEqual({
+      key: 'forge-basic',
+      name: 'Forge basic shapes',
+    });
+    expect(keyText(keyFor(fixture()))).toMatch(
+      /^Key\nSymbols: Forge basic shapes\.\n\n/
+    );
+    setActiveSet('oregon-2012');
+    const key = keyFor(fixture(), settingsForSet('oregon-2012'));
+    const entrance = key.entries.find((e) =>
+      (e.classes || []).includes('entrance')
+    );
+    expect(entrance.shape).toBe('Entrance, 13 mm');
+    expect(key.set).toEqual({
+      key: 'oregon-2012',
+      name: 'University of Oregon symbols',
+    });
+    expect(keyText(key)).toMatch(
+      /^Key\nSymbols: University of Oregon symbols\.\n\n/
+    );
   });
 });
