@@ -640,7 +640,7 @@ describe("a draft's class switches", () => {
     });
   }
 
-  it('offers one switch per class the draft has, in the class table order, each saying its count and whether it is on', () => {
+  it('offers one switch per class the draft has, in the class table order, each saying its count, pressed only when every shape is on', () => {
     openDraft();
     const fieldset = surface.querySelector('.drawing-editor-map-switches');
     expect(fieldset.tagName).toBe('FIELDSET');
@@ -650,7 +650,7 @@ describe("a draft's class switches", () => {
     expect(
       switches().map((b) => [b.textContent, b.getAttribute('aria-pressed')])
     ).toEqual([
-      [S.mapGroupSwitch('Area', 2), 'mixed'],
+      [S.mapGroupSwitch('Area', 2), 'false'],
       [S.mapGroupSwitch('Landmark', 1), 'false'],
     ]);
     expect(S.mapGroupSwitch('Area', 2)).toBe('Area (2)');
@@ -668,7 +668,9 @@ describe("a draft's class switches", () => {
     expect(S.groupSet('Area', 1, true)).toBe('Area: 1 shape on.');
     undoButton().click();
     expect([selectOf(0).value, selectOf(1).value]).toEqual(['area', 'ignore']);
-    expect(switchFor('Area').getAttribute('aria-pressed')).toBe('mixed');
+    // Two states only: NVDA reads a mixed toggle as "not pressed, half
+    // checked" and leaving it as "pressed, not checked".
+    expect(switchFor('Area').getAttribute('aria-pressed')).toBe('false');
     expect(status()).toBe(S.groupReverted('Area', 1));
     // Pressed when every shape is on, it turns them all off.
     switchFor('Area').click();

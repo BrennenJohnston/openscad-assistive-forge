@@ -691,7 +691,7 @@ test.describe('the draft map', () => {
     const areaSwitch = page.locator(
       '#drawingEditorSurface .drawing-editor-map-switch[data-map-class="area"]'
     );
-    await expect(areaSwitch).toHaveAttribute('aria-pressed', /false|mixed/);
+    await expect(areaSwitch).toHaveAttribute('aria-pressed', 'false');
     const areas = Number(
       (await areaSwitch.textContent()).match(/\((\d+)\)/)[1]
     );

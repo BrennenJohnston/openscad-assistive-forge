@@ -2162,7 +2162,10 @@ export function createDrawingEditor({
     filterMapRows();
   }
 
-  /** Each switch's count and state: pressed when every shape is on. */
+  /**
+   * Each switch's count and state: pressed when every shape is on. Two
+   * states only: NVDA reads a mixed toggle as "not pressed, half checked".
+   */
   function syncMapSwitches() {
     if (mapGroups.hidden) return;
     const originals = originalIndices();
@@ -2173,7 +2176,7 @@ export function createDrawingEditor({
       button.textContent = S.mapGroupSwitch(className(key), shapes.length);
       button.setAttribute(
         'aria-pressed',
-        on === 0 ? 'false' : on === shapes.length ? 'true' : 'mixed'
+        String(shapes.length > 0 && on === shapes.length)
       );
       button.hidden = shapes.length === 0;
     });

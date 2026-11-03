@@ -18178,7 +18178,7 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
    buttons wear, not the app's translucent select halo. */
 /* A draft's class switches above the list: wrapping, each at the touch
    floor; pressed as the editor's tools are, a ring inside the accent edge,
-   and some on drawn with a dashed edge, so a state is never colour alone. */
+   so the state is never colour alone. */
 .drawing-editor-map-groups {
   display: flex;
   flex-direction: column;
@@ -18212,10 +18212,6 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   background: var(--color-hover-bg);
   border-color: var(--color-accent);
   box-shadow: inset 0 0 0 1px var(--color-accent);
-}
-
-.drawing-editor-map-switch[aria-pressed='mixed'] {
-  border-style: dashed;
 }
 
 .drawing-editor-map-show {
