@@ -2802,7 +2802,7 @@ test.describe('a map from your drawing, step by step', () => {
     await next.click();
     await expect(heading).toHaveText('Step 5 of 5: Check and print');
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      'One plate of 152 x 102 mm; the whole map fits.',
+      /^One plate of 152 x 102 mm; the whole map fits\. The key takes (one plate|\d+ plates)\.$/,
       { timeout: 10000 }
     );
     await expect(page.locator('#param-map_width_mm-spinbox')).toHaveValue(
