@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   saying how much ground fits on the plate and what draws at it.
 - A route map can be a trip by bus and train, planned by Transitous, the
   open journey planner, as well as a walk.
+- A place or route map chooses how much it shows as a level, from the way
+  alone to everything in the data, with a choice for each group of
+  features, and keeps to a number of symbols a reader can learn. The editor
+  turns a whole class on or off in one press and can list only what is on.
 - A place map near a building shows curb ramps and raised curbs, a traffic
   island as part of its crossing, and a crossing with no paint dashed, all
   read from the map data.

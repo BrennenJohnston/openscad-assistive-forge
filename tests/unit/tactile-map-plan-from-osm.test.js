@@ -296,10 +296,14 @@ describe('draftPlan', () => {
     close(edge.points[0][1], Y(-100));
   });
 
-  it('keeps shops and benches only when ticked, a named amenity as an on landmark with its kind, and nothing for the rest', () => {
+  it('enters every shop and bench, off unless ticked, a named amenity as an on landmark with its kind, and nothing it cannot read', () => {
     const { plan } = DRAFT();
-    expect(byId(plan, 'osm-node-8')).toBeUndefined();
-    expect(byId(plan, 'osm-node-13')).toBeUndefined();
+    // In the data and off, so a detail level can turn the group on.
+    expect(byId(plan, 'osm-node-8').on).toBe(false);
+    expect([
+      byId(plan, 'osm-node-13').class,
+      byId(plan, 'osm-node-13').on,
+    ]).toEqual(['furniture', false]);
     const cafe = byId(plan, 'osm-node-14');
     expect([cafe.class, cafe.kind, cafe.on, cafe.name, cafe.what]).toEqual([
       'landmark',
@@ -308,7 +312,10 @@ describe('draftPlan', () => {
       'Bean',
       'Cafe',
     ]);
-    expect(byId(plan, 'osm-node-15')).toBeUndefined();
+    expect([
+      byId(plan, 'osm-node-15').what,
+      byId(plan, 'osm-node-15').on,
+    ]).toEqual(['Bike parking', false]);
     expect(byId(plan, 'osm-way-18')).toBeUndefined();
     expect(byId(plan, 'osm-node-20')).toBeUndefined();
     const { plan: ticked } = draftPlan({
@@ -355,8 +362,13 @@ describe('draftPlan', () => {
       false,
       'Vending machine',
     ]);
-    expect(byId(plain, 'osm-node-31')).toBeUndefined();
-    expect(byId(plain, 'osm-node-33')).toBeUndefined();
+    expect(byId(plain, 'osm-node-31').on).toBe(false);
+    const toilets = byId(plain, 'osm-node-33');
+    expect([toilets.class, toilets.on, toilets.what]).toEqual([
+      'landmark',
+      false,
+      'Toilets',
+    ]);
     const shops = draft(['shop']);
     expect(byId(shops, 'osm-node-31').on).toBe(false);
     expect(byId(shops, 'osm-node-32').on).toBe(true);
@@ -427,11 +439,9 @@ describe('draftPlan', () => {
         size: { w: 480, h: 360 },
       }).plan;
     const on = (plan, id) => plan.features.find((f) => f.id === id)?.on;
-    expect(['50', '51', '52'].map((id) => on(at('blocks'), `osm-node-${id}`))).toEqual([
-      true,
-      false,
-      false,
-    ]);
+    expect(
+      ['50', '51', '52'].map((id) => on(at('blocks'), `osm-node-${id}`))
+    ).toEqual([true, false, false]);
     expect(
       ['50', '51', '52'].map((id) => on(at('neighborhood'), `osm-node-${id}`))
     ).toEqual([true, false, false]);
@@ -459,8 +469,8 @@ describe('draftPlan', () => {
       walkways: 5,
       crossings: 2,
       buildings: 1,
-      landmarks: 4,
-      total: 19,
+      landmarks: 7,
+      total: 22,
       on: 8,
       leftOut: 0,
     });
@@ -928,8 +938,8 @@ describe('the place map at 3600 Ferry Pl NE, read from the real tiles', () => {
       true,
       'Restaurant: Plaza Cafe',
     ]);
-    expect(plan.filter((f) => f.what === 'Bench')).toEqual([]);
-    const landmarks = plan.filter((f) => f.class === 'landmark');
+    expect(plan.filter((f) => f.what === 'Bench' && f.on)).toEqual([]);
+    const landmarks = plan.filter((f) => f.class === 'landmark' && f.on);
     expect(landmarks.length).toBeGreaterThan(0);
     for (const f of landmarks) {
       expect(f.name).toBeTruthy();
@@ -952,7 +962,8 @@ describe('the place map at 3600 Ferry Pl NE, read from the real tiles', () => {
     ]);
     const benches = plan.features.filter((f) => f.what === 'Bench');
     expect(benches.length).toBeGreaterThan(0);
-    for (const f of benches) expect([f.class, f.on]).toEqual(['furniture', true]);
+    for (const f of benches)
+      expect([f.class, f.on]).toEqual(['furniture', true]);
     const { warnings } = buildLevelRings(plan);
     const close = warnings.filter((w) => w.code === 'too-close');
     const ids = new Set(benches.map((f) => f.id));

@@ -76,8 +76,10 @@ import { loadSymbolLibraryFile, setLibrary } from './symbol-library.js';
 import {
   ADDRESS_STRINGS,
   BIG_BYTES,
+  DETAIL_START,
   createAddressSection,
 } from './address-section.js';
+import { applyDetail, judgeSymbols, switchesFor } from './detail-levels.js';
 import {
   archiveEntries,
   levelHeights,
@@ -341,7 +343,14 @@ class MapPanel {
       onData: (osm) => {
         this.osm = osm;
         if (osm) this.wait();
+        this.countDetail().catch((err) => {
+          this.sayAddress(err?.message || String(err), true);
+        });
       },
+      onDetail: (detail) =>
+        this.detailChanged(detail).catch((err) => {
+          this.sayAddress(err?.message || String(err), true);
+        }),
       onDraft: () =>
         this.makeDraft().catch((err) => {
           this.sayAddress(err?.message || String(err), true);
@@ -1231,13 +1240,28 @@ class MapPanel {
    * it so the person chooses what stays. Nothing near the address is a
    * sentence and no change.
    */
-  async makeDraft() {
-    const osm = this.osm;
-    if (!osm) return;
-    if (osm.to) {
-      await this.makeRouteDraft(osm);
-      return;
-    }
+  /**
+   * Step 3's tier and groups, or the first tier's when the section is not
+   * there to ask.
+   */
+  currentDetail(osm = this.osm) {
+    const type = osm?.to ? 'route' : 'place';
+    const asked = this.address?.getDetail?.();
+    if (asked && asked.type === type) return asked;
+    return {
+      type,
+      level: DETAIL_START,
+      changed: false,
+      switches: switchesFor(type, DETAIL_START),
+    };
+  }
+
+  /**
+   * A place map's draft with step 3's tier applied: the draft builder (a
+   * lazy chunk) enters every feature, the tier decides which are on.
+   * `found` is false when nothing is near the address to draw.
+   */
+  async placeDraft(osm, detail) {
     const { draftPlan, NEAR_M } = await import('./plan-from-osm.js');
     const { plan, counts } = draftPlan({
       elements: osm.elements,
@@ -1254,13 +1278,108 @@ class MapPanel {
     const found = drawsSidewalks
       ? plan.features.some((f) => f.class === 'walkway' && f.on)
       : plan.features.some((f) => f.class === 'curb' && f.on);
-    if (!found) {
-      this.sayAddress(
-        drawsSidewalks
-          ? ADDRESS_STRINGS.nothingNear(NEAR_M)
-          : ADDRESS_STRINGS.nothingDrawn,
-        true
+    const applied = applyDetail(plan.features, {
+      switches: detail.switches,
+      scale: osm.scale,
+      mmPerM: plan.meta?.geo?.mmPerM,
+    });
+    return {
+      plan: { ...plan, features: applied.features },
+      counts: { ...counts, on: applied.on },
+      judged: applied,
+      found,
+      nothing: drawsSidewalks
+        ? ADDRESS_STRINGS.nothingNear(NEAR_M)
+        : ADDRESS_STRINGS.nothingDrawn,
+    };
+  }
+
+  /** A route map's draft with step 3's tier, or no plan when no walk joins. */
+  async routeDraft(osm, detail) {
+    const { draftRoutePlan } = await import('./plan-from-route.js');
+    // A walk of a trip by bus and train ends, or starts, at its stop.
+    const travel = osm.travel;
+    const stop = travel?.stopName ? { name: travel.stopName } : null;
+    const { plan, counts } = draftRoutePlan({
+      elements: osm.elements,
+      from: osm.place,
+      to: osm.to,
+      size: { w: this.plan.size.w, h: this.plan.size.h },
+      landmarks: osm.landmarks,
+      avoidSteps: this.address?.avoidSteps() ?? false,
+      fromStop: travel?.walk === 'from' ? stop : null,
+      toStop: travel?.walk === 'to' ? stop : null,
+      switches: detail.switches,
+    });
+    return {
+      plan,
+      counts,
+      judged: plan ? judgeSymbols(plan.features, detail.switches) : null,
+    };
+  }
+
+  /** The live line under step 3's choices, from the data kept. */
+  async countDetail(detail = this.currentDetail()) {
+    const osm = this.osm;
+    if (!osm || !this.address?.setDetailCount) {
+      this.address?.setDetailCount?.('');
+      return null;
+    }
+    const built = osm.to
+      ? await this.routeDraft(osm, detail)
+      : await this.placeDraft(osm, detail);
+    if (!built.judged || built.found === false) {
+      this.address.setDetailCount('');
+      return built;
+    }
+    const { on, symbols, warning, refusal } = built.judged;
+    if (!refusal) {
+      this.address.setDetailCount(
+        warning
+          ? ADDRESS_STRINGS.detailCountWarned(on, warning)
+          : ADDRESS_STRINGS.detailCount(on, symbols)
       );
+    }
+    return built;
+  }
+
+  /**
+   * Step 3's tier or a group changed: the live line follows and is said
+   * once; a choice past the symbol limit is refused, said, and put back.
+   */
+  async detailChanged(detail) {
+    if (!this.osm) {
+      this.lastDetail = detail;
+      return;
+    }
+    const built = await this.countDetail(detail);
+    if (built?.judged?.refusal) {
+      this.sayAddress(built.judged.refusal, true);
+      this.address?.setDetail?.(this.lastDetail || this.currentDetail());
+      return;
+    }
+    this.lastDetail = detail;
+    const line = this.address?.refs?.detailCount?.textContent;
+    if (line) this.sayAddress(line);
+  }
+
+  async makeDraft() {
+    const osm = this.osm;
+    if (!osm) return;
+    if (osm.to) {
+      await this.makeRouteDraft(osm);
+      return;
+    }
+    const { plan, counts, judged, found, nothing } = await this.placeDraft(
+      osm,
+      this.currentDetail(osm)
+    );
+    if (!found) {
+      this.sayAddress(nothing, true);
+      return;
+    }
+    if (judged.refusal) {
+      this.sayAddress(judged.refusal, true);
       return;
     }
     this.plan = plan;
@@ -1282,6 +1401,7 @@ class MapPanel {
       (warnings.length
         ? ADDRESS_STRINGS.draftReady(counts.on, counts.total, warnings.length)
         : ADDRESS_STRINGS.draftReadyClean(counts.on, counts.total)) +
+        (judged.warning ? ` ${judged.warning}` : '') +
         (counts.leftOut ? ADDRESS_STRINGS.leftOut(counts.leftOut) : '') +
         this.bigNote(osm) +
         ` ${keySentence(this.labeled().key)}`
@@ -1299,22 +1419,17 @@ class MapPanel {
     const short = (p) => (p?.name || '').split(',')[0].trim();
     const from = short(osm.place);
     const to = short(osm.to);
-    const { draftRoutePlan } = await import('./plan-from-route.js');
-    // A walk of a trip by bus and train ends, or starts, at its stop.
     const travel = osm.travel;
-    const stop = travel?.stopName ? { name: travel.stopName } : null;
-    const { plan, counts } = draftRoutePlan({
-      elements: osm.elements,
-      from: osm.place,
-      to: osm.to,
-      size: { w: this.plan.size.w, h: this.plan.size.h },
-      landmarks: osm.landmarks,
-      avoidSteps: this.address?.avoidSteps() ?? false,
-      fromStop: travel?.walk === 'from' ? stop : null,
-      toStop: travel?.walk === 'to' ? stop : null,
-    });
+    const { plan, counts, judged } = await this.routeDraft(
+      osm,
+      this.currentDetail(osm)
+    );
     if (!plan) {
       this.sayAddress(ADDRESS_STRINGS.noWalk(from, to), true);
+      return;
+    }
+    if (judged.refusal) {
+      this.sayAddress(judged.refusal, true);
       return;
     }
     const { warnings } = buildLevelRings(plan);
@@ -1336,6 +1451,7 @@ class MapPanel {
         plan.size.w,
         plan.size.h
       ) +
+        (judged.warning ? ` ${judged.warning}` : '') +
         (travel?.words ? ADDRESS_STRINGS.journeyNote(travel.words) : '') +
         this.bigNote(osm) +
         ` ${keySentence(this.labeled().key)}`

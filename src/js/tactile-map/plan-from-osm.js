@@ -346,7 +346,7 @@ export function draftPlan({
       features.push(f);
     }
   };
-  const addArea = (id, cls, ring, on, name) => {
+  const addArea = (id, cls, ring, on, name, what) => {
     for (const [i, piece] of clipRing(ring, w, h).entries()) {
       if (piece.length < 3 || ringArea(piece) < MIN_AREA_MM2) continue;
       const f = {
@@ -357,6 +357,7 @@ export function draftPlan({
         on,
       };
       if (name) f.name = name;
+      if (what) f.what = what;
       features.push(f);
     }
   };
@@ -396,7 +397,14 @@ export function draftPlan({
                 round3((points[mid - 1][1] + points[mid][1]) / 2),
               ]
             : points[mid];
-        addPoint(`${id}-stairs`, 'stairs', at, ticked.has('stairs'), name);
+        const stairs = addPoint(
+          `${id}-stairs`,
+          'stairs',
+          at,
+          ticked.has('stairs'),
+          name
+        );
+        if (stairs) stairs.way = nearCenter(points);
         addLine(id, 'walkway', points, nearCenter(points), name);
         continue;
       }
@@ -408,6 +416,11 @@ export function draftPlan({
         // one line; over a whole neighborhood the streets are the map, on.
         if (streetAsOneLine(widthM)) {
           addLine(id, 'curb', points, rules.streetsAsOneLine === true, name);
+          if (rules.streetsAsOneLine === true) {
+            for (const f of features) {
+              if (f.id === id || f.id.startsWith(`${id}-`)) f.street = true;
+            }
+          }
           continue;
         }
         const { left, right } = offsetLine(points, (widthM / 2) * k);
@@ -420,7 +433,14 @@ export function draftPlan({
         classFromTable(t, 'way');
       if (!cls) continue;
       if (cls === 'area') {
-        addArea(id, 'area', closed ? points.slice(0, -1) : points, false, name);
+        addArea(
+          id,
+          'area',
+          closed ? points.slice(0, -1) : points,
+          false,
+          name,
+          t.building ? 'Building' : t.leisure ? 'Park' : undefined
+        );
       } else if (cls === 'crossing') {
         if (!rules.crossings) continue;
         addLine(id, 'crossing', points, ticked.has('crossing'), name);
@@ -445,20 +465,31 @@ export function draftPlan({
       const at = mm(el);
       const id = `osm-node-${el.id}`;
       if (t.shop !== undefined) {
-        if (ticked.has('shop'))
-          addPoint(id, 'landmark', at, !!name && fits('landmark'), name, t);
+        addPoint(
+          id,
+          'landmark',
+          at,
+          ticked.has('shop') && !!name && fits('landmark'),
+          name,
+          t
+        );
         continue;
       }
       if (isFurniture(t)) {
-        if (t.amenity === 'bench' && ticked.has('bench'))
-          addPoint(id, 'furniture', at, fits('furniture'), name, t);
-        else if (name) addPoint(id, 'furniture', at, false, name, t);
+        addPoint(
+          id,
+          'furniture',
+          at,
+          t.amenity === 'bench' && ticked.has('bench') && fits('furniture'),
+          name,
+          t
+        );
         continue;
       }
       const cls = classFromTable(t, 'node');
       if (!cls) continue;
       if (cls === 'landmark') {
-        if (name) addPoint(id, 'landmark', at, fits('landmark'), name, t);
+        addPoint(id, 'landmark', at, !!name && fits('landmark'), name, t);
         continue;
       }
       if (cls === 'crossing') {
@@ -478,18 +509,19 @@ export function draftPlan({
 
   // The address's own entrance: the one nearest it within NEAR_M, on at
   // every scale while entrances are ticked (it is where the map leads).
-  if (ticked.has('entrance')) {
-    let door = null;
-    let doorD = NEAR_M * k;
-    for (const f of features) {
-      if (f.class !== 'entrance') continue;
-      const d = dist(f.at, middle);
-      if (d <= doorD) {
-        door = f;
-        doorD = d;
-      }
+  let door = null;
+  let doorD = NEAR_M * k;
+  for (const f of features) {
+    if (f.class !== 'entrance') continue;
+    const d = dist(f.at, middle);
+    if (d <= doorD) {
+      door = f;
+      doorD = d;
     }
-    if (door) door.on = true;
+  }
+  if (door) {
+    door.address = true;
+    if (ticked.has('entrance')) door.on = true;
   }
 
   // A stop position is where the vehicle halts; its platform, where people
@@ -508,9 +540,11 @@ export function draftPlan({
       )
     ) {
       f.on = false;
+      f.twin = true;
     }
   }
 
+  for (const f of features) if (f.class === 'walkway') f.way = f.on;
   // A crossing whose end lies on an on walkway's end starts on.
   const walkwayEnds = features
     .filter((f) => f.class === 'walkway' && f.on)
@@ -520,7 +554,10 @@ export function draftPlan({
     if (f.class !== 'crossing' || f.on) continue;
     const ends =
       f.kind === 'line' ? [f.points[0], f.points[f.points.length - 1]] : [f.at];
-    if (ends.some(touches)) f.on = true;
+    if (ends.some(touches)) {
+      f.on = true;
+      f.way = true;
+    }
   }
 
   // An island starts on where it meets a crossing that is on.
@@ -530,8 +567,10 @@ export function draftPlan({
   for (const f of features) {
     if (f.class !== 'traffic-island') continue;
     const ends = [f.points[0], f.points[f.points.length - 1]];
-    if (ends.some((p) => crossingEnds.some((e) => dist(e, p) <= TOUCH_MM)))
+    if (ends.some((p) => crossingEnds.some((e) => dist(e, p) <= TOUCH_MM))) {
       f.on = true;
+      f.way = true;
+    }
   }
 
   // A curb starts on where it stands on a sidewalk or crossing that is on,
@@ -563,6 +602,7 @@ export function draftPlan({
     );
     if (onPath && roomAt(f.at)) {
       f.on = true;
+      f.roomy = true;
       placed.push(f.at);
     }
   }

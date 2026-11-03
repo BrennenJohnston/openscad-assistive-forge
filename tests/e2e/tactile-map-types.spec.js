@@ -73,6 +73,11 @@ test.describe('the three map types end to end', () => {
     await axeClean(page, 'place step 2');
     await nextStep(page, 3, 'What to show');
     await axeClean(page, 'place step 3');
+    // Everything in the data, by arrow keys: a map that full has warnings.
+    await page.locator('#tactileMapDetail-named').focus();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('#tactileMapDetail-everything')).toBeChecked();
     await nextStep(page, 4, 'Make the map');
     await tabTo(page, '#tactileMapMake');
     await page.keyboard.press('Enter');
