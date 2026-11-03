@@ -1540,7 +1540,7 @@ describe('the map Make the map drafts', () => {
     await pullData();
     await vi.waitFor(() => expect(opened).not.toBeNull());
     expect(addressStatus()).toMatch(
-      /^Draft map ready: \d+ of 20 features on; (\d+ warnings|no warnings)\. Choose what stays\.$/
+      /^Draft map ready: \d+ of 21 features on; (\d+ warnings|no warnings)\. Choose what stays\.$/
     );
     expect(announce).toHaveBeenCalledWith(addressStatus(), {
       source: 'tactile-map',
@@ -1549,9 +1549,9 @@ describe('the map Make the map drafts', () => {
     expect(opened.options.draft).toBe(true);
     expect(opened.options.sourceName).toBe('Draft map of Central Library');
     expect(opened.svg).toContain('data-feature="you-are-here"');
-    expect(opened.analysis.elements).toHaveLength(20);
+    expect(opened.analysis.elements).toHaveLength(21);
     const classes = opened.options.initialClasses;
-    expect(Object.keys(classes)).toHaveLength(20);
+    expect(Object.keys(classes)).toHaveLength(21);
     const plan = getMapPlan();
     // The rows: what is on first, then what is off, curbs last within each;
     // the editor gets the features in that order and the map's own width.
