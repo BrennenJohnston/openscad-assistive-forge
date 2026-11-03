@@ -173,6 +173,23 @@ describe('the README says what the map is', () => {
     expect(readme.split('\n')[0]).toBe('A map from a drawing.');
     expect(readme).not.toMatch(/OpenStreetMap/);
   });
+
+  it("credits a published symbol set's authors last, when the map uses one", () => {
+    const readme = readmeText({
+      ...base,
+      about: {
+        type: 'place',
+        place: 'Central Library',
+        ratio: 1000,
+        symbolsCredit:
+          'Symbols: Lobben and Lawrence 2012, University of Oregon, GPL-3',
+      },
+    });
+    expect(readme.trim().split('\n').slice(-2)).toEqual([
+      'Map data from OpenStreetMap contributors, ODbL: https://www.openstreetmap.org/copyright',
+      'Symbols: Lobben and Lawrence 2012, University of Oregon, GPL-3',
+    ]);
+  });
 });
 
 describe('the archive and its README', () => {

@@ -209,6 +209,15 @@ export function levelHeights(parameters = {}) {
  * @returns {{ lead: string|null, credits: string[] }}
  */
 export function mapAbout(about = {}) {
+  const said = aboutOf(about);
+  // A published symbol set's authors are credited last.
+  if (about.symbolsCredit) {
+    return { ...said, credits: [...said.credits, about.symbolsCredit] };
+  }
+  return said;
+}
+
+function aboutOf(about) {
   const osm = `${ATTRIBUTION}: ${OSM_COPYRIGHT_URL}`;
   if (about.type === 'place') {
     const where = about.place ? ` of ${about.place}` : '';

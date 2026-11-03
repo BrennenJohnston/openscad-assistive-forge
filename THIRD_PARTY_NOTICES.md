@@ -590,6 +590,24 @@ mdomlop (https://github.com/mdomlop/retrosmart-x11-cursors), GPL-3.0.
   own (green #00ff00, amber #ffb000, the DOS yellow #ffff55) with the black
   outline kept.
 
+## University of Oregon Tactile Map Symbols (GPL-3.0-or-later)
+
+The Tactile Map Designer's second symbol set,
+`src/js/tactile-map/symbol-sets/oregon-2012.js`, and its shapes in
+`docs/guides/symbol-sheet/symbol_sheet_data.scad`, are traced from the
+University of Oregon's 3D models of the tactile map symbols of Lobben and
+Lawrence (2012).
+
+**License**: GNU General Public License v3.0 (the models' own COPYING)
+**Copyright**: Copyright (c) 2013, 2016 University of Oregon; Authors: Megen Brittell, Manny Garcia, Amy Lobben, Megan Lawrence
+**Project**: "Tactile symbols for production on 2D and 3D printers", University of Oregon, doi 10.7264/D37P4V
+**Publication**: Lobben A, Lawrence M (2012) The use of environmental features on tactile maps by navigators who are blind. The Professional Geographer 64(1):95-108, doi 10.1080/00330124.2011.595619
+**Redistribution**: under this repository's GPL-3.0-or-later umbrella
+
+- **Changes**: each point symbol is the outline of its OpenSCAD module seen
+  from above, in a unit box; its lines are 1.2 mm instead of the published
+  0.8 mm. The models' 2D files, under a different license, are not used.
+
 ## Switch Sounds (CC0-1.0)
 
 Three short sounds play when the Alt View switches on, changes its look or

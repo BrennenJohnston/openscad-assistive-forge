@@ -39,7 +39,11 @@ import {
   ringsFromPathData,
   ringsToPathData,
 } from '../ring-geometry.js';
-import { activeLibrary } from './symbol-library.js';
+import {
+  BUILT_IN_SETS,
+  activeLibrary,
+  librarySymbolsFor,
+} from './symbol-library.js';
 import { levelsByClass, mapClass } from './map-classes.js';
 import { featureNames, placeFinder } from './feature-names.js';
 
@@ -86,6 +90,34 @@ export const BUILTIN_SYMBOLS = {
   'you-are-here': DISC_SHAPE,
   'transit-stop': DISC_SHAPE,
 };
+
+/**
+ * The builder's settings for a built-in symbol set: its symbols, the size
+ * they were published at, and its line styles on the classes that draw
+ * with them. The basic shapes need none: the defaults are theirs.
+ *
+ * @param {string} setKey
+ * @returns {object}
+ */
+export function settingsForSet(setKey) {
+  const set = BUILT_IN_SETS.find((x) => x.key === setKey);
+  if (!set || !set.lineStyles) return {};
+  const classes = { ...LEVELS_BY_CLASS };
+  for (const line of set.lineStyles) {
+    if (!line.class || !classes[line.class]) continue;
+    const row = { ...classes[line.class], style: line.style };
+    if (line.widthMm !== undefined) row.width = line.widthMm;
+    if (line.dashMm !== undefined) row.dashMm = line.dashMm;
+    if (line.dashGapMm !== undefined) row.dashGapMm = line.dashGapMm;
+    if (line.gapMm !== undefined) row.gapMm = line.gapMm;
+    classes[line.class] = row;
+  }
+  return {
+    classes,
+    symbols: librarySymbolsFor(setKey),
+    symbolSizeMm: set.symbolSizeMm,
+  };
+}
 
 /**
  * Symbols as a map by key, whether they came as a map or as the library's
@@ -533,7 +565,12 @@ export function buildLevelRings(plan, settings = {}) {
       let rings;
       if (style === 'dotted') rings = dottedLine(pts, width, s.dotSpacingMm);
       else if (style === 'dashed')
-        rings = dashedLine(pts, width, s.dashMm, s.dashGapMm);
+        rings = dashedLine(
+          pts,
+          width,
+          cls.dashMm ?? s.dashMm,
+          cls.dashGapMm ?? s.dashGapMm
+        );
       else if (style === 'ticks')
         rings = tickedLine(pts, width, s.tickLengthMm, s.tickSpacingMm);
       else if (style === 'chevrons')
@@ -545,7 +582,7 @@ export function buildLevelRings(plan, settings = {}) {
           f.uphill
         );
       else if (style === 'double')
-        rings = doubleLine(f.points, width, s.doubleGapMm);
+        rings = doubleLine(f.points, width, cls.gapMm ?? s.doubleGapMm);
       else rings = strokePolyline(f.points, width);
       built.push({ f, level, rings });
       if (style !== 'double' && width > s.maxSingleLineMm) {

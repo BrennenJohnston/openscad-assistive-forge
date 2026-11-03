@@ -68,7 +68,12 @@ import {
   planPlates,
   plateLevelsSvg,
 } from './plate-tiling.js';
-import { loadSymbolLibraryFile, setLibrary } from './symbol-library.js';
+import {
+  BUILT_IN_SETS,
+  activeSetKey,
+  loadSymbolLibraryFile,
+  setLibrary,
+} from './symbol-library.js';
 import {
   ADDRESS_STRINGS,
   BIG_BYTES,
@@ -1536,8 +1541,18 @@ class MapPanel {
     }
   }
 
-  /** What the map is, for the README: its type and what it was made from. */
+  /**
+   * What the map is, for the README: its type, what it was made from, and
+   * the published symbol set it draws with, if any.
+   */
   mapAbout() {
+    const credit = BUILT_IN_SETS.find((s) => s.key === activeSetKey())?.credit;
+    const about = this.mapKind();
+    return credit ? { ...about, symbolsCredit: credit } : about;
+  }
+
+  /** The map's type and what it was made from. */
+  mapKind() {
     const short = (p) => (p?.name || '').split(',')[0].trim();
     const osm = this.osm;
     if (this.source === 'draft' && osm?.to) {
