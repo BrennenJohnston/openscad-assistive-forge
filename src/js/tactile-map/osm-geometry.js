@@ -42,6 +42,16 @@ export const KEPT_TAGS = Object.freeze([
   'public_transport',
   'bus',
   'tram',
+  'trolleybus',
+  'train',
+  'light_rail',
+  'subway',
+  // A stop's number, said with its name ("Bus stop 29405").
+  'ref',
+  // What a place is, read by feature-kinds.js.
+  'tourism',
+  'healthcare',
+  'office',
   'level',
   'layer',
   'steps',
@@ -73,6 +83,9 @@ const INTEREST_TAGS = Object.freeze([
   'bus',
   'tram',
   'steps',
+  'tourism',
+  'healthcare',
+  'office',
 ]);
 
 /**

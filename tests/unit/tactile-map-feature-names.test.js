@@ -89,6 +89,67 @@ describe('feature names', () => {
     ).toEqual(['Stairs', 'Stairs (2)']);
   });
 
+  it('says what a point is before its name, and leaves the word out where the name already says it', () => {
+    const point = (id, what, name, at, ref) => ({
+      id,
+      class: 'landmark',
+      kind: 'point',
+      at,
+      on: true,
+      what,
+      ...(name ? { name } : {}),
+      ...(ref ? { ref } : {}),
+    });
+    expect(
+      featureNames([
+        point('a', 'Restaurant', 'Plaza Cafe', [10, 10]),
+        point('b', 'Cafe', 'Lobby Espresso', [20, 10]),
+        point('c', 'Library', 'Health Sciences Library', [30, 10]),
+        point(
+          'd',
+          'Bus stop',
+          'NE Pacific St & Montlake Blvd NE',
+          [40, 10],
+          '29405'
+        ),
+        point('e', 'Bus stop', null, [50, 10], '29247'),
+        point('f', 'Bench', null, [12, 12]),
+        point('g', 'Entrance', 'Center on Human Development', [60, 10]),
+      ])
+    ).toEqual([
+      'Restaurant: Plaza Cafe',
+      'Cafe: Lobby Espresso',
+      'Health Sciences Library',
+      'Bus stop 29405: NE Pacific St & Montlake Blvd NE',
+      'Bus stop 29247',
+      'Bench near Plaza Cafe',
+      'Entrance: Center on Human Development',
+    ]);
+  });
+
+  it('names an unnamed point by what it is near the nearest place, and by what it is alone with nothing named', () => {
+    expect(
+      featureNames([
+        {
+          id: 'a',
+          class: 'furniture',
+          kind: 'point',
+          what: 'Bench',
+          at: [0, 0],
+          on: true,
+        },
+        {
+          id: 'b',
+          class: 'furniture',
+          kind: 'point',
+          what: 'Bench',
+          at: [9, 9],
+          on: true,
+        },
+      ])
+    ).toEqual(['Bench', 'Bench (2)']);
+  });
+
   it('writes each name onto its path in the drawing the editor opens', () => {
     const svg = drawingFromPlan(PLAN);
     expect(svg).toContain('data-name="Husky Union Building"');

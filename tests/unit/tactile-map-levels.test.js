@@ -307,6 +307,55 @@ describe('the clutter checks', () => {
     );
   });
 
+  it('says three or more symbols at one spot in one warning: one kind, keep one; several kinds, move them apart', () => {
+    const hall = {
+      id: 'hall',
+      class: 'area',
+      kind: 'area',
+      name: 'The Hall',
+      ring: [
+        [20, 20],
+        [60, 20],
+        [60, 50],
+        [20, 50],
+      ],
+      on: true,
+    };
+    const bench = (id, x, y) => ({
+      id,
+      class: 'furniture',
+      kind: 'point',
+      what: 'Bench',
+      at: [x, y],
+      on: true,
+    });
+    const plan = emptyPlan(200, 150);
+    plan.features.push(
+      hall,
+      bench('b1', 100, 75),
+      bench('b2', 101, 75),
+      bench('b3', 100, 76),
+      bench('b4', 101, 76),
+      triangle('t1', 150, 20),
+      triangle('t2', 160, 20),
+      {
+        id: 's1',
+        class: 'stairs',
+        kind: 'point',
+        at: [170, 20],
+        on: true,
+      }
+    );
+    const { warnings } = buildLevelsSvg(plan);
+    const close = warnings.filter((w) => w.code === 'too-close');
+    expect(close.map((w) => w.text)).toEqual([
+      '4 benches within 3 mm of one another near The Hall. Keep one and turn the others off.',
+      '3 symbols within 3 mm of one another near The Hall. Move them apart or turn some off.',
+    ]);
+    expect(close[0].featureIds).toEqual(['b1', 'b2', 'b3', 'b4']);
+    expect(close[1].featureIds).toEqual(['t1', 't2', 's1']);
+  });
+
   it('counts the symbol keys and warns past fifteen', () => {
     const plan = emptyPlan(600, 450);
     for (let i = 0; i < 16; i++) {

@@ -18,7 +18,12 @@ import {
   DRAFT_LIMIT,
 } from '../../src/js/tactile-map/plan-from-osm.js';
 import { SHAPE_LIST_CAP } from '../../src/js/svg-preparer.js';
-import { scaleChoice, nearestRule } from '../../src/js/tactile-map/scales.js';
+import {
+  scaleChoice,
+  nearestRule,
+  groundBox,
+} from '../../src/js/tactile-map/scales.js';
+import { featureNames } from '../../src/js/tactile-map/feature-names.js';
 import { pullTiles, TILE_URL } from '../../src/js/tactile-map/osm-tiles.js';
 import { projectLatLon, toMm } from '../../src/js/tactile-map/osm-geometry.js';
 import {
@@ -137,6 +142,7 @@ describe("the class table's osm lists", () => {
       'area',
       'stairs',
       'entrance',
+      'furniture',
       'landmark',
       'transit-stop',
       'curb-ramp',
@@ -290,16 +296,17 @@ describe('draftPlan', () => {
     close(edge.points[0][1], Y(-100));
   });
 
-  it('keeps shops and benches only when ticked, a named amenity as an off landmark, and nothing for the rest', () => {
+  it('keeps shops and benches only when ticked, a named amenity as an on landmark with its kind, and nothing for the rest', () => {
     const { plan } = DRAFT();
     expect(byId(plan, 'osm-node-8')).toBeUndefined();
     expect(byId(plan, 'osm-node-13')).toBeUndefined();
     const cafe = byId(plan, 'osm-node-14');
-    expect([cafe.class, cafe.kind, cafe.on, cafe.name]).toEqual([
+    expect([cafe.class, cafe.kind, cafe.on, cafe.name, cafe.what]).toEqual([
       'landmark',
       'point',
-      false,
+      true,
       'Bean',
+      'Cafe',
     ]);
     expect(byId(plan, 'osm-node-15')).toBeUndefined();
     expect(byId(plan, 'osm-way-18')).toBeUndefined();
@@ -312,12 +319,123 @@ describe('draftPlan', () => {
       size: { w: 480, h: 360 },
     });
     const shop = byId(ticked, 'osm-node-8');
-    expect([shop.class, shop.on, shop.name]).toEqual([
+    expect([shop.class, shop.on, shop.name, shop.what]).toEqual([
       'landmark',
       true,
       'Corner Bakery',
+      'Bakery',
     ]);
-    expect(byId(ticked, 'osm-node-13').on).toBe(true);
+    const bench = byId(ticked, 'osm-node-13');
+    expect([bench.class, bench.on, bench.what]).toEqual([
+      'furniture',
+      true,
+      'Bench',
+    ]);
+  });
+
+  it('keeps a named piece of street furniture off in its own class, an unnamed shop off, a named one on', () => {
+    const marks = [
+      node(30, { amenity: 'vending_machine', name: 'Tickets' }, [10, 10]),
+      node(31, { shop: 'bakery' }, [20, 10]),
+      node(32, { shop: 'books', name: 'Pages' }, [30, 10]),
+      node(33, { amenity: 'toilets' }, [40, 10]),
+    ];
+    const draft = (landmarks) =>
+      draftPlan({
+        elements: marks,
+        center: CENTER,
+        radiusM: 250,
+        landmarks,
+        size: { w: 480, h: 360 },
+      }).plan;
+    const plain = draft([]);
+    const vending = byId(plain, 'osm-node-30');
+    expect([vending.class, vending.on, vending.what]).toEqual([
+      'furniture',
+      false,
+      'Vending machine',
+    ]);
+    expect(byId(plain, 'osm-node-31')).toBeUndefined();
+    expect(byId(plain, 'osm-node-33')).toBeUndefined();
+    const shops = draft(['shop']);
+    expect(byId(shops, 'osm-node-31').on).toBe(false);
+    expect(byId(shops, 'osm-node-32').on).toBe(true);
+  });
+
+  it('keeps the ref of a stop and starts a stop position off where its platform stands within 30 m', () => {
+    const marks = [
+      node(
+        40,
+        {
+          highway: 'bus_stop',
+          public_transport: 'platform',
+          name: 'Pine & 3rd',
+          ref: '29247',
+        },
+        [0, 20]
+      ),
+      node(
+        41,
+        {
+          public_transport: 'stop_position',
+          bus: 'yes',
+          name: 'Pine & 3rd',
+          ref: '29247',
+        },
+        [6, 24]
+      ),
+      node(
+        42,
+        {
+          public_transport: 'stop_position',
+          bus: 'yes',
+          name: 'Pine & 9th',
+          ref: '29300',
+        },
+        [150, 24]
+      ),
+    ];
+    const { plan } = draftPlan({
+      elements: marks,
+      center: CENTER,
+      radiusM: 250,
+      landmarks: ['transit-stop'],
+      size: { w: 480, h: 360 },
+    });
+    const platform = byId(plan, 'osm-node-40');
+    expect([platform.on, platform.what, platform.ref]).toEqual([
+      true,
+      'Bus stop',
+      '29247',
+    ]);
+    expect(byId(plan, 'osm-node-41').on).toBe(false);
+    expect(byId(plan, 'osm-node-42').on).toBe(true);
+  });
+
+  it("starts the address's own entrance on at every scale where entrances are ticked, and no other", () => {
+    const marks = [
+      node(50, { entrance: 'main' }, [8, 12]),
+      node(51, { entrance: 'yes' }, [20, 25]),
+      node(52, { entrance: 'yes' }, [60, 0]),
+    ];
+    const at = (key, landmarks = ['entrance']) =>
+      draftPlan({
+        elements: marks,
+        center: CENTER,
+        scale: { ratio: scaleChoice(key).ratio, rules: scaleChoice(key).rules },
+        landmarks,
+        size: { w: 480, h: 360 },
+      }).plan;
+    const on = (plan, id) => plan.features.find((f) => f.id === id)?.on;
+    expect(['50', '51', '52'].map((id) => on(at('blocks'), `osm-node-${id}`))).toEqual([
+      true,
+      false,
+      false,
+    ]);
+    expect(
+      ['50', '51', '52'].map((id) => on(at('neighborhood'), `osm-node-${id}`))
+    ).toEqual([true, false, false]);
+    expect(on(at('blocks', []), 'osm-node-50')).toBe(false);
   });
 
   it('makes the tram a track and the foot path a walkway, both off', () => {
@@ -343,7 +461,7 @@ describe('draftPlan', () => {
       buildings: 1,
       landmarks: 4,
       total: 19,
-      on: 7,
+      on: 8,
       leftOut: 0,
     });
     expect(plan.features.filter((f) => f.on).length).toBe(counts.on);
@@ -465,7 +583,8 @@ describe('a draft at a named scale', () => {
   it('starts the ticked landmarks on only where their symbols fit: every one near a block, transit stops over a few blocks, none over a neighborhood', () => {
     const marks = [
       ...STREETS,
-      node(20, { entrance: 'main', name: 'Door' }, [10, 20]),
+      // Beyond NEAR_M, so not the address's own entrance.
+      node(20, { entrance: 'main', name: 'Door' }, [40, 20]),
       node(
         21,
         { highway: 'bus_stop', public_transport: 'platform', name: 'Stop' },
@@ -753,5 +872,102 @@ describe('the pedestrian base near a building', () => {
         (f) => f.class === 'curb-ramp' || f.class === 'raised-curb'
       )
     ).toEqual([]);
+  });
+});
+
+describe('the place map at 3600 Ferry Pl NE, read from the real tiles', () => {
+  // Real tiles over the address (zoom 15, x 5250 and 5251, y 11438, fetched
+  // 2026-11-02; map data from OpenStreetMap contributors, ODbL).
+  const FERRY = { lat: 47.6481285, lon: -122.3086726 };
+  const tiles = (x) =>
+    readFileSync(`tests/fixtures/tactile-map/sourdough-15-${x}-11438.mvt`);
+  const TILE = { 5250: tiles(5250), 5251: tiles(5251) };
+  const fetch = async (url) => {
+    const x = Object.keys(TILE).find(
+      (k) =>
+        url ===
+        TILE_URL.replace('{z}', 15).replace('{x}', k).replace('{y}', 11438)
+    );
+    const bytes = x ? TILE[x] : new Uint8Array(0);
+    return {
+      ok: true,
+      status: x ? 200 : 204,
+      arrayBuffer: async () =>
+        bytes.buffer.slice(
+          bytes.byteOffset,
+          bytes.byteOffset + bytes.byteLength
+        ),
+    };
+  };
+  const SIZE = { w: 480, h: 360 };
+  const draft = async (landmarks) => {
+    const choice = scaleChoice('block');
+    const { elements } = await pullTiles({
+      box: groundBox(FERRY, choice.ratio, SIZE),
+      fetch,
+    });
+    return draftPlan({
+      elements,
+      center: FERRY,
+      scale: { ratio: choice.ratio, rules: choice.rules },
+      landmarks,
+      size: SIZE,
+      place: { name: 'Center on Human Development and Disability South' },
+    }).plan;
+  };
+  const named = (plan) => {
+    const names = featureNames(plan.features);
+    return plan.features.map((f, i) => ({ ...f, said: names[i] }));
+  };
+
+  it('starts the named places on with their kind and leaves the benches out at the first ticks', async () => {
+    const plan = named(await draft(['entrance', 'transit-stop']));
+    const cafe = plan.find((f) => f.name === 'Plaza Cafe');
+    expect([cafe.class, cafe.on, cafe.said]).toEqual([
+      'landmark',
+      true,
+      'Restaurant: Plaza Cafe',
+    ]);
+    expect(plan.filter((f) => f.what === 'Bench')).toEqual([]);
+    const landmarks = plan.filter((f) => f.class === 'landmark');
+    expect(landmarks.length).toBeGreaterThan(0);
+    for (const f of landmarks) {
+      expect(f.name).toBeTruthy();
+      expect(f.what).toBeTruthy();
+      expect(f.said).not.toMatch(/^Landmark/);
+    }
+    const stops = plan.filter((f) => f.class === 'transit-stop' && f.on);
+    expect(new Set(stops.map((f) => f.said)).size).toBe(stops.length);
+    for (const f of stops) expect(f.said).toMatch(/^Bus stop \d+: /);
+  });
+
+  it("says the owner's six benches at one spot as benches in one warning", async () => {
+    const plan = await draft([
+      'entrance',
+      'transit-stop',
+      'crossing',
+      'stairs',
+      'shop',
+      'bench',
+    ]);
+    const benches = plan.features.filter((f) => f.what === 'Bench');
+    expect(benches.length).toBeGreaterThan(0);
+    for (const f of benches) expect([f.class, f.on]).toEqual(['furniture', true]);
+    const { warnings } = buildLevelRings(plan);
+    const close = warnings.filter((w) => w.code === 'too-close');
+    const ids = new Set(benches.map((f) => f.id));
+    const mentions = new Map();
+    for (const w of close) {
+      for (const id of w.featureIds) {
+        if (ids.has(id)) mentions.set(id, (mentions.get(id) || 0) + 1);
+      }
+    }
+    expect(Math.max(...mentions.values())).toBe(1);
+    const grouped = close.filter((w) =>
+      /^\d+ benches within 3 mm of one another near .+\. Keep one and turn the others off\.$/.test(
+        w.text
+      )
+    );
+    expect(grouped).toHaveLength(1);
   });
 });

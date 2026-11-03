@@ -43,7 +43,7 @@ const DENSIFY_MM = 0.5;
 const MAX_SHIFT_MM = 15;
 const MIN_PIECE_MM = 2;
 const SIMPLIFY_MM = 0.2;
-const POINT_CLASSES_NEAR = new Set(['landmark', 'transit-stop']);
+const POINT_CLASSES_NEAR = new Set(['landmark', 'furniture', 'transit-stop']);
 
 const round3 = (v) => Math.round(v * 1000) / 1000;
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);

@@ -13,6 +13,7 @@
  *
  * @license GPL-3.0-or-later
  */
+import { FURNITURE_AMENITIES } from './feature-kinds.js';
 
 /**
  * @typedef {object} MapClass
@@ -194,16 +195,42 @@ export const MAP_CLASSES = Object.freeze([
     osm: [{ tag: 'entrance', kind: 'node' }],
   },
   {
+    key: 'furniture',
+    name: 'Street furniture',
+    kind: 'point',
+    level: 2,
+    symbolKey: 'landmark-circle',
+    source:
+      'Holloway and others 2019: benches and bins are not a place to steer by, so they leave the first tier of a map; the library disc until a symbol set gives them a shape',
+    // Before the landmark row: an amenity is read here first. Benches when
+    // their box is ticked; the rest only with a name.
+    osm: [
+      {
+        tag: 'amenity',
+        values: [...FURNITURE_AMENITIES],
+        kind: 'node',
+      },
+      { tag: 'leisure', values: ['picnic_table'], kind: 'node' },
+    ],
+  },
+  {
     key: 'landmark',
     name: 'Landmark',
     kind: 'point',
     level: 2,
     symbolKey: 'landmark-circle',
     source: 'BANA 2022 8.6.5; Jehoel 2009: 5.0 to 6.4 mm identifies a symbol',
-    // Shops and benches when their box is ticked; other amenities with a name.
+    // Shops when their box is ticked; other places with a name.
     osm: [
       { tag: 'shop', kind: 'node' },
       { tag: 'amenity', kind: 'node' },
+      {
+        tag: 'tourism',
+        values: ['hotel', 'museum', 'information'],
+        kind: 'node',
+      },
+      { tag: 'healthcare', kind: 'node' },
+      { tag: 'office', kind: 'node' },
     ],
   },
   {
