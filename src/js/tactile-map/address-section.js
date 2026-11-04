@@ -144,9 +144,10 @@ export const ADDRESS_STRINGS = Object.freeze({
   landmarkChoices: { none: 'None', named: 'Named places', all: 'All points' },
   /** A11Y: the live line under the choices, once the data is here. */
   detailCount: (on, symbols) =>
-    `${on} features on, ${symbols} different ${symbols === 1 ? 'symbol' : 'symbols'}.`,
+    `${on} ${on === 1 ? 'feature' : 'features'} on, ${symbols} different ${symbols === 1 ? 'symbol' : 'symbols'}.`,
   /** A11Y: the same line past 10 symbols, the warning naming the count. */
-  detailCountWarned: (on, warning) => `${on} features on, ${warning}`,
+  detailCountWarned: (on, warning) =>
+    `${on} ${on === 1 ? 'feature' : 'features'} on, ${warning}`,
   /** A11Y: step 3's choice of the shapes the map draws with. */
   symbolSetLegend: 'Symbol set',
   symbolSetOwn: 'Your own set (a file)',

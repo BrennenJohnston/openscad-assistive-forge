@@ -10,6 +10,8 @@
  * @license GPL-3.0-or-later
  */
 import { test, expect } from '@playwright/test';
+import JSZip from 'jszip';
+import { readFileSync } from 'node:fs';
 import { goToStep } from '../e2e/helpers/map-steps.js';
 
 /** A draft, or a sentence that ends the press without one. */
@@ -109,17 +111,57 @@ test.describe('the Tactile Map Designer with the live services', () => {
     await makeTheMap(page);
     await editorOpens(page);
     await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
-      /^Draft map ready: \d+ of \d+ features on/
+      /^Draft map ready: \d+ of \d+ features on.* The key has \d+ symbols? and \d+ abbreviations?\.$/
     );
     const plan = await page.evaluate(() => {
       const p = document.getElementById('tactileMapPanel').__forgeMapPanel.plan;
-      return { features: p.features.length, waiting: Boolean(p.meta?.waiting) };
+      return {
+        features: p.features.length,
+        named: p.features.filter((f) => f.on && f.name).length,
+        waiting: Boolean(p.meta?.waiting),
+      };
     });
     expect(plan.waiting).toBe(false);
     expect(plan.features).toBeGreaterThan(0);
+    expect(plan.named).toBeGreaterThan(0);
     // The empty plate's title left with the draft.
     const title = page.locator('#param-title_text');
     if (await title.count()) await expect(title).not.toHaveValue('NO MAP YET');
+  });
+
+  test('the zip of a place map from live data: the University of Oregon symbols named, the key on its own plates with its label tape', async ({
+    page,
+  }) => {
+    await openTile(page, 'place');
+    await pick(page, FROM, '3800 E Stevens Way NE', /Gates Center/);
+    await goToStep(page, 3);
+    await page.locator('#tactileMapSymbolSet-oregon-2012').check();
+    await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
+      'Symbols: University of Oregon symbols.'
+    );
+    await makeTheMap(page);
+    await editorOpens(page);
+    await expect(page.locator('#drawingEditorSurface :focus')).toHaveCount(1, {
+      timeout: 60000,
+    });
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#tactileMapMake')).toBeFocused();
+    await goToStep(page, 5);
+    const downloadPromise = page.waitForEvent('download', { timeout: 240000 });
+    await page.locator('#tactileMapRenderAll').click();
+    const download = await downloadPromise;
+    const zip = await JSZip.loadAsync(readFileSync(await download.path()));
+    const names = Object.keys(zip.files);
+    expect(names.some((name) => /^tactile_map_key(-1)?\.stl$/.test(name))).toBe(
+      true
+    );
+    const readme = await zip.file('README.txt').async('string');
+    expect(readme).toContain('\nKey\nSymbols: University of Oregon symbols.\n');
+    expect(readme).toMatch(/\nKey( 1)? plate, label tape top to bottom:\n/);
+    expect(readme).toContain(
+      'Symbols: Lobben and Lawrence 2012, University of Oregon, GPL-3'
+    );
+    expect(readme).toContain('Map data from OpenStreetMap contributors');
   });
 
   test('a route map on foot: the Husky Union Building to the Gates Center, data from a live server, a route in the editor', async ({

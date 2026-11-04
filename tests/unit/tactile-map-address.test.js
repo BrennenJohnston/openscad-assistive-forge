@@ -34,6 +34,7 @@ import {
   getMapPlace,
   getMapPlan,
 } from '../../src/js/tactile-map/map-panel.js';
+import { ADDRESS_STRINGS } from '../../src/js/tactile-map/address-section.js';
 import { trimElement } from '../../src/js/tactile-map/osm-geometry.js';
 import {
   announce,
@@ -508,5 +509,23 @@ describe('the waiting plate and the status box', () => {
     await pickFirst();
     expect(getMapPlan()).toBe(drafted);
     expect(params().title_text).toBe('');
+  });
+});
+
+describe('the live line under the detail levels', () => {
+  it('says one feature and one symbol in the singular', () => {
+    expect(ADDRESS_STRINGS.detailCount(1, 1)).toBe(
+      '1 feature on, 1 different symbol.'
+    );
+    expect(ADDRESS_STRINGS.detailCount(19, 5)).toBe(
+      '19 features on, 5 different symbols.'
+    );
+    const warning = '11 different symbols: more than 10 is hard to remember.';
+    expect(ADDRESS_STRINGS.detailCountWarned(1, warning)).toBe(
+      `1 feature on, ${warning}`
+    );
+    expect(ADDRESS_STRINGS.detailCountWarned(301, warning)).toBe(
+      `301 features on, ${warning}`
+    );
   });
 });
