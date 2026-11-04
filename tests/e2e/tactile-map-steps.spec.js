@@ -79,15 +79,6 @@ test.describe('the map workflows by keyboard', () => {
     await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
       /^Draft map ready: /
     );
-    // The map's classes decide what prints, and its own sentences give those
-    // counts: the combined picture behind its canvas says nothing over them.
-    await expect(
-      page.locator('#drawingEditorSurface svg[aria-label="Prepared result"]')
-    ).toBeAttached({ timeout: 60000 });
-    const heard = await page
-      .locator('#drawingEditorSurface [aria-live]')
-      .allTextContents();
-    expect(heard.join(' ')).not.toMatch(/Preview updated/);
     // Escape leaves the editor; focus returns to Make the map.
     await page.keyboard.press('Escape');
     await expect(page.locator('#tactileMapMake')).toBeFocused();

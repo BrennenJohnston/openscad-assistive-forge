@@ -1130,6 +1130,23 @@ describe('role change updates result preview', () => {
 
     ws.destroy();
   });
+
+  // On a map the classes decide what prints and the map's own sentences give
+  // those counts: "301 on" here once followed "19 of 301 features on".
+  it('says the preview updated for a drawing, and nothing for a map', async () => {
+    const heardWith = async (options) => {
+      const ws = createSvgPrepWorkspace(container);
+      const heard = listenTo(ws);
+      ws.open(SIMPLE_SVG, makeAnalysis(2), options);
+      await ws.whenReady();
+      await ws.whenCombined();
+      const words = heard().join(' | ');
+      ws.destroy();
+      return words;
+    };
+    expect(await heardWith({})).toMatch(/Preview updated/);
+    expect(await heardWith({ purpose: 'map' })).not.toMatch(/Preview updated/);
+  });
 });
 
 describe('object list highlighting (overlay paths)', () => {
