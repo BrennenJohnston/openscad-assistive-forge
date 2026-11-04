@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A screen reader says a tactile map's plate once as you move through the list, no longer says "Preview updated" over a map's own counts, and hears "1 plate".
 - You are here on a tactile map no longer feels like a landmark: it keeps its
   10 mm disc and gains a center dot one step higher than any other symbol.
 - A draft map opens in the editor with what is on first and the curbs last,

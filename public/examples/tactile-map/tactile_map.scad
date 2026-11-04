@@ -185,7 +185,8 @@ plate_hint = ceil(map_width_mm / 252) * ceil(map_height_mm / 252);
 
 echo(str("Finished map: ", map_width_mm, " x ", map_height_mm, " mm; levels at ",
          level_z(1) - base_eff, ", ", level_z(2) - base_eff, " and ", level_z(3) - base_eff,
-         " mm above the base; fits a 256 x 256 mm bed in ", plate_hint, " plates."));
+         " mm above the base; fits a 256 x 256 mm bed in ", plate_hint,
+         plate_hint == 1 ? " plate." : " plates."));
 
 // =============================================================================
 // TEXT HELPERS
