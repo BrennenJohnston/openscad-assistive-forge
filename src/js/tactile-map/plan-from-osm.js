@@ -648,7 +648,9 @@ export function draftPlan({
       .map((f) => [reach(f), f])
       .sort((a, b) => a[0] - b[0])
       .map(([, f]) => f);
-    const room = Math.max(0, DRAFT_LIMIT - 1 - on.length);
+    // Two seats kept for the marks pushed below: the destination and You
+    // are here.
+    const room = Math.max(0, DRAFT_LIMIT - 2 - on.length);
     const keep = new Set([...on, ...off.slice(0, room)]);
     leftOut = features.length - keep.size;
     const kept = features.filter((f) => keep.has(f));
@@ -658,17 +660,28 @@ export function draftPlan({
 
   // The typed address is the destination, marked by the cone at the
   // geocoder's point (the map's center on the first draft) and named by what
-  // was typed. You are here is the reader's own place: they put it where
-  // they stand, in the editor; the draft places none.
-  features.push({
-    id: 'destination',
-    class: 'destination',
-    kind: 'point',
-    name: addressName(place),
-    size: DESTINATION_CONE_MM,
-    at: [w / 2, h / 2],
-    on: true,
-  });
+  // was typed. You are here is the reader's own place: the draft carries it
+  // off, at the center, for the person to put where they stand in the
+  // editor (Place You are here, or a drag); nothing prints until they do.
+  features.push(
+    {
+      id: 'destination',
+      class: 'destination',
+      kind: 'point',
+      name: addressName(place),
+      size: DESTINATION_CONE_MM,
+      at: [w / 2, h / 2],
+      on: true,
+    },
+    {
+      id: 'you-are-here',
+      class: 'you-are-here',
+      kind: 'point',
+      name: 'You are here',
+      at: [w / 2, h / 2],
+      on: false,
+    }
+  );
   plan.meta.address = {
     name: place?.name || '',
     typed: place?.query || '',

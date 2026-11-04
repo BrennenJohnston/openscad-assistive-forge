@@ -247,7 +247,7 @@ export const EDITOR_STRINGS = Object.freeze({
   /** The canvas in the map purpose: its name and its keyboard help. A11Y. */
   mapCanvasLabel: 'Map shapes',
   mapCanvasHelp:
-    "Arrow keys move between shapes. Enter opens the shape's Class menu. Plus and minus zoom; 0 fits the whole drawing.",
+    "Arrow keys move between shapes. Enter opens the shape's Class menu. Space picks up the destination or You are here to move it with the arrow keys; Space puts it down. Plus and minus zoom; 0 fits the whole drawing. Positions are millimeters from the map's top left corner.",
   /** The status line as the highlight moves in the map purpose. A11Y (two shapes). */
   mapHighlighting: (name, cls) => `${name}, ${cls}.`,
   mapHighlightingUnclassed: (name) => `${name}, no class yet.`,
@@ -330,6 +330,25 @@ export const EDITOR_STRINGS = Object.freeze({
   classReverted: (name, cls) => `Class of ${name} back to ${cls}.`,
   /** The command label, heard again on redo. */
   labelSetClass: (name, cls) => `${name} set to ${cls}`,
+
+  // ── The marks: the destination and You are here ────────────────────────
+  /** The button that puts You are here at the middle of the view. */
+  placeHere: 'Place You are here',
+  /** After the button, with where the mark landed. A11Y. */
+  herePlaced: (x, y) =>
+    `You are here placed at ${x}, ${y} mm. Drag it, or press Space on it and use the arrow keys.`,
+  /** Space on a highlighted mark. A11Y. */
+  markPickedUp: (name) =>
+    `${name} picked up. Arrow keys move it 1 mm, with Shift 10 mm. Space puts it down, Escape puts it back.`,
+  /** Each arrow key during a carry, and the pointer as it drags. A11Y. */
+  markAt: (name, x, y) => `${name} at ${x}, ${y} mm.`,
+  /** The move done, by pointer or by keyboard. A11Y. */
+  markMoved: (name, x, y) => `${name} moved to ${x}, ${y} mm.`,
+  /** Escape during a carry, and Undo of a move. A11Y. */
+  markPutBack: (name, x, y) => `${name} back at ${x}, ${y} mm.`,
+  /** The command labels, heard again on redo. */
+  labelMoveMark: (name) => `${name} moved`,
+  labelPlaceHere: 'You are here placed',
   /** A draft's switches above the list: one per class. A11Y. */
   mapGroupsLegend: 'Turn a whole class on or off',
   /** A switch's words: the class and how many shapes have it. A11Y. */

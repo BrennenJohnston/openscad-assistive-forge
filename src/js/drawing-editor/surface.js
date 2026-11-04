@@ -201,6 +201,15 @@ export function createDrawingEditor({
   );
   clearRouteBtn.hidden = true;
 
+  // The map purpose's marks: You are here goes to the middle of the view,
+  // to be dragged or carried from there (a draft carries it off until then).
+  const placeHereBtn = button(
+    S.placeHere,
+    'btn btn-secondary drawing-editor-place-here',
+    'place-here'
+  );
+  placeHereBtn.hidden = true;
+
   const paintSelect = document.createElement('select');
   paintSelect.className = 'drawing-editor-paint-select';
   paintSelect.setAttribute('aria-label', S.paintColourLabel);
@@ -264,7 +273,7 @@ export function createDrawingEditor({
   // row. At a 1280 px window the toolbar's real width is 692 px (the editor
   // shares the window with the customizer) and the groups sum to 1,705 px, so
   // two rows cannot hold them: three named rows, none of which wraps.
-  stencilTools.append(toolsGroup, clearRouteBtn, paintGroup);
+  stencilTools.append(toolsGroup, clearRouteBtn, placeHereBtn, paintGroup);
   stencilTools.hidden = true;
   viewGroup.hidden = true;
   zoomGroup.hidden = true;
@@ -890,6 +899,21 @@ export function createDrawingEditor({
         toggleSelected(key);
         announceSelection();
       },
+      // The map purpose's marks, dragged or carried; the surface records
+      // each whole move as one command and says where the mark stands.
+      canMove: (key) => purpose === 'map' && markOf(Number(key)) !== null,
+      onPickUp: (key) => say(S.markPickedUp(nameOfOriginal(Number(key)))),
+      onMoving: (key, dx, dy) => {
+        const orig = Number(key);
+        const [x, y] = markPosition(orig, dx, dy);
+        say(S.markAt(nameOfOriginal(orig), x, y));
+      },
+      onMoveEnd: (key, dx, dy) => moveMark(Number(key), dx, dy),
+      onPutBack: (key) => {
+        const orig = Number(key);
+        const [x, y] = markPosition(orig);
+        say(S.markPutBack(nameOfOriginal(orig), x, y));
+      },
       onOpenColour: (key) => {
         if (purpose === 'map') {
           focusMapRow(key);
@@ -1231,11 +1255,13 @@ export function createDrawingEditor({
       if (purpose === 'map') {
         mapElements = analysis?.elements || [];
         mapClasses.clear();
+        markMoves.clear();
         route = [];
         routePrev.clear();
         seedClasses(savedClasses);
         ensureClassSelects();
         buildMapGroups();
+        syncPlaceHere();
         setCount('regions', mapElements.length);
         feedMapCanvas(svgString).catch((err) => {
           console.error(
@@ -1427,6 +1453,7 @@ export function createDrawingEditor({
         : id === 'route';
     }
     clearRouteBtn.hidden = !map;
+    if (!map) placeHereBtn.hidden = true;
     viewGroup.hidden = !stencil;
     // The region canvas is the picture of the two purposes that work on
     // shapes one by one: the stencil paints them, the map classes them.
@@ -2377,6 +2404,108 @@ export function createDrawingEditor({
     });
   }
 
+  // ── The marks: the destination and You are here ────────────────────────
+
+  /** The two marks a person may move, by the host's feature at that index. */
+  const MARK_CLASSES = new Set(['destination', 'you-are-here']);
+  const round1 = (v) => Math.round(v * 10) / 10;
+  /** Each moved mark's offset from where the draft put it, by original index. */
+  const markMoves = new Map();
+
+  function markOf(orig) {
+    const f = callbacks.features?.[orig];
+    return f &&
+      f.kind === 'point' &&
+      MARK_CLASSES.has(f.class) &&
+      Array.isArray(f.at) &&
+      f.at.length === 2
+      ? f
+      : null;
+  }
+
+  /** Where a mark stands now, in the drawing's millimeters, plus a move in hand. */
+  function markPosition(orig, extraX = 0, extraY = 0) {
+    const f = markOf(orig);
+    const off = markMoves.get(orig) || [0, 0];
+    return [
+      round1(f.at[0] + off[0] + extraX),
+      round1(f.at[1] + off[1] + extraY),
+    ];
+  }
+
+  /** The live You are here row's original index, or null for a drawing. */
+  function hereOriginal() {
+    const orig = originalIndices().find(
+      (i) => markOf(i)?.class === 'you-are-here'
+    );
+    return orig === undefined ? null : orig;
+  }
+
+  function syncPlaceHere() {
+    placeHereBtn.hidden = !(purpose === 'map' && hereOriginal() !== null);
+  }
+
+  /** A move and a class written together, as one command does and undoes them. */
+  function writeMark(orig, offset, cls) {
+    if (offset) markMoves.set(orig, offset);
+    else markMoves.delete(orig);
+    canvas.setRegionOffset(String(orig), offset);
+    if (cls === 'ignore') mapClasses.delete(orig);
+    else mapClasses.set(orig, cls);
+    syncClassSelects();
+    paintMapCanvas();
+  }
+
+  /**
+   * A mark moved by a drag or a carry: one command, undone as one. A mark
+   * moved is a mark wanted, so an off You are here comes on where it lands.
+   */
+  function moveMark(orig, dx, dy) {
+    const f = markOf(orig);
+    if (!f || (dx === 0 && dy === 0)) return;
+    const name = nameOfOriginal(orig);
+    const before = markMoves.get(orig) || null;
+    const after = [
+      round1((before?.[0] || 0) + dx),
+      round1((before?.[1] || 0) + dy),
+    ];
+    const classBefore = mapClasses.get(orig) || 'ignore';
+    const classAfter = classBefore === 'ignore' ? f.class : classBefore;
+    const [x0, y0] = markPosition(orig);
+    stack.run({
+      label: S.labelMoveMark(name),
+      do: () => {
+        writeMark(orig, after, classAfter);
+        const [x, y] = markPosition(orig);
+        say(S.markMoved(name, x, y));
+      },
+      undo: () => writeMark(orig, before, classBefore),
+      undoSentence: S.markPutBack(name, x0, y0),
+    });
+  }
+
+  /** You are here to the middle of the view, on, highlighted, to be moved from there. */
+  function placeHere() {
+    const orig = hereOriginal();
+    if (orig === null) return;
+    const f = markOf(orig);
+    const vb = canvas.getViewBox();
+    const target = [round1(vb.x + vb.w / 2), round1(vb.y + vb.h / 2)];
+    const before = markMoves.get(orig) || null;
+    const after = [round1(target[0] - f.at[0]), round1(target[1] - f.at[1])];
+    const classBefore = mapClasses.get(orig) || 'ignore';
+    stack.run({
+      label: S.labelPlaceHere,
+      do: () => {
+        writeMark(orig, after, 'you-are-here');
+        canvas.setHighlight(String(orig), { pulse: true });
+        const [x, y] = markPosition(orig);
+        say(S.herePlaced(x, y));
+      },
+      undo: () => writeMark(orig, before, classBefore),
+    });
+  }
+
   /**
    * A shape picked with the route tool: it joins the route when one of its
    * ends lies at the route's end (the host's feature points decide; a plain
@@ -2445,7 +2574,7 @@ export function createDrawingEditor({
     const regions = originalIndices().map((orig) => {
       const el = mapElements[orig];
       const pathData = el?.pathData || '';
-      return {
+      const region = {
         key: `shape-${orig}`,
         index: orig,
         name: nameOfOriginal(orig),
@@ -2453,6 +2582,9 @@ export function createDrawingEditor({
         pathData,
         rings: pathData ? geometry.ringsFromPathData(pathData) : [],
       };
+      // A mark moved in the editor hands back where it now stands.
+      if (markMoves.has(orig)) region.at = markPosition(orig);
+      return region;
     });
     const n = regions.filter((r) => r.class !== 'ignore').length;
     const sentence = isDraft
@@ -2854,6 +2986,7 @@ export function createDrawingEditor({
     });
   }
   clearRouteBtn.addEventListener('click', () => clearRoute());
+  placeHereBtn.addEventListener('click', () => placeHere());
   paintSelectionBtn.addEventListener('click', () => {
     if (selected.size === 0) {
       say(S.nothingSelected);
@@ -3083,6 +3216,13 @@ export function createDrawingEditor({
         event.preventDefault();
         event.stopPropagation();
         cropPanel.cancel();
+        return;
+      }
+      // A mark in hand goes back where it was; the editor stays open.
+      if (canvas.isCarrying()) {
+        event.preventDefault();
+        event.stopPropagation();
+        canvas.putBack();
         return;
       }
       if (canvas.isDragging()) {

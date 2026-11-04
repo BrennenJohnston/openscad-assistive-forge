@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   archiveEntries,
+  coneRows,
   plateGridSvg,
   plateParameterSets,
   plateRoles,
@@ -94,6 +95,45 @@ describe('plateParameterSets', () => {
     expect(sets[0].parameters.plate_id).toBe('');
     expect(sets[0].parameters.title_text).toBe('Station');
     expect(sets[0].svg).toMatch(/<g id="cutouts"><path /);
+  });
+
+  it("writes each plate's cone rows in tenths of a millimeter from its bottom left, y up; a cone on a seam goes to the plate holding its center", () => {
+    const { rings } = buildLevelRings(sampleStationPlan());
+    const cones = [
+      [100, 50],
+      [300, 200],
+      [240, 180],
+    ];
+    const sets = plateParameterSets({
+      rings,
+      cones,
+      layout,
+      idStyle: 'notches',
+      northCue: 'Arrow with N',
+      config: { ...CONFIG, coneMarksParam: 'cone_marks' },
+      parameters: {},
+    });
+    expect(sets.map((s) => [s.id, s.parameters.cone_marks])).toEqual([
+      ['A1', '1000:1300'],
+      ['A2', ''],
+      ['B1', ''],
+      ['B2', '600:1600|0:1800'],
+    ]);
+    expect(coneRows(cones, { x: 0, y: 0, w: 480, h: 360 })).toBe(
+      '1000:3100|3000:1600|2400:1800'
+    );
+    expect(coneRows([], { x: 0, y: 0, w: 480, h: 360 })).toBe('');
+    // A model without the parameter gets no row.
+    const plain = plateParameterSets({
+      rings,
+      cones,
+      layout,
+      idStyle: 'notches',
+      northCue: 'None',
+      config: CONFIG,
+      parameters: {},
+    });
+    expect('cone_marks' in plain[0].parameters).toBe(false);
   });
 });
 

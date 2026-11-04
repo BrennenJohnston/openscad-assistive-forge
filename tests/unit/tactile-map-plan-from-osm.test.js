@@ -457,7 +457,7 @@ describe('draftPlan', () => {
     expect(byId(plan, 'osm-way-17').on).toBe(false);
   });
 
-  it('marks the address with the destination cone in the middle, named by the place, places no You are here, and counts what it drew', () => {
+  it('marks the address with the destination cone in the middle, named by the place, carries You are here off at the middle for the reader to place, and counts what it drew', () => {
     const { plan, counts } = DRAFT();
     const destination = byId(plan, 'destination');
     expect([
@@ -475,7 +475,16 @@ describe('draftPlan', () => {
       4.9,
       'Pine Street Station',
     ]);
-    expect(byId(plan, 'you-are-here')).toBeUndefined();
+    // Off until the person puts it where they stand: the draft cannot know,
+    // and an on mark at the middle once read as the address.
+    const here = byId(plan, 'you-are-here');
+    expect([here.class, here.kind, here.on, here.at, here.name]).toEqual([
+      'you-are-here',
+      'point',
+      false,
+      [240, 180],
+      'You are here',
+    ]);
     expect(plan.meta.address).toEqual({
       name: 'Pine Street Station, Seattle, Washington',
       typed: '',
@@ -487,7 +496,7 @@ describe('draftPlan', () => {
       crossings: 2,
       buildings: 1,
       landmarks: 7,
-      total: 22,
+      total: 23,
       on: 8,
       leftOut: 0,
     });
@@ -514,7 +523,10 @@ describe('draftPlan', () => {
       radiusM: 250,
       size: { w: 480, h: 360 },
     });
-    expect(plan.features.map((f) => f.id)).toEqual(['destination']);
+    expect(plan.features.map((f) => f.id)).toEqual([
+      'destination',
+      'you-are-here',
+    ]);
   });
 
   it("names the destination by what was typed, up to its first comma, else by the geocoder's house number and street, else by the place's name", () => {
@@ -708,7 +720,8 @@ describe('a draft within the editor', () => {
     });
     expect(plan.features.length).toBe(DRAFT_LIMIT);
     expect(counts.total).toBe(DRAFT_LIMIT);
-    expect(counts.leftOut).toBe(1201 + 1 - DRAFT_LIMIT);
+    // The destination and You are here take two of the seats.
+    expect(counts.leftOut).toBe(1201 + 2 - DRAFT_LIMIT);
     // The on sidewalk near the address stays; the kept off ones are the nearest.
     expect(plan.features.find((f) => f.id === 'osm-way-9').on).toBe(true);
     const kept = new Set(plan.features.map((f) => f.id));

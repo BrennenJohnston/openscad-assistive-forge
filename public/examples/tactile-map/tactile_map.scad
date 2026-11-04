@@ -86,8 +86,20 @@ key_print = "";
 // Height of the capital I in the key's raised words (mm). ADA 703.2.5: 16 to 50.8, as the title and the Braille Sign.
 key_letter_height_mm = 16; // [16:0.1:50.8]
 
+/* [Destination] */
+// Where the destination cones stand, written by the panel: rows of x:y in tenths of a millimeter from the plate's bottom left, rows split by |. A map plate holds the cone at the address; the key plate holds its sample.
+cone_marks = "";
+
 /* [Hidden] */
 $fn = 32;
+
+// The destination cone, Touch Mapper's address marker exactly (skarkkai/
+// touch-mapper, converter/tactile_constants.py and obj-to-tactile.py,
+// AGPL-3.0): 4.9 mm tall from the plate's underside, its foot as wide as it
+// is tall, the top cut flat at an eighth of the radius so it prints, 16
+// sides. Constants, not dials: the form other tactile map makers know.
+CONE_HEIGHT_MM = 4.9;
+CONE_RADIUS_MM = CONE_HEIGHT_MM / 2;
 
 // Overlap for every boolean, so no two faces touch exactly.
 _fuse = 0.01;
@@ -363,6 +375,20 @@ function _row(r) =
     let(a = _at(r, ":"), rest = _sub(r, a + 1, len(r)), b = _at(rest, ":"))
     [_int(_sub(r, 0, a)) / 10, _int(_sub(rest, 0, b)) / 10, _sub(rest, b + 1, len(rest))];
 function _rows(s) = len(s) == 0 ? [] : [for (r = _split(s, "|")) if (len(r) > 0) _row(r)];
+// Rows of "x:y" split by "|", x and y in tenths of a millimeter.
+function _xy(r) =
+    let(a = _at(r, ":"))
+    [_int(_sub(r, 0, a)) / 10, _int(_sub(r, a + 1, len(r))) / 10];
+function _xy_rows(s) = len(s) == 0 ? [] : [for (r = _split(s, "|")) if (len(r) > 0) _xy(r)];
+
+// The destination cone rises from under the plate through whatever stands
+// at its foot, so it is the tallest thing on the map wherever it lands.
+module destination_cone() {
+    for (m = _xy_rows(cone_marks))
+        translate([m[0], m[1], -_fuse])
+            cylinder(h = CONE_HEIGHT_MM + _fuse, r1 = CONE_RADIUS_MM,
+                     r2 = CONE_RADIUS_MM / 8, $fn = 16);
+}
 
 module key_words() {
     translate([0, 0, base_eff - _fuse])
@@ -380,6 +406,7 @@ module tactile_map() {
             cube([map_width_mm, map_height_mm, base_eff]);
             levels();
             here_mark();
+            destination_cone();
             if (plate_kind == "Key") {
                 key_words();
             } else {

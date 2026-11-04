@@ -132,11 +132,13 @@ export function rowOrder(features = []) {
 /**
  * The editor's rows laid back over the plan by index: a row classed
  * `ignore` switches its feature off (the class kept, so switching it back
- * on restores it); any other class switches it on with that class. The
- * geometry is untouched; the plan returned is new.
+ * on restores it); any other class switches it on with that class. A row
+ * with an `at` moves its point there (the destination and You are here,
+ * dragged in the editor); every other feature's geometry is untouched; the
+ * plan returned is new.
  *
  * @param {object} plan
- * @param {Array<{index: number, class: string}>} regions
+ * @param {Array<{index: number, class: string, at?: [number, number]}>} regions
  * @param {number[]|null} [order] - the rows' order the drawing was written in
  * @returns {object}
  */
@@ -153,6 +155,14 @@ export function applyRowsToPlan(plan, regions, order = null) {
     } else {
       f.on = true;
       f.class = cls;
+    }
+    if (
+      f.kind === 'point' &&
+      Array.isArray(region.at) &&
+      region.at.length === 2 &&
+      region.at.every((v) => Number.isFinite(v))
+    ) {
+      f.at = [region.at[0], region.at[1]];
     }
   }
   return { ...plan, features };

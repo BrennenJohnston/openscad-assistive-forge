@@ -372,7 +372,7 @@ export function keyPlates(
       on: true,
     });
     plan.features.push(...p.samples, ...p.channels);
-    const { rings } = buildLevelRings(plan, settings);
+    const { rings, cones } = buildLevelRings(plan, settings);
     return {
       id: pages.length === 1 ? 'key' : `key-${n + 1}`,
       size: { w: plateW, h: plateH },
@@ -380,6 +380,7 @@ export function keyPlates(
       svg: levelsSvgFromRings(rings, plan.size),
       print: p.print.join('|'),
       tape: p.tape,
+      cones,
     };
   });
 }

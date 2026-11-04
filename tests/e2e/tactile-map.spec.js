@@ -580,8 +580,9 @@ test.describe('the draft map', () => {
       '#drawingEditorSurface .drawing-editor-class-select'
     );
     // Every feature in the data has a row, the off ones too (a group switch
-    // turns them on): the fixture's 20 drawn features and its bakery.
-    await expect(selects).toHaveCount(21);
+    // turns them on): the fixture's 20 drawn features, its bakery, and You
+    // are here, off until the person places it.
+    await expect(selects).toHaveCount(22);
     // The last entry of a draft's Class menu reads Off, not Ignore.
     await expect(selects.first().locator('option').last()).toHaveText('Off');
     await expect(
