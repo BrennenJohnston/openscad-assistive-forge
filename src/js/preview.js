@@ -121,7 +121,7 @@ export function getThreeModule() {
     LineDashedMaterial,
     LineSegments,
     Vector3,
-    // The axis-tick overlay rasterises its distance labels onto a canvas and
+    // The axis-tick overlay rasterizes its distance labels onto a canvas and
     // hangs them in the scene as sprites. Without these three it would throw
     // "three.CanvasTexture is not a constructor" before the group is returned,
     // and the whole overlay, tick lines included, would be lost. Its unit
@@ -3936,7 +3936,12 @@ export class PreviewManager {
    * @param {string} source.dataUrlOrText - Data URL for rasters, SVG text for SVG
    * @returns {Promise<void>}
    */
-  async setReferenceOverlaySource({ kind, name, dataUrlOrText }) {
+  async setReferenceOverlaySource({
+    kind,
+    name,
+    dataUrlOrText,
+    keepColors = false,
+  }) {
     // Dispose of existing texture
     if (this.referenceTexture) {
       this.referenceTexture.dispose();
@@ -3948,6 +3953,7 @@ export class PreviewManager {
       this.overlayConfig.sourceFileName = null;
       this.overlayConfig.intrinsicAspect = null;
       this._lastSvgContent = null;
+      this._lastSvgKeepsColors = false;
       this.removeReferenceOverlay();
       return;
     }
@@ -3955,10 +3961,17 @@ export class PreviewManager {
     try {
       if (kind === 'svg') {
         this._lastSvgContent = dataUrlOrText;
+        // A source that keeps its own colors (the tactile map's paper) is
+        // never painted the overlay color, and gets a sharper canvas so
+        // its small print stays legible across a plate.
+        this._lastSvgKeepsColors = keepColors;
         const { texture, aspect, widthMm, heightMm } =
           await this.svgTextToCanvasTexture(
             dataUrlOrText,
-            this.overlayConfig.svgColor
+            keepColors ? null : this.overlayConfig.svgColor,
+            keepColors
+              ? { targetCanvasSize: this.getMaxTextureResolution() * 2 }
+              : {}
           );
         this.referenceTexture = texture;
         this.overlayConfig.intrinsicAspect = aspect;
@@ -4411,9 +4424,11 @@ export class PreviewManager {
         this.referenceTexture.dispose();
         this.referenceTexture = null;
       }
+      const keep = this._lastSvgKeepsColors;
       const { texture, aspect } = await this.svgTextToCanvasTexture(
         this._lastSvgContent,
-        this.overlayConfig.svgColor
+        keep ? null : this.overlayConfig.svgColor,
+        keep ? { targetCanvasSize: this.getMaxTextureResolution() * 2 } : {}
       );
       this.referenceTexture = texture;
       this.overlayConfig.intrinsicAspect = aspect;
@@ -4475,6 +4490,15 @@ export class PreviewManager {
       }
       case 'custom':
         return Number.isFinite(customMm) ? customMm : 0;
+      case 'model-bottom': {
+        // customMm from the mesh's underside, wherever the mesh stands;
+        // negative lies under it (the tactile map's paper, which the plate
+        // covers until the model is switched off).
+        if (!this.mesh) return 0;
+        const box = new Box3().setFromObject(this.mesh);
+        if (!Number.isFinite(box.min.z)) return 0;
+        return box.min.z + (Number.isFinite(customMm) ? customMm : 0);
+      }
       case 'under-plate':
       default:
         return -0.25;
@@ -4485,8 +4509,8 @@ export class PreviewManager {
    * Choose which surface the overlay sits against.
    *
    * @param {Object} options
-   * @param {string} [options.preset] - under-plate | build-plate | model-top | custom
-   * @param {number} [options.customMm] - Z in mm, used by the custom preset
+   * @param {string} [options.preset] - under-plate | build-plate | model-top | model-bottom | custom
+   * @param {number} [options.customMm] - Z in mm: the height for custom, the lift above the underside for model-bottom
    */
   setOverlayZ({ preset, customMm } = {}) {
     if (typeof preset === 'string') this.overlayConfig.zPreset = preset;
@@ -4508,7 +4532,8 @@ export class PreviewManager {
    * Called after a render, so 'Top of model' follows the object.
    */
   refreshOverlayZ() {
-    if (this.overlayConfig.zPreset !== 'model-top') return;
+    const preset = this.overlayConfig.zPreset;
+    if (preset !== 'model-top' && preset !== 'model-bottom') return;
     this.setOverlayZ({});
   }
 

@@ -39,6 +39,9 @@ const DEFAULTS = {
   crosshairs: false,
   wireframe: false,
   axisMarks: false,
+  // The model itself: off, the mesh hides so what lies under it (the
+  // tactile map's paper on the reference overlay) can be read alone.
+  model: true,
 };
 
 /**
@@ -49,7 +52,7 @@ const EDGE_BUDGET_PREF = 'edgeBudget';
 const DEFAULT_EDGE_BUDGET = 75000;
 
 /**
- * @typedef {'axes'|'edges'|'crosshairs'|'wireframe'|'axisMarks'} DisplayOption
+ * @typedef {'axes'|'edges'|'crosshairs'|'wireframe'|'axisMarks'|'model'} DisplayOption
  */
 
 /**
@@ -196,6 +199,7 @@ const HUMAN_LABELS = {
   crosshairs: 'Crosshairs',
   wireframe: 'Wireframe',
   axisMarks: 'Axis distance markings',
+  model: 'Model',
 };
 
 /**
@@ -472,6 +476,8 @@ export class DisplayOptionsController {
     if (this.connectPreviewManager()) return;
     this._apply('edges');
     this._apply('wireframe');
+    // A new mesh arrives visible; a hidden model stays hidden.
+    this._apply('model');
     // Any path that replaces or clears scene content loses axes and ticks,
     // so they are re-applied here along with what a mesh swap invalidates.
     // Both are idempotent re-adds (getObjectByName guards), so the common
@@ -658,6 +664,9 @@ export class DisplayOptionsController {
         break;
       case 'axisMarks':
         this._applyAxisMarks(pm);
+        break;
+      case 'model':
+        this._applyModel(pm);
         break;
     }
   }
@@ -854,6 +863,12 @@ export class DisplayOptionsController {
   _applyWireframe(pm) {
     if (pm.mesh?.material) {
       pm.mesh.material.wireframe = !!this.state.wireframe;
+    }
+  }
+
+  _applyModel(pm) {
+    if (pm.mesh) {
+      pm.mesh.visible = !!this.state.model;
     }
   }
 

@@ -58,7 +58,7 @@ export const UI_NAMESPACES = Object.freeze(
 );
 
 /**
- * The 23 per-interface storage keys.
+ * The 24 per-interface storage keys.
  * The display-* names mirror display-options-controller.js's PREF_PREFIX
  * derivation and auto-rotate/rotate-speed mirror overlay-grid-controller's
  * — same getAppPrefKey generator, and the unit snapshot pins every derived
@@ -75,6 +75,7 @@ export const SCOPED_PREF_BASE_KEYS = Object.freeze([
   getAppPrefKey('display-edgeBudget'),
   getAppPrefKey('display-crosshairs'),
   getAppPrefKey('display-wireframe'),
+  getAppPrefKey('display-model'),
   STORAGE_KEY_MEASUREMENTS,
   STORAGE_KEY_VIEWPORT_SCHEME,
   STORAGE_KEY_STATUS_BAR,

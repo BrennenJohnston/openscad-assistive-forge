@@ -68,7 +68,7 @@ test.describe('Tactile Map tile', () => {
     ).not.toHaveCount(0);
   });
 
-  test('lays no picture of its own map file over the preview: the map file is the model, not a reference', async ({
+  test('lays the map paper over the plate, never the map file itself, and Show Model hides the plate to read it', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -81,15 +81,44 @@ test.describe('Tactile Map tile', () => {
       /state-current/,
       { timeout: PREVIEW_TIMEOUT }
     );
-    // The reference picture was switched on a moment after the files list
-    // drew, once its image had loaded.
-    await page.waitForTimeout(2000);
+    // The paper is the overlay's source; the levels file never is.
+    await expect(page.locator('#overlayToggle')).toBeChecked({
+      timeout: 10_000,
+    });
+    const overlay = () =>
+      page.evaluate(() => ({
+        source: window.previewManager?.getOverlayConfig?.()?.sourceFileName,
+        visible: Boolean(window.previewManager?.referenceOverlay?.visible),
+        model: window.previewManager?.mesh?.visible ?? null,
+      }));
+    expect(await overlay()).toMatchObject({
+      source: 'paper_whole.svg',
+      visible: true,
+      model: true,
+    });
+
+    await goToStep(page, 5);
+    const paperBox = page.locator('#tactileMapPaper');
+    await expect(paperBox).toBeChecked();
+    await paperBox.uncheck();
     await expect(page.locator('#overlayToggle')).not.toBeChecked();
-    expect(
-      await page.evaluate(() =>
-        Boolean(window.previewManager?.referenceOverlay?.visible)
-      )
-    ).toBe(false);
+    expect((await overlay()).visible).toBe(false);
+    await paperBox.check();
+    await expect(page.locator('#overlayToggle')).toBeChecked({
+      timeout: 10_000,
+    });
+    expect((await overlay()).source).toBe('paper_whole.svg');
+
+    // The View menu's switch hides the mesh and nothing else.
+    const showModel = page.getByRole('menuitemcheckbox', {
+      name: 'Show Model',
+    });
+    await page.evaluate(() => document.getElementById('viewMenuBtn')?.click());
+    await showModel.click();
+    expect(await overlay()).toMatchObject({ visible: true, model: false });
+    await page.evaluate(() => document.getElementById('viewMenuBtn')?.click());
+    await showModel.click();
+    expect((await overlay()).model).toBe(true);
   });
 
   test('the preview renders the whole map, then plate A1 at 240 x 180', async ({

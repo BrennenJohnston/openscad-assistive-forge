@@ -213,4 +213,12 @@ describe('plateLevelsSvg', () => {
     expect(channels).toBe(2);
     for (const o of outs) expect(o.svg).toMatch(/width="240mm" height="180mm"/);
   });
+
+  it('hands back the clipped rings too, so the paper can draw the same plate', () => {
+    const out = plateLevelsSvg(rings, A1);
+    expect(out.rings.level3).toHaveLength(1);
+    expect(bbox(out.rings.level3).maxX).toBeCloseTo(240, 2);
+    expect(out.rings.channels).toEqual([]);
+    expect(out.rings.cutouts).toEqual([]);
+  });
 });

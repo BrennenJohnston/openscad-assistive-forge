@@ -2132,3 +2132,101 @@ describe('the Alt View', () => {
     expect(announce).not.toHaveBeenCalled();
   });
 });
+
+describe('the map paper under the plate', () => {
+  let pm;
+  const toggle = () => document.getElementById('overlayToggle');
+  const paperBox = () => document.getElementById('tactileMapPaper');
+
+  beforeEach(() => {
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      '<input type="checkbox" id="overlayToggle">'
+    );
+    pm = {
+      setReferenceOverlaySource: vi.fn(async () => {}),
+      setOverlayEnabled: vi.fn(),
+      setOverlayZ: vi.fn(),
+      setOverlayTransform: vi.fn(),
+    };
+    mount({ getAutoPreviewController: () => ({ previewManager: pm }) });
+  });
+
+  it("loads the whole map's paper, in its own colours, 2 mm under the plate, and turns the overlay on", async () => {
+    await vi.waitFor(
+      () => expect(pm.setReferenceOverlaySource).toHaveBeenCalled(),
+      SETTLE
+    );
+    const call = pm.setReferenceOverlaySource.mock.calls.at(-1)[0];
+    expect(call.kind).toBe('svg');
+    expect(call.name).toBe('paper_whole.svg');
+    expect(call.keepColors).toBe(true);
+    expect(call.dataUrlOrText).toMatch(/the waiting area/);
+    await vi.waitFor(
+      () => expect(pm.setOverlayEnabled).toHaveBeenLastCalledWith(true),
+      SETTLE
+    );
+    expect(pm.setOverlayZ).toHaveBeenLastCalledWith({
+      preset: 'model-bottom',
+      customMm: -2,
+    });
+    expect(pm.setOverlayTransform).toHaveBeenLastCalledWith({
+      offsetX: 0,
+      offsetY: 0,
+      rotationDeg: 0,
+    });
+    expect(toggle().checked).toBe(true);
+    expect(paperBox().checked).toBe(true);
+  });
+
+  it('follows the plate shown, and the checkbox clears the paper and brings it back', async () => {
+    await vi.waitFor(
+      () => expect(pm.setOverlayEnabled).toHaveBeenLastCalledWith(true),
+      SETTLE
+    );
+    click('tactileMapPlate-A1');
+    await vi.waitFor(
+      () =>
+        expect(pm.setReferenceOverlaySource.mock.calls.at(-1)[0].name).toBe(
+          'paper_A1.svg'
+        ),
+      SETTLE
+    );
+    paperBox().click();
+    await vi.waitFor(
+      () => expect(pm.setOverlayEnabled).toHaveBeenLastCalledWith(false),
+      SETTLE
+    );
+    expect(pm.setReferenceOverlaySource.mock.calls.at(-1)[0]).toEqual({
+      kind: null,
+      name: null,
+      dataUrlOrText: null,
+    });
+    expect(toggle().checked).toBe(false);
+    paperBox().click();
+    await vi.waitFor(
+      () => expect(pm.setOverlayEnabled).toHaveBeenLastCalledWith(true),
+      SETTLE
+    );
+    expect(pm.setReferenceOverlaySource.mock.calls.at(-1)[0].name).toBe(
+      'paper_A1.svg'
+    );
+  });
+
+  it('clears the paper when the panel goes', async () => {
+    await vi.waitFor(
+      () => expect(pm.setOverlayEnabled).toHaveBeenLastCalledWith(true),
+      SETTLE
+    );
+    destroyMapPanel();
+    expect(pm.setReferenceOverlaySource.mock.calls.at(-1)[0].kind).toBe(null);
+    expect(pm.setOverlayEnabled).toHaveBeenLastCalledWith(false);
+    expect(toggle().checked).toBe(false);
+  });
+
+  it('draws no paper without a preview to put it on', async () => {
+    mount();
+    await new Promise((r) => setTimeout(r, 450));
+    expect(pm.setReferenceOverlaySource).not.toHaveBeenCalled();
+  });
+});

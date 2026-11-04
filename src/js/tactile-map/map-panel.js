@@ -61,6 +61,7 @@ import {
   scaleSentence,
 } from './plan-from-drawing.js';
 import {
+  DEFAULT_SETTINGS,
   buildLevelRings,
   levelsSvgFromRings,
   settingsForSet,
@@ -68,6 +69,14 @@ import {
 import { keyFor, keySentence, keyText } from './map-key.js';
 import { keyLabel, keyPlates, KEY_LETTER_MM, KEY_WORDS } from './key-layout.js';
 import { labelPlan } from './map-labels.js';
+import {
+  mapPaperSvg,
+  paperChannels,
+  paperColors,
+  paperTexts,
+  paperWords,
+  shiftTexts,
+} from './map-paper.js';
 import { svgToDataUrl } from '../svg-text-encoding.js';
 import {
   BED_PRESETS,
@@ -113,6 +122,15 @@ export const ALT_VIEW_SENTENCE =
   'The Tactile Map Designer is not available in the Alt View. Its controls return when the Alt View is off.';
 /** A11Y: the name of the folded warnings list, its count first. */
 export const WARNINGS_TITLE = (n) => (n === 1 ? '1 warning' : `${n} warnings`);
+/** A11Y: said when the paper could not be laid on the plate. */
+export const PAPER_FAILED = (why) => `The map paper could not be drawn: ${why}`;
+/**
+ * The paper lies this far under the plate's underside: a sheet under a
+ * print, covered until the model is switched off. On the plate it would
+ * fight the raised faces for depth: the preview's depth buffer cannot tell
+ * surfaces half a millimeter apart on a 480 mm plate (MEASURED).
+ */
+const PAPER_GAP_MM = 2;
 
 let panel = null;
 
@@ -288,6 +306,13 @@ class MapPanel {
       options.render || renderThroughEngine(options.getAutoPreviewController);
     this.download = options.download || downloadFile;
     this.getEditor = options.getEditor || sharedDrawingEditor;
+    // The map paper: the plate shown, drawn flat with its names, laid on
+    // the preview's reference overlay while the checkbox says so.
+    this.getController = options.getAutoPreviewController || null;
+    this.showPaper = options.showPaper !== false;
+    this.paper = null;
+    this.paperShown = false;
+    this.paperToken = 0;
     // The address section: its geocoder (a test's stub, else the lazy
     // chunk loaded on the first press) and the place last picked.
     this.searchPlaces = options.searchPlaces || null;
@@ -806,6 +831,22 @@ class MapPanel {
     plates.appendChild(el('legend', '', 'Plate'));
     add('bed', plates);
     this.refs.plates = plates;
+
+    const paperRow = el('div', 'braille-panel-toggle-row');
+    const paperBox = document.createElement('input');
+    paperBox.type = 'checkbox';
+    paperBox.id = 'tactileMapPaper';
+    paperBox.checked = this.showPaper;
+    paperBox.addEventListener('change', () => {
+      this.showPaper = paperBox.checked;
+      this.syncPaper();
+    });
+    const paperLabel = el('label', '', 'Show the map paper');
+    paperLabel.htmlFor = paperBox.id;
+    paperRow.appendChild(paperBox);
+    paperRow.appendChild(paperLabel);
+    add('bed', paperRow);
+    this.refs.paper = paperBox;
 
     const styleLabel = el('label', 'braille-panel-label', 'Plate name style');
     styleLabel.htmlFor = 'tactileMapIdStyle';
@@ -2029,6 +2070,8 @@ class MapPanel {
     let showTitle = 'yes';
     let showNorth = 'yes';
     let keyPage = null;
+    let plate = null;
+    let rings = built.rings;
     if (this.plate === 'whole') {
       svg = levelsSvgFromRings(built.rings, this.plan.size, built.textBoxes);
       size = this.plan.size;
@@ -2041,11 +2084,12 @@ class MapPanel {
       showTitle = 'no';
       showNorth = 'no';
     } else {
-      const plate = this.layout.plates.find((p) => p.id === this.plate);
+      plate = this.layout.plates.find((p) => p.id === this.plate);
       const out = plateLevelsSvg(built.rings, plate, { id: this.idStyle });
       const roles = plateRoles(plate, this.layout, this.northCue());
       svg = out.svg;
       size = out.size;
+      rings = out.rings;
       fileName = `levels_${plate.id}.svg`;
       if (this.idStyle === 'margin') plateId = plate.id;
       showTitle = roles.title ? 'yes' : 'no';
@@ -2069,6 +2113,127 @@ class MapPanel {
         `[MapPanel] No file control for parameter: ${this.config.mapFileParam}`
       );
     }
+    if (this.previewManager()) {
+      this.paper = this.paperFor({
+        rings,
+        size,
+        labeled,
+        keyPage,
+        plate,
+        title: showTitle === 'yes',
+      });
+      this.syncPaper();
+    }
+  }
+
+  /** The preview the paper lies on; none in a test without one. */
+  previewManager() {
+    return this.getController?.()?.previewManager || null;
+  }
+
+  /**
+   * The paper of the plate shown: its rings as drawn, every name at its
+   * thing, the channels with their tape's text, a key plate's raised
+   * words, the title where the raised one stands and the plate's name.
+   * The colors are the tokens' values as the page shows them now.
+   */
+  paperFor({ rings, size, labeled, keyPage, plate, title }) {
+    const parameters = stateManager.getState().parameters || {};
+    const s = { ...DEFAULT_SETTINGS, ...this.levelSettings() };
+    const across = this.tapeWidth() + s.channelClearanceMm;
+    const labelText = new Map(
+      (labeled.labels || []).map((l) => [`label-${l.featureId}`, l.text])
+    );
+    const textOf = (f) => labelText.get(f.id) || '';
+    let texts = [];
+    let channels = [];
+    let words = [];
+    let plateId = '';
+    let drawn = rings;
+    if (keyPage) {
+      drawn = buildLevelRings(keyPage.plan, s).rings;
+      channels = paperChannels(
+        keyPage.plan.features,
+        across,
+        (f, i) => keyPage.tape[i]
+      );
+      words = paperWords(
+        keyPage.print,
+        Number(parameters[this.config.keyLetterParam]) || KEY_LETTER_MM,
+        keyPage.size.h
+      );
+      plateId = keyLabel(keyPage.id);
+    } else if (plate) {
+      texts = shiftTexts(paperTexts(labeled.plan), plate);
+      channels = shiftTexts(
+        paperChannels(labeled.plan.features, across, textOf),
+        plate
+      );
+      plateId = plate.id;
+    } else {
+      texts = paperTexts(labeled.plan);
+      channels = paperChannels(labeled.plan.features, across, textOf);
+    }
+    const style = getComputedStyle(document.documentElement);
+    const colors = paperColors((name) => style.getPropertyValue(name));
+    return {
+      name: `paper_${this.plate}.svg`,
+      svg: mapPaperSvg({
+        rings: drawn,
+        size,
+        texts,
+        channels,
+        words,
+        title: title ? String(parameters[this.config.titleParam] || '') : '',
+        plateId,
+        colors,
+      }),
+    };
+  }
+
+  /**
+   * Lay the paper on the preview's reference overlay, or take it off: it
+   * keeps its own colors, lies under the plate wherever the model stands,
+   * and the overlay's own switch follows it.
+   */
+  syncPaper() {
+    const pm = this.previewManager();
+    if (!pm) return;
+    const toggle = document.getElementById('overlayToggle');
+    if (!this.showPaper || !this.paper) {
+      if (!this.paperShown) return;
+      this.paperShown = false;
+      this.paperToken += 1;
+      pm.setReferenceOverlaySource({
+        kind: null,
+        name: null,
+        dataUrlOrText: null,
+      });
+      pm.setOverlayEnabled(false);
+      if (toggle) toggle.checked = false;
+      return;
+    }
+    const { name, svg } = this.paper;
+    const token = (this.paperToken += 1);
+    Promise.resolve(
+      pm.setReferenceOverlaySource({
+        kind: 'svg',
+        name,
+        dataUrlOrText: svg,
+        keepColors: true,
+      })
+    )
+      .then(() => {
+        if (token !== this.paperToken) return;
+        pm.setOverlayTransform({ offsetX: 0, offsetY: 0, rotationDeg: 0 });
+        pm.setOverlayZ({ preset: 'model-bottom', customMm: -PAPER_GAP_MM });
+        pm.setOverlayEnabled(true);
+        this.paperShown = true;
+        if (toggle) toggle.checked = true;
+      })
+      .catch((err) => {
+        this.sayAddress(PAPER_FAILED(err?.message || String(err)), true);
+      });
   }
 
   /** The panel's sections, hidden together under the Alt View. */
@@ -2089,6 +2254,8 @@ class MapPanel {
 
   destroy() {
     clearTimeout(this.timer);
+    this.paper = null;
+    this.syncPaper();
     // The next panel starts on its first set, as its radios say.
     setLibrary(null);
     setActiveSet(BUILT_IN_SETS[0].key);
