@@ -23,8 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or carried by keyboard (Space picks one up, the arrow keys move it, Space
   puts it down); Place You are here puts the reader's mark at the middle of
   the view, and one Undo takes a whole move back.
+- The map prints as a sheet: a blank band of 10 to 40 mm around the map on
+  every side, set in step 5, and the raised title on a band of its own above
+  the map, wrapped to the map's width and spaced as a sign's letters are; or
+  inside the map's top edge as before, or left off. A title band that would
+  force a row of short plates prints on title plates of its own above row A.
+  A place map can be made portrait, upright at the same scale.
 
 ### Changed
+
+- The plates are cut from the sheet, the map in its band: the sample's
+  480 x 360 mm map prints as four 250 x 190 mm plates on a 256 mm bed, and
+  the README's backing board is the sheet's size.
 
 - The drawing editor's picture moves in every tool: a drag on empty ground
   pans it with the mouse or a finger, Shift with an arrow key moves it a

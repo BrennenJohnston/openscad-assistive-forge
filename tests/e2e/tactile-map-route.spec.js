@@ -186,14 +186,15 @@ test('a route map from the Husky Union Building to the Bill & Melinda Gates Cent
     );
   }
 
-  // The model takes the fitted size and renders with no warning.
-  // Escape leaves the editor, and focus goes back to the button that opened it.
+  // The model takes the fitted size in its 10 mm band and renders with no
+  // warning. Escape leaves the editor, and focus goes back to the button
+  // that opened it.
   await page.keyboard.press('Escape');
   await expect(make).toBeFocused();
-  await expect(page.locator('#param-map_width_mm-spinbox')).toHaveValue('172', {
+  await expect(page.locator('#param-map_width_mm-spinbox')).toHaveValue('192', {
     timeout: 10000,
   });
-  await expect(page.locator('#param-map_height_mm-spinbox')).toHaveValue('360');
+  await expect(page.locator('#param-map_height_mm-spinbox')).toHaveValue('380');
   // The preview holds the route map's model, not the sample's before it.
   await expect
     .poll(
@@ -206,7 +207,7 @@ test('a route map from the Husky Union Building to the Bill & Melinda Gates Cent
         }),
       { timeout: PREVIEW_TIMEOUT }
     )
-    .toBe(172);
+    .toBe(192);
   await expect(page.locator('.preview-state-indicator')).toHaveClass(
     /state-current/,
     { timeout: PREVIEW_TIMEOUT }

@@ -183,8 +183,10 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
 
     await nextStep(page, 5, 'Check and print');
     await axeClean(page, 'step 5');
+    // The 480 x 360 face in its 10 mm band: a 500 x 380 sheet, whose
+    // 250 x 190 plates hold the key in four (five at 240 x 180).
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 240 x 180 mm, A1 to B2. The key takes 5 plates.'
+      '4 plates of 250 x 190 mm, A1 to B2. The key takes 4 plates.'
     );
     await expect(page.locator('#tactileMapKeyWords')).toHaveValue('braille');
     const key = await page.evaluate(() => {
@@ -206,7 +208,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       'Walkway: a dashed line 1.2 mm wide, low',
       'Area: a raised area, low',
     ]);
-    expect(key.plates).toEqual(['key-1', 'key-2', 'key-3', 'key-4', 'key-5']);
+    expect(key.plates).toEqual(['key-1', 'key-2', 'key-3', 'key-4']);
 
     // The zip: the map's plates, the key's, and the README that goes with them.
     const downloadPromise = page.waitForEvent('download', { timeout: 420_000 });
@@ -242,10 +244,10 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       }
       return hi - lo;
     });
-    expect(size[0]).toBeCloseTo(240, 1);
-    expect(size[1]).toBeCloseTo(180, 1);
+    expect(size[0]).toBeCloseTo(250, 1);
+    expect(size[1]).toBeCloseTo(190, 1);
     await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
-      'All 9 plates are in tactile_map_plates.zip.'
+      'All 8 plates are in tactile_map_plates.zip.'
     );
   });
 
@@ -304,6 +306,8 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     });
     expect(plan.cone).toEqual(moved);
     expect(plan.here).toEqual({ on: true, at: placed });
+    // The model's row is in the sheet's frame: the face's 10 mm band to the
+    // left and below, y up from the 380 mm sheet's bottom.
     await expect
       .poll(() =>
         page.evaluate(
@@ -311,7 +315,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
         )
       )
       .toBe(
-        `${Math.round(moved[0] * 10)}:${Math.round((360 - moved[1]) * 10)}`
+        `${Math.round((moved[0] + 10) * 10)}:${Math.round((370 - moved[1]) * 10)}`
       );
   });
 

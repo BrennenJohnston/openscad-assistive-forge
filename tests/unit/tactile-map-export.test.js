@@ -8,12 +8,14 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  EMPTY_RINGS,
   archiveEntries,
   coneRows,
   plateGridSvg,
   plateParameterSets,
   plateRoles,
   readmeText,
+  titlePlateSets,
 } from '../../src/js/tactile-map/plate-export.js';
 import {
   BED_PRESETS,
@@ -21,6 +23,7 @@ import {
 } from '../../src/js/tactile-map/plate-tiling.js';
 import { buildLevelRings } from '../../src/js/tactile-map/levels-svg.js';
 import { sampleStationPlan } from '../../src/js/tactile-map/plan.js';
+import { sheetOf, titleRows } from '../../src/js/tactile-map/sheet.js';
 
 const x1c = BED_PRESETS.find((b) => b.key === 'x1c');
 const layout = planPlates({ w: 480, h: 360, bed: x1c });
@@ -135,6 +138,118 @@ describe('plateParameterSets', () => {
     });
     expect('cone_marks' in plain[0].parameters).toBe(false);
   });
+
+  // STATION on one 16 mm line is a 40.65 mm band (16 x 1.35 and 9.525
+  // clear above and below). On a 480 x 360 face the 500 x 420.65 sheet
+  // still cuts into two rows, so the band rides in row A: its row goes to
+  // A1 and, starting 240 mm left of its edge, to A2; the model's own title
+  // stays off every plate.
+  it("writes the title band's rows to the plates of the top row, the second plate's starting left of its edge, and turns the model's title off", () => {
+    const { rings } = buildLevelRings(sampleStationPlan());
+    const sheet = sheetOf({ face: { w: 480, h: 360 }, title: 'Station' });
+    const rows = titleRows(sheet, 16);
+    const banded = planPlates({
+      w: sheet.w,
+      h: sheet.h,
+      bed: x1c,
+      titleBandMm: sheet.titleBand.h,
+    });
+    expect(banded.titlePlates).toEqual([]);
+    const sets = plateParameterSets({
+      rings,
+      rows,
+      sheetH: sheet.h,
+      titleInside: false,
+      layout: banded,
+      idStyle: 'notches',
+      northCue: 'Arrow with N',
+      config: { ...CONFIG, raisedWordsParam: 'raised_words' },
+      parameters: {},
+    });
+    expect(
+      sets.map((s) => [
+        s.id,
+        s.parameters.raised_words,
+        s.parameters.plate_shows_title,
+      ])
+    ).toEqual([
+      ['A1', '100:1748:160:0:STATION', 'no'],
+      ['A2', '-2400:1748:160:0:STATION', 'no'],
+      ['B1', '', 'no'],
+      ['B2', '', 'no'],
+    ]);
+  });
+});
+
+describe('titlePlateSets', () => {
+  // A 480 x 480 face: two rows of plates alone, three with the band, so
+  // the band takes a row of its own above A, 75 mm tall (the model's
+  // smallest plate), the title's row on it and on no map plate.
+  it('gives each title plate an empty levels file of its size, the rows it holds, no cone and neither flag', () => {
+    const sheet = sheetOf({ face: { w: 480, h: 480 }, title: 'Station' });
+    const rows = titleRows(sheet, 16);
+    const split = planPlates({
+      w: sheet.w,
+      h: sheet.h,
+      bed: x1c,
+      titleBandMm: sheet.titleBand.h,
+    });
+    expect(split.titlePlates.map((p) => [p.id, p.w, p.h])).toEqual([
+      ['title-1', 250, 75],
+      ['title-2', 250, 75],
+    ]);
+    const config = {
+      ...CONFIG,
+      raisedWordsParam: 'raised_words',
+      coneMarksParam: 'cone_marks',
+    };
+    const titles = titlePlateSets({
+      titlePlates: split.titlePlates,
+      rows,
+      sheetH: sheet.h,
+      config,
+      parameters: { title_text: 'Station' },
+    });
+    expect(titles.map((t) => [t.id, t.parameters.raised_words])).toEqual([
+      ['title-1', '100:395:160:0:STATION'],
+      ['title-2', '-2400:395:160:0:STATION'],
+    ]);
+    const first = titles[0];
+    expect(first.size).toEqual({ w: 250, h: 75 });
+    expect(first.fileName).toBe('levels_title-1.svg');
+    expect(first.svg).toMatch(/viewBox="0 0 250 75"/);
+    expect(first.parameters.map_width_mm).toBe(250);
+    expect(first.parameters.map_height_mm).toBe(75);
+    expect(first.parameters.cone_marks).toBe('');
+    expect(first.parameters.plate_shows_title).toBe('no');
+    expect(first.parameters.plate_shows_north).toBe('no');
+    expect(first.parameters.plate_id).toBe('');
+    expect(first.parameters.title_text).toBe('Station');
+    expect(first.roles).toEqual({ title: false, north: false });
+    expect(EMPTY_RINGS()).toEqual({
+      level1: [],
+      level2: [],
+      level3: [],
+      here: [],
+      channels: [],
+      cutouts: [],
+    });
+    // The map plates below hold none of the title.
+    const { rings } = buildLevelRings(sampleStationPlan());
+    const maps = plateParameterSets({
+      rings,
+      rows,
+      sheetH: sheet.h,
+      titleInside: false,
+      layout: split,
+      idStyle: 'notches',
+      northCue: 'None',
+      config,
+      parameters: {},
+    });
+    expect(maps.every((s) => s.parameters.raised_words === '')).toBe(true);
+    expect(maps[0].parameters.map_height_mm).toBe(250);
+  });
 });
 
 describe('plateGridSvg', () => {
@@ -153,6 +268,27 @@ describe('plateGridSvg', () => {
     }
     expect(svg).toContain(
       'Bambu Lab X1C, P1S or P1P (256 x 256 mm): 2 x 2 plates of 240 x 180 mm'
+    );
+  });
+
+  it('draws the title plates above row A with their names, and says so in the caption', () => {
+    const split = planPlates({
+      w: 500,
+      h: 540.65,
+      bed: x1c,
+      titleBandMm: 40.65,
+    });
+    const svg = plateGridSvg({
+      rings: EMPTY_RINGS(),
+      layout: split,
+      size: { w: 500, h: 540.65 },
+      bedName: x1c.name,
+    });
+    expect(svg.match(/<rect [^>]*stroke="#c81e1e"/g)).toHaveLength(6);
+    expect(svg).toContain('>Title 1</text>');
+    expect(svg).toContain('>Title 2</text>');
+    expect(svg).toContain(
+      '2 x 2 plates of 250 x 250 mm, and 2 title plates of 250 x 75 mm above'
     );
   });
 });
@@ -212,6 +348,25 @@ describe('the README says what the map is', () => {
     const readme = readmeText({ ...base, about: { type: 'drawing' } });
     expect(readme.split('\n')[0]).toBe('A map from a drawing.');
     expect(readme).not.toMatch(/OpenStreetMap/);
+  });
+
+  it('says where the title plates go when the title has plates of its own', () => {
+    const split = planPlates({
+      w: 500,
+      h: 540.65,
+      bed: x1c,
+      titleBandMm: 40.65,
+    });
+    const readme = readmeText({
+      ...base,
+      layout: split,
+      size: { w: 500, h: 540.65 },
+      about: { type: 'drawing' },
+    });
+    expect(readme).toContain(
+      'Print one of each: A1, A2, B1, B2. The title prints on 2 plates of its own, Title 1, Title 2, 250 x 75 mm, above row A. Lay them out'
+    );
+    expect(readme).toContain('backing board of 500 x 540.65 mm');
   });
 
   it("credits a published symbol set's authors last, when the map uses one", () => {

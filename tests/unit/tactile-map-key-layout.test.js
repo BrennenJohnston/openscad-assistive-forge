@@ -70,14 +70,16 @@ const LETTER = 16;
 /** The default tape, 12.7 mm, in a channel 0.4 mm wider. */
 const ACROSS = 13.1;
 
-/** The raised words of a page: x, the baseline from the top, the text. */
+/** The raised words of a page: x, the baseline from the top, the capital, the stand, the text. */
 const wordsOf = (page) =>
   page.print
     ? page.print.split('|').map((r) => {
-        const [x, y, ...rest] = r.split(':');
+        const [x, y, h, z, ...rest] = r.split(':');
         return {
           x: Number(x) / 10,
           baseline: page.size.h - Number(y) / 10,
+          h: Number(h) / 10,
+          z: Number(z) / 10,
           text: rest.join(':'),
         };
       })

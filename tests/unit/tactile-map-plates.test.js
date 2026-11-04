@@ -13,8 +13,10 @@ import {
   BED_PRESETS,
   ID_STYLES,
   PLATE_MIN_MM,
+  isTitleId,
   planPlates,
   plateLevelsSvg,
+  titleLabel,
 } from '../../src/js/tactile-map/plate-tiling.js';
 import {
   buildLevelRings,
@@ -129,6 +131,47 @@ describe('planPlates', () => {
     expect(r).toMatchObject({ rows: 1, cols: 1, plateW: 250, plateH: 200 });
     expect(r.plates).toHaveLength(1);
     expect(r.plates[0].id).toBe('A1');
+  });
+
+  it('keeps a title band inside the top row while the rows stay as they were, and gives it a plate row of its own when it would force a row of short plates', () => {
+    // A 480 x 360 face in a 10 mm band with a one-line title: 500 x
+    // 420.65, still two rows of two on an X1C; the band rides in row A.
+    const same = planPlates({
+      w: 500,
+      h: 420.65,
+      bed: bed('x1c'),
+      titleBandMm: 40.65,
+    });
+    expect(same).toMatchObject({ rows: 2, cols: 2, plateW: 250 });
+    expect(same.plateH).toBeCloseTo(210.325, 5);
+    expect(same.titlePlates).toEqual([]);
+    expect(same.plates.map((p) => p.id)).toEqual(['A1', 'A2', 'B1', 'B2']);
+    // A bed only 200 mm deep: the band would make three short rows of
+    // 140 mm; instead the map keeps its two rows of 190 and the band goes
+    // on plates of its own above row A, as wide as the columns and at
+    // least as tall as the smallest plate the model takes.
+    const split = planPlates({
+      w: 500,
+      h: 420.65,
+      bed: { w: 256, d: 200 },
+      titleBandMm: 40.65,
+    });
+    expect(split).toMatchObject({ rows: 2, cols: 2, plateW: 250, plateH: 190 });
+    expect(split.titlePlates.map((p) => [p.id, p.x, p.y, p.w, p.h])).toEqual([
+      ['title-1', 0, 0, 250, 75],
+      ['title-2', 250, 0, 250, 75],
+    ]);
+    expect(split.titleBandMm).toBeCloseTo(40.65, 5);
+    // The map's plates start under the band, named as before.
+    expect(split.plates.map((p) => [p.id, p.x, p.y, p.w, p.h])).toEqual([
+      ['A1', 0, 40.65, 250, 190],
+      ['A2', 250, 40.65, 250, 190],
+      ['B1', 0, 230.65, 250, 190],
+      ['B2', 250, 230.65, 250, 190],
+    ]);
+    expect(isTitleId('title-1')).toBe(true);
+    expect(isTitleId('A1')).toBe(false);
+    expect(titleLabel('title-1')).toBe('Title 1');
   });
 });
 
