@@ -89,6 +89,8 @@ A draft opens in the drawing editor's map purpose, one shape per feature, each n
 
 Above the list, **Turn a whole class on or off** has one button for each class in the draft, with how many shapes have it, such as "Area (41)". One press turns every shape of the class on, or, when all are on already, off; one Undo takes the whole press back. A button reads as pressed when all its shapes are on. **Show** lists every shape, or only the shapes that are on; a shape you switch off in its row stays in the list until you choose again, so the row you are on never disappears.
 
+The picture moves under your hand in every tool: drag on empty ground with the mouse or a finger and the map follows; **Shift** with an arrow key moves it a tenth of the view, and in the **Hand** tool the arrow keys alone do; the four pan buttons beside **Fit**, **+** and **−** do the same by touch. The arrow keys alone, in any other tool, still walk from shape to shape.
+
 The two marks move. The destination cone stands where the address search put it, and **You are here** is yours to place: a draft carries it off, at the middle, until you put it where the reader stands. Press **Place You are here** and it comes on at the middle of the view; then drag either mark with the mouse or a finger, or walk to it with the arrow keys and press Space to pick it up, move it with the arrow keys (1 mm a press, 10 mm with Shift), and press Space to put it down; Escape puts it back. The status says where a mark stands in millimeters from the map's top left corner, and one Undo takes a whole move back. A mark you drag comes on if it was off.
 
 **Walk this** is a tool in the editor's toolbar for drawing a route yourself: pick it (the key is W), then click the sidewalks in the order you walk them. Each one joins the route where one of its ends meets either end of the route, so the first two may be picked in either direction, and the status says how many segments are on the route and how long it is in meters. A segment that touches nothing on the route yet is refused, so pick the one between them first. **Clear route** puts every picked segment back. When you apply, the segments that meet become one Route line, the dotted line a finger follows.
@@ -229,6 +231,7 @@ The sentences give the real numbers; the ones above are examples.
 - A step's status sentences are said once: a pick, the draft's ready sentence, a failure and what to try instead. The counts shown when the map data arrives are not said, because the ready sentence follows.
 - The plates summary is a polite live region: a change of bed or of plate is said once. Rendering every plate is counted off the same way, and the zip's name is said when it is ready.
 - In the drawing editor, each row's Class menu is a native menu named for its row, in the row's Tab order; the plan's size is said when Apply classes closes the editor.
+- The editor's picture is one Tab stop whose help names its keys: the arrows walk the shapes, Shift with an arrow moves the picture, Space picks up and puts down the destination or You are here. The four pan buttons are named Pan left, Pan up, Pan down and Pan right.
 - The warnings are a plain list inside a disclosure whose summary counts them.
 
 ## Privacy

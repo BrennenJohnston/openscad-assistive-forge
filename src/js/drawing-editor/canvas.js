@@ -22,6 +22,11 @@
  * region's offset as a transform and reports the whole move once, through
  * `on.onMoveEnd`, so the surface records one command.
  *
+ * The picture moves under every tool: a drag that starts on empty ground
+ * pans (the Hand tool pans from anywhere), Shift with an arrow key pans a
+ * tenth of the view, the bare arrows pan in the Hand tool, and `panBy`
+ * serves the toolbar's four pan buttons.
+ *
  * Coordinates: pointer positions are mapped into the drawing's units with the
  * viewBox and the element's box under `preserveAspectRatio="xMidYMid meet"`,
  * the arithmetic the browser does, written out here so it can be tested
@@ -52,6 +57,10 @@ const ZOOM_STEP = 1.5;
 const MARQUEE_MIN_UNITS = 0.5;
 /** A drag of a mark shorter than this is a click on it. */
 const MOVE_MIN_UNITS = 0.5;
+/** A press on empty ground that travels less than this is a click, not a pan. */
+const PAN_MIN_PX = 3;
+/** What an arrow key or a pan button moves the view by: a tenth of it. */
+const PAN_FRACTION = 0.1;
 /** The arrow keys' steps during a carry, in drawing units (mm on a map). */
 const NUDGE_UNITS = 1;
 const NUDGE_SHIFT_UNITS = 10;
@@ -596,6 +605,27 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
     applyViewBox();
   }
 
+  /**
+   * Move the view by fractions of its own width and height: a positive x
+   * looks further right, a positive y further down.
+   */
+  function panBy(fx, fy) {
+    vb = { ...vb, x: vb.x + fx * vb.w, y: vb.y + fy * vb.h };
+    applyViewBox();
+  }
+
+  function startPan(event, at) {
+    drag = {
+      kind: 'pan',
+      start: at,
+      vb0: { ...vb },
+      clientX: event.clientX,
+      clientY: event.clientY,
+      moved: false,
+      pointerId: event.pointerId,
+    };
+  }
+
   function cancelDrag() {
     if (drag?.pointerId !== undefined) {
       try {
@@ -644,14 +674,13 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
     const at = toUnits(event);
     const key = regionKeyOf(event.target);
     if (tool === 'hand') {
-      drag = {
-        kind: 'pan',
-        start: at,
-        vb0: { ...vb },
-        pointerId: event.pointerId,
-      };
+      startPan(event, at);
     } else if (tool === 'marquee') {
       drag = { kind: 'marquee', start: at, pointerId: event.pointerId };
+    } else if (!key) {
+      // Empty ground under any other tool: a drag pans, as the Hand tool
+      // does; a press that does not travel is a click on nothing.
+      startPan(event, at);
     } else if (tool === 'select' && canMove(key)) {
       // A mark under the Select tool moves with the pointer; a press that
       // does not travel is a click on it, resolved on release.
@@ -676,6 +705,12 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
     } catch {
       // jsdom has no pointer capture; the events still arrive.
     }
+    // The press is taken over below, which also stops the browser's own
+    // focusing of the canvas: done here instead, so a click on empty ground
+    // still hands the keyboard to the picture.
+    if (typeof svg.focus === 'function' && document.activeElement !== svg) {
+      svg.focus({ preventScroll: true });
+    }
     event.preventDefault();
   }
 
@@ -683,6 +718,14 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
     if (!drag) return;
     const at = toUnits(event);
     if (drag.kind === 'pan') {
+      if (
+        !drag.moved &&
+        Math.abs(event.clientX - drag.clientX) < PAN_MIN_PX &&
+        Math.abs(event.clientY - drag.clientY) < PAN_MIN_PX
+      ) {
+        return;
+      }
+      drag.moved = true;
       vb = {
         ...drag.vb0,
         x: drag.vb0.x - (at.x - drag.start.x) * (drag.vb0.w / vb.w),
@@ -738,7 +781,12 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
       return;
     }
     if (current.kind === 'pan') {
-      on.onPan?.();
+      if (current.moved) {
+        on.onPan?.();
+        return;
+      }
+      // A press on empty ground that went nowhere: the click it always was.
+      if (tool !== 'hand') on.onEmptyClick?.(event.shiftKey);
       return;
     }
     if (current.kind === 'move') {
@@ -807,6 +855,18 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
         putBack();
         return;
       }
+      return;
+    }
+    if (dir && (event.shiftKey || tool === 'hand')) {
+      // Shift with an arrow moves the picture under every tool; in the Hand
+      // tool the bare arrows do the same. Elsewhere the bare arrows keep
+      // walking the shapes, the keyboard reader's way.
+      event.preventDefault();
+      event.stopPropagation();
+      panBy(
+        dir === 'left' ? -PAN_FRACTION : dir === 'right' ? PAN_FRACTION : 0,
+        dir === 'up' ? -PAN_FRACTION : dir === 'down' ? PAN_FRACTION : 0
+      );
       return;
     }
     if (dir) {
@@ -883,6 +943,11 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
     fit,
     zoomIn: () => zoomBy(ZOOM_STEP),
     zoomOut: () => zoomBy(1 / ZOOM_STEP),
+    panBy,
+    panLeft: () => panBy(-PAN_FRACTION, 0),
+    panUp: () => panBy(0, -PAN_FRACTION),
+    panDown: () => panBy(0, PAN_FRACTION),
+    panRight: () => panBy(PAN_FRACTION, 0),
     isDragging: () => drag !== null,
     isCarrying: () => carry !== null,
     putBack,

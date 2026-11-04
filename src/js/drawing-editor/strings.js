@@ -228,6 +228,11 @@ export const EDITOR_STRINGS = Object.freeze({
   fit: 'Fit',
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
+  /** The four pan buttons beside them; arrows on the face, these names read. A11Y. */
+  panLeft: 'Pan left',
+  panUp: 'Pan up',
+  panDown: 'Pan down',
+  panRight: 'Pan right',
   /** The stencil purpose's Apply: the plan goes with the drawing. */
   applyColours: 'Apply colors',
   /** What is undone or redone. A11Y. */
@@ -240,14 +245,14 @@ export const EDITOR_STRINGS = Object.freeze({
   /** The canvas's own name and its keyboard help. A11Y. */
   canvasLabel: 'The drawing',
   canvasHelp:
-    'Arrow keys move between regions, Enter or Space adds one to the selection, number keys 1 to 8 color the selection, 0 sets it to the base coat, Delete removes it.',
+    'Arrow keys move between regions, Enter or Space adds one to the selection, number keys 1 to 8 color the selection, 0 sets it to the base coat, Delete removes it. Shift and the arrow keys move the picture; a drag on empty ground does too.',
   /** The status line as the highlight moves. A11Y (two shapes). */
   highlighting: (name, colour, plate) => `${name}, ${colour}, plate ${plate}.`,
   highlightingRemoved: (name) => `${name}, removed.`,
   /** The canvas in the map purpose: its name and its keyboard help. A11Y. */
   mapCanvasLabel: 'Map shapes',
   mapCanvasHelp:
-    "Arrow keys move between shapes. Enter opens the shape's Class menu. Space picks up the destination or You are here to move it with the arrow keys; Space puts it down. Plus and minus zoom; 0 fits the whole drawing. Positions are millimeters from the map's top left corner.",
+    "Arrow keys move between shapes. Enter opens the shape's Class menu. Space picks up the destination or You are here to move it with the arrow keys; Space puts it down. Shift and the arrow keys move the picture, and in the Hand tool the arrow keys alone do; a drag on empty ground does too. Plus and minus zoom; 0 fits the whole drawing. Positions are millimeters from the map's top left corner.",
   /** The status line as the highlight moves in the map purpose. A11Y (two shapes). */
   mapHighlighting: (name, cls) => `${name}, ${cls}.`,
   mapHighlightingUnclassed: (name) => `${name}, no class yet.`,

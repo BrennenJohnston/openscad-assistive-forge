@@ -235,9 +235,22 @@ export function createDrawingEditor({
   zoomInBtn.setAttribute('aria-label', S.zoomIn);
   const zoomOutBtn = button('−', 'btn btn-secondary', 'zoom-out');
   zoomOutBtn.setAttribute('aria-label', S.zoomOut);
+  // The four pan buttons: the picture moves a tenth of the view a press,
+  // for a pointer that cannot drag and a finger on a phone.
+  const panButtons = [
+    ['←', S.panLeft, 'pan-left', 'panLeft'],
+    ['↑', S.panUp, 'pan-up', 'panUp'],
+    ['↓', S.panDown, 'pan-down', 'panDown'],
+    ['→', S.panRight, 'pan-right', 'panRight'],
+  ].map(([glyph, name, action, method]) => {
+    const el = button(glyph, 'btn btn-secondary drawing-editor-pan', action);
+    el.setAttribute('aria-label', name);
+    el.dataset.pan = method;
+    return el;
+  });
   const zoomGroup = document.createElement('div');
   zoomGroup.className = 'drawing-editor-zoom';
-  zoomGroup.append(fitBtn, zoomInBtn, zoomOutBtn);
+  zoomGroup.append(fitBtn, zoomInBtn, zoomOutBtn, ...panButtons);
 
   // The view: the untouched drawing or the plan over it, and one
   // plate at a time.
@@ -3000,6 +3013,9 @@ export function createDrawingEditor({
   fitBtn.addEventListener('click', () => canvas.fit());
   zoomInBtn.addEventListener('click', () => canvas.zoomIn());
   zoomOutBtn.addEventListener('click', () => canvas.zoomOut());
+  for (const el of panButtons) {
+    el.addEventListener('click', () => canvas[el.dataset.pan]());
+  }
   panelToggleBtn.addEventListener('click', () => setPanel(panel.hidden));
   // The skip link's promise holds with the drawer closed: it opens the
   // drawer on its way there.
