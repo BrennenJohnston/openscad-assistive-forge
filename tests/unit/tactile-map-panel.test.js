@@ -823,12 +823,16 @@ describe('render every plate and download', () => {
       'levels_B1.svg',
       'levels_B2.svg',
       'map_plan.json',
+      'map_print.pdf',
       'plate_grid.svg',
       'tactile_map_A1.stl',
       'tactile_map_A2.stl',
       'tactile_map_B1.stl',
       'tactile_map_B2.stl',
     ]);
+    const pdf = await zip.file('map_print.pdf').async('uint8array');
+    expect(String.fromCharCode(...pdf.slice(0, 5))).toBe('%PDF-');
+    expect(readme).toMatch(/^map_print\.pdf shows where each label goes/);
     expect(
       (await zip.file('tactile_map_A1.stl').async('uint8array')).length
     ).toBe(84);
@@ -839,7 +843,8 @@ describe('render every plate and download', () => {
       JSON.parse(await zip.file('map_plan.json').async('string')).size
     ).toEqual({ w: 480, h: 360 });
     expect(readme).toBe(
-      'A map from a drawing.\n' +
+      'map_print.pdf shows where each label goes, with its text, for assembly and labeling.\n' +
+        'A map from a drawing.\n' +
         'Station: 4 plates for a Bambu Lab X1C, P1S or P1P (256 x 256 mm) bed, each 240 x 180 mm. ' +
         'Print one of each: A1, A2, B1, B2. ' +
         'Lay them out as the grid reads, row A at the top, column 1 at the left, and glue them edge to edge onto a backing board of 480 x 360 mm. ' +
@@ -2130,6 +2135,36 @@ describe('the Alt View', () => {
     root.setAttribute('data-ui-variant', 'mono');
     await new Promise((r) => setTimeout(r, 20));
     expect(announce).not.toHaveBeenCalled();
+  });
+});
+
+describe('the PDF for the transcriber', () => {
+  const mediaBox = (bytes) => {
+    let s = '';
+    for (const b of bytes) s += String.fromCharCode(b);
+    return /\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/.exec(s).slice(1).map(Number);
+  };
+
+  it('the button downloads the PDF alone, on Letter, and the Paper choice turns it to A4', async () => {
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const button = document.getElementById('tactileMapPdf');
+    expect(button.textContent).toBe('Download the PDF');
+    button.click();
+    await vi.waitFor(() => expect(downloads.length).toBe(1), SETTLE);
+    expect(downloads[0].name).toBe('tactile_map_print.pdf');
+    expect(downloads[0].format).toBe('pdf');
+    expect(mediaBox(downloads[0].bytes)).toEqual([792, 612]);
+    const paper = document.getElementById('tactileMapPaperSize');
+    expect([...paper.options].map((o) => o.textContent)).toEqual([
+      'Letter',
+      'A4',
+    ]);
+    paper.value = 'a4';
+    paper.dispatchEvent(new Event('change'));
+    button.click();
+    await vi.waitFor(() => expect(downloads.length).toBe(2), SETTLE);
+    expect(mediaBox(downloads[1].bytes)).toEqual([841.89, 595.28]);
+    expect(status()).toBe('The PDF is in tactile_map_print.pdf.');
   });
 });
 

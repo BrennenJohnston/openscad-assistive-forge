@@ -77,6 +77,7 @@ import {
   paperWords,
   shiftTexts,
 } from './map-paper.js';
+import { PAPER_SIZES, mapPdf } from './map-pdf.js';
 import { svgToDataUrl } from '../svg-text-encoding.js';
 import {
   BED_PRESETS,
@@ -101,8 +102,10 @@ import {
 } from './address-section.js';
 import { applyDetail, judgeSymbols, switchesFor } from './detail-levels.js';
 import {
+  PDF_NAME,
   archiveEntries,
   levelHeights,
+  mapAbout as aboutLines,
   plateGridSvg,
   plateParameterSets,
   plateRoles,
@@ -313,6 +316,10 @@ class MapPanel {
     this.paper = null;
     this.paperShown = false;
     this.paperToken = 0;
+    // The PDF's paper, Letter unless chosen.
+    this.paperSize = PAPER_SIZES.some((p) => p.key === options.paperSize)
+      ? options.paperSize
+      : PAPER_SIZES[0].key;
     // The address section: its geocoder (a test's stub, else the lazy
     // chunk loaded on the first press) and the place last picked.
     this.searchPlaces = options.searchPlaces || null;
@@ -848,6 +855,24 @@ class MapPanel {
     add('bed', paperRow);
     this.refs.paper = paperBox;
 
+    const sizeLabel = el('label', 'braille-panel-label', 'Paper');
+    sizeLabel.htmlFor = 'tactileMapPaperSize';
+    add('bed', sizeLabel);
+    const sizeSelect = el('select', 'braille-panel-select');
+    sizeSelect.id = 'tactileMapPaperSize';
+    for (const size of PAPER_SIZES) {
+      const option = document.createElement('option');
+      option.value = size.key;
+      option.textContent = size.name;
+      sizeSelect.appendChild(option);
+    }
+    sizeSelect.value = this.paperSize;
+    sizeSelect.addEventListener('change', () => {
+      this.paperSize = sizeSelect.value;
+    });
+    add('bed', sizeSelect);
+    this.refs.paperSize = sizeSelect;
+
     const styleLabel = el('label', 'braille-panel-label', 'Plate name style');
     styleLabel.htmlFor = 'tactileMapIdStyle';
     add('bed', styleLabel);
@@ -1023,10 +1048,26 @@ class MapPanel {
       this.cancelRequested = true;
       this.say('Stopping after this plate.');
     });
+    const pdfButton = el(
+      'button',
+      'btn btn-secondary braille-translate-btn',
+      'Download the PDF'
+    );
+    pdfButton.type = 'button';
+    pdfButton.id = 'tactileMapPdf';
+    pdfButton.addEventListener('click', () => {
+      try {
+        this.downloadPdf();
+      } catch (err) {
+        this.say(err?.message || String(err), true);
+      }
+    });
     actions.appendChild(renderAll);
+    actions.appendChild(pdfButton);
     actions.appendChild(cancel);
     add('render', actions);
     this.refs.renderAll = renderAll;
+    this.refs.pdfButton = pdfButton;
     this.refs.cancel = cancel;
 
     const renderStatus = el('p', 'braille-panel-help');
@@ -1782,15 +1823,22 @@ class MapPanel {
     return { type: 'drawing' };
   }
 
+  /** The map's name for the README and the PDF: the title, else the plan's, else the file's. */
+  mapName(parameters, stem) {
+    return (
+      String(parameters.title_text || '').trim() ||
+      this.plan.meta?.title ||
+      stem
+    );
+  }
+
   async buildArchive({ stem, extension, rendered, sets, rings, parameters }) {
     const bed = this.bed();
     const bedName =
       this.bedKey === 'custom' ? `custom ${bed.w} x ${bed.d} mm` : bed.name;
+    const pdf = this.buildPdf({ stem, parameters });
     const readme = readmeText({
-      mapName:
-        String(parameters.title_text || '').trim() ||
-        this.plan.meta?.title ||
-        stem,
+      mapName: this.mapName(parameters, stem),
       bedName,
       layout: this.layout,
       size: this.plan.size,
@@ -1800,6 +1848,8 @@ class MapPanel {
       keyIds: this.keyPages.map((p) => p.id),
       keyText: this.keyPages.length ? keyText(this.labeled().key) : '',
       keyTape: this.keyPages.map((p) => ({ id: p.id, texts: p.tape })),
+      pdfName: PDF_NAME,
+      unspelled: pdf.unspelled,
     });
     const grid = plateGridSvg({
       rings,
@@ -1817,10 +1867,87 @@ class MapPanel {
       plan: this.plan,
       readme,
       grid,
+      pdf: pdf.bytes,
     })) {
       zip.file(entry.name, entry.data);
     }
     return zip.generateAsync({ type: 'uint8array' });
+  }
+
+  /**
+   * The PDF for the transcriber: the whole map with its plates, each plate
+   * at full size with its channels and their texts, the labels, the key.
+   * Built from the same data as the paper, on the paper size chosen.
+   */
+  buildPdf({ stem, parameters }) {
+    const labeled = this.labeled();
+    const built = buildLevelRings(labeled.plan, this.levelSettings());
+    const whole = this.paperDataFor({
+      rings: built.rings,
+      size: this.plan.size,
+      labeled,
+      keyPage: null,
+      plate: null,
+      title: true,
+    });
+    const plates = (this.layout?.plates || []).map((plate) => {
+      const out = plateLevelsSvg(built.rings, plate, { id: this.idStyle });
+      const roles = plateRoles(plate, this.layout, this.northCue());
+      return {
+        id: plate.id,
+        ...this.paperDataFor({
+          rings: out.rings,
+          size: out.size,
+          labeled,
+          keyPage: null,
+          plate,
+          title: roles.title,
+        }),
+      };
+    });
+    const keys = this.keyPages.map((page) => ({
+      id: keyLabel(page.id),
+      ...this.paperDataFor({
+        rings: null,
+        size: page.size,
+        labeled,
+        keyPage: page,
+        plate: null,
+        title: false,
+      }),
+    }));
+    const lengths = new Map(
+      (labeled.plan.features || [])
+        .filter((f) => f.kind === 'channel')
+        .map((f) => [f.id, f.length])
+    );
+    const labels = (labeled.labels || []).map((l) => ({
+      ...l,
+      lengthMm: lengths.get(`label-${l.featureId}`) ?? 0,
+    }));
+    return mapPdf({
+      mapName: this.mapName(parameters, stem),
+      lead: aboutLines(this.mapAbout()).lead || '',
+      paper: this.paperSize,
+      whole,
+      plates: [...plates, ...keys],
+      layout: this.layout,
+      keyLines: keyText(labeled.key).trimEnd().split('\n'),
+      labels,
+      tapeWidthMm: this.tapeWidth(),
+      colors: this.paperColors(),
+    });
+  }
+
+  /** Download the PDF alone, as the button asks. */
+  downloadPdf() {
+    const state = stateManager.getState();
+    const parameters = state.parameters || {};
+    const stem = projectStem(state.uploadedFile?.name || 'tactile_map');
+    const { bytes } = this.buildPdf({ stem, parameters });
+    const fileName = `${stem}_print.pdf`;
+    this.download(bytes, fileName, 'pdf');
+    this.say(`The PDF is in ${fileName}.`);
   }
 
   schedule(delay = DEBOUNCE_MS) {
@@ -2132,12 +2259,11 @@ class MapPanel {
   }
 
   /**
-   * The paper of the plate shown: its rings as drawn, every name at its
-   * thing, the channels with their tape's text, a key plate's raised
-   * words, the title where the raised one stands and the plate's name.
-   * The colors are the tokens' values as the page shows them now.
+   * What a plate's paper and its PDF page draw: its rings as drawn, every
+   * name at its thing, the channels with their tape's text, a key plate's
+   * raised words, the title where the raised one stands, the plate's name.
    */
-  paperFor({ rings, size, labeled, keyPage, plate, title }) {
+  paperDataFor({ rings, size, labeled, keyPage, plate, title }) {
     const parameters = stateManager.getState().parameters || {};
     const s = { ...DEFAULT_SETTINGS, ...this.levelSettings() };
     const across = this.tapeWidth() + s.channelClearanceMm;
@@ -2174,19 +2300,30 @@ class MapPanel {
       texts = paperTexts(labeled.plan);
       channels = paperChannels(labeled.plan.features, across, textOf);
     }
+    return {
+      rings: drawn,
+      size,
+      texts,
+      channels,
+      words,
+      title: title ? String(parameters[this.config.titleParam] || '') : '',
+      plateId,
+    };
+  }
+
+  /** The paper's colors: the tokens' values as the page shows them now. */
+  paperColors() {
     const style = getComputedStyle(document.documentElement);
-    const colors = paperColors((name) => style.getPropertyValue(name));
+    return paperColors((name) => style.getPropertyValue(name));
+  }
+
+  /** The paper of the plate shown, as the overlay's SVG. */
+  paperFor(input) {
     return {
       name: `paper_${this.plate}.svg`,
       svg: mapPaperSvg({
-        rings: drawn,
-        size,
-        texts,
-        channels,
-        words,
-        title: title ? String(parameters[this.config.titleParam] || '') : '',
-        plateId,
-        colors,
+        ...this.paperDataFor(input),
+        colors: this.paperColors(),
       }),
     };
   }

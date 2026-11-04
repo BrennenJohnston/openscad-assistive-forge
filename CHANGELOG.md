@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the shapes in the editor's colors with every name and label text in
   place, so a map can be checked before it prints; the View menu's Show
   Model switch hides the plate to read the paper.
+- The map's PDF, in the zip and from a Download the PDF button: the map
+  with its plates, each plate at full size with every label channel and its
+  text, the labels and the key, on Letter or A4, for the person who makes
+  the labels and assembles the plates.
 
 ## [5.8.0] - 2026-11-04
 

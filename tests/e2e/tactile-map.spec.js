@@ -202,6 +202,10 @@ test.describe('Tactile Map tile', () => {
     expect(names).toContain('README.txt');
     expect(names).toContain('levels_A1.svg');
     expect(names).toContain('plate_grid.svg');
+    expect(names).toContain('map_print.pdf');
+    const pdf = await zip.file('map_print.pdf').async('uint8array');
+    expect(String.fromCharCode(...pdf.slice(0, 5))).toBe('%PDF-');
+    expect(readme).toMatch(/^map_print\.pdf shows where each label goes/);
     const a1 = await zip.file('tactile_map_A1.stl').async('uint8array');
     expect(a1.length).toBeGreaterThan(84);
     const { triangles } = parseSTL(a1);
@@ -222,6 +226,28 @@ test.describe('Tactile Map tile', () => {
     );
     await expect(page.locator('#tactileMapRenderAll')).toBeVisible();
     await expect(page.locator('#tactileMapRenderCancel')).toBeHidden();
+  });
+
+  test('Download the PDF gives the transcriber the PDF alone', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await openTactileMap(page);
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await goToStep(page, 5);
+    const downloadPromise = page.waitForEvent('download', { timeout: 60_000 });
+    await page.locator('#tactileMapPdf').click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe('tactile_map_print.pdf');
+    const bytes = readFileSync(await download.path());
+    expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    expect(bytes.toString('latin1')).toMatch(/\(the waiting area\) Tj/);
+    await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
+      'The PDF is in tactile_map_print.pdf.'
+    );
   });
 
   test('the door opens the drawing in the file control as a map, and Apply classes makes the plan', async ({
