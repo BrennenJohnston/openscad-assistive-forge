@@ -7,101 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- A map can draw with the University of Oregon's published tactile symbols
-  (Lobben and Lawrence 2012, GPL-3): **Symbol set** in step 3 chooses the
-  basic shapes, the Oregon set at its 13 mm with its street, sidewalk and
-  railroad lines, or a file of your own; the key and the README name the
-  set in use. A sheet in `docs/guides/symbol-sheet/` prints a set to feel.
-- The Tactile Map Designer starts by asking what map to make: a place map,
-  a route map, or a map from your drawing, also chosen on its welcome card
-  or in a link. Each walks you through its own numbered steps, one at a
-  time, and one Make the map button gets the data, drafts the map and opens
-  it in the editor. A route can avoid steps where another way exists.
-- A place map is drawn at a named scale instead of a radius: a building and
-  its doors, a block, a few blocks, a neighborhood, or a custom ratio, each
-  saying how much ground fits on the plate and what draws at it.
-- A route map can be a trip by bus and train, planned by Transitous, the
-  open journey planner, as well as a walk.
-- A place or route map chooses how much it shows as a level, from the way
-  alone to everything in the data, with a choice for each group of
-  features, and keeps to a number of symbols a reader can learn. The editor
-  turns a whole class on or off in one press and can list only what is on.
-- A place map near a building shows curb ramps and raised curbs, a traffic
-  island as part of its crossing, and a crossing with no paint dashed, all
-  read from the map data.
-- Steep sidewalks take a sidewalk's incline from the map data where it
-  gives a number, and the grade's help says what 5, 8 and 15 % feel like.
-- The Tactile Map Designer guide follows the three map types, and the
-  README in a plate zip says what the map is and carries its data credits.
-- A place or route map lays a channel for a braille label beside each
-  named place, for its name or its 2-letter key, 3 mm clear of everything,
-  and the README lists the labels to write.
-- A tactile map comes with its key: every symbol, line and area it draws,
-  You are here first, with the 2-letter abbreviations of named places,
-  printed on key plates in 16 mm raised capitals with a channel for each
-  entry's braille on label tape, and written into the README with the tape
-  texts.
-- A place map names what each point is, such as "Restaurant: Plaza Cafe"
-  or "Bus stop 29405", starts named places on and leaves unnamed benches
-  and bins to a street furniture class, and says several symbols crowded
-  at one spot in one warning.
-
-### Fixed
-
-- A screen reader says a tactile map's plate once as you move through the list, no longer says "Preview updated" over a map's own counts, and hears "1 plate".
-- You are here on a tactile map no longer feels like a landmark: it keeps its
-  10 mm disc and gains a center dot one step higher than any other symbol.
-- A draft map opens in the editor with what is on first and the curbs last,
-  measured at the map's own width: it no longer calls hundreds of shapes too
-  thin at 14 mm or marks every row too small to trace.
-- Get map data works from the published site: the Tactile Map Designer
-  reads OpenStreetMap US's map tiles first, and only when they fail asks
-  OpenStreetMap's main Overpass server, then VK Maps' server, saying which
-  one it is asking; a pull that fails says what failed instead of "busy".
-- A map pull's result shows in a framed box under the buttons, a failure in
-  red, and once a place is picked the preview shows an empty plate titled NO
-  MAP YET instead of the sample station until the draft is made.
-- A drawing chosen for a tactile map previews raised as drawn until its
-  shapes are classed, instead of five OpenSCAD warnings, and the plan's
-  warnings fold under one line that counts them.
-- The Customizer's help mark is a 20 px circle again, beside its label, not a
-  44 px disc over the end of it, when the descriptions are behind help marks.
-
-## [5.8.0] - 2026-11-01
+## [5.8.0] - 2026-11-04
 
 ### Added
 
-- The Tactile Map Designer: a tactile map tile with up to three raised
-  levels, research-sized symbols, a raised title, a north cue and channels
-  for braille label tape, with a guide and a symbols page.
-- Tactile maps split into plates for your print bed, each named by touch;
-  one button renders every plate and downloads them as one zip with the
-  plan, the levels files, a layout picture and a README.
-- The drawing editor turns a line drawing, a DXF or a traced photo into a
-  tactile map plan: a class on every shape, painted in the charm
-  customizer's layer colors, with pan, zoom and a keyboard walk between
-  shapes.
-- Type an address and the Tactile Map Designer drafts a map of the
-  sidewalks and landmarks you choose from OpenStreetMap, live or from a
-  file, its shapes named by their street or building.
-- Sidewalks steeper than a grade you set can carry uphill chevrons, from
-  public terrain tiles.
-- A route map: type where a walk starts and where it ends, and the draft
-  raises the walk from door to door with its crossings and steps, on a
-  plate fitted to the walk.
+- The Tactile Map Designer: a tactile map of up to three raised levels, with
+  research-sized symbols, a raised title, a north cue, a guide and a symbols
+  page. It asks what map to make, a place, a route or your own drawing, and
+  walks you through numbered steps to one Make the map button.
+- A place map drafts from an address and OpenStreetMap, live or from a file, at
+  a named scale from a building's doors to a neighborhood, and names each point.
+  It reads OpenStreetMap US's tiles first, then OpenStreetMap's main Overpass
+  server and VK Maps' server, saying which it is asking and what failed.
+- A route map raises a walk from door to door with its crossings and steps, on
+  a plate fitted to the walk, and can avoid steps where another way exists; or
+  a trip by bus and train, planned by Transitous.
+- A level chooses how much a map shows, from the way alone to everything in
+  the data, with a choice for each group of features.
+- A map near a building shows curb ramps, raised curbs, traffic islands and
+  crossings with no paint. Sidewalks steeper than a grade you set can carry
+  uphill chevrons, from the map's incline data or public terrain tiles.
+- **Symbol set** draws a map with basic shapes, the University of Oregon's
+  published tactile symbols (Lobben and Lawrence 2012, GPL-3) or a file of your
+  own; a sheet in `docs/guides/symbol-sheet/` prints a set to feel.
+- You are here is a 10 mm disc with a center dot one step above any symbol.
+- A map comes with its key: every symbol, line and area it draws, on key plates
+  with a channel for each entry's braille on label tape, its name raised in
+  16 mm capitals if you choose. Named places get channels for their labels.
+- Maps split into plates for your print bed, each named by touch; one button
+  renders them all into one zip with the plan, the levels files, a layout
+  picture and a README of the key, the tape texts and the data credits.
+- The drawing editor turns a line drawing, a DXF or a traced photo into a map
+  plan: a class on every shape, in the charm customizer's layer colors, with
+  pan, zoom, a keyboard walk and one press for a whole class on or off.
 
 ### Fixed
 
-- The welcome cards' Tool menus are 44 px tall on a touch screen, the same
-  floor as the buttons beside them.
-- A menu focused by keyboard shows a solid ring in every look, where the
-  dark and light looks drew a faint halo.
-- In the Alt View, reaching the end of a list is the last sound a scroll
-  makes: no line's tick follows it any more.
-- On a phone held sideways the drawing editor scrolls to its picture, which
-  its toolbar used to cut to a strip.
+- The welcome cards' Tool menus are 44 px tall on a touch screen.
+- A menu focused by keyboard shows a solid ring in every look.
+- In the Alt View, reaching the end of a list is the last sound a scroll makes.
+- On a phone held sideways the drawing editor scrolls to its picture, which its
+  toolbar used to cut to a strip.
+- The Customizer's help mark is a 20 px circle again, beside its label, not a
+  44 px disc over the end of it, when the descriptions are behind help marks.
 
 ## [5.7.2] - 2026-10-26
 
