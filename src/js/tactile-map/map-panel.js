@@ -1792,16 +1792,26 @@ class MapPanel {
     const focused = document.activeElement;
     const hadFocus =
       focused && fieldset.contains(focused) ? focused.value : null;
-    for (const row of [
-      ...fieldset.querySelectorAll('.braille-panel-toggle-row'),
-    ])
-      row.remove();
     const ids = [
       'whole',
       ...(this.layout ? this.layout.plates.map((p) => p.id) : []),
       ...this.keyPages.map((p) => p.id),
     ];
     if (!ids.includes(this.plate)) this.plate = 'whole';
+    // The same plates keep their radios: one built again takes focus again,
+    // and a screen reader says the plate a second time.
+    const shown = [...fieldset.querySelectorAll('input[type="radio"]')];
+    if (
+      shown.length === ids.length &&
+      shown.every((radio, i) => radio.value === ids[i])
+    ) {
+      for (const radio of shown) radio.checked = radio.value === this.plate;
+      return;
+    }
+    for (const row of [
+      ...fieldset.querySelectorAll('.braille-panel-toggle-row'),
+    ])
+      row.remove();
     for (const id of ids) {
       const row = el('div', 'braille-panel-toggle-row');
       const input = document.createElement('input');

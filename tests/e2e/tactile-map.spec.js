@@ -871,6 +871,16 @@ test.describe('the draft map', () => {
         { timeout: 15000 }
       )
       .toBe('Key');
+    // The file control takes its file a moment after the plate kind changes.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => window.stateManager.getState().parameters.map_file?.name
+          ),
+        { timeout: 15000 }
+      )
+      .toMatch(/^levels_key(-1)?\.svg$/);
     const params = await page.evaluate(() => {
       const p = window.stateManager.getState().parameters;
       const d = p.map_file?.data || '';
@@ -884,6 +894,11 @@ test.describe('the draft map', () => {
     expect(params.file).toMatch(/^levels_key(-1)?\.svg$/);
     expect(params.print).toBe('');
     expect(params.levels).toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
+    // One plate is one plate in the model's message, which a screen reader says.
+    await expect(page.locator('#echoMessages')).toContainText(
+      'fits a 256 x 256 mm bed in 1 plate.',
+      { timeout: PREVIEW_TIMEOUT }
+    );
     // Key words: braille only to start; Print and braille raises the words.
     const keyWords = page.locator('#tactileMapKeyWords');
     await expect(keyWords).toHaveValue('braille');

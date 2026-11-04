@@ -2066,7 +2066,9 @@ export function createSvgPrepWorkspace(containerEl) {
     markAsPicture(imported, 'Prepared result');
     refs.resultPane.insertBefore(imported, refs.resultZoom);
 
-    if (sayUpdated) {
+    // On a map the classes decide what prints, and the map's own sentences
+    // give those counts; this picture stands behind its canvas.
+    if (sayUpdated && currentCallbacks.purpose !== 'map') {
       const fgCount = elements.filter(
         (el) => el.role !== 'ignore' && el.pathData
       ).length;

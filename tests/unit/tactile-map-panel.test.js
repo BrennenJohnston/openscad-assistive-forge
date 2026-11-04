@@ -542,6 +542,49 @@ describe('the map panel', () => {
     expect(await choose('B2')).toEqual(['no', 'no']);
   });
 
+  it('keeps the same radios when only the plate changes, so a screen reader says the plate once', async () => {
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const radio = (id) =>
+      document.querySelector(`#tactileMapPlates input[value="${id}"]`);
+    const a2 = radio('A2');
+    const b2 = radio('B2');
+    b2.focus();
+    const focused = vi.fn();
+    b2.addEventListener('focus', focused);
+    b2.checked = true;
+    b2.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(
+      () => expect(files[files.length - 1].fileName).toBe('levels_B2.svg'),
+      SETTLE
+    );
+    expect(radio('B2')).toBe(b2);
+    expect(radio('A2')).toBe(a2);
+    expect(b2.checked).toBe(true);
+    expect(document.activeElement).toBe(b2);
+    expect(focused).not.toHaveBeenCalled();
+  });
+
+  it('builds the radios again when the plates change, keeping focus on a plate still there', async () => {
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const whole = document.querySelector(
+      '#tactileMapPlates input[value="whole"]'
+    );
+    whole.focus();
+    const count = () =>
+      document.querySelectorAll('#tactileMapPlates input[type="radio"]').length;
+    const before = count();
+    // A smaller bed cuts the map into more plates.
+    const bed = document.getElementById('tactileMapBed');
+    bed.value = 'mini';
+    bed.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(count()).toBeGreaterThan(before), SETTLE);
+    const again = document.querySelector(
+      '#tactileMapPlates input[value="whole"]'
+    );
+    expect(again).not.toBe(whole);
+    expect(document.activeElement).toBe(again);
+  });
+
   it('offers the plate name style with notches first, and writes the letters only for the margin style', async () => {
     await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
     const style = document.getElementById('tactileMapIdStyle');
