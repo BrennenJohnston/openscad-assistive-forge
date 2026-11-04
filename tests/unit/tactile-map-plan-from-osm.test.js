@@ -14,6 +14,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
+  addressName,
   draftPlan,
   DRAFT_LIMIT,
 } from '../../src/js/tactile-map/plan-from-osm.js';
@@ -456,15 +457,31 @@ describe('draftPlan', () => {
     expect(byId(plan, 'osm-way-17').on).toBe(false);
   });
 
-  it('puts the You are here point in the middle, on, and counts what it drew', () => {
+  it('marks the address with the destination cone in the middle, named by the place, places no You are here, and counts what it drew', () => {
     const { plan, counts } = DRAFT();
-    const here = byId(plan, 'you-are-here');
-    expect([here.class, here.kind, here.on, here.at]).toEqual([
-      'you-are-here',
+    const destination = byId(plan, 'destination');
+    expect([
+      destination.class,
+      destination.kind,
+      destination.on,
+      destination.at,
+      destination.size,
+      destination.name,
+    ]).toEqual([
+      'destination',
       'point',
       true,
       [240, 180],
+      4.9,
+      'Pine Street Station',
     ]);
+    expect(byId(plan, 'you-are-here')).toBeUndefined();
+    expect(plan.meta.address).toEqual({
+      name: 'Pine Street Station, Seattle, Washington',
+      typed: '',
+      lat: CENTER.lat,
+      lon: CENTER.lon,
+    });
     expect(counts).toEqual({
       walkways: 5,
       crossings: 2,
@@ -497,7 +514,35 @@ describe('draftPlan', () => {
       radiusM: 250,
       size: { w: 480, h: 360 },
     });
-    expect(plan.features.map((f) => f.id)).toEqual(['you-are-here']);
+    expect(plan.features.map((f) => f.id)).toEqual(['destination']);
+  });
+
+  it("names the destination by what was typed, up to its first comma, else by the geocoder's house number and street, else by the place's name", () => {
+    const uw =
+      'Center on Human Development and Disability South, 3600, Ferry Place Northeast, University District, Seattle, King County, Washington, 98195, United States';
+    expect(
+      addressName({ name: uw, query: '3600 Ferry Pl NE, Seattle, WA 98195' })
+    ).toBe('3600 Ferry Pl NE');
+    expect(addressName({ name: uw })).toBe('3600 Ferry Place Northeast');
+    expect(
+      addressName({
+        name: '3600, Ferry Place Northeast, University District, Seattle, King County, Washington, 98195, United States',
+      })
+    ).toBe('3600 Ferry Place Northeast');
+    expect(
+      addressName({ name: 'Plaza Cafe, University of Washington, Seattle' })
+    ).toBe('Plaza Cafe');
+    expect(addressName({ name: '' })).toBe('Destination');
+    expect(addressName(null)).toBe('Destination');
+    const { plan } = draftPlan({
+      elements: ELEMENTS,
+      center: CENTER,
+      radiusM: 250,
+      size: { w: 480, h: 360 },
+      place: { name: uw, query: '3600 Ferry Pl NE', ...CENTER },
+    });
+    expect(byId(plan, 'destination').name).toBe('3600 Ferry Pl NE');
+    expect(plan.meta.address.typed).toBe('3600 Ferry Pl NE');
   });
 });
 

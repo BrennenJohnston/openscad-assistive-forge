@@ -27,6 +27,7 @@ import { projectLatLon, toMm } from './osm-geometry.js';
 import { pointKey, walkBetween } from './walk-graph.js';
 import { DEFAULT_SETTINGS } from './levels-svg.js';
 import { PLATE_MIN_MM } from './plate-tiling.js';
+import { DESTINATION_CONE_MM } from './symbol-library.js';
 
 /** The least gap between the route and anything else that is on, in mm. */
 export const ROUTE_GAP_MM = 3;
@@ -280,7 +281,8 @@ export function draftRoutePlan({
   // Ticked landmarks near the walk: placed once the route's own symbols are.
   const nearby = [];
   for (const f of base.features) {
-    if (f.id === 'you-are-here') continue;
+    // The base's own marks: the walk places its start and its end itself.
+    if (f.id === 'you-are-here' || f.id === 'destination') continue;
     const copy = { ...f, on: false };
     if (
       (switches ? wantsPoint(f, switches) : f.on) &&
@@ -446,10 +448,11 @@ export function draftRoutePlan({
           on: true,
         }
       : {
-          id: 'destination-door',
-          class: 'entrance',
+          id: 'destination',
+          class: 'destination',
           kind: 'point',
           name: endName || 'Destination',
+          size: DESTINATION_CONE_MM,
           at: route[route.length - 1],
           on: true,
         },

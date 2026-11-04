@@ -1699,7 +1699,8 @@ describe('the map Make the map drafts', () => {
     expect(opened.options.purpose).toBe('map');
     expect(opened.options.draft).toBe(true);
     expect(opened.options.sourceName).toBe('Draft map of Central Library');
-    expect(opened.svg).toContain('data-feature="you-are-here"');
+    expect(opened.svg).toContain('data-feature="destination"');
+    expect(opened.svg).not.toContain('data-feature="you-are-here"');
     expect(opened.analysis.elements).toHaveLength(21);
     const classes = opened.options.initialClasses;
     expect(Object.keys(classes)).toHaveLength(21);
@@ -1715,8 +1716,8 @@ describe('the map Make the map drafts', () => {
     });
     const firstOff = rows.findIndex((f) => !f.on);
     expect(rows.slice(firstOff).every((f) => !f.on)).toBe(true);
-    expect(classes[rows.findIndex((f) => f.id === 'you-are-here')]).toBe(
-      'you-are-here'
+    expect(classes[rows.findIndex((f) => f.id === 'destination')]).toBe(
+      'destination'
     );
     expect(opened.options.designWidthMm).toBe(plan.size.w);
     expect(plan.meta.title).toBe('Central Library');
@@ -1867,7 +1868,8 @@ describe('the map Make the map drafts', () => {
       way.filter((f) => ['landmark', 'area', 'transit-stop'].includes(f.class))
     ).toEqual([]);
     expect(way.some((f) => f.class === 'walkway')).toBe(true);
-    expect(way.some((f) => f.class === 'you-are-here')).toBe(true);
+    expect(way.some((f) => f.class === 'destination')).toBe(true);
+    expect(way.some((f) => f.class === 'you-are-here')).toBe(false);
   });
 
   it('takes the rows back by index: a feature off keeps its class, one on takes the class, and the plan is rebuilt', async () => {

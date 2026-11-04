@@ -1255,6 +1255,9 @@ export function createAddressSection({
         box: where.box,
         source: 'overpass',
         place: at,
+        // The typed words: the destination is named by them, so the map
+        // says the address the person asked for.
+        query: input.value.trim(),
         to,
         travel: ends
           ? {

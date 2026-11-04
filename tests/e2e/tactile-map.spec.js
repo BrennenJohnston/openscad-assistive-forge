@@ -912,6 +912,17 @@ test.describe('the draft map', () => {
         .__forgeMapPanel.keyPages.flatMap((p) => p.tape)
     );
     expect(tape).toContain('pc restaurant: plaza cafe');
+    // The typed address is the destination, the first row after the key's
+    // title, named by the words typed up to the first comma.
+    // (A row longer than a channel wraps at a space; the first piece holds
+    // the start of the name.)
+    const destinationRow = tape.findIndex((t) =>
+      t.startsWith('destination, 3600 ferry')
+    );
+    expect(destinationRow).toBeGreaterThan(-1);
+    expect(destinationRow).toBeLessThan(
+      tape.indexOf('pc restaurant: plaza cafe')
+    );
     const keyRadio = page.locator(
       'input[name="tactileMapPlate"][value^="key"]'
     );

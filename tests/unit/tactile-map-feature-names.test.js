@@ -175,4 +175,19 @@ describe('feature names', () => {
     );
     for (const w of warnings) expect(w.text).not.toMatch(/osm-(way|node)-/);
   });
+
+  it('names the destination by its address and never names another feature near it', () => {
+    const names = featureNames([
+      {
+        id: 'destination',
+        class: 'destination',
+        kind: 'point',
+        name: '3600 Ferry Pl NE',
+        at: [0, 0],
+        on: true,
+      },
+      { id: 's', class: 'stairs', kind: 'point', at: [4, 0], on: true },
+    ]);
+    expect(names).toEqual(['3600 Ferry Pl NE', 'Stairs']);
+  });
 });

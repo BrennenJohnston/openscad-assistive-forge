@@ -261,6 +261,7 @@ export function applyDetail(features, { switches, scale, mmPerM }) {
   const decide = (f) => {
     if (sw.everything) return true;
     switch (f.class) {
+      case 'destination':
       case 'you-are-here':
         return true;
       case 'walkway':

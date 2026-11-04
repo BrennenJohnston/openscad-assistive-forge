@@ -88,6 +88,7 @@ export const BUILTIN_SYMBOLS = {
   'landmark-square': DISC_SHAPE,
   'landmark-triangle': TRIANGLE_SHAPE,
   'you-are-here': DISC_SHAPE,
+  'destination-cone': DISC_SHAPE,
   'transit-stop': DISC_SHAPE,
 };
 
@@ -621,7 +622,9 @@ export function buildLevelRings(plan, settings = {}) {
         });
       }
       points.push({ f, size });
-      if (size < s.minSymbolMm) {
+      // A solid symbol (the destination cone) is read by its height, not
+      // its footprint: the flat-symbol floor does not apply.
+      if (size < s.minSymbolMm && !shape.solid) {
         warn(
           'symbol-too-small',
           f.id,

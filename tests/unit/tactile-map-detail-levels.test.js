@@ -128,7 +128,8 @@ describe('the detail levels', () => {
     expect(onOf(first, 'area')).toEqual([]);
     expect(onOf(first, 'furniture')).toEqual([]);
     expect(onOf(first, 'entrance').length).toBeLessThanOrEqual(1);
-    expect(onOf(first, 'you-are-here')).toHaveLength(1);
+    expect(onOf(first, 'destination')).toHaveLength(1);
+    expect(onOf(first, 'you-are-here')).toHaveLength(0);
     const named = applyDetail(plan.features, {
       type: 'place',
       switches: switchesFor('place', 'named'),
@@ -185,6 +186,7 @@ describe('the detail levels', () => {
       (f) =>
         f.kind === 'point' &&
         f.class !== 'you-are-here' &&
+        f.class !== 'destination' &&
         !(f.class === 'entrance' && f.address)
     );
     expect(points.every((f) => f.class === 'transit-stop')).toBe(true);

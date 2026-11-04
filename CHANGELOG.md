@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   text, the labels and the key, on Letter or A4, for the person who makes
   the labels and assembles the plates.
 
+### Fixed
+
+- A place map marks the typed address: a destination cone (Touch Mapper's
+  marker, 4.9 mm tall) stands at the address and the key names it first
+  with the address; a route's end carries the same cone. You are here is
+  no longer dropped at the plate's center as if it were the address.
+
 ## [5.8.0] - 2026-11-04
 
 ### Added

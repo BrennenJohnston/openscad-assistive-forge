@@ -1362,7 +1362,9 @@ class MapPanel {
       scale: osm.scale,
       landmarks: osm.landmarks,
       size: { w: this.plan.size.w, h: this.plan.size.h },
-      place: osm.place,
+      // The typed words travel with the place: the destination is named
+      // by them, so the map says the address the person asked for.
+      place: osm.place ? { ...osm.place, query: osm.query || '' } : null,
     });
     // A scale that draws sidewalks needs one near the address; one that
     // draws streets alone needs a street.

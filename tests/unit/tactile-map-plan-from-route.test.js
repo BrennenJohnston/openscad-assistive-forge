@@ -111,7 +111,7 @@ describe('a route map draft', () => {
     expect(on('osm-way-463804370-stairs')).toBe(true);
   });
 
-  it('switches on the two buildings, You are here at the start door and an entrance at the destination door', () => {
+  it('switches on the two buildings, You are here at the start door and the destination cone at the end door', () => {
     const { plan } = draft();
     const route = plan.features.find((f) => f.class === 'route');
     const hub = plan.features.filter((f) =>
@@ -136,13 +136,14 @@ describe('a route map draft', () => {
       )
     ).toBeLessThanOrEqual(13.5);
     const last = route.points[route.points.length - 1];
-    const door = plan.features.filter(
+    const end = plan.features.filter(
       (f) =>
-        f.class === 'entrance' &&
+        f.class === 'destination' &&
         f.on &&
         Math.hypot(f.at[0] - last[0], f.at[1] - last[1]) < 0.01
     );
-    expect(door).toHaveLength(1);
+    expect(end).toHaveLength(1);
+    expect(end[0].name).toBe('Bill & Melinda Gates Center');
   });
 
   it('keeps every walkway and curb that is on at least the gap from the route, the walkways as stubs near it', () => {
@@ -315,9 +316,7 @@ describe('a walk to or from a stop', () => {
       name: 'East Stevens Way NE & Benton Ln, 72',
       on: true,
     });
-    expect(
-      plan.features.find((f) => f.id === 'destination-door')
-    ).toBeUndefined();
+    expect(plan.features.find((f) => f.id === 'destination')).toBeUndefined();
     expect(plan.features.find((f) => f.id === 'you-are-here').on).toBe(true);
   });
 
@@ -332,8 +331,13 @@ describe('a walk to or from a stop', () => {
     const start = plan.features.find((f) => f.id === 'start-stop');
     expect(start).toMatchObject({ class: 'transit-stop', on: true });
     expect(plan.features.find((f) => f.id === 'you-are-here')).toBeUndefined();
-    expect(plan.features.find((f) => f.id === 'destination-door').on).toBe(
-      true
-    );
+    const end = plan.features.find((f) => f.id === 'destination');
+    expect(end).toMatchObject({
+      class: 'destination',
+      kind: 'point',
+      size: 4.9,
+      on: true,
+    });
+    expect(end.name.length).toBeGreaterThan(0);
   });
 });

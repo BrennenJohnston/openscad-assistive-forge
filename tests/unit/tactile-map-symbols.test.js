@@ -29,6 +29,7 @@ const KEYS = [
   'landmark-square',
   'landmark-triangle',
   'you-are-here',
+  'destination-cone',
   'transit-stop',
   'chevron-uphill',
 ];
@@ -41,16 +42,23 @@ const fileOf = (value, name = 'symbols.json') => ({
 afterEach(() => setLibrary(null));
 
 describe('the built-in symbols', () => {
-  it('are the ten shapes, each with a name and a source', () => {
+  it('are the eleven shapes, each with a name and a source; the destination cone the one solid, at its own size', () => {
     expect(BUILT_IN_SYMBOLS.map((s) => s.key)).toEqual(KEYS);
     for (const s of BUILT_IN_SYMBOLS) {
       expect(typeof s.name, s.key).toBe('string');
       expect(s.name.length, s.key).toBeGreaterThan(0);
       expect(typeof s.source, s.key).toBe('string');
       expect(s.source.length, s.key).toBeGreaterThan(10);
-      expect(s.minSizeMm, s.key).toBe(SYMBOL_MIN_SIZE_MM);
+      expect(s.minSizeMm, s.key).toBe(
+        s.key === 'destination-cone' ? 4.9 : SYMBOL_MIN_SIZE_MM
+      );
       expect(ringsFromPathData(s.pathData).length, s.key).toBeGreaterThan(0);
+      expect(s.solid, s.key).toBe(
+        s.key === 'destination-cone' ? 'cone' : undefined
+      );
     }
+    const cone = BUILT_IN_SYMBOLS.find((s) => s.key === 'destination-cone');
+    expect(cone.source).toMatch(/Touch Mapper/);
   });
 
   it('have no part thinner than 1.0 mm at 10 mm', () => {
@@ -160,7 +168,7 @@ describe('the file door', () => {
     expect(activeLibrary()).toHaveLength(2);
     expect(activeLibrary().map((s) => s.key)).toEqual(['a', 'b']);
     setLibrary(null);
-    expect(activeLibrary()).toHaveLength(10);
+    expect(activeLibrary()).toHaveLength(11);
     expect(activeLibrary()).toBe(BUILT_IN_SYMBOLS);
   });
 });

@@ -87,7 +87,7 @@ afterEach(() => {
 });
 
 describe('the class table', () => {
-  it('lists the twenty classes and Ignore last, each with a kind, a name and a source', () => {
+  it('lists the twenty-one classes and Ignore last, each with a kind, a name and a source', () => {
     expect(MAP_CLASS_KEYS).toEqual([
       'wall',
       'curb',
@@ -104,6 +104,7 @@ describe('the class table', () => {
       'entrance',
       'furniture',
       'landmark',
+      'destination',
       'you-are-here',
       'transit-stop',
       'curb-ramp',
@@ -144,6 +145,7 @@ describe('the class table', () => {
       'Entrance',
       'Street furniture',
       'Landmark',
+      'Destination',
       'You are here',
       'Transit stop',
       'Curb ramp',

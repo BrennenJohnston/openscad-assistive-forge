@@ -40,8 +40,9 @@ import { regionArea } from '../ring-geometry.js';
  */
 export const LABEL_CELLS = 6;
 
-/** Point classes, most important first; You are here leads the key. */
+/** Point classes, most important first; the destination, then You are here, lead the key. */
 const POINT_ORDER = [
+  'destination',
   'you-are-here',
   'entrance',
   'stairs',
@@ -68,6 +69,8 @@ const AREA_ORDER = ['area'];
 
 /** How a built-in symbol feels, in words; a loaded set's name otherwise. */
 const SHAPE_WORDS = Object.freeze({
+  'destination-cone': (mm) =>
+    `a cone ${mm} mm across and ${mm} mm tall, flat at the top`,
   'you-are-here': (mm) =>
     `a disc ${mm} mm across with a center dot one step higher`,
   stairs: (mm) => `three bars, ${mm} mm`,
@@ -252,6 +255,8 @@ export function namedPoints(plan) {
         f.on !== false &&
         f.kind === 'point' &&
         f.class !== 'you-are-here' &&
+        // The destination is named in its own key row, by its cone.
+        f.class !== 'destination' &&
         f.name
     )
     .sort((a, b) => rank(a.class) - rank(b.class) || near(a) - near(b));
@@ -286,7 +291,10 @@ export function keyFor(plan, settings = {}, { needsKey = new Set() } = {}) {
     symbols[key] || symbols.circle || BUILTIN_SYMBOLS.circle;
   for (const f of on.filter((x) => x.kind === 'point')) {
     const key = f.symbol ?? classes[f.class]?.symbol ?? 'circle';
-    const sig = feel(shapeOf(key));
+    const printed = shapeOf(key);
+    // A solid symbol (the cone) is its own row: its footprint is a disc,
+    // but it prints as nothing else does.
+    const sig = printed?.solid ? `solid:${printed.solid}` : feel(printed);
     const entry = bySymbol.get(sig) || {
       kind: 'point',
       symbolKey: key,
@@ -295,6 +303,8 @@ export function keyFor(plan, settings = {}, { needsKey = new Set() } = {}) {
     };
     if (!entry.classes.includes(f.class)) entry.classes.push(f.class);
     entry.sizeMm = Math.max(entry.sizeMm, f.size ?? s.symbolSizeMm);
+    // The destination's row carries the address it marks.
+    if (f.class === 'destination' && f.name) entry.address = f.name;
     bySymbol.set(sig, entry);
   }
   const points = [...bySymbol.values()].map((e) => {
@@ -306,7 +316,10 @@ export function keyFor(plan, settings = {}, { needsKey = new Set() } = {}) {
       shape?.pathData === basicShapes[e.symbolKey]?.pathData;
     return {
       ...e,
-      name: e.classes.map(className).join(' or '),
+      name:
+        e.classes[0] === 'destination' && e.address
+          ? `Destination, ${e.address}`
+          : e.classes.map(className).join(' or '),
       raised: typeof shape?.raisedPathData === 'string',
       shape: basic
         ? SHAPE_WORDS[e.symbolKey](say(e.sizeMm))
