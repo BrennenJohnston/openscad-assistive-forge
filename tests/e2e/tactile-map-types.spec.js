@@ -262,7 +262,9 @@ test.describe('the three map types end to end', () => {
       readFileSync(await (await download).path())
     );
     const readme = await zip.file('README.txt').async('string');
-    expect(readme.split('\n')[0]).toBe('A map from a drawing.');
+    const lines = readme.split('\n');
+    expect(lines[0]).toMatch(/^map_print\.pdf shows where each label goes/);
+    expect(lines[1]).toBe('A map from a drawing.');
     expect(readme).not.toMatch(/OpenStreetMap/);
   });
 });
