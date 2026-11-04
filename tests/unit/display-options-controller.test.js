@@ -1221,3 +1221,65 @@ describe('DisplayOptionsController — edges from the preview worker', () => {
     expect(mockThree.EdgesGeometry).toHaveBeenCalledWith(mockMesh.geometry, 15);
   });
 });
+
+// ============================================================================
+// The model switch: hide the plate to read the paper under it
+// ============================================================================
+
+describe('DisplayOptionsController — the model switch', () => {
+  let pm;
+  let three;
+
+  function makeCtrl() {
+    return new DisplayOptionsController({
+      getPreviewManager: () => pm,
+      getThree: () => three,
+    });
+  }
+
+  beforeEach(() => {
+    resetDisplayOptionsController();
+    localStorage.clear();
+    document.body.innerHTML = '';
+    three = makeFatThreeMock();
+    pm = makePreviewManagerWithThemeListeners(createMockMesh());
+    pm.mesh.visible = true;
+  });
+
+  it('shows the model by default', () => {
+    const ctrl = makeCtrl();
+    ctrl.init();
+    expect(ctrl.get('model')).toBe(true);
+    expect(pm.mesh.visible).toBe(true);
+  });
+
+  it('hides the mesh when off, shows it again when on', () => {
+    const ctrl = makeCtrl();
+    ctrl.init();
+    ctrl.set('model', false);
+    expect(pm.mesh.visible).toBe(false);
+    ctrl.set('model', true);
+    expect(pm.mesh.visible).toBe(true);
+  });
+
+  it('keeps a hidden model hidden when a new mesh arrives', () => {
+    const ctrl = makeCtrl();
+    ctrl.init();
+    ctrl.set('model', false);
+    pm.mesh = createMockMesh();
+    pm.mesh.visible = true;
+    ctrl.refreshOverlays();
+    expect(pm.mesh.visible).toBe(false);
+  });
+
+  it('remembers the choice like the other display options', () => {
+    const ctrl = makeCtrl();
+    ctrl.init();
+    ctrl.set('model', false);
+    resetDisplayOptionsController();
+    const again = makeCtrl();
+    again.init();
+    expect(again.get('model')).toBe(false);
+    expect(pm.mesh.visible).toBe(false);
+  });
+});

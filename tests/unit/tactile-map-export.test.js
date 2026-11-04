@@ -245,4 +245,37 @@ describe('the archive and its README', () => {
       'README.txt',
     ]);
   });
+
+  it('carries the PDF before the README, which names it first', () => {
+    const readme = readmeText({
+      mapName: 'Station',
+      bedName: x1c.name,
+      layout,
+      size: { w: 480, h: 360 },
+      heights: { base: 0.4, tops: [1, 1.8, 2.4] },
+      tapeWidthMm: 12.7,
+      pdfName: 'map_print.pdf',
+    });
+    expect(readme).toMatch(
+      /^map_print\.pdf shows where each label goes, with its text, for assembly and labeling\.\n/
+    );
+    const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+    const entries = archiveEntries({
+      stem: 'm',
+      extension: '.stl',
+      rendered: [],
+      sets: [],
+      plan: {},
+      readme,
+      grid: '<svg/>',
+      pdf,
+    });
+    expect(entries.map((e) => e.name)).toEqual([
+      'map_plan.json',
+      'plate_grid.svg',
+      'map_print.pdf',
+      'README.txt',
+    ]);
+    expect(entries[2].data).toBe(pdf);
+  });
 });

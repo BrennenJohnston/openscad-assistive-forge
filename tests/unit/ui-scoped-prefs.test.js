@@ -50,6 +50,7 @@ const EXPECTED_BASE_KEYS = [
   'openscad-forge-display-edgeBudget',
   'openscad-forge-display-crosshairs',
   'openscad-forge-display-wireframe',
+  'openscad-forge-display-model',
   'openscad-forge-measurements',
   'openscad-forge-viewport-scheme',
   'openscad-forge-status-bar',

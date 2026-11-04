@@ -269,6 +269,7 @@ export function plateLevelsSvg(levelRings, plate, options = {}) {
 
   return {
     svg: levelsSvgFromRings(rings, size, textBoxes),
+    rings,
     dropped,
     size,
     plateId: plate.id,

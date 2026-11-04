@@ -256,6 +256,8 @@ function aboutOf(about) {
  * @param {string} [input.keyText] - the key as text (map-key.js `keyText`)
  * @param {Array<{id: string, texts: string[]}>} [input.keyTape] - each key
  *   plate's texts to write on label tape, top to bottom
+ * @param {string} [input.pdfName] - the PDF in the archive, named first
+ * @param {string[]} [input.unspelled] - names the PDF's fonts could not spell
  * @returns {string}
  */
 export function readmeText({
@@ -269,12 +271,17 @@ export function readmeText({
   keyIds = [],
   keyText = '',
   keyTape = [],
+  pdfName = '',
+  unspelled = [],
 }) {
   const tape = keyTape.filter((k) => k.texts.length);
   const n = layout.plates.length;
   const ids = layout.plates.map((plate) => plate.id).join(', ');
   const { lead, credits } = mapAbout(about);
   return (
+    (pdfName
+      ? `${pdfName} shows where each label goes, with its text, for assembly and labeling.\n`
+      : '') +
     (lead ? `${lead}\n` : '') +
     `${mapName}: ${n} ${n === 1 ? 'plate' : 'plates'} for a ${bedName} bed, ` +
     `each ${layout.plateW} x ${layout.plateH} mm. ` +
@@ -297,7 +304,10 @@ export function readmeText({
           `${keyLabel(k.id)} plate, label tape top to bottom:\n` +
           k.texts.map((t) => `- ${t}\n`).join('')
       )
-      .join('')
+      .join('') +
+    (unspelled.length
+      ? `\nNames the PDF could not spell: ${unspelled.join('; ')}\n`
+      : '')
   );
 }
 
@@ -314,6 +324,7 @@ export function readmeText({
  * @param {Object} input.plan
  * @param {string} input.readme
  * @param {string} input.grid - plateGridSvg(...)
+ * @param {Uint8Array} [input.pdf] - the map's PDF, as map_print.pdf
  * @returns {Array<{name: string, data: string|ArrayBuffer|Uint8Array}>}
  */
 export function archiveEntries({
@@ -324,6 +335,7 @@ export function archiveEntries({
   plan,
   readme,
   grid,
+  pdf = null,
 }) {
   const entries = rendered.map((plate) => ({
     name: `${stem}_${plate.id}${extension}`,
@@ -334,6 +346,10 @@ export function archiveEntries({
     entries.push({ name: `levels_${set.id}.svg`, data: set.svg });
   }
   entries.push({ name: 'plate_grid.svg', data: grid });
+  if (pdf) entries.push({ name: PDF_NAME, data: pdf });
   entries.push({ name: 'README.txt', data: readme });
   return entries;
 }
+
+/** The map's PDF in the archive. */
+export const PDF_NAME = 'map_print.pdf';

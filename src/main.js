@@ -5056,10 +5056,18 @@ async function initApp() {
         checked: displayOptionsController.get('crosshairs'),
         handler: () => displayOptionsController.toggle('crosshairs'),
       },
-      // The grid, measurements and status-bar toggles. Forge-only: Classic's
-      // View menu keeps its desktop shape.
+      // The model, grid, measurements and status-bar toggles. Forge-only:
+      // Classic's View menu keeps its desktop shape.
       ...(document.body.dataset.uiMode !== 'classic'
         ? [
+            {
+              // Off, the mesh hides so a reference overlay under it (the
+              // tactile map's paper) can be read alone.
+              type: 'toggle',
+              label: 'Show Model',
+              checked: displayOptionsController.get('model'),
+              handler: () => displayOptionsController.toggle('model'),
+            },
             {
               type: 'toggle',
               label: 'Show Grid',

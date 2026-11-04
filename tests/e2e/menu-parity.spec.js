@@ -686,6 +686,7 @@ const VIEW_MENU_ORDER = [
   'Show Axes',
   'Show Scale Markers',
   'Show Crosshairs',
+  'Show Model',
   'Show Grid',
   'Show Measurements',
   'Show Status Bar',

@@ -4068,3 +4068,59 @@ describe('the orbit point stays on the model', () => {
     expect(target.z).toBeCloseTo(7, 5)
   })
 })
+
+describe('an overlay source that keeps its own colours', () => {
+  let container
+  let manager
+  let spy
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    container.style.width = '800px'
+    container.style.height = '600px'
+    document.body.appendChild(container)
+    manager = new PreviewManager(container)
+    spy = vi.spyOn(manager, 'svgTextToCanvasTexture').mockResolvedValue({
+      texture: { dispose() {} },
+      aspect: 1,
+      widthMm: 10,
+      heightMm: 10,
+    })
+    manager.overlayConfig.svgColor = '#ffffff'
+  })
+
+  afterEach(() => {
+    document.body.removeChild(container)
+  })
+
+  it('is rasterised with no recolour and a sharper canvas; a plain source still takes the chosen colour', async () => {
+    await manager.setReferenceOverlaySource({
+      kind: 'svg',
+      name: 'paper.svg',
+      dataUrlOrText: '<svg/>',
+      keepColors: true,
+    })
+    expect(spy).toHaveBeenLastCalledWith('<svg/>', null, {
+      targetCanvasSize: manager.getMaxTextureResolution() * 2,
+    })
+    await manager.setReferenceOverlaySource({
+      kind: 'svg',
+      name: 'ref.svg',
+      dataUrlOrText: '<svg/>',
+    })
+    expect(spy).toHaveBeenLastCalledWith('<svg/>', '#ffffff', {})
+  })
+
+  it('a colour change leaves it in its own colours', async () => {
+    await manager.setReferenceOverlaySource({
+      kind: 'svg',
+      name: 'paper.svg',
+      dataUrlOrText: '<svg/>',
+      keepColors: true,
+    })
+    await manager.setOverlaySvgColor('#ff0000')
+    expect(spy).toHaveBeenLastCalledWith('<svg/>', null, {
+      targetCanvasSize: manager.getMaxTextureResolution() * 2,
+    })
+  })
+})
