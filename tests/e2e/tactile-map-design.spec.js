@@ -317,13 +317,19 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
 });
 
 test.describe('the marks on a phone', () => {
+  // No isMobile: Firefox rejects it when the browser context is created.
+  // A touch screen alone makes the page a phone's: hover none, pointer
+  // coarse (MEASURED in Chromium and Firefox).
   test.use({
     viewport: { width: 412, height: 915 },
     hasTouch: true,
-    isMobile: true,
   });
 
-  test('the cone is dragged by touch', async ({ page }) => {
+  test('the cone is dragged by touch', async ({ page, browserName }) => {
+    test.skip(
+      browserName !== 'chromium',
+      "a finger's touch is sent through CDP, which only Chromium has"
+    );
     test.setTimeout(240_000);
     await routeMapServices(page);
     await page.route('https://nominatim.openstreetmap.org/search*', (route) =>
