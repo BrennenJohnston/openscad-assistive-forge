@@ -54,6 +54,7 @@ export const EMPTY_RINGS = () => ({
   here: [],
   channels: [],
   cutouts: [],
+  leads: [],
 });
 
 /** The tile's own defaults, used when a parameter is not in the state. */

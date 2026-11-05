@@ -36,6 +36,8 @@ const DEFAULTS = {
   label_channel_depth_mm: 0.3,
   map_width_mm: 480,
   map_height_mm: 360,
+  wedge_face_angle_deg: 75,
+  numeral_raise_mm: 1,
 };
 
 describe('the Tactile Map tile', () => {
@@ -104,6 +106,63 @@ describe('the Tactile Map tile', () => {
     expect(p.map_height_mm.minimum).toBe(75);
     expect(src).toMatch(/outside 100 to 600 mm/);
     expect(src).toMatch(/outside 75 to 450 mm/);
+  });
+
+  it("raises a number's braille wedge from the embosser's form, the dial ranges enforced and the dots held to the sign's ranges", () => {
+    const src = source();
+    const p = params();
+    expect(p.wedge_face_angle_deg.minimum).toBe(45);
+    expect(p.wedge_face_angle_deg.maximum).toBe(90);
+    expect(p.wedge_foot_mm.minimum).toBe(2);
+    expect(p.wedge_foot_mm.maximum).toBe(12);
+    expect(p.numeral_raise_mm.minimum).toBe(0.8);
+    expect(p.numeral_raise_mm.maximum).toBe(2);
+    expect(p.number_wedges.default).toBe('');
+    expect(manifest().tactileMap.numberWedgesParam).toBe('number_wedges');
+    // The dot figures, each inside its ADA 703.3.1 range and asserted.
+    for (const [name, value] of [
+      ['DOT_BASE_MM', 1.5],
+      ['DOT_DOME_MM', 1.0],
+      ['DOT_BASE_HEIGHT_MM', 0.3],
+      ['DOT_DOME_HEIGHT_MM', 0.5],
+      ['DOT_PITCH_MM', 2.5],
+      ['CELL_PITCH_MM', 6.5],
+    ]) {
+      expect(src).toMatch(new RegExp(`^${name} = ${value.toFixed(1)};`, 'm'));
+    }
+    expect(src).toMatch(/assert\(in_range\(DOT_BASE_MM, DOT_BASE_RANGE_MM\)/);
+    expect(src).toMatch(
+      /assert\(in_range\(DOT_BASE_HEIGHT_MM \+ DOT_DOME_HEIGHT_MM, DOT_HEIGHT_RANGE_MM\)/
+    );
+    expect(src).toMatch(/assert\(in_range\(DOT_PITCH_MM, DOT_PITCH_RANGE_MM\)/);
+    expect(src).toMatch(/assert\(in_range\(CELL_PITCH_MM, CELL_PITCH_RANGE_MM\)/);
+    // The number sign, then a digit a cell; a wedge holds 1 to 99.
+    expect(src).toMatch(/NUMBER_SIGN = \[3, 4, 5, 6\];/);
+    expect(src).toMatch(/assert\(in_range\(row\[2\], NUMBER_RANGE\)/);
+    // Every wedge is unioned from the base's top, so none floats.
+    expect(src).toMatch(
+      /translate\(\[row\[0\], row\[1\], base_eff - _fuse\]\)\s*_label_wedge\(row\[2\]\);/
+    );
+    expect(src).toMatch(/number_wedges\(\);\s*leads\(\);/);
+  });
+
+  it('raises a # row as a bold centered numeral, 10 mm on a thing or at least 16 mm elsewhere, and any other word as before', () => {
+    const src = source();
+    expect(src).toMatch(/function _is_numeral\(s\) = len\(s\) > 1 && s\[0\] == "#";/);
+    expect(src).toMatch(/NUMERAL_ON_THING_MM = 10;/);
+    expect(src).toMatch(
+      /in_range\(row\[2\], TITLE_CAP_RANGE_MM\) \|\| \(numeral && row\[2\] == NUMERAL_ON_THING_MM\)/
+    );
+    expect(src).toMatch(/font = "Liberation Sans:style=Bold",\s*halign = "center"/);
+    expect(src).toMatch(/numeral \? numeral_raise_mm : title_raise_mm/);
+  });
+
+  it('raises the lead lines on a level of their own, one step above the top level the map uses', () => {
+    const src = source();
+    expect(src).toMatch(/import\s*\(\s*map_file\s*,\s*id\s*=\s*"leads"/);
+    expect(src).toMatch(
+      /linear_extrude\(height = level_z\(levels_used\) \+ level_step_mm - base_eff \+ _fuse\)\s*import\(map_file, id = "leads"/
+    );
   });
 
   it('lets All printed raise a thin base to the 1.2 mm wall instead of stopping on it', () => {
@@ -193,6 +252,19 @@ describe('the Tactile Map tile', () => {
     const main = src.slice(src.indexOf('module tactile_map()'));
     expect(main).toMatch(/raised_words\(\);/);
     expect(main).not.toMatch(/key_words\(\)/);
+  });
+
+  it('ships its sample with every group the model imports', () => {
+    const sample = readFileSync(join(TILE_DIR, 'sample_station.svg'), 'utf8');
+    const imported = [...source().matchAll(/id\s*=\s*"([a-z]+)"/g)].map(
+      (m) => m[1]
+    );
+    expect(imported).toContain('leads');
+    for (const id of imported) {
+      expect(sample, `the sample lacks the ${id} group`).toContain(
+        `<g id="${id}">`
+      );
+    }
   });
 
   it('ships the sample levels file it defaults to', () => {

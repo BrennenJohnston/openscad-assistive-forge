@@ -235,6 +235,7 @@ describe('titlePlateSets', () => {
       here: [],
       channels: [],
       cutouts: [],
+      leads: [],
     });
     // The map plates below hold none of the title.
     const { rings } = buildLevelRings(sampleStationPlan());

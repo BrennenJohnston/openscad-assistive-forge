@@ -275,6 +275,7 @@ export function plateLevelsSvg(levelRings, plate, options = {}) {
   }
   if (!rings.channels) rings.channels = [];
   if (!rings.cutouts) rings.cutouts = [];
+  if (!rings.leads) rings.leads = [];
 
   const size = { w: plate.w, h: plate.h };
   const textBoxes = [];
