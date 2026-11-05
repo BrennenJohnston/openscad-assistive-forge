@@ -447,16 +447,18 @@ describe('the map panel', () => {
     expect(isMapPanelActive()).toBe(true);
   });
 
-  it('says four plates of 240 x 180 for the sample on an X1C, then nine on an A1 mini', async () => {
+  // The sample's 480 x 360 mm face in its 10 mm band is a 500 x 380 mm sheet.
+  it('says four plates of 250 x 190 for the sample in its band on an X1C, then nine on an A1 mini', async () => {
     await vi.waitFor(
-      () => expect(summary()).toBe('4 plates of 240 x 180 mm, A1 to B2.'),
+      () => expect(summary()).toBe('4 plates of 250 x 190 mm, A1 to B2.'),
       SETTLE
     );
     const select = document.getElementById('tactileMapBed');
     select.value = 'a1-mini';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     await vi.waitFor(
-      () => expect(summary()).toBe('9 plates of 160 x 120 mm, A1 to C3.'),
+      () =>
+        expect(summary()).toBe('9 plates of 166.7 x 126.7 mm, A1 to C3.'),
       SETTLE
     );
     const radios = [
@@ -476,7 +478,7 @@ describe('the map panel', () => {
     ]);
   });
 
-  it('writes plate B2 as a 240 x 180 levels file and its size, then the whole map again', async () => {
+  it('writes plate B2 as a 250 x 190 levels file and its size, then the whole sheet again', async () => {
     await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
     const before = files.length;
     const b2 = document.querySelector('#tactileMapPlates input[value="B2"]');
@@ -489,10 +491,10 @@ describe('the map panel', () => {
     const last = files[files.length - 1];
     expect(last.name).toBe('map_file');
     expect(last.fileName).toBe('levels_B2.svg');
-    expect(last.svg).toMatch(/viewBox="0 0 240 180"/);
-    expect(String(params().map_width_mm)).toBe('240');
-    expect(String(params().map_height_mm)).toBe('180');
-    expect(setParameterValue).toHaveBeenCalledWith('map_width_mm', 240);
+    expect(last.svg).toMatch(/viewBox="0 0 250 190"/);
+    expect(String(params().map_width_mm)).toBe('250');
+    expect(String(params().map_height_mm)).toBe('190');
+    expect(setParameterValue).toHaveBeenCalledWith('map_width_mm', 250);
     expect(announce).toHaveBeenCalledWith(
       'Showing plate B2.',
       expect.anything()
@@ -504,10 +506,10 @@ describe('the map panel', () => {
     whole.checked = true;
     whole.dispatchEvent(new Event('change', { bubbles: true }));
     await vi.waitFor(
-      () => expect(String(params().map_width_mm)).toBe('480'),
+      () => expect(String(params().map_width_mm)).toBe('500'),
       SETTLE
     );
-    expect(String(params().map_height_mm)).toBe('360');
+    expect(String(params().map_height_mm)).toBe('380');
     expect(files[files.length - 1].fileName).toBe('levels_whole.svg');
     expect(announce).toHaveBeenCalledWith(
       'Showing the whole map.',
@@ -540,6 +542,211 @@ describe('the map panel', () => {
     });
     expect(await choose('A1')).toEqual(['yes', 'yes']);
     expect(await choose('B2')).toEqual(['no', 'no']);
+  });
+
+  // A tile that hands the panel its title gets the title on a band above
+  // the map: STATION on one 16 mm line is 41 mm of band (16 x 1.35 and
+  // 9.525 clear above and below, rounded up), and the 500 x 421 mm sheet still cuts
+  // into two rows on an X1C, so the band rides in row A.
+  it('with a title parameter the title stands on its band: no plate draws the model title, the rows go to the plates that hold them, and Inside puts it back on A1', async () => {
+    mount({
+      config: {
+        titleParam: 'title_text',
+        raisedWordsParam: 'raised_words',
+        marginParam: 'margin_mm',
+        titleBandParam: 'title_band_mm',
+      },
+    });
+    await vi.waitFor(
+      () => expect(summary()).toBe('4 plates of 250 x 210.5 mm, A1 to B2.'),
+      SETTLE
+    );
+    expect(String(params().margin_mm)).toBe('10');
+    expect(String(params().title_band_mm)).toBe('41');
+    expect(params().plate_shows_title).toBe('no');
+    expect(params().raised_words).toBe('100:3855:160:0:STATION');
+    const choose = async (id) => {
+      const radio = document.querySelector(
+        `#tactileMapPlates input[value="${id}"]`
+      );
+      radio.checked = true;
+      radio.dispatchEvent(new Event('change', { bubbles: true }));
+      await vi.waitFor(
+        () => expect(files[files.length - 1].fileName).toBe(`levels_${id}.svg`),
+        SETTLE
+      );
+    };
+    await choose('A1');
+    expect(params().plate_shows_title).toBe('no');
+    expect(params().raised_words).toBe('100:1750:160:0:STATION');
+    await choose('A2');
+    expect(params().raised_words).toBe('-2400:1750:160:0:STATION');
+    await choose('B1');
+    expect(params().raised_words).toBe('');
+
+    // Inside: the model draws its own title on A1 again and the band leaves.
+    const place = document.getElementById('tactileMapTitlePlacement');
+    expect([...place.options].map((o) => o.value)).toEqual([
+      'band',
+      'inside',
+      'none',
+    ]);
+    place.value = 'inside';
+    place.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(
+      () => expect(summary()).toBe('4 plates of 250 x 190 mm, A1 to B2.'),
+      SETTLE
+    );
+    await choose('A1');
+    expect(params().plate_shows_title).toBe('yes');
+    expect(params().raised_words).toBe('');
+    expect(String(params().title_band_mm)).toBe('0');
+
+    // A wider band: 12 mm makes a 504 x 384 mm sheet, still four plates.
+    const margin = document.getElementById('tactileMapMargin');
+    expect(margin.min).toBe('10');
+    expect(margin.max).toBe('40');
+    margin.value = '12';
+    margin.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(
+      () => expect(summary()).toBe('4 plates of 252 x 192 mm, A1 to B2.'),
+      SETTLE
+    );
+    expect(String(params().margin_mm)).toBe('12');
+  });
+
+  it('rebuilds the sheet when the title or its letter height changes in the Customizer', async () => {
+    mount({
+      config: {
+        titleParam: 'title_text',
+        raisedWordsParam: 'raised_words',
+        titleLetterParam: 'title_char_height_mm',
+        marginParam: 'margin_mm',
+        titleBandParam: 'title_band_mm',
+      },
+    });
+    await vi.waitFor(
+      () => expect(summary()).toBe('4 plates of 250 x 210.5 mm, A1 to B2.'),
+      SETTLE
+    );
+    // The title cleared: the band leaves.
+    stateManager.setState({ parameters: { ...params(), title_text: '' } });
+    await vi.waitFor(
+      () => expect(summary()).toBe('4 plates of 250 x 190 mm, A1 to B2.'),
+      SETTLE
+    );
+    // A 20 mm title: 20 x 1.35 + 19.05 = 46.05 mm of band, rounded up to 47.
+    stateManager.setState({
+      parameters: {
+        ...params(),
+        title_text: 'Station',
+        title_char_height_mm: '20',
+      },
+    });
+    await vi.waitFor(
+      () => expect(summary()).toBe('4 plates of 250 x 213.5 mm, A1 to B2.'),
+      SETTLE
+    );
+    // The 427 mm sheet: the capital's top 19.525 mm from the top, the
+    // baseline 20 below it, 387.475 mm up from the bottom.
+    expect(String(params().title_band_mm)).toBe('47');
+    expect(params().raised_words).toBe('100:3875:200:0:STATION');
+  });
+
+  // A hall from 40 to 300 by 60 to 200 and the cone inside it: the printed
+  // box is 260 x 140 mm at 40, 60; in its 10 mm band a 280 x 160 sheet.
+  const trimPlan = () => {
+    const sample = sampleStationPlan();
+    return {
+      ...sample,
+      meta: { ...sample.meta, title: '' },
+      features: [
+        {
+          id: 'hall',
+          class: 'area',
+          kind: 'area',
+          name: 'the hall',
+          ring: [
+            [40, 60],
+            [300, 60],
+            [300, 200],
+            [40, 200],
+          ],
+          on: true,
+        },
+        {
+          id: 'destination',
+          class: 'destination',
+          kind: 'point',
+          name: '3600 Ferry Pl NE',
+          size: 4.9,
+          at: [100, 100],
+          on: true,
+        },
+      ],
+    };
+  };
+
+  it('offers Trim the empty edges above Print bed: checked for a place map, unchecked for a drawing, not for a route', () => {
+    const box = () => document.getElementById('tactileMapTrim');
+    expect(box()).not.toBeNull();
+    expect(box().checked).toBe(false);
+    expect(document.getElementById('tactileMapTrimHelp').textContent).toBe(
+      'Cuts the empty plate around what prints; the margin stays.'
+    );
+    expect(box().getAttribute('aria-describedby')).toBe('tactileMapTrimHelp');
+    expect(document.querySelector('label[for="tactileMapTrim"]').textContent).toBe(
+      'Trim the empty edges'
+    );
+    // Above Print bed in the step.
+    const bed = document.getElementById('tactileMapBed');
+    expect(
+      box().compareDocumentPosition(bed) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    mount({ type: 'place' });
+    expect(box().checked).toBe(true);
+    mount({ type: 'route' });
+    expect(box()).toBeNull();
+  });
+
+  it('trims the sheet to what prints when the switch is on, moves the model rows with it, and gives the whole face back when off', async () => {
+    mount({
+      plan: trimPlan(),
+      config: { coneMarksParam: 'cone_marks' },
+    });
+    await vi.waitFor(
+      () => expect(summary()).toBe('4 plates of 250 x 190 mm, A1 to B2.'),
+      SETTLE
+    );
+    await vi.waitFor(
+      () => expect(params().cone_marks).toBe('1100:2700'),
+      SETTLE
+    );
+    const box = document.getElementById('tactileMapTrim');
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(
+      () => expect(summary()).toBe('2 plates of 140 x 160 mm, A1 to A2.'),
+      SETTLE
+    );
+    expect(String(params().map_width_mm)).toBe('280');
+    expect(String(params().map_height_mm)).toBe('160');
+    // The cone at the face's 100, 100: 60, 40 on the trimmed face, 70, 50
+    // on the sheet, 110 up from its bottom.
+    expect(params().cone_marks).toBe('700:1100');
+    expect(files[files.length - 1].svg).toMatch(/viewBox="0 0 280 160"/);
+    box.checked = false;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(
+      () => expect(summary()).toBe('4 plates of 250 x 190 mm, A1 to B2.'),
+      SETTLE
+    );
+    expect(params().cone_marks).toBe('1100:2700');
+  });
+
+  it('offers no title placement to a tile that keeps its title to itself, and draws the title inside the map', () => {
+    expect(document.getElementById('tactileMapTitlePlacement')).toBeNull();
+    expect(document.getElementById('tactileMapMargin')).not.toBeNull();
   });
 
   it('keeps the same radios when only the plate changes, so a screen reader says the plate once', async () => {
@@ -608,7 +815,7 @@ describe('the map panel', () => {
     style.value = 'margin';
     style.dispatchEvent(new Event('change', { bubbles: true }));
     await vi.waitFor(() => expect(params().plate_id).toBe('B2'), SETTLE);
-    expect(files[files.length - 1].svg).toMatch(/viewBox="0 0 240 190"/);
+    expect(files[files.length - 1].svg).toMatch(/viewBox="0 0 250 200"/);
     expect(files[files.length - 1].svg).toMatch(/<g id="cutouts"><\/g>/);
   });
 
@@ -617,7 +824,7 @@ describe('the map panel', () => {
     mount({
       config: {
         plateKindParam: 'plate_kind',
-        keyPrintParam: 'key_print',
+        raisedWordsParam: 'raised_words',
         keyLetterParam: 'key_letter_height_mm',
       },
     });
@@ -636,13 +843,17 @@ describe('the map panel', () => {
     key.checked = true;
     key.dispatchEvent(new Event('change', { bubbles: true }));
     await vi.waitFor(() => expect(params().plate_kind).toBe('Key'), SETTLE);
-    expect(params().key_print).toBe('');
+    expect(params().raised_words).toBe('');
     expect(files[files.length - 1].svg).toMatch(
       /<g id="channels"><path d="[^"]+"\/><\/g>/
     );
     words.value = 'both';
     words.dispatchEvent(new Event('change', { bubbles: true }));
-    await vi.waitFor(() => expect(params().key_print).toMatch(/:KEY/), SETTLE);
+    // Rows of x:y:h:z:TEXT: the capital 16 mm, standing on the base.
+    await vi.waitFor(
+      () => expect(params().raised_words).toMatch(/^\d+:\d+:160:0:KEY/),
+      SETTLE
+    );
   });
 
   it('writes cone_marks for the whole map, for the plate that holds the cone, and for the key plate with its sample, when the model has the parameter', async () => {
@@ -660,13 +871,15 @@ describe('the map panel', () => {
       plan,
       config: {
         plateKindParam: 'plate_kind',
-        keyPrintParam: 'key_print',
+        raisedWordsParam: 'raised_words',
         keyLetterParam: 'key_letter_height_mm',
         coneMarksParam: 'cone_marks',
       },
     });
+    // The cone at the face's 100, 50 stands at the sheet's 110, 60: y up
+    // from the sheet's bottom, 380 - 60.
     await vi.waitFor(
-      () => expect(params().cone_marks).toBe('1000:3100'),
+      () => expect(params().cone_marks).toBe('1100:3200'),
       SETTLE
     );
     const pick = (value) => {
@@ -678,7 +891,7 @@ describe('the map panel', () => {
     };
     pick('A1');
     await vi.waitFor(
-      () => expect(params().cone_marks).toBe('1000:1300'),
+      () => expect(params().cone_marks).toBe('1100:1300'),
       SETTLE
     );
     pick('B2');
@@ -698,14 +911,14 @@ describe('the map panel', () => {
     select.dispatchEvent(new Event('change', { bubbles: true }));
     const w = document.getElementById('tactileMapBedWidth');
     const d = document.getElementById('tactileMapBedDepth');
-    w.value = '110';
-    d.value = '110';
+    w.value = '100';
+    d.value = '100';
     w.dispatchEvent(new Event('change', { bubbles: true }));
     d.dispatchEvent(new Event('change', { bubbles: true }));
     await vi.waitFor(
       () =>
         expect(summary()).toBe(
-          'A 110 x 110 mm bed cuts this map into plates of 96 x 90 mm, under the 100 x 75 mm minimum. Choose a larger bed.'
+          'A 100 x 100 mm bed cuts this map into plates of 83.3 x 95 mm, under the 100 x 75 mm minimum. Choose a larger bed.'
         ),
       SETTLE
     );
@@ -714,7 +927,7 @@ describe('the map panel', () => {
         ...document.querySelectorAll('#tactileMapPlates input[type="radio"]'),
       ].map((r) => r.value)
     ).toEqual(['whole']);
-    expect(String(params().map_width_mm)).toBe('480');
+    expect(String(params().map_width_mm)).toBe('500');
     expect(files[files.length - 1].fileName).toBe('levels_whole.svg');
     click('tactileMapRenderAll');
     await new Promise((resolve) => setTimeout(resolve, 60));
@@ -734,7 +947,7 @@ describe('the map panel', () => {
     d.value = '300';
     w.dispatchEvent(new Event('change', { bubbles: true }));
     await vi.waitFor(
-      () => expect(summary()).toBe('4 plates of 240 x 180 mm, A1 to B2.'),
+      () => expect(summary()).toBe('4 plates of 250 x 190 mm, A1 to B2.'),
       SETTLE
     );
   });
@@ -883,17 +1096,18 @@ describe('render every plate and download', () => {
       (await zip.file('tactile_map_A1.stl').async('uint8array')).length
     ).toBe(84);
     expect(await zip.file('levels_B2.svg').async('string')).toMatch(
-      /viewBox="0 0 240 180"/
+      /viewBox="0 0 250 190"/
     );
+    // The plan keeps the face; the plates and the board are the sheet.
     expect(
       JSON.parse(await zip.file('map_plan.json').async('string')).size
     ).toEqual({ w: 480, h: 360 });
     expect(readme).toBe(
       'map_print.pdf shows where each label goes, with its text, for assembly and labeling.\n' +
         'A map from a drawing.\n' +
-        'Station: 4 plates for a Bambu Lab X1C, P1S or P1P (256 x 256 mm) bed, each 240 x 180 mm. ' +
+        'Station: 4 plates for a Bambu Lab X1C, P1S or P1P (256 x 256 mm) bed, each 250 x 190 mm. ' +
         'Print one of each: A1, A2, B1, B2. ' +
-        'Lay them out as the grid reads, row A at the top, column 1 at the left, and glue them edge to edge onto a backing board of 480 x 360 mm. ' +
+        'Lay them out as the grid reads, row A at the top, column 1 at the left, and glue them edge to edge onto a backing board of 500 x 380 mm. ' +
         'Levels, measured from the underside: base 0.4 mm, then 1.0, 1.8, 2.4 mm. ' +
         'Label channels take 12.7 mm tape. ' +
         'The picture plate_grid.svg shows the layout.\n'
@@ -933,8 +1147,8 @@ describe('render every plate and download', () => {
       'levels_B2.svg',
     ]);
     const first = calls[0].parameters;
-    expect(first.map_width_mm).toBe(240);
-    expect(first.map_height_mm).toBe(180);
+    expect(first.map_width_mm).toBe(250);
+    expect(first.map_height_mm).toBe(190);
     expect(first.plate_id).toBe('');
     expect(first.plate_shows_title).toBe('yes');
     expect(first.plate_shows_north).toBe('no');
@@ -943,7 +1157,7 @@ describe('render every plate and download', () => {
     expect(first.map_file.data).toMatch(/^data:image\/svg\+xml;base64,/);
     expect(first.title_text).toBe('Station');
     expect(calls[0].options).toEqual({ format: 'stl', timeoutMs: 60000 });
-    expect(String(params().map_width_mm)).toBe('480');
+    expect(String(params().map_width_mm)).toBe('500');
   });
 
   it('stops after the current plate on Cancel and keeps the chosen plate', async () => {
@@ -961,7 +1175,7 @@ describe('render every plate and download', () => {
     b2.checked = true;
     b2.dispatchEvent(new Event('change', { bubbles: true }));
     await vi.waitFor(
-      () => expect(String(params().map_width_mm)).toBe('240'),
+      () => expect(String(params().map_width_mm)).toBe('250'),
       SETTLE
     );
 
@@ -998,7 +1212,7 @@ describe('render every plate and download', () => {
       expect.anything()
     );
     expect(b2.checked).toBe(true);
-    expect(String(params().map_width_mm)).toBe('240');
+    expect(String(params().map_width_mm)).toBe('250');
     expect(render.hidden).toBe(false);
     expect(cancel.hidden).toBe(true);
     expect(document.activeElement).toBe(render);
@@ -1135,8 +1349,9 @@ describe('the drawing door', () => {
       regions: regionsOf(DRAWING, { 0: 'wall', 1: 'area' }),
       svg: DRAWING,
     });
+    // The drawing's 302 x 202 mm in its 10 mm band.
     await vi.waitFor(
-      () => expect(summary()).toBe('2 plates of 151 x 202 mm, A1 to A2.'),
+      () => expect(summary()).toBe('2 plates of 161 x 222 mm, A1 to A2.'),
       SETTLE
     );
     await vi.waitFor(
@@ -1145,10 +1360,10 @@ describe('the drawing door', () => {
     );
     const last = files[files.length - 1];
     expect(last.fileName).toBe('levels_whole.svg');
-    expect(last.svg).toMatch(/viewBox="0 0 302 202"/);
+    expect(last.svg).toMatch(/viewBox="0 0 322 222"/);
     expect(last.svg).toMatch(/<g id="level3">\s*<path/);
-    expect(String(params().map_width_mm)).toBe('302');
-    expect(String(params().map_height_mm)).toBe('202');
+    expect(String(params().map_width_mm)).toBe('322');
+    expect(String(params().map_height_mm)).toBe('222');
     expect(document.getElementById('tactileMapWarnings').children.length).toBe(
       0
     );
@@ -1165,7 +1380,7 @@ describe('the drawing door', () => {
       svg: DRAWING,
     });
     await vi.waitFor(
-      () => expect(summary()).toBe('2 plates of 151 x 202 mm, A1 to A2.'),
+      () => expect(summary()).toBe('2 plates of 161 x 222 mm, A1 to A2.'),
       SETTLE
     );
     const levels = files[files.length - 1];
@@ -1193,7 +1408,7 @@ describe('the drawing door', () => {
       svg: DRAWING,
     });
     await vi.waitFor(
-      () => expect(summary()).toBe('2 plates of 151 x 202 mm, A1 to A2.'),
+      () => expect(summary()).toBe('2 plates of 161 x 222 mm, A1 to A2.'),
       SETTLE
     );
     const width = document.getElementById('tactileMapDrawingWidth');
@@ -1206,11 +1421,11 @@ describe('the drawing door', () => {
     await vi.waitFor(
       () =>
         expect(summary()).toBe(
-          'One plate of 152 x 102 mm; the whole map fits.'
+          'One plate of 172 x 122 mm; the whole map fits.'
         ),
       SETTLE
     );
-    expect(String(params().map_width_mm)).toBe('152');
+    expect(String(params().map_width_mm)).toBe('172');
   });
 });
 
@@ -1838,7 +2053,7 @@ describe('the map Make the map drafts', () => {
     await pullData(undefined, {
       config: {
         plateKindParam: 'plate_kind',
-        keyPrintParam: 'key_print',
+        raisedWordsParam: 'raised_words',
         keyLetterParam: 'key_letter_height_mm',
       },
     });

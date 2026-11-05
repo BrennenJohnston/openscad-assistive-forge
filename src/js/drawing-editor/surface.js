@@ -1202,6 +1202,9 @@ export function createDrawingEditor({
           : 'relief';
     root.dataset.purpose = purpose;
     isDraft = purpose === 'map' && draft === true;
+    // A map host says where its trimmed sheet falls: a dashed frame over
+    // the plan, gone for any other purpose or host.
+    canvas.showTrim(purpose === 'map' ? rest.trim || null : null);
     // Every open starts on the drawing. A re-trace calls open() on an
     // editor that is already up, and coming back to a charm view of a drawing
     // that has just changed underneath it would be showing the old charm.

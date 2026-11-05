@@ -183,8 +183,23 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
 
     await nextStep(page, 5, 'Check and print');
     await axeClean(page, 'step 5');
+    // A place map starts trimmed: the shapes at Ferry Place sit in a
+    // 358 x 220 mm box of the 480 x 360 face, so the sheet in its 10 mm
+    // band is 378 x 240 and cuts into two plates. Off, the whole face in its
+    // band is a 500 x 380 sheet of four 250 x 190 plates (which hold the key
+    // in four; five at 240 x 180).
+    const trim = page.locator('#tactileMapTrim');
+    await expect(trim).toBeChecked();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 240 x 180 mm, A1 to B2. The key takes 5 plates.'
+      '2 plates of 189 x 240 mm, A1 to A2. The key takes 4 plates.'
+    );
+    await trim.uncheck();
+    await expect(page.locator('#tactileMapSummary')).toHaveText(
+      '4 plates of 250 x 190 mm, A1 to B2. The key takes 4 plates.'
+    );
+    await trim.check();
+    await expect(page.locator('#tactileMapSummary')).toHaveText(
+      '2 plates of 189 x 240 mm, A1 to A2. The key takes 4 plates.'
     );
     await expect(page.locator('#tactileMapKeyWords')).toHaveValue('braille');
     const key = await page.evaluate(() => {
@@ -206,7 +221,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       'Walkway: a dashed line 1.2 mm wide, low',
       'Area: a raised area, low',
     ]);
-    expect(key.plates).toEqual(['key-1', 'key-2', 'key-3', 'key-4', 'key-5']);
+    expect(key.plates).toEqual(['key-1', 'key-2', 'key-3', 'key-4']);
 
     // The zip: the map's plates, the key's, and the README that goes with them.
     const downloadPromise = page.waitForEvent('download', { timeout: 420_000 });
@@ -215,17 +230,26 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     const download = await downloadPromise;
     const zip = await JSZip.loadAsync(readFileSync(await download.path()));
     const names = Object.keys(zip.files);
-    for (const id of ['A1', 'A2', 'B1', 'B2', ...key.plates]) {
+    for (const id of ['A1', 'A2', ...key.plates]) {
       expect(names).toContain(`tactile_map_${id}.stl`);
       expect(names).toContain(`levels_${id}.svg`);
     }
+    expect(names).not.toContain('tactile_map_B1.stl');
     const readme = await zip.file('README.txt').async('string');
+    expect(readme).toContain(
+      'each 189 x 240 mm, trimmed to the shapes with a 10 mm margin. Print one of each: A1, A2.'
+    );
     expect(readme).toContain('\nKey\nSymbols: University of Oregon symbols.\n');
     expect(readme).toContain(
       'Symbols: Lobben and Lawrence 2012, University of Oregon, GPL-3'
     );
     expect(readme).toContain('Key 1 plate, label tape top to bottom:');
-    expect(readme).toContain('- pc restaurant: plaza cafe\n');
+    // The key plates are the map's plate size: on the trimmed map's 189 mm
+    // plates a long row wraps onto two strips of tape, listed one under the
+    // other, so the list is read with its pieces joined.
+    expect(readme.replace(/\n- /g, ' ')).toContain(
+      'pc restaurant: plaza cafe'
+    );
 
     // A key plate is the map's plate size, with channels cut for its tape.
     const levels = await zip.file('levels_key-1.svg').async('string');
@@ -242,10 +266,10 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       }
       return hi - lo;
     });
-    expect(size[0]).toBeCloseTo(240, 1);
-    expect(size[1]).toBeCloseTo(180, 1);
+    expect(size[0]).toBeCloseTo(189, 1);
+    expect(size[1]).toBeCloseTo(240, 1);
     await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
-      'All 9 plates are in tactile_map_plates.zip.'
+      'All 6 plates are in tactile_map_plates.zip.'
     );
   });
 
@@ -304,15 +328,21 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     });
     expect(plan.cone).toEqual(moved);
     expect(plan.here).toEqual({ on: true, at: placed });
+    // The model's row is in the sheet's frame: the face's point less the
+    // trim's offset plus the band, y up from the sheet's bottom (the panel
+    // holds the sheet and the trim it last built).
     await expect
       .poll(() =>
-        page.evaluate(
-          () => window.stateManager.getState().parameters.cone_marks
-        )
+        page.evaluate(([mx, my]) => {
+          const p = document.getElementById('tactileMapPanel').__forgeMapPanel;
+          const [ax, ay] = p.sheet.faceAt;
+          const [ox, oy] = p.view.offset;
+          const want = `${Math.round((mx + ax - ox) * 10)}:${Math.round((p.sheet.h - (my + ay - oy)) * 10)}`;
+          const got = window.stateManager.getState().parameters.cone_marks;
+          return got === want ? 'match' : `${got} is not ${want}`;
+        }, moved)
       )
-      .toBe(
-        `${Math.round(moved[0] * 10)}:${Math.round((360 - moved[1]) * 10)}`
-      );
+      .toBe('match');
   });
 
   test('the picture pans by a drag on empty ground, by Shift with the arrows, by the arrows in the Hand tool, and by four buttons of 44 px', async ({

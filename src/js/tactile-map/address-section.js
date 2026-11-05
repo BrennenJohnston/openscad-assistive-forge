@@ -41,6 +41,7 @@ import {
   sentenceFor,
 } from './scales.js';
 import { TRANSIT_STRINGS } from './transit.js';
+import { ORIENTATIONS } from './sheet.js';
 
 /** How a server failed, as the middle of the switch sentence. */
 const HOST_FAILED = Object.freeze({
@@ -90,6 +91,10 @@ export const ADDRESS_STRINGS = Object.freeze({
   scaleLabel: (name, ratio) => `${name}, 1:${ratio}`,
   /** A11Y: Custom's ratio field. */
   customLabel: 'Custom scale, 1 to',
+  /** A11Y: which way the plate lies; its two answers come from the sheet. */
+  orientationLegend: 'Plate orientation',
+  orientationHelp:
+    'Portrait turns the plate upright: less ground across, more up and down, at the same scale.',
   /** A11Y: the route's steps choice, its group name and its two answers. */
   stepsLegend: 'Steps on the way',
   stepsAllow: 'Allowed, and marked on the map',
@@ -460,6 +465,40 @@ export function createAddressSection({
   scaleChoice.appendChild(customRow);
   section.appendChild(scaleChoice);
 
+  // Which way the plate lies: landscape as the model starts, or portrait,
+  // which swaps the draft's width and height at the same scale.
+  const orientationChoice = el(
+    'fieldset',
+    'braille-panel-choice tactile-map-orientation'
+  );
+  orientationChoice.id = 'tactileMapOrientation';
+  orientationChoice.appendChild(el('legend', '', S.orientationLegend));
+  const orientationHelp = el('p', 'braille-panel-help', S.orientationHelp);
+  orientationHelp.id = 'tactileMapOrientationHelp';
+  const orientationRadios = ORIENTATIONS.map((choice, i) => {
+    const line = el('div', 'braille-panel-toggle-row');
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'tactileMapOrientation';
+    radio.id = `tactileMapOrientation-${choice.key}`;
+    radio.value = choice.key;
+    radio.checked = i === 0;
+    radio.setAttribute('aria-describedby', orientationHelp.id);
+    const words = el('label', '', choice.name);
+    words.htmlFor = radio.id;
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      refreshScale();
+      onChange();
+    });
+    line.appendChild(radio);
+    line.appendChild(words);
+    orientationChoice.appendChild(line);
+    return radio;
+  });
+  orientationChoice.appendChild(orientationHelp);
+  section.appendChild(orientationChoice);
+
   // A route: on foot, or by bus and train, a journey the planner finds on
   // a press; a trip's map is one of its walks, to the first stop or from
   // the last.
@@ -795,7 +834,7 @@ export function createAddressSection({
   const parts = {
     where: [label, help, row, results],
     to: [toLabel, toHelp, toRow, toResults],
-    scale: [scaleChoice],
+    scale: [scaleChoice, orientationChoice],
     travel: [travelChoice, transitBox],
     steps: [stepsChoice],
     landmarks: [
@@ -1433,6 +1472,12 @@ export function createAddressSection({
     },
     /** The tier and the groups chosen in step 3. */
     getDetail,
+    /** Which way the plate lies, chosen in step 2: 'landscape' or 'portrait'. */
+    getOrientation() {
+      return (
+        orientationRadios.find((r) => r.checked)?.value || ORIENTATIONS[0].key
+      );
+    },
     /** The symbol set chosen in step 3: a built-in set's key, or 'file'. */
     getSymbolSet() {
       return symbolRadios.find((r) => r.checked)?.value || setChoices[0].key;

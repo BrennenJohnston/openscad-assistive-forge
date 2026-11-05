@@ -684,6 +684,9 @@ export function buildLevelRings(plan, settings = {}) {
         )
       ),
       height: s.titleCharHeightMm,
+      // The tile's own title, laid out on the plate's edge, not a thing on
+      // the map: the trim leaves it out.
+      title: true,
     });
   }
 

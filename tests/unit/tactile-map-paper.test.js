@@ -135,7 +135,7 @@ describe('the paper of a plate', () => {
       texts: [
         { featureId: 'x', text: 'Café & <Bar>', at: [50, 50], kind: 'point' },
       ],
-      words: paperWords('95:1000:KEY', 16, 180),
+      words: paperWords('95:1000:160:0:KEY', 16, 180),
       title: 'Station',
       plateId: 'A1',
       colors,

@@ -61,7 +61,7 @@ const SAMPLE_MM = 18;
 /** The Braille Sign's letter spacing (ADA 703.2.7). */
 const LETTER_SPACING = 1.21;
 /** Line pitch of the raised words: 135 % of the capital (ADA 703.2.8). */
-const PRINT_PITCH = 1.35;
+export const PRINT_PITCH = 1.35;
 /** Between two channels of one entry (BANA 2022 8.5.3; the map's channels). */
 const CHANNEL_GAP_MM = 3;
 
@@ -118,7 +118,7 @@ function descentMm(text, letterMm) {
 }
 
 /** Words wrapped to a width in raised capitals. */
-function wrapPrint(text, widthMm, letterMm) {
+export function wrapPrint(text, widthMm, letterMm) {
   const fits = (s) =>
     signRowWidthMm(s, {
       charHeightMm: letterMm,
@@ -330,8 +330,10 @@ export function keyPlates(
         });
         page.tape.push(line.text);
       } else {
+        // A row as the model reads it: the baseline's start, the capital's
+        // height, standing on the base (0 above it), then the words.
         page.print.push(
-          `${tenths(textX)}:${tenths(plateH - (top + letterHeightMm))}:${line.text}`
+          `${tenths(textX)}:${tenths(plateH - (top + letterHeightMm))}:${tenths(letterHeightMm)}:0:${line.text}`
         );
       }
       bottom = top + line.tall;

@@ -246,6 +246,13 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   const plateLayer = document.createElementNS(SVG_NS, 'g');
   plateLayer.setAttribute('data-layer', 'plate');
   plateLayer.setAttribute('aria-hidden', 'true');
+  // The map's trimmed sheet: a dashed frame around what prints, told by the
+  // host; the step 5 sentence carries the fact for a screen reader.
+  const trimFrame = document.createElementNS(SVG_NS, 'rect');
+  trimFrame.setAttribute('data-layer', 'trim');
+  trimFrame.setAttribute('class', 'drawing-editor-trim');
+  trimFrame.setAttribute('aria-hidden', 'true');
+  trimFrame.setAttribute('visibility', 'hidden');
   const highlightLayer = document.createElementNS(SVG_NS, 'g');
   highlightLayer.setAttribute('data-layer', 'highlight');
   highlightLayer.setAttribute('aria-hidden', 'true');
@@ -266,6 +273,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
     edgeLayer,
     regionLayer,
     plateLayer,
+    trimFrame,
     highlightLayer,
     marquee
   );
@@ -587,6 +595,23 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
       svg.dataset.plate = 'true';
     } else {
       delete svg.dataset.plate;
+    }
+  }
+
+  /**
+   * Draw the trimmed sheet's frame over the plan, or none.
+   * @param {{ x: number, y: number, w: number, h: number }|null} box - In
+   *   the drawing's units
+   */
+  function showTrim(box) {
+    if (box && box.w > 0 && box.h > 0) {
+      trimFrame.setAttribute('x', String(box.x));
+      trimFrame.setAttribute('y', String(box.y));
+      trimFrame.setAttribute('width', String(box.w));
+      trimFrame.setAttribute('height', String(box.h));
+      trimFrame.setAttribute('visibility', 'visible');
+    } else {
+      trimFrame.setAttribute('visibility', 'hidden');
     }
   }
 
@@ -957,6 +982,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
     setView,
     getView: () => svg.dataset.view,
     showPlate,
+    showTrim,
     highlightLayer,
     getHighlight: () => highlighted,
     setTool,

@@ -18691,6 +18691,16 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   pointer-events: none;
 }
 
+/* The map's trimmed sheet: a dashed frame in the ground's muted ink. */
+.drawing-editor-trim {
+  fill: none;
+  stroke: var(--color-text-muted);
+  stroke-width: 1.5px;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
 /* "Show original": the art at full strength and nothing drawn over it. */
 .drawing-editor-canvas-svg[data-view='original'] [data-layer='art'] {
   opacity: 1;

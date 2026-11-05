@@ -108,7 +108,7 @@ describe('the canvas view', () => {
     document.body.innerHTML = '';
   });
 
-  it('draws the layers in order: art, edges, regions, plate, highlight, marquee', () => {
+  it('draws the layers in order: art, edges, regions, plate, trim, highlight, marquee', () => {
     const layers = [...canvas.svg.querySelectorAll('[data-layer]')].map(
       (el) => el.dataset.layer
     );
@@ -117,11 +117,33 @@ describe('the canvas view', () => {
       'edges',
       'regions',
       'plate',
+      'trim',
       'highlight',
       'marquee',
     ]);
     expect(canvas.svg.querySelector('defs pattern')).not.toBeNull();
     expect(canvas.getView()).toBe('plan');
+  });
+
+  it('draws the trimmed sheet as a dashed frame the host gives, hidden from assistive tech and until a box comes, and takes it away again', () => {
+    const frame = canvas.svg.querySelector('[data-layer="trim"]');
+    expect(frame.tagName).toBe('rect');
+    expect(frame.getAttribute('class')).toBe('drawing-editor-trim');
+    expect(frame.getAttribute('aria-hidden')).toBe('true');
+    expect(frame.getAttribute('visibility')).toBe('hidden');
+    canvas.showTrim({ x: 4, y: 1, w: 20, h: 8 });
+    expect(frame.getAttribute('visibility')).toBe('visible');
+    expect(['x', 'y', 'width', 'height'].map((a) => frame.getAttribute(a))).toEqual([
+      '4',
+      '1',
+      '20',
+      '8',
+    ]);
+    canvas.showTrim(null);
+    expect(frame.getAttribute('visibility')).toBe('hidden');
+    // An empty box is no frame.
+    canvas.showTrim({ x: 0, y: 0, w: 0, h: 8 });
+    expect(frame.getAttribute('visibility')).toBe('hidden');
   });
 
   it('Show original is a view the stylesheet reads off the svg', () => {

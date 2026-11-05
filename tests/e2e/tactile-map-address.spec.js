@@ -223,7 +223,7 @@ test.describe('the address section', () => {
       { timeout: 120000 }
     );
     await expect(page.locator('#echoMessages')).toContainText(
-      'Finished map: 480 x 360 mm'
+      'Finished map: 500 x 380 mm'
     );
   });
 
