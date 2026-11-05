@@ -6,8 +6,9 @@
  * keeps raised text clear of the map's edge), and the title stands above
  * the face on a band of its own, each line at the sign's pitch with the
  * ADA 703 clearance above and below, wrapped to the face's width at the
- * title's capital height. The title may instead stand inside the face's top
- * edge, as the model drew it before, or be left out.
+ * title's capital height, the band rounded up to whole millimeters. The
+ * title may instead stand inside the face's top edge, as the model drew it
+ * before, or be left out.
  *
  * Geometry here is the plan's: millimeters, y down, the sheet's top left at
  * the origin. The model's rows (`raised_words`) are written y up from the
@@ -123,9 +124,14 @@ export function titleBandOf(title, faceWidthMm, letterMm) {
   if (!text) return null;
   const lines = wrapPrint(text, faceWidthMm, letterMm);
   if (!lines.length) return null;
+  // Rounded up to the millimeter: the tile's sizes are whole millimeters,
+  // and a band of 40.65 would reach the model as 41 with the third of a
+  // millimeter falling at a plate's top edge.
   return {
     lines,
-    h: round3(lines.length * letterMm * PRINT_PITCH + 2 * SHEET_CLEARANCE_MM),
+    h: Math.ceil(
+      lines.length * letterMm * PRINT_PITCH + 2 * SHEET_CLEARANCE_MM - 1e-9
+    ),
   };
 }
 

@@ -545,8 +545,8 @@ describe('the map panel', () => {
   });
 
   // A tile that hands the panel its title gets the title on a band above
-  // the map: STATION on one 16 mm line is 40.65 mm of band (16 x 1.35 and
-  // 9.525 clear above and below), and the 500 x 420.65 mm sheet still cuts
+  // the map: STATION on one 16 mm line is 41 mm of band (16 x 1.35 and
+  // 9.525 clear above and below, rounded up), and the 500 x 421 mm sheet still cuts
   // into two rows on an X1C, so the band rides in row A.
   it('with a title parameter the title stands on its band: no plate draws the model title, the rows go to the plates that hold them, and Inside puts it back on A1', async () => {
     mount({
@@ -558,13 +558,13 @@ describe('the map panel', () => {
       },
     });
     await vi.waitFor(
-      () => expect(summary()).toBe('4 plates of 250 x 210.3 mm, A1 to B2.'),
+      () => expect(summary()).toBe('4 plates of 250 x 210.5 mm, A1 to B2.'),
       SETTLE
     );
     expect(String(params().margin_mm)).toBe('10');
-    expect(String(params().title_band_mm)).toBe('40.65');
+    expect(String(params().title_band_mm)).toBe('41');
     expect(params().plate_shows_title).toBe('no');
-    expect(params().raised_words).toBe('100:3851:160:0:STATION');
+    expect(params().raised_words).toBe('100:3855:160:0:STATION');
     const choose = async (id) => {
       const radio = document.querySelector(
         `#tactileMapPlates input[value="${id}"]`
@@ -578,9 +578,9 @@ describe('the map panel', () => {
     };
     await choose('A1');
     expect(params().plate_shows_title).toBe('no');
-    expect(params().raised_words).toBe('100:1748:160:0:STATION');
+    expect(params().raised_words).toBe('100:1750:160:0:STATION');
     await choose('A2');
-    expect(params().raised_words).toBe('-2400:1748:160:0:STATION');
+    expect(params().raised_words).toBe('-2400:1750:160:0:STATION');
     await choose('B1');
     expect(params().raised_words).toBe('');
 
@@ -626,7 +626,7 @@ describe('the map panel', () => {
       },
     });
     await vi.waitFor(
-      () => expect(summary()).toBe('4 plates of 250 x 210.3 mm, A1 to B2.'),
+      () => expect(summary()).toBe('4 plates of 250 x 210.5 mm, A1 to B2.'),
       SETTLE
     );
     // The title cleared: the band leaves.
@@ -635,7 +635,7 @@ describe('the map panel', () => {
       () => expect(summary()).toBe('4 plates of 250 x 190 mm, A1 to B2.'),
       SETTLE
     );
-    // A 20 mm title: 20 x 1.35 + 19.05 = 46.05 mm of band.
+    // A 20 mm title: 20 x 1.35 + 19.05 = 46.05 mm of band, rounded up to 47.
     stateManager.setState({
       parameters: {
         ...params(),
@@ -644,13 +644,13 @@ describe('the map panel', () => {
       },
     });
     await vi.waitFor(
-      () => expect(summary()).toBe('4 plates of 250 x 213 mm, A1 to B2.'),
+      () => expect(summary()).toBe('4 plates of 250 x 213.5 mm, A1 to B2.'),
       SETTLE
     );
-    // The 426.05 mm sheet: the capital's top 19.525 mm from the top, the
-    // baseline 20 below it, 386.525 mm up from the bottom.
-    expect(String(params().title_band_mm)).toBe('46.05');
-    expect(params().raised_words).toBe('100:3865:200:0:STATION');
+    // The 427 mm sheet: the capital's top 19.525 mm from the top, the
+    // baseline 20 below it, 387.475 mm up from the bottom.
+    expect(String(params().title_band_mm)).toBe('47');
+    expect(params().raised_words).toBe('100:3875:200:0:STATION');
   });
 
   // A hall from 40 to 300 by 60 to 200 and the cone inside it: the printed

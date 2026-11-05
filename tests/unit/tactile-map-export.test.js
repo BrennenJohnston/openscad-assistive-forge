@@ -139,8 +139,8 @@ describe('plateParameterSets', () => {
     expect('cone_marks' in plain[0].parameters).toBe(false);
   });
 
-  // STATION on one 16 mm line is a 40.65 mm band (16 x 1.35 and 9.525
-  // clear above and below). On a 480 x 360 face the 500 x 420.65 sheet
+  // STATION on one 16 mm line is a 41 mm band (16 x 1.35 and 9.525 clear
+  // above and below, rounded up). On a 480 x 360 face the 500 x 421 sheet
   // still cuts into two rows, so the band rides in row A: its row goes to
   // A1 and, starting 240 mm left of its edge, to A2; the model's own title
   // stays off every plate.
@@ -173,8 +173,8 @@ describe('plateParameterSets', () => {
         s.parameters.plate_shows_title,
       ])
     ).toEqual([
-      ['A1', '100:1748:160:0:STATION', 'no'],
-      ['A2', '-2400:1748:160:0:STATION', 'no'],
+      ['A1', '100:1750:160:0:STATION', 'no'],
+      ['A2', '-2400:1750:160:0:STATION', 'no'],
       ['B1', '', 'no'],
       ['B2', '', 'no'],
     ]);

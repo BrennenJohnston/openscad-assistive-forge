@@ -23,24 +23,26 @@ import {
 const FACE = { w: 480, h: 360 };
 
 describe('the sheet', () => {
-  it('puts a 10 mm band around a 480 x 360 face and a one-line 16 mm title on its own band above: 500 x 420.65, the face at 10, 50.65', () => {
+  it('puts a 10 mm band around a 480 x 360 face and a one-line 16 mm title on its own band above: 500 x 421, the face at 10, 51', () => {
     const s = sheetOf({ face: FACE, marginMm: 10, title: 'Ferry Place' });
     expect(s.w).toBe(500);
-    expect(s.h).toBeCloseTo(420.65, 5);
+    expect(s.h).toBe(421);
     expect(s.band).toEqual({ left: 10, right: 10, top: 10, bottom: 10 });
-    // 16 x 1.35 for the line, 9.525 clear above and below.
-    expect(s.titleBand.h).toBeCloseTo(40.65, 5);
+    // 16 x 1.35 for the line, 9.525 clear above and below: 40.65, rounded
+    // up to the millimeter, as the model's sizes are whole.
+    expect(s.titleBand.h).toBe(41);
     expect(s.titleBand.y).toBe(10);
     expect(s.titleBand.lines).toEqual(['FERRY PLACE']);
     expect(s.faceAt[0]).toBe(10);
-    expect(s.faceAt[1]).toBeCloseTo(50.65, 5);
+    expect(s.faceAt[1]).toBe(51);
     expect(s.face).toEqual(FACE);
     expect(s.placement).toBe('band');
   });
 
-  it('wraps a long title to the face width in lines at the sign pitch, and each line adds 21.6 mm to the band', () => {
+  it('wraps a long title to the face width in lines at the sign pitch, each line 21.6 mm before the band rounds up', () => {
     const one = titleBandOf('Ferry Place', 480, 16);
     expect(one.lines).toEqual(['FERRY PLACE']);
+    expect(one.h).toBe(41);
     const long = titleBandOf(
       'University of Washington Center on Human Development and Disability',
       480,
@@ -50,7 +52,7 @@ describe('the sheet', () => {
     expect(long.lines.join(' ')).toBe(
       'UNIVERSITY OF WASHINGTON CENTER ON HUMAN DEVELOPMENT AND DISABILITY'
     );
-    expect(long.h).toBeCloseTo(one.h + (long.lines.length - 1) * 21.6, 5);
+    expect(long.h).toBe(Math.ceil(long.lines.length * 21.6 + 19.05));
     // A narrower face wraps sooner: 21 capitals of 16 mm run past 200 mm.
     expect(titleBandOf('Ferry Place Northeast', 200, 16).lines).toEqual([
       'FERRY PLACE',
@@ -107,20 +109,21 @@ describe('the sheet', () => {
       s.faceAt
     );
     expect(rings.level1[0][0].x).toBe(10);
-    expect(rings.level1[0][0].y).toBeCloseTo(50.65, 5);
+    expect(rings.level1[0][0].y).toBe(51);
     expect(rings.channels).toEqual([]);
     const rows = titleRows(s, 16);
     expect(rows).toHaveLength(1);
     // The capital's top 9.525 mm into the band, the baseline 16 below it:
-    // 35.525 mm from the sheet's top, so 385.125 mm up from its bottom.
+    // 35.525 mm from the 421 mm sheet's top, so 385.475 mm up from its
+    // bottom.
     expect(rows[0]).toEqual({
       x: 10,
-      y: 385.125,
+      y: 385.475,
       h: 16,
       z: 0,
       text: 'FERRY PLACE',
     });
-    expect(rowsText(rows)).toBe('100:3851:160:0:FERRY PLACE');
+    expect(rowsText(rows)).toBe('100:3855:160:0:FERRY PLACE');
     // Two lines a pitch apart, the second lower on the sheet.
     const two = sheetOf({
       face: { w: 200, h: 150 },
@@ -137,19 +140,19 @@ describe('the sheet', () => {
   it('gives each plate the rows that touch it, in its own frame, a row across a seam starting left of the next plate', () => {
     const s = sheetOf({ face: FACE, marginMm: 10, title: 'Ferry Place' });
     const rows = titleRows(s, 16);
-    // The band rides in row A of two 250 x 210.325 plates: the row's
-    // baseline is 35.525 mm from the top, so 174.8 mm up from A1's bottom.
-    const a1 = { x: 0, y: 0, w: 250, h: 210.325 };
-    const a2 = { x: 250, y: 0, w: 250, h: 210.325 };
-    const b1 = { x: 0, y: 210.325, w: 250, h: 210.325 };
+    // The band rides in row A of two 250 x 210.5 plates: the row's baseline
+    // is 35.525 mm from the top, so 174.975 mm up from A1's bottom.
+    const a1 = { x: 0, y: 0, w: 250, h: 210.5 };
+    const a2 = { x: 250, y: 0, w: 250, h: 210.5 };
+    const b1 = { x: 0, y: 210.5, w: 250, h: 210.5 };
     expect(plateRows(rows, a1, s.h)).toEqual([
-      { x: 10, y: 174.8, h: 16, z: 0, text: 'FERRY PLACE' },
+      { x: 10, y: 174.975, h: 16, z: 0, text: 'FERRY PLACE' },
     ]);
     expect(rowsText(plateRows(rows, a2, s.h))).toBe(
-      '-2400:1748:160:0:FERRY PLACE'
+      '-2400:1750:160:0:FERRY PLACE'
     );
     expect(plateRows(rows, b1, s.h)).toEqual([]);
-    // A title plate of its own above row A, 75 mm tall on a 540.65 sheet.
+    // A title plate of its own above row A, 75 mm tall on a 541 sheet.
     const tall = sheetOf({ face: { w: 480, h: 480 }, title: 'Ferry Place' });
     const title1 = { x: 0, y: 0, w: 250, h: 75 };
     expect(rowsText(plateRows(titleRows(tall, 16), title1, tall.h))).toBe(
