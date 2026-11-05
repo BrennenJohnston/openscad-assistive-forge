@@ -24,15 +24,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   puts it down); Place You are here puts the reader's mark at the middle of
   the view, and one Undo takes a whole move back.
 
+- A Drawing editor button in the Customizer's header, beside Undo and Redo,
+  on every tile whose file control takes a drawing: it opens the editor on
+  the design the model shows, or on the empty editor that asks for a
+  picture, from anywhere on the tile. The file control's own button now
+  stands whatever the control holds.
+
 ### Changed
 
 - The drawing editor's picture moves in every tool: a drag on empty ground
   pans it with the mouse or a finger, Shift with an arrow key moves it a
   tenth of the view (the arrow keys alone in the Hand tool), and four pan
   buttons stand beside Fit and the zoom buttons, on a phone as on a desktop.
+  The charm's relief picture, the stencil's regions and the map's shapes
+  all move by this one rule; the relief pane's own zoom row is gone.
+- The drawing editor's toolbar is two rows: the name, the view switch and
+  the ways out, then one working row that wraps as the width asks; Save,
+  Keep original and Reset wait behind More. The picture fills the stage, the
+  shape rows are one line each, and a shape chosen on the picture opens the
+  shapes list and brings its row to the middle of the view.
 
 ### Fixed
 
+- On a phone, the drawing editor's Save, Keep original and Reset did nothing:
+  the buttons moved into More, where their presses were never heard.
 - Dragging the picture in the drawing editor moves it smoothly with the
   pointer; before, it flashed between positions until the button was released.
 

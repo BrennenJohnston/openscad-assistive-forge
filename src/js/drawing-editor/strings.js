@@ -249,6 +249,9 @@ export const EDITOR_STRINGS = Object.freeze({
   /** The status line as the highlight moves. A11Y (two shapes). */
   highlighting: (name, colour, plate) => `${name}, ${colour}, plate ${plate}.`,
   highlightingRemoved: (name) => `${name}, removed.`,
+  /** The relief picture's keyboard help, read with its name. A11Y. */
+  reliefPictureHelp:
+    'Arrow keys move between shapes. Enter or Space chooses one. Shift and the arrow keys move the picture, and in the Hand tool the arrow keys alone do; a drag on empty ground does too. Plus and minus zoom; 0 fits the whole drawing.',
   /** The canvas in the map purpose: its name and its keyboard help. A11Y. */
   mapCanvasLabel: 'Map shapes',
   mapCanvasHelp:

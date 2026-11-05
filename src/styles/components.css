@@ -16509,7 +16509,7 @@ body.tutorial-body-locked {
    as a map: the Map file control's own doors stay out of its step 1. The
    photo's Crop first, beside Start, stays. */
 .tactile-map-file-slot .svg-prep-edit-btn,
-.tactile-map-file-slot .svg-prep-empty-door {
+.tactile-map-file-slot .svg-prep-door {
   display: none;
 }
 
@@ -17754,7 +17754,6 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
    the shapes drawer stay out of the way; the header keeps the editor's name
    and Close, and the crop view carries Save crop and Cancel. */
 .drawing-editor[data-crop-first='true'] .drawing-editor-toolbar-row--view,
-.drawing-editor[data-crop-first='true'] .drawing-editor-toolbar-row--tools,
 .drawing-editor[data-crop-first='true'] .drawing-editor-more-panel,
 .drawing-editor[data-crop-first='true'] .drawing-editor-panel-toggle,
 .drawing-editor[data-crop-first='true'] .drawing-editor-skip {
@@ -17765,7 +17764,6 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
    a sentence and Choose a picture take the rest, and nothing that works on
    a drawing is offered without one. */
 .drawing-editor[data-empty='true'] .drawing-editor-toolbar-row--view,
-.drawing-editor[data-empty='true'] .drawing-editor-toolbar-row--tools,
 .drawing-editor[data-empty='true'] .drawing-editor-more-panel,
 .drawing-editor[data-empty='true'] .drawing-editor-panel-toggle,
 .drawing-editor[data-empty='true'] .drawing-editor-skip,
@@ -18099,7 +18097,160 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 .drawing-editor-toolbar .svg-prep-footer {
   border-top: 0;
   padding-top: 0;
-  margin-left: auto;
+}
+
+/* The tools and the movement mean nothing over the crop view. */
+.drawing-editor[data-crop='open'] .drawing-editor-zoom,
+.drawing-editor[data-crop='open'] .drawing-editor-stencil-tools {
+  display: none;
+}
+
+/* ── The picture takes the room ──────────────────────────────────────────
+   One set of movement controls in the toolbar, so the pane's own row steps
+   aside; the caption of a single picture is read, not shown; and the picture
+   fills what the stage has, rather than stopping at 300 px with a scrollbar
+   beside it. */
+.drawing-editor-stage {
+  display: flex;
+  flex-direction: column;
+}
+
+.drawing-editor-stage .svg-prep-workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.drawing-editor-stage .svg-prep-previews {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.drawing-editor-stage .svg-prep-pane-wrap {
+  min-height: 0;
+}
+
+.drawing-editor-stage .svg-prep-zoom-controls {
+  display: none;
+}
+
+.drawing-editor-stage .svg-prep-previews--single .svg-prep-pane-caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.drawing-editor-stage .svg-prep-source-pane,
+.drawing-editor-stage .svg-prep-result-pane {
+  padding: var(--space-2xs);
+  cursor: grab;
+}
+
+.drawing-editor-stage .svg-prep-source-pane[data-panning],
+.drawing-editor-stage .svg-prep-result-pane[data-panning] {
+  cursor: grabbing;
+}
+
+/* A finger on the picture is the picture's, as on the map's canvas. */
+.drawing-editor-stage .svg-prep-source-pane svg,
+.drawing-editor-stage .svg-prep-result-pane svg {
+  max-height: none;
+  touch-action: none;
+}
+
+.drawing-editor-stage
+  .svg-prep-result-pane[data-tool='hand']
+  .svg-prep-hit-path,
+.drawing-editor-stage
+  .svg-prep-source-pane[data-tool='hand']
+  .svg-prep-hit-path {
+  cursor: grab;
+}
+
+/* ── A row on one line ───────────────────────────────────────────────────
+   Name above its mark, the switches and More beside them, so the side panel's
+   304 px at a 1280 window holds a row in one line where it took two. */
+.drawing-editor-panel .svg-prep-object {
+  display: grid;
+  grid-template-columns: auto minmax(5ch, 1fr) auto auto;
+  align-items: center;
+  column-gap: var(--space-2xs);
+  padding: var(--space-2xs);
+}
+
+.drawing-editor-panel .svg-prep-object-name {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.drawing-editor-panel .svg-prep-swatch {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.drawing-editor-panel .svg-prep-role-group,
+.drawing-editor-panel .drawing-editor-class-select {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.drawing-editor-panel .svg-prep-more-btn {
+  grid-column: 4;
+  grid-row: 1 / span 2;
+}
+
+.drawing-editor-panel .svg-prep-object-warning,
+.drawing-editor-panel .svg-prep-thin-mark {
+  grid-column: 2;
+  justify-self: start;
+}
+
+.drawing-editor-panel .svg-prep-more-panel {
+  grid-column: 1 / -1;
+}
+
+/* The list tools fold under one line, with the count beside them. */
+.drawing-editor-panel .svg-prep-bulk-bar {
+  margin-bottom: var(--space-2xs);
+}
+
+.svg-prep-bulk-tools > summary {
+  cursor: pointer;
+  min-height: var(--size-touch-target);
+  display: flex;
+  align-items: center;
+  font-size: var(--font-size-sm);
+}
+
+.svg-prep-bulk-tools > summary:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.svg-prep-bulk-tools[open] {
+  flex-basis: 100%;
+}
+
+.drawing-editor-more-panel .svg-prep-design-width-help {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* Under the band the header holds the view switch, the list and Close; the
+   editor's name is read, and the row keeps to one line. */
+@container (max-width: 640px) {
+  .drawing-editor-toolbar-row--header .drawing-editor-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 .drawing-editor-view-controls {
@@ -18400,7 +18551,19 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-xs);
+  gap: var(--space-2xs);
+}
+
+/* The working row flows as one: Apply and More sit at its far end, and it
+   breaks to a second line only when the width is spent (S8). */
+.drawing-editor-toolbar .drawing-editor-apply,
+.drawing-editor-toolbar .svg-prep-footer {
+  margin-left: auto;
+}
+
+.drawing-editor-toolbar .svg-prep-footer + .drawing-editor-more-btn,
+.drawing-editor-toolbar .drawing-editor-apply + .svg-prep-footer {
+  margin-left: 0;
 }
 
 /* The paint pair (the colour and its one button) moves as a unit instead of

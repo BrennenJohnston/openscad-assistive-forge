@@ -2226,3 +2226,235 @@ test.describe('The camera panel keyboard shortcuts pop-out', () => {
     await expect(popout).toBeHidden();
   });
 });
+
+// S9: the picture moves one way. Measured in the charm's relief editor and the
+// map's editor, at a desktop window with a mouse and a phone with a finger: the
+// seven buttons and their size, Shift with an arrow key, a drag on empty
+// ground, a shape chosen on the picture, and the door into the editor.
+const S9_SIZES = [
+  { width: 1280, height: 720, touch: false, min: 36 },
+  { width: 412, height: 915, touch: true, min: 44 },
+];
+const S9_DRAWING =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="200mm" height="100mm" viewBox="0 0 200 100">' +
+  '<rect x="30" y="30" width="60" height="20"/>' +
+  '<rect x="130" y="60" width="20" height="20"/>' +
+  '</svg>';
+
+const viewBoxOf = async (svg) =>
+  (await svg.getAttribute('viewBox')).split(/[\s,]+/).map(Number);
+
+async function s9Ready(page, url) {
+  await page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    localStorage.setItem('openscad-forge-theme', 'dark');
+    localStorage.setItem(
+      'openscad-forge-ui-mode',
+      JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+    );
+  });
+  await page.goto(url, { timeout: 60_000 });
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: WASM_READY_TIMEOUT,
+  });
+  await page
+    .locator('.param-control')
+    .first()
+    .waitFor({ state: 'attached', timeout: 60_000 });
+  const notNow = page.locator('#saveProjectNotNow');
+  if (
+    await notNow.waitFor({ state: 'visible', timeout: 3_000 }).then(
+      () => true,
+      () => false
+    )
+  ) {
+    await notNow.click();
+  }
+}
+
+/** On a phone the Customizer is a drawer: open it before reaching a control. */
+async function s9OpenCustomizer(page, size) {
+  if (!size.touch) return;
+  const toggle = page.locator('#mobileDrawerToggle');
+  await toggle.waitFor({ state: 'visible', timeout: 30_000 });
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await page.waitForTimeout(600);
+}
+
+/**
+ * The movement every editor's picture keeps, read in the open editor:
+ * `svg` is the picture, `shape` a path on it, `empty` a point of empty ground.
+ */
+async function expectS9Movement(page, size, { svg, shape, empty }) {
+  const zoom = page.locator('#drawingEditorSurface .drawing-editor-zoom');
+  const buttons = zoom.locator('button');
+  await expect(buttons).toHaveCount(7);
+  await expect(zoom.locator('.drawing-editor-pan')).toHaveCount(4);
+  for (let i = 0; i < 7; i += 1) {
+    const box = await buttons.nth(i).boundingBox();
+    expect
+      .soft(box?.height ?? 0, `S9: zoom button ${i} tall enough (${box?.height})`)
+      .toBeGreaterThanOrEqual(size.min - 0.5);
+    expect
+      .soft(box?.width ?? 0, `S9: zoom button ${i} wide enough (${box?.width})`)
+      .toBeGreaterThanOrEqual(size.min - 0.5);
+  }
+
+  // The right pan button moves the view a tenth of its width; so does Shift
+  // with the right arrow key once the picture has the focus.
+  await buttons.nth(0).click();
+  const atFit = await viewBoxOf(svg);
+  await zoom.locator('[data-pan="panRight"]').click();
+  const afterButton = await viewBoxOf(svg);
+  expect
+    .soft(afterButton[0] - atFit[0], 'S9: a pan button moves a tenth')
+    .toBeCloseTo(atFit[2] / 10, 1);
+  await svg.click({ position: empty });
+  await page.keyboard.press('Shift+ArrowRight');
+  const afterKey = await viewBoxOf(svg);
+  expect
+    .soft(afterKey[0] - afterButton[0], 'S9: Shift+Arrow moves a tenth')
+    .toBeCloseTo(atFit[2] / 10, 1);
+
+  // A drag on empty ground carries the picture with the pointer.
+  await buttons.nth(0).click();
+  const box = await svg.boundingBox();
+  await page.mouse.move(box.x + empty.x, box.y + empty.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + empty.x + 60, box.y + empty.y + 30, {
+    steps: 6,
+  });
+  await page.mouse.up();
+  const afterDrag = await viewBoxOf(svg);
+  expect
+    .soft(afterDrag[0], 'S9: a drag on empty ground pans')
+    .toBeLessThan(atFit[0]);
+
+  // A shape chosen on the picture opens the list on its row.
+  await shape.click({ force: true });
+  await expect(
+    page.locator('#drawingEditorSurface details[data-section="regions"]')
+  ).toHaveAttribute('open', '');
+  const row = page
+    .locator('#drawingEditorSurface .svg-prep-object--selected')
+    .first();
+  await expect(row).toBeVisible();
+  const inView = await page.evaluate(() => {
+    const chosen = document.querySelector(
+      '#drawingEditorSurface .svg-prep-object--selected'
+    );
+    const list = chosen?.closest('.svg-prep-objects');
+    if (!chosen || !list) return null;
+    const a = chosen.getBoundingClientRect();
+    const b = list.getBoundingClientRect();
+    return a.top >= b.top - 1 && a.bottom <= b.bottom + 1;
+  });
+  expect.soft(inView, "S9: the chosen row is in the list's view").toBe(true);
+}
+
+for (const size of S9_SIZES) {
+  test.describe(`S9 the picture moves one way, ${size.width} x ${size.height}`, () => {
+    test.use({
+      viewport: { width: size.width, height: size.height },
+      hasTouch: size.touch,
+    });
+
+    test('the charm: the header door opens the editor on the design, and the picture keeps the rule', async ({
+      page,
+    }) => {
+      test.setTimeout(300_000);
+      expectRule('S9');
+      await s9Ready(page, '/?example=q-charm');
+      await s9OpenCustomizer(page, size);
+      const header = page.locator('#editorDoorBtn');
+      await expect(header).toBeVisible();
+      await page.evaluate(() => {
+        let d = document.querySelector('#param-design_file')?.closest('details');
+        while (d) {
+          d.open = true;
+          d = d.parentElement?.closest('details');
+        }
+      });
+      await page.locator('#param-design_file').setInputFiles({
+        name: 'two.svg',
+        mimeType: 'image/svg+xml',
+        buffer: Buffer.from(S9_DRAWING),
+      });
+      await expect(
+        page.locator('.file-upload-container', {
+          has: page.locator('#param-design_file'),
+        })
+      ).toContainText('two.svg', { timeout: 30_000 });
+      await header.click();
+      const editor = page.locator('#drawingEditorSurface .drawing-editor').first();
+      await expect(editor).toHaveAttribute('data-purpose', 'relief', {
+        timeout: 60_000,
+      });
+      const svg = page.locator('#drawingEditorSurface .svg-prep-result-pane svg');
+      await expect(svg).toBeVisible();
+      await expectS9Movement(page, size, {
+        svg,
+        shape: page
+          .locator('#drawingEditorSurface .svg-prep-result-pane .svg-prep-standin-path')
+          .nth(1),
+        empty: { x: 4, y: 4 },
+      });
+    });
+
+    test('the map: its own door and no header door, and the picture keeps the rule', async ({
+      page,
+    }) => {
+      test.setTimeout(300_000);
+      expectRule('S9');
+      await s9Ready(page, '/?example=tactile-map');
+      await s9OpenCustomizer(page, size);
+      await page.locator('#tactileMapType-drawing').check();
+      await page.locator('#tactileMapChooserNext').click();
+      await expect(page.locator('#tactileMapSteps-heading')).toHaveText(
+        'Step 1 of 5: Choose the drawing'
+      );
+      // The map's own steps carry its door; the header offers none.
+      await expect(page.locator('#editorDoorBtn')).toBeHidden();
+      await page.locator('#param-map_file').setInputFiles({
+        name: 'two.svg',
+        mimeType: 'image/svg+xml',
+        buffer: Buffer.from(S9_DRAWING),
+      });
+      await expect
+        .poll(
+          () =>
+            page.evaluate(
+              () => window.stateManager?.getState()?.parameters?.map_file?.name
+            ),
+          { timeout: 30_000 }
+        )
+        .toBe('two.svg');
+      const next = page.locator('#tactileMapSteps-next');
+      await next.click();
+      await next.click();
+      await expect(page.locator('#tactileMapSteps-heading')).toHaveText(
+        'Step 3 of 5: Class the shapes'
+      );
+      await page.locator('#tactileMapEditDrawing').click();
+      const editor = page.locator('#drawingEditorSurface .drawing-editor').first();
+      await expect(editor).toHaveAttribute('data-purpose', 'map', {
+        timeout: 60_000,
+      });
+      const svg = page.locator('#drawingEditorSurface .drawing-editor-canvas-svg');
+      await expect(svg).toBeVisible();
+      await expectS9Movement(page, size, {
+        svg,
+        shape: page
+          .locator(
+            '#drawingEditorSurface .drawing-editor-canvas-svg [data-layer="regions"] path'
+          )
+          .nth(1),
+        empty: { x: 4, y: 4 },
+      });
+    });
+  });
+}
