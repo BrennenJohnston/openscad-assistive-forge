@@ -334,9 +334,18 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     const box = await svg.boundingBox();
     await page.mouse.move(box.x + 20, box.y + 20);
     await page.mouse.down();
-    await page.mouse.move(box.x + 50, box.y + 35, { steps: 4 });
-    await page.mouse.move(box.x + 80, box.y + 50, { steps: 4 });
+    // The picture travels with the hand at every step, and never flashes back.
+    const seen = [];
+    for (let i = 1; i <= 12; i++) {
+      await page.mouse.move(box.x + 20 + i * 5, box.y + 20 + i * 2.5);
+      seen.push(Number((await viewBox()).split(/[\s,]+/)[0]));
+    }
     await page.mouse.up();
+    const steps = seen.slice(1).map((x, i) => x - seen[i]);
+    for (const step of steps) {
+      expect(step).toBeLessThan(0);
+      expect(step).toBeCloseTo(steps[0], 3);
+    }
     const afterDrag = await viewBox();
     expect(afterDrag).not.toBe(before);
     await expect(svg).toHaveAttribute('data-tool', 'select');
