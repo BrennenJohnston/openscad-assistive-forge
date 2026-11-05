@@ -1929,10 +1929,19 @@ class MapPanel {
       this.sayAddress(judged.refusal, true);
       return;
     }
-    const { warnings } = buildLevelRings(plan, this.levelSettings());
     this.plan = plan;
-    this.draft = { counts, warnings: warnings.length };
     this.source = 'draft';
+    // Counted as step 5 lists them: the labels', the plates', the channels'
+    // and the moved symbol's, as the place map counts its own.
+    const labeled = this.labeled();
+    const cleared = this.clearedPlan(labeled);
+    const warnings = [
+      ...labeled.warnings,
+      ...cleared.built.warnings,
+      ...this.channelWarnings(),
+      ...(keptClearNote(cleared.moved) ? [keptClearNote(cleared.moved)] : []),
+    ];
+    this.draft = { counts, warnings: warnings.length };
     this.planWarnings = [];
     this.plate = 'whole';
     this.leaveWaiting();

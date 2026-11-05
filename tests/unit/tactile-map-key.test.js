@@ -262,4 +262,24 @@ describe('the key with a published set in use', () => {
       /^Key\nSymbols: University of Oregon symbols\.\n\n/
     );
   });
+
+  it("says 'basic shape' for a class the set leaves to the basic one, and not for the set's own", () => {
+    const plan = emptyPlan(200, 150);
+    plan.features.push(
+      point('e', 'entrance', [20, 20]),
+      point('r', 'curb-ramp', [60, 20])
+    );
+    setActiveSet('oregon-2012');
+    const key = keyFor(plan, settingsForSet('oregon-2012'));
+    const row = (cls) => key.entries.find((e) => e.classes.includes(cls));
+    expect(row('entrance').shape).toBe('Entrance, 13 mm');
+    expect(row('curb-ramp').shape).toBe('three rising bars, 13 mm, basic shape');
+    expect(key.notes).toEqual([]);
+    // The basic set itself borrows nothing, so it never says so.
+    setActiveSet('forge-basic');
+    const basic = keyFor(plan);
+    expect(
+      basic.entries.find((e) => e.classes.includes('curb-ramp')).shape
+    ).toBe('three rising bars, 10 mm');
+  });
 });

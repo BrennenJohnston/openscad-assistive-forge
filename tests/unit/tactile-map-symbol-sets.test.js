@@ -134,6 +134,26 @@ describe('the University of Oregon set', () => {
     }
     expect(OREGON_2012.classSymbols['you-are-here']).toBeNull();
   });
+
+  it('draws no two classes alike in either set, at any detail level', () => {
+    // A detail level turns classes on and off and changes no shape, so
+    // shapes distinct over every class are distinct at every level.
+    const classes = MAP_CLASSES.filter((c) => c.symbolKey);
+    for (const set of BUILT_IN_SETS) {
+      const library = new Map(librarySymbolsFor(set.key).map((s) => [s.key, s]));
+      const seen = new Map();
+      for (const cls of classes) {
+        const shape = library.get(cls.symbolKey);
+        expect(shape, `${set.key}: ${cls.key} has a shape`).toBeTruthy();
+        const signature = shape.solid ? `solid:${shape.solid}` : shape.pathData;
+        expect(
+          seen.get(signature),
+          `${set.key}: ${cls.key} draws like ${seen.get(signature)}`
+        ).toBeUndefined();
+        seen.set(signature, cls.key);
+      }
+    }
+  });
 });
 
 describe('symbol sets in the library', () => {
