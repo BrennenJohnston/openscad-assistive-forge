@@ -18521,6 +18521,24 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   stroke-width: 2px;
 }
 
+/* A mark a person may drag (the destination, You are here): the move
+   cursor on it, and a grab edge under it wide enough for a finger at any
+   zoom, since the cone's footprint is 4.9 mm on a map 480 mm across. */
+.drawing-editor-region[data-movable] {
+  cursor: move;
+}
+
+.drawing-editor-region-edge[data-movable] {
+  display: inline;
+  stroke: transparent;
+  stroke-width: 44px;
+  pointer-events: stroke;
+}
+
+.drawing-editor-canvas-svg[data-carrying] .drawing-editor-region[data-movable] {
+  cursor: grabbing;
+}
+
 /* The map purpose paints as the charm customizer does: a shape in its
    level's layer color (floor, symbol, top), a line class as a line in it,
    and a light edge under every painted shape so the darkest of the three

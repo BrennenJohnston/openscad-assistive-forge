@@ -81,12 +81,14 @@ export function plateRoles(plate, layout, northCue) {
  */
 export function plateParameterSets({
   rings,
+  cones = [],
   layout,
   idStyle,
   northCue,
   config,
   parameters,
 }) {
+  const last = { col: layout.cols - 1, row: layout.rows - 1 };
   return layout.plates.map((plate) => {
     const out = plateLevelsSvg(rings, plate, { id: idStyle });
     const roles = plateRoles(plate, layout, northCue);
@@ -101,6 +103,12 @@ export function plateParameterSets({
         type: 'image/svg+xml',
       },
     };
+    if (config.coneMarksParam) {
+      next[config.coneMarksParam] = coneRows(cones, plate, {
+        lastCol: plate.col === last.col,
+        lastRow: plate.row === last.row,
+      });
+    }
     if (config.plateIdParam) {
       next[config.plateIdParam] = idStyle === 'margin' ? plate.id : '';
     }
@@ -119,6 +127,39 @@ export function plateParameterSets({
       roles,
     };
   });
+}
+
+/**
+ * The model's cone rows for one plate: "x:y" per cone whose center the
+ * plate holds, in tenths of a millimeter from the plate's bottom left (the
+ * model's frame, y up; the plan's is y down), rows split by "|". A center
+ * on a seam belongs to the plate to its right or below, and the far edge
+ * to the last plate, so no cone is printed twice or not at all.
+ *
+ * @param {Array<[number, number]>} cones - Centers in plan mm
+ * @param {{ x: number, y: number, w: number, h: number }} plate
+ * @param {{ lastCol?: boolean, lastRow?: boolean }} [edge] - Whether the
+ *   plate's far edges are the map's
+ * @returns {string}
+ */
+export function coneRows(
+  cones,
+  plate,
+  { lastCol = true, lastRow = true } = {}
+) {
+  const inside = (v, lo, span, last) =>
+    v >= lo && (last ? v <= lo + span : v < lo + span);
+  const tenths = (v) => String(Math.round(v * 10));
+  return (cones || [])
+    .filter(
+      ([x, y]) =>
+        inside(x, plate.x, plate.w, lastCol) &&
+        inside(y, plate.y, plate.h, lastRow)
+    )
+    .map(
+      ([x, y]) => `${tenths(x - plate.x)}:${tenths(plate.h - (y - plate.y))}`
+    )
+    .join('|');
 }
 
 const GRID_FILLS = {

@@ -88,6 +88,7 @@ export const BUILTIN_SYMBOLS = {
   'landmark-square': DISC_SHAPE,
   'landmark-triangle': TRIANGLE_SHAPE,
   'you-are-here': DISC_SHAPE,
+  'destination-cone': DISC_SHAPE,
   'transit-stop': DISC_SHAPE,
 };
 
@@ -552,6 +553,8 @@ export function buildLevelRings(plan, settings = {}) {
   const points = [];
   const channels = [];
   const textBoxes = [];
+  // Where each solid symbol stands: the model raises the cone there itself.
+  const cones = [];
 
   for (const f of plan.features || []) {
     if (f.on === false) continue;
@@ -621,7 +624,10 @@ export function buildLevelRings(plan, settings = {}) {
         });
       }
       points.push({ f, size });
-      if (size < s.minSymbolMm) {
+      if (shape.solid) cones.push([f.at[0], f.at[1]]);
+      // A solid symbol (the destination cone) is read by its height, not
+      // its footprint: the flat-symbol floor does not apply.
+      if (size < s.minSymbolMm && !shape.solid) {
         warn(
           'symbol-too-small',
           f.id,
@@ -827,6 +833,7 @@ export function buildLevelRings(plan, settings = {}) {
     rings,
     textBoxes,
     warnings,
+    cones,
     stats: {
       segments,
       ringsPerLevel,

@@ -31,6 +31,7 @@ vi.mock('../../src/js/feature-flags.js', () => ({
 }));
 
 import { createDrawingEditor } from '../../src/js/drawing-editor/surface.js';
+import { clientToViewBox } from '../../src/js/drawing-editor/canvas.js';
 import { EDITOR_STRINGS as S } from '../../src/js/drawing-editor/strings.js';
 import { analyzeSvg } from '../../src/js/svg-preparer.js';
 import {
@@ -87,7 +88,7 @@ afterEach(() => {
 });
 
 describe('the class table', () => {
-  it('lists the twenty classes and Ignore last, each with a kind, a name and a source', () => {
+  it('lists the twenty-one classes and Ignore last, each with a kind, a name and a source', () => {
     expect(MAP_CLASS_KEYS).toEqual([
       'wall',
       'curb',
@@ -104,6 +105,7 @@ describe('the class table', () => {
       'entrance',
       'furniture',
       'landmark',
+      'destination',
       'you-are-here',
       'transit-stop',
       'curb-ramp',
@@ -144,6 +146,7 @@ describe('the class table', () => {
       'Entrance',
       'Street furniture',
       'Landmark',
+      'Destination',
       'You are here',
       'Transit stop',
       'Curb ramp',
@@ -711,5 +714,199 @@ describe("a draft's class switches", () => {
     expect(surface.querySelector('.drawing-editor-map-groups').hidden).toBe(
       true
     );
+  });
+});
+
+describe('the marks: the destination and You are here', () => {
+  /** An area, the destination cone at the middle circle, You are here off at the right one. */
+  const FEATURES = [
+    { id: 'a', class: 'area', kind: 'area', on: true },
+    {
+      id: 'destination',
+      class: 'destination',
+      kind: 'point',
+      name: '3600 Ferry Pl NE',
+      size: 4.9,
+      at: [90, 50],
+      on: true,
+    },
+    {
+      id: 'you-are-here',
+      class: 'you-are-here',
+      kind: 'point',
+      name: 'You are here',
+      at: [130, 50],
+      on: false,
+    },
+  ];
+  const canvasSvg = () => surface.querySelector('.drawing-editor-canvas-svg');
+  const regionAt = (i) =>
+    surface.querySelector(
+      `.drawing-editor-canvas-svg [data-layer="regions"] [data-region="${i}"]`
+    );
+  const edgeAt = (i) =>
+    surface.querySelector(
+      `.drawing-editor-canvas-svg [data-layer="edges"] [data-edge="${i}"]`
+    );
+  const undoButton = () =>
+    surface.querySelector('.drawing-editor-history [data-action="undo"]');
+  const placeButton = () =>
+    surface.querySelector('.drawing-editor-place-here');
+  const viewBox = () => {
+    const [x, y, w, h] = canvasSvg()
+      .getAttribute('viewBox')
+      .split(/\s+/)
+      .map(Number);
+    return { x, y, w, h };
+  };
+  const BOX = { left: 0, top: 0, width: 400, height: 200, right: 400, bottom: 200 };
+  const Pointer = typeof PointerEvent === 'function' ? PointerEvent : MouseEvent;
+  const pointer = (target, type, clientX, clientY) =>
+    target.dispatchEvent(
+      new Pointer(type, {
+        clientX,
+        clientY,
+        button: 0,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+  const key = (k, init = {}) =>
+    canvasSvg().dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: k,
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      })
+    );
+  const round1 = (v) => Math.round(v * 10) / 10;
+  // The rows are named by the analyzer here ("Circle 2 (r=10)"); the app's
+  // draft names each path itself. The sentences take the row's name.
+  const nameOf = (i) =>
+    rows()[i].querySelector('.svg-prep-object-name').textContent;
+
+  async function openWithMarks() {
+    openMap({
+      draft: true,
+      initialClasses: { 0: 'area', 1: 'destination' },
+      features: FEATURES,
+      mmPerM: 0.5,
+    });
+    await vi.waitFor(() => expect(regionAt(2)?.dataset.movable).toBe('true'));
+    canvasSvg().getBoundingClientRect = () => BOX;
+  }
+
+  it('marks the two as movable on the canvas, with a grab edge, and says so in the help; a building is not', async () => {
+    await openWithMarks();
+    expect(regionAt(1).dataset.movable).toBe('true');
+    expect(edgeAt(1).dataset.movable).toBe('true');
+    expect(regionAt(2).dataset.movable).toBe('true');
+    expect(regionAt(0).dataset.movable).toBeUndefined();
+    expect(edgeAt(0).dataset.movable).toBeUndefined();
+    expect(S.mapCanvasHelp).toContain('Space picks up');
+    expect(placeButton().hidden).toBe(false);
+    expect(placeButton().textContent).toBe(S.placeHere);
+  });
+
+  it('a pointer drag moves the destination, says where it stands, is one undoable move, and Apply hands back the new position', async () => {
+    await openWithMarks();
+    const vb = viewBox();
+    const from = clientToViewBox(BOX, vb, 180, 100);
+    const to = clientToViewBox(BOX, vb, 220, 112);
+    pointer(regionAt(1), 'pointerdown', 180, 100);
+    pointer(canvasSvg(), 'pointermove', 200, 106);
+    pointer(canvasSvg(), 'pointermove', 220, 112);
+    pointer(canvasSvg(), 'pointerup', 220, 112);
+    const x = round1(90 + to.x - from.x);
+    const y = round1(50 + to.y - from.y);
+    expect(x).not.toBe(90);
+    const name = nameOf(1);
+    expect(status()).toBe(S.markMoved(name, x, y));
+    expect(regionAt(1).getAttribute('transform')).toMatch(/^translate\(/);
+    expect(edgeAt(1).getAttribute('transform')).toMatch(/^translate\(/);
+    undoButton().click();
+    expect(status()).toBe(S.markPutBack(name, 90, 50));
+    expect(regionAt(1).getAttribute('transform')).toBeNull();
+    editor.redo();
+    expect(status()).toBe(S.redone(S.labelMoveMark(name)));
+    applyButton().click();
+    await vi.waitFor(() => expect(onApply).toHaveBeenCalled());
+    const regions = onApply.mock.calls[0][0].regions;
+    expect(regions[1].at).toEqual([x, y]);
+    expect(regions[0].at).toBeUndefined();
+    expect(regions[2].at).toBeUndefined();
+  });
+
+  it('a click on a mark still opens its row, as on any shape', async () => {
+    await openWithMarks();
+    pointer(regionAt(1), 'pointerdown', 180, 100);
+    pointer(canvasSvg(), 'pointerup', 180, 100);
+    expect(regionAt(1).getAttribute('transform')).toBeNull();
+    expect(document.activeElement).toBe(selectOf(1));
+  });
+
+  it('Space picks a highlighted mark up, the arrows move it 1 mm and 10 mm with Shift, Space puts it down as one undoable move, and Escape puts it back', async () => {
+    await openWithMarks();
+    const name = nameOf(1);
+    selectOf(1).focus();
+    canvasSvg().focus();
+    key(' ');
+    expect(status()).toBe(S.markPickedUp(name));
+    key('ArrowRight');
+    key('ArrowRight');
+    key('ArrowDown', { shiftKey: true });
+    expect(status()).toBe(S.markAt(name, 92, 60));
+    key(' ');
+    expect(status()).toBe(S.markMoved(name, 92, 60));
+    undoButton().click();
+    expect(status()).toBe(S.markPutBack(name, 90, 50));
+    expect(regionAt(1).getAttribute('transform')).toBeNull();
+    editor.redo();
+    key(' ');
+    key('ArrowLeft');
+    expect(status()).toBe(S.markAt(name, 91, 60));
+    key('Escape');
+    expect(status()).toBe(S.markPutBack(name, 92, 60));
+    applyButton().click();
+    await vi.waitFor(() => expect(onApply).toHaveBeenCalled());
+    expect(onApply.mock.calls[0][0].regions[1].at).toEqual([92, 60]);
+  });
+
+  it('Place You are here turns the off mark on at the middle of the view, says so, highlights it, and Undo takes it back off', async () => {
+    await openWithMarks();
+    const vb = viewBox();
+    const cx = round1(vb.x + vb.w / 2);
+    const cy = round1(vb.y + vb.h / 2);
+    placeButton().click();
+    expect(status()).toBe(S.herePlaced(cx, cy));
+    expect(selectOf(2).value).toBe('you-are-here');
+    expect(
+      canvasSvg().querySelector('[data-layer="highlight"]').dataset.region
+    ).toBe('2');
+    undoButton().click();
+    expect(selectOf(2).value).toBe('ignore');
+    expect(regionAt(2).getAttribute('transform')).toBeNull();
+    editor.redo();
+    applyButton().click();
+    await vi.waitFor(() => expect(onApply).toHaveBeenCalled());
+    const r = onApply.mock.calls[0][0].regions[2];
+    expect([r.class, r.at]).toEqual(['you-are-here', [cx, cy]]);
+  });
+
+  it('a drag of the off You are here turns it on where it lands', async () => {
+    await openWithMarks();
+    pointer(regionAt(2), 'pointerdown', 260, 100);
+    pointer(canvasSvg(), 'pointermove', 280, 100);
+    pointer(canvasSvg(), 'pointerup', 280, 100);
+    expect(selectOf(2).value).toBe('you-are-here');
+    expect(status().startsWith(`${nameOf(2)} moved to `)).toBe(true);
+    undoButton().click();
+    expect(selectOf(2).value).toBe('ignore');
+  });
+
+  it('hides Place You are here for a plain drawing, which has no mark', () => {
+    openMap();
+    expect(placeButton().hidden).toBe(true);
   });
 });

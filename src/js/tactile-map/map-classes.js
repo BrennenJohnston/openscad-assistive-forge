@@ -234,6 +234,15 @@ export const MAP_CLASSES = Object.freeze([
     ],
   },
   {
+    key: 'destination',
+    name: 'Destination',
+    kind: 'point',
+    level: 2,
+    symbolKey: 'destination-cone',
+    source:
+      'Touch Mapper (skarkkai/touch-mapper, AGPL-3.0): the typed address marked by a cone that stands above everything else on the map',
+  },
+  {
     key: 'you-are-here',
     name: 'You are here',
     kind: 'point',

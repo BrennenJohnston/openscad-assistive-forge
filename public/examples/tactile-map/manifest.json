@@ -18,7 +18,8 @@
     "mapFileKindParam": "map_file_kind",
     "plateKindParam": "plate_kind",
     "keyPrintParam": "key_print",
-    "keyLetterParam": "key_letter_height_mm"
+    "keyLetterParam": "key_letter_height_mm",
+    "coneMarksParam": "cone_marks"
   },
   "tactile": [
     "base_thickness_mm",

@@ -24,6 +24,7 @@ The Tactile Map tile places point symbols for the things a reader looks for on a
 | Landmark, square   | A raised curb, or a second landmark                  | A square 9 mm on a side                                                                                               | The same sources; a square identified from 5.0 mm                                                                                                                                             |
 | Landmark, triangle | A curb ramp or flush curb, or a third landmark       | An equilateral triangle, 10 mm on a side                                                                              | The same sources; a triangle identified from 6.4 mm, so it is the shape to use last at small sizes                                                                                            |
 | You are here       | The reader's own place                               | A disc 10 mm across with a 4 mm dot in its center that stands one symbol step (0.8 mm) higher than every other symbol | BANA 2022 8.5.6 asks for the most prominent symbol on the map, first in the key; ISO 19028 6.5.1 raises the present location higher than the other marks                                      |
+| Destination cone   | The address you typed, or where a walk ends          | A cone 4.9 mm across at its foot and 4.9 mm tall from the plate's underside, its top cut flat at 0.6 mm; on the sheet and the paper, its 4.9 mm footprint | Touch Mapper's address marker (skarkkai/touch-mapper, AGPL-3.0), the form other tactile map makers know; its author cut the top because a sharp tip prints poorly                |
 | Transit stop       | A bus, train or tram stop                            | A 9 mm square with a 3 by 4.5 mm notch cut from its top edge                                                          | BANA 2022 8.6.5: a shape used for two things differs by 25 to 30 percent of its size, so the notch keeps it apart from the landmark square                                                    |
 | Uphill chevron     | The uphill direction of a steep sidewalk             | A V band 10 mm wide, its point up; along a line it is drawn every 10 mm, 6 mm across, pointing uphill                 | Arrows are read by their point (McCallum, Ungar and Jehoel 2006); the chevron pitch keeps inside BANA 2022 3.4.3.3's dash figures; steepness follows the OpenSidewalks incline, rise over run |
 
@@ -51,6 +52,7 @@ Each map class takes one of the set's symbols, or keeps its basic shape where th
 | Transit stop                           | Challenging feature (1)                                   |
 | Curb ramp, raised curb, elevators      | their basic shapes: the set has no curbs and no elevators |
 | You are here                           | its basic mark, the same in every set                     |
+| Destination                            | its cone, the same in every set                           |
 
 The set's fourteen point symbols, numbered as the sheet prints them:
 

@@ -251,10 +251,12 @@ describe('Make a route map', () => {
         1,
         172,
         360
-      ) + ' The key has 10 symbols and 5 abbreviations.'
+      ) + ' The key has 10 symbols and 4 abbreviations.'
     );
+    // The destination is keyed by its cone and named in its own row, so it
+    // takes no two-letter key.
     expect(addressStatus()).toBe(
-      'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk. The key has 10 symbols and 5 abbreviations.'
+      'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk. The key has 10 symbols and 4 abbreviations.'
     );
     // The model is told the fitted size.
     await vi.waitFor(() => {

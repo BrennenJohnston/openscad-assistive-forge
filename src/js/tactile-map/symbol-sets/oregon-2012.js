@@ -260,6 +260,7 @@ export const OREGON_2012 = Object.freeze({
     'elevator-up': null,
     'elevator-down': null,
     'you-are-here': null,
+    destination: null,
   },
   lineStyles: LINE_STYLES,
   fills: FILLS,

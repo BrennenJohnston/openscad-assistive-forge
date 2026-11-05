@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with its plates, each plate at full size with every label channel and its
   text, the labels and the key, on Letter or A4, for the person who makes
   the labels and assembles the plates.
+- The destination cone is printed: the model raises Touch Mapper's cone at
+  the address on the map plate and beside its row on the key plate. In the
+  editor the cone and You are here are dragged with the mouse or a finger,
+  or carried by keyboard (Space picks one up, the arrow keys move it, Space
+  puts it down); Place You are here puts the reader's mark at the middle of
+  the view, and one Undo takes a whole move back.
+
+### Fixed
+
+- A place map marks the typed address: a destination cone (Touch Mapper's
+  marker, 4.9 mm tall) stands at the address and the key names it first
+  with the address; a route's end carries the same cone. You are here is
+  no longer dropped at the plate's center as if it were the address.
 
 ## [5.8.0] - 2026-11-04
 

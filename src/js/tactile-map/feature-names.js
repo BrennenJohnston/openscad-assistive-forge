@@ -53,7 +53,7 @@ function anchorOf(f) {
 }
 
 /** Classes that are not places to name another feature by. */
-const NOT_A_PLACE = new Set(['you-are-here', 'route']);
+const NOT_A_PLACE = new Set(['you-are-here', 'destination', 'route']);
 
 function toSegment(p, a, b) {
   const dx = b[0] - a[0];

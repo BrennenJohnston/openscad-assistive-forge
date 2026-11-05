@@ -259,9 +259,12 @@ export function applyDetail(features, { switches, scale, mmPerM }) {
   const reach = ALONG_M * (mmPerM || 1);
 
   const decide = (f) => {
+    // You are here is the reader's own place, placed by them in the editor:
+    // no tier turns it on or off.
+    if (f.class === 'you-are-here') return f.on !== false;
     if (sw.everything) return true;
     switch (f.class) {
-      case 'you-are-here':
+      case 'destination':
         return true;
       case 'walkway':
         return sw.sidewalks === 'all' || !!f.way;

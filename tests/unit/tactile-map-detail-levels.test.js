@@ -116,7 +116,8 @@ describe('the detail levels', () => {
       expect(counts[i]).toBeGreaterThan(counts[i - 1]);
     }
     expect(counts[0]).toBeLessThan(60);
-    expect(counts[3]).toBe(plan.features.length);
+    // Everything but the off You are here, which only the reader places.
+    expect(counts[3]).toBe(plan.features.length - 1);
     const first = applyDetail(plan.features, {
       type: 'place',
       switches: switchesFor('place', 'way'),
@@ -128,7 +129,8 @@ describe('the detail levels', () => {
     expect(onOf(first, 'area')).toEqual([]);
     expect(onOf(first, 'furniture')).toEqual([]);
     expect(onOf(first, 'entrance').length).toBeLessThanOrEqual(1);
-    expect(onOf(first, 'you-are-here')).toHaveLength(1);
+    expect(onOf(first, 'destination')).toHaveLength(1);
+    expect(onOf(first, 'you-are-here')).toHaveLength(0);
     const named = applyDetail(plan.features, {
       type: 'place',
       switches: switchesFor('place', 'named'),
@@ -140,6 +142,29 @@ describe('the detail levels', () => {
     expect(onOf(named, 'landmark').some((f) => f.name === 'Plaza Cafe')).toBe(
       true
     );
+  });
+
+  it('leaves You are here as the reader set it at every tier, Everything included: off until placed, on once placed', async () => {
+    const { plan, scale } = await ferry();
+    const here = plan.features.find((f) => f.class === 'you-are-here');
+    expect(here.on).toBe(false);
+    const at = (features, key) =>
+      applyDetail(features, {
+        type: 'place',
+        switches: switchesFor('place', key),
+        scale,
+        size: plan.size,
+        mmPerM: plan.meta.geo.mmPerM,
+      }).features;
+    for (const level of DETAIL_LEVELS.place) {
+      expect(onOf(at(plan.features, level.key), 'you-are-here')).toHaveLength(
+        0
+      );
+    }
+    const placed = plan.features.map((f) =>
+      f.class === 'you-are-here' ? { ...f, on: true } : f
+    );
+    expect(onOf(at(placed, 'way'), 'you-are-here')).toHaveLength(1);
   });
 
   it('turns a whole group on or off with one switch: every building, every bench', async () => {
@@ -185,6 +210,7 @@ describe('the detail levels', () => {
       (f) =>
         f.kind === 'point' &&
         f.class !== 'you-are-here' &&
+        f.class !== 'destination' &&
         !(f.class === 'entrance' && f.address)
     );
     expect(points.every((f) => f.class === 'transit-stop')).toBe(true);

@@ -198,6 +198,26 @@ describe('applyRowsToPlan', () => {
     const after = applyRowsToPlan(before, [{ index: 99, class: 'wall' }]);
     expect(after.features).toEqual(before.features);
   });
+
+  it("moves a point to the row's at when the editor moved it, and leaves every other point where it was", () => {
+    const before = plan();
+    const snapshot = JSON.parse(JSON.stringify(before));
+    const k = before.features.findIndex((f) => f.kind === 'point');
+    expect(k).toBeGreaterThanOrEqual(0);
+    const regions = before.features.map((f, index) => ({
+      index,
+      class: f.on ? f.class : 'ignore',
+    }));
+    regions[k].at = [12.5, 34];
+    const after = applyRowsToPlan(before, regions);
+    expect(after.features[k].at).toEqual([12.5, 34]);
+    expect(before).toEqual(snapshot);
+    for (const [i, f] of after.features.entries()) {
+      if (i !== k) {
+        expect(f.at ?? null).toEqual(snapshot.features[i].at ?? null);
+      }
+    }
+  });
 });
 
 describe('the order of the editor rows', () => {

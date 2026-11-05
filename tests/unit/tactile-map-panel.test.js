@@ -645,6 +645,52 @@ describe('the map panel', () => {
     await vi.waitFor(() => expect(params().key_print).toMatch(/:KEY/), SETTLE);
   });
 
+  it('writes cone_marks for the whole map, for the plate that holds the cone, and for the key plate with its sample, when the model has the parameter', async () => {
+    const plan = sampleStationPlan();
+    plan.features.push({
+      id: 'destination',
+      class: 'destination',
+      kind: 'point',
+      name: '3600 Ferry Pl NE',
+      size: 4.9,
+      at: [100, 50],
+      on: true,
+    });
+    mount({
+      plan,
+      config: {
+        plateKindParam: 'plate_kind',
+        keyPrintParam: 'key_print',
+        keyLetterParam: 'key_letter_height_mm',
+        coneMarksParam: 'cone_marks',
+      },
+    });
+    await vi.waitFor(
+      () => expect(params().cone_marks).toBe('1000:3100'),
+      SETTLE
+    );
+    const pick = (value) => {
+      const radio = document.querySelector(
+        `#tactileMapPlates input[value${value === 'key' ? '^' : ''}="${value}"]`
+      );
+      radio.checked = true;
+      radio.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    pick('A1');
+    await vi.waitFor(
+      () => expect(params().cone_marks).toBe('1000:1300'),
+      SETTLE
+    );
+    pick('B2');
+    await vi.waitFor(() => expect(params().cone_marks).toBe(''), SETTLE);
+    pick('key');
+    await vi.waitFor(() => expect(params().plate_kind).toBe('Key'), SETTLE);
+    await vi.waitFor(
+      () => expect(params().cone_marks).toMatch(/^\d+:\d+$/),
+      SETTLE
+    );
+  });
+
   it('refuses a bed that cuts the map into plates under 100 x 75 mm, and keeps the whole map', async () => {
     await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
     const select = document.getElementById('tactileMapBed');
@@ -1487,8 +1533,10 @@ describe('the map data row', () => {
     make().click();
     await vi.waitFor(() => expect(opened).not.toBeNull(), { timeout: 15000 });
     expect(getMapPlan().features).toHaveLength(1000);
+    // Two of the thousand seats are the marks', the destination and You
+    // are here.
     expect(addressStatus()).toMatch(
-      / 102 features far from the address were left out: the editor works with 1,000 at a time\. The key has \d+ symbols? and \d+ abbreviations?\.$/
+      / 103 features far from the address were left out: the editor works with 1,000 at a time\. The key has \d+ symbols? and \d+ abbreviations?\.$/
     );
   });
 
@@ -1691,7 +1739,7 @@ describe('the map Make the map drafts', () => {
     await pullData();
     await vi.waitFor(() => expect(opened).not.toBeNull());
     expect(addressStatus()).toMatch(
-      /^Draft map ready: \d+ of 21 features on; (\d+ warnings|no warnings)\. Choose what stays\. The key has \d+ symbols? and \d+ abbreviations?\.$/
+      /^Draft map ready: \d+ of 22 features on; (\d+ warnings|no warnings)\. Choose what stays\. The key has \d+ symbols? and \d+ abbreviations?\.$/
     );
     expect(announce).toHaveBeenCalledWith(addressStatus(), {
       source: 'tactile-map',
@@ -1699,10 +1747,12 @@ describe('the map Make the map drafts', () => {
     expect(opened.options.purpose).toBe('map');
     expect(opened.options.draft).toBe(true);
     expect(opened.options.sourceName).toBe('Draft map of Central Library');
+    expect(opened.svg).toContain('data-feature="destination"');
+    // You are here rides along off, a row the person switches on or places.
     expect(opened.svg).toContain('data-feature="you-are-here"');
-    expect(opened.analysis.elements).toHaveLength(21);
+    expect(opened.analysis.elements).toHaveLength(22);
     const classes = opened.options.initialClasses;
-    expect(Object.keys(classes)).toHaveLength(21);
+    expect(Object.keys(classes)).toHaveLength(22);
     const plan = getMapPlan();
     // The rows: what is on first, then what is off, curbs last within each;
     // the editor gets the features in that order and the map's own width.
@@ -1715,8 +1765,8 @@ describe('the map Make the map drafts', () => {
     });
     const firstOff = rows.findIndex((f) => !f.on);
     expect(rows.slice(firstOff).every((f) => !f.on)).toBe(true);
-    expect(classes[rows.findIndex((f) => f.id === 'you-are-here')]).toBe(
-      'you-are-here'
+    expect(classes[rows.findIndex((f) => f.id === 'destination')]).toBe(
+      'destination'
     );
     expect(opened.options.designWidthMm).toBe(plan.size.w);
     expect(plan.meta.title).toBe('Central Library');
@@ -1854,8 +1904,11 @@ describe('the map Make the map drafts', () => {
     opened = null;
     make().click();
     await vi.waitFor(() => expect(opened).not.toBeNull());
-    expect(getMapPlan().features.every((f) => f.on)).toBe(true);
-    expect(addressStatus()).toMatch(/^Draft map ready: 21 of 21 features on;/);
+    // Everything but You are here, which waits for the person to place it.
+    expect(
+      getMapPlan().features.every((f) => f.on || f.class === 'you-are-here')
+    ).toBe(true);
+    expect(addressStatus()).toMatch(/^Draft map ready: 21 of 22 features on;/);
 
     document.getElementById('tactileMapDetail-way').click();
     await vi.waitFor(() => expect(line.textContent).not.toMatch(/^21 /));
@@ -1867,7 +1920,8 @@ describe('the map Make the map drafts', () => {
       way.filter((f) => ['landmark', 'area', 'transit-stop'].includes(f.class))
     ).toEqual([]);
     expect(way.some((f) => f.class === 'walkway')).toBe(true);
-    expect(way.some((f) => f.class === 'you-are-here')).toBe(true);
+    expect(way.some((f) => f.class === 'destination')).toBe(true);
+    expect(way.some((f) => f.class === 'you-are-here')).toBe(false);
   });
 
   it('takes the rows back by index: a feature off keeps its class, one on takes the class, and the plan is rebuilt', async () => {

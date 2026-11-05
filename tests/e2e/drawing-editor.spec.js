@@ -2972,8 +2972,8 @@ test.describe('the route tool', () => {
       '#drawingEditorSurface .drawing-editor-canvas-svg [data-layer="regions"] path'
     );
     // One shape per feature in the data, the off ones too: the fixture's 20
-    // drawn features and its bakery.
-    await expect(paths).toHaveCount(21);
+    // drawn features, its bakery, and You are here, off until placed.
+    await expect(paths).toHaveCount(22);
     const region = (key) =>
       page.locator(
         `#drawingEditorSurface .drawing-editor-canvas-svg [data-layer="regions"] path[data-region="${key}"]`

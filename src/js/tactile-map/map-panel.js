@@ -104,6 +104,7 @@ import { applyDetail, judgeSymbols, switchesFor } from './detail-levels.js';
 import {
   PDF_NAME,
   archiveEntries,
+  coneRows,
   levelHeights,
   mapAbout as aboutLines,
   plateGridSvg,
@@ -1362,7 +1363,9 @@ class MapPanel {
       scale: osm.scale,
       landmarks: osm.landmarks,
       size: { w: this.plan.size.w, h: this.plan.size.h },
-      place: osm.place,
+      // The typed words travel with the place: the destination is named
+      // by them, so the map says the address the person asked for.
+      place: osm.place ? { ...osm.place, query: osm.query || '' } : null,
     });
     // A scale that draws sidewalks needs one near the address; one that
     // draws streets alone needs a street.
@@ -1718,6 +1721,7 @@ class MapPanel {
     const sets = [
       ...plateParameterSets({
         rings: built.rings,
+        cones: built.cones,
         layout: this.layout,
         idStyle: this.idStyle,
         northCue: this.northCue(),
@@ -2125,6 +2129,14 @@ class MapPanel {
         [this.config.plateKindParam]: 'Key',
         [this.config.keyPrintParam]: page.print,
       };
+      if (this.config.coneMarksParam) {
+        next[this.config.coneMarksParam] = coneRows(page.cones, {
+          x: 0,
+          y: 0,
+          w: page.size.w,
+          h: page.size.h,
+        });
+      }
       if (this.config.plateIdParam) next[this.config.plateIdParam] = '';
       if (this.config.plateShowsTitleParam)
         next[this.config.plateShowsTitleParam] = 'no';
@@ -2233,6 +2245,21 @@ class MapPanel {
     if (this.config.plateKindParam) {
       setParameterValue(this.config.plateKindParam, keyPage ? 'Key' : 'Map');
       setParameterValue(this.config.keyPrintParam, keyPage?.print || '');
+    }
+    if (this.config.coneMarksParam) {
+      // The cones the plate holds, in the model's frame; a key page's are
+      // its samples, the whole map's every one.
+      const frame = plate || { x: 0, y: 0, w: size.w, h: size.h };
+      const edge = plate
+        ? {
+            lastCol: plate.col === this.layout.cols - 1,
+            lastRow: plate.row === this.layout.rows - 1,
+          }
+        : {};
+      setParameterValue(
+        this.config.coneMarksParam,
+        coneRows(keyPage ? keyPage.cones : built.cones, frame, edge)
+      );
     }
     this.setFileKind('levels');
     if (!this.setFile(this.config.mapFileParam, fileName, svg)) {

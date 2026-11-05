@@ -15,6 +15,13 @@
  * full keyboard path; this is the shortcut for someone who can see the
  * drawing and prefers to walk it.
  *
+ * A MOVABLE region (the map purpose's destination and You are here, named
+ * by `on.canMove`) is dragged with the pointer in the Select tool, or picked
+ * up with Space, nudged by the arrow keys (1 unit; 10 with Shift) and put
+ * down with Space or Enter; Escape puts it back. The canvas keeps each
+ * region's offset as a transform and reports the whole move once, through
+ * `on.onMoveEnd`, so the surface records one command.
+ *
  * Coordinates: pointer positions are mapped into the drawing's units with the
  * viewBox and the element's box under `preserveAspectRatio="xMidYMid meet"`,
  * the arithmetic the browser does, written out here so it can be tested
@@ -43,6 +50,13 @@ const FIT_PADDING = 0.04;
 const ZOOM_STEP = 1.5;
 /** A marquee smaller than this is a click that wandered, not a rectangle. */
 const MARQUEE_MIN_UNITS = 0.5;
+/** A drag of a mark shorter than this is a click on it. */
+const MOVE_MIN_UNITS = 0.5;
+/** The arrow keys' steps during a carry, in drawing units (mm on a map). */
+const NUDGE_UNITS = 1;
+const NUDGE_SHIFT_UNITS = 10;
+
+const round1 = (v) => Math.round(v * 10) / 10;
 
 /**
  * Map a pointer position into viewBox units.
@@ -139,7 +153,9 @@ export function nearestInDirection(regions, fromKey, direction) {
  * @param {string} args.labelId - id of the element that names the canvas
  * @param {object} [args.on] - Callbacks: onClick(key, shift), onEmptyClick(shift),
  *   onMarquee(keys, shift), onPaint(key), onRemove(key), onHighlight(key),
- *   onToggle(key), onOpenColour(key), onPan()
+ *   onToggle(key), onOpenColour(key), onPan(), canMove(key) -> boolean,
+ *   onPickUp(key), onMoving(key, dx, dy), onMoveEnd(key, dx, dy),
+ *   onPutBack(key)
  * @returns {object}
  */
 export function createRegionCanvas({ container, labelId, on = {} }) {
@@ -235,8 +251,65 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   let tool = 'select';
   let highlighted = null;
   let drag = null;
+  /** A mark picked up by keyboard: its key and the offset so far. */
+  let carry = null;
   const pathByKey = new Map();
   const edgeByKey = new Map();
+  /** Each moved region's offset from where the drawing put it. */
+  const offsets = new Map();
+
+  const canMove = (key) => !!key && on.canMove?.(key) === true;
+
+  /** Draw a region's offset, settled plus what a drag or carry adds. */
+  function placeRegion(key, extraX = 0, extraY = 0) {
+    const base = offsets.get(key) || [0, 0];
+    const dx = round1(base[0] + extraX);
+    const dy = round1(base[1] + extraY);
+    const transform = dx === 0 && dy === 0 ? null : `translate(${dx} ${dy})`;
+    for (const el of [pathByKey.get(key), edgeByKey.get(key)]) {
+      if (!el) continue;
+      if (transform) el.setAttribute('transform', transform);
+      else el.removeAttribute('transform');
+    }
+    if (highlighted === key) {
+      if (transform) highlightLayer.setAttribute('transform', transform);
+      else highlightLayer.removeAttribute('transform');
+    }
+  }
+
+  /**
+   * Settle a region's offset, as the surface records it (a move done, or
+   * undone). The region's box and interior follow, so the arrow keys and
+   * the marquee find it where it now stands.
+   */
+  function setRegionOffset(key, offset) {
+    const was = offsets.get(key) || [0, 0];
+    const next = offset ? [round1(offset[0]), round1(offset[1])] : [0, 0];
+    if (next[0] === 0 && next[1] === 0) offsets.delete(key);
+    else offsets.set(key, next);
+    const r = regions.find((x) => x.key === key);
+    if (r) {
+      const dx = next[0] - was[0];
+      const dy = next[1] - was[1];
+      if (r.bbox) {
+        r.bbox = {
+          minX: r.bbox.minX + dx,
+          minY: r.bbox.minY + dy,
+          maxX: r.bbox.maxX + dx,
+          maxY: r.bbox.maxY + dy,
+        };
+      }
+      if (r.interior) {
+        r.interior = { x: r.interior.x + dx, y: r.interior.y + dy };
+      }
+    }
+    placeRegion(key);
+  }
+
+  function endCarry() {
+    carry = null;
+    delete svg.dataset.carrying;
+  }
 
   /** Whether the person asked for less motion; read each time it matters. */
   const reduceMotion = () =>
@@ -269,6 +342,9 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
     regions = list;
     pathByKey.clear();
     edgeByKey.clear();
+    offsets.clear();
+    endCarry();
+    highlightLayer.removeAttribute('transform');
     while (artLayer.firstChild) artLayer.removeChild(artLayer.firstChild);
     while (edgeLayer.firstChild) edgeLayer.removeChild(edgeLayer.firstChild);
     while (regionLayer.firstChild)
@@ -304,6 +380,10 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
       edge.dataset.edge = r.key;
       edgeLayer.appendChild(edge);
       edgeByKey.set(r.key, edge);
+      if (canMove(r.key)) {
+        path.dataset.movable = 'true';
+        edge.dataset.movable = 'true';
+      }
     }
     clearHighlight();
     showPlate(null);
@@ -422,6 +502,9 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
     const d = path.getAttribute('d');
     halo.setAttribute('d', d);
     focusStroke.setAttribute('d', d);
+    const moved = path.getAttribute('transform');
+    if (moved) highlightLayer.setAttribute('transform', moved);
+    else highlightLayer.removeAttribute('transform');
     highlightLayer.setAttribute('visibility', 'visible');
     highlightLayer.dataset.region = highlighted;
     highlightLayer.classList.remove('is-pulsing', 'is-steady');
@@ -433,9 +516,11 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   }
 
   function clearHighlight() {
+    if (carry) putBack();
     highlighted = null;
     highlightLayer.setAttribute('visibility', 'hidden');
     highlightLayer.classList.remove('is-pulsing', 'is-steady');
+    highlightLayer.removeAttribute('transform');
     delete highlightLayer.dataset.region;
     for (const path of pathByKey.values())
       path.classList.remove('is-highlighted');
@@ -519,8 +604,32 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
         // Not captured in this environment; nothing to release.
       }
     }
+    // A mark let go mid-drag goes back where it was.
+    if (drag?.kind === 'move') placeRegion(drag.key);
     drag = null;
     marquee.setAttribute('visibility', 'hidden');
+  }
+
+  /** A carry ended by Escape, or by the highlight leaving: the mark goes back. */
+  function putBack() {
+    if (!carry) return;
+    const { key } = carry;
+    endCarry();
+    placeRegion(key);
+    on.onPutBack?.(key);
+  }
+
+  /** A carry ended by Space or Enter: one move, as the pointer would make. */
+  function putDown() {
+    if (!carry) return;
+    const { key, dx, dy } = carry;
+    endCarry();
+    if (dx === 0 && dy === 0) {
+      placeRegion(key);
+      on.onPutBack?.(key);
+      return;
+    }
+    on.onMoveEnd?.(key, dx, dy);
   }
 
   // A shape's edge, under it, answers for it: a click in a dashed line's gap
@@ -543,6 +652,19 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
       };
     } else if (tool === 'marquee') {
       drag = { kind: 'marquee', start: at, pointerId: event.pointerId };
+    } else if (tool === 'select' && canMove(key)) {
+      // A mark under the Select tool moves with the pointer; a press that
+      // does not travel is a click on it, resolved on release.
+      if (carry) putBack();
+      drag = {
+        kind: 'move',
+        start: at,
+        key,
+        dx: 0,
+        dy: 0,
+        moved: false,
+        pointerId: event.pointerId,
+      };
     } else {
       // Select, paint, remove: a click, resolved on release so a drag that
       // began on a region does not fire on the way down.
@@ -575,6 +697,19 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
       marquee.setAttribute('width', String(Math.abs(at.x - drag.start.x)));
       marquee.setAttribute('height', String(Math.abs(at.y - drag.start.y)));
       marquee.setAttribute('visibility', 'visible');
+    } else if (drag.kind === 'move') {
+      drag.dx = at.x - drag.start.x;
+      drag.dy = at.y - drag.start.y;
+      if (
+        !drag.moved &&
+        Math.abs(drag.dx) < MOVE_MIN_UNITS &&
+        Math.abs(drag.dy) < MOVE_MIN_UNITS
+      ) {
+        return;
+      }
+      drag.moved = true;
+      placeRegion(drag.key, drag.dx, drag.dy);
+      on.onMoving?.(drag.key, round1(drag.dx), round1(drag.dy));
     }
   }
 
@@ -604,6 +739,16 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
     }
     if (current.kind === 'pan') {
       on.onPan?.();
+      return;
+    }
+    if (current.kind === 'move') {
+      if (current.moved) {
+        // The whole move at once; the surface settles the offset it records.
+        on.onMoveEnd?.(current.key, round1(current.dx), round1(current.dy));
+        return;
+      }
+      setHighlight(current.key);
+      on.onClick?.(current.key, event.shiftKey);
       return;
     }
     // A click: the region under the pointer on release, or nothing.
@@ -637,6 +782,33 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
       ArrowUp: 'up',
       ArrowDown: 'down',
     }[event.key];
+    if (carry) {
+      // A mark in hand: the arrows carry it, Space or Enter puts it down,
+      // Escape puts it back; nothing else leaves the carry.
+      if (dir) {
+        event.preventDefault();
+        event.stopPropagation();
+        const step = event.shiftKey ? NUDGE_SHIFT_UNITS : NUDGE_UNITS;
+        carry.dx += dir === 'left' ? -step : dir === 'right' ? step : 0;
+        carry.dy += dir === 'up' ? -step : dir === 'down' ? step : 0;
+        placeRegion(carry.key, carry.dx, carry.dy);
+        on.onMoving?.(carry.key, round1(carry.dx), round1(carry.dy));
+        return;
+      }
+      if (event.key === ' ' || event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        putDown();
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        putBack();
+        return;
+      }
+      return;
+    }
     if (dir) {
       event.preventDefault();
       const next = nearestInDirection(regions, highlighted, dir);
@@ -656,6 +828,20 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
         setHighlight(next, { pulse: true });
         on.onHighlight?.(next);
       }
+      return;
+    }
+    if (
+      event.key === ' ' &&
+      highlighted &&
+      tool === 'select' &&
+      canMove(highlighted)
+    ) {
+      // Space picks a mark up; Enter still opens its row, as on any shape.
+      event.preventDefault();
+      event.stopPropagation();
+      carry = { key: highlighted, dx: 0, dy: 0 };
+      svg.dataset.carrying = highlighted;
+      on.onPickUp?.(highlighted);
       return;
     }
     if ((event.key === 'Enter' || event.key === ' ') && highlighted) {
@@ -698,7 +884,11 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
     zoomIn: () => zoomBy(ZOOM_STEP),
     zoomOut: () => zoomBy(1 / ZOOM_STEP),
     isDragging: () => drag !== null,
+    isCarrying: () => carry !== null,
+    putBack,
     cancelDrag,
+    setRegionOffset,
+    getRegionOffset: (key) => [...(offsets.get(key) || [0, 0])],
     getViewBox: () => ({ ...vb }),
     destroy() {
       svg.removeEventListener('pointerdown', onPointerDown);

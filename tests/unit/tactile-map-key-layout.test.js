@@ -312,6 +312,31 @@ describe('keyPlates', () => {
     expect([frame.class, frame.width]).toEqual(['curb', 1]);
   });
 
+  it("hands each page the centers of its cone samples, so the model raises the destination's cone on the key plate too", () => {
+    const p = plan();
+    p.features.push({
+      id: 'destination',
+      class: 'destination',
+      kind: 'point',
+      name: '3600 Ferry Pl NE',
+      size: 4.9,
+      at: [240, 180],
+      on: true,
+    });
+    const pages = keyPlates(keyFor(p), { ...PLATE, title: 'Ferry Place' });
+    // With the words raised the title fills the first plate; the
+    // destination's row, and its sample, open the second.
+    const page = pages.find((pg) =>
+      pg.plan.features.some((f) => f.class === 'destination')
+    );
+    const sample = page.plan.features.find((f) => f.class === 'destination');
+    expect(sample.symbol).toBe('destination-cone');
+    expect(page.cones).toEqual([sample.at]);
+    expect(
+      pages.filter((pg) => pg !== page).every((pg) => pg.cones.length === 0)
+    ).toBe(true);
+  });
+
   it('never sets a line off the plate: a row taller than the plate goes on, line by line, on the next', () => {
     const pages = keyPlates(keyFor(plan()), {
       plateW: 200,

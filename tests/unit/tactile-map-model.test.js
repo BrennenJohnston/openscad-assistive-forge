@@ -133,6 +133,30 @@ describe('the Tactile Map tile', () => {
     expect(sample).toMatch(/<g id="here"/);
   });
 
+  it("raises a destination cone at each cone_marks row, Touch Mapper's figures, on map and key plates alike", () => {
+    const src = source();
+    const p = params();
+    expect(
+      p.cone_marks,
+      'cone_marks is not a parameter of the model'
+    ).toBeTruthy();
+    expect(p.cone_marks.default).toBe('');
+    expect(manifest().tactileMap.coneMarksParam).toBe('cone_marks');
+    // Touch Mapper's marker: 4.9 mm tall from the plate's underside, a
+    // radius of half that, the top cut flat at an eighth of the radius so
+    // it prints, 16 sides. Constants, not dials.
+    expect(src).toMatch(/CONE_HEIGHT_MM\s*=\s*4\.9\s*;/);
+    expect(src).toMatch(/CONE_RADIUS_MM\s*=\s*CONE_HEIGHT_MM\s*\/\s*2\s*;/);
+    expect(src).toMatch(/r2\s*=\s*CONE_RADIUS_MM\s*\/\s*8,\s*\$fn\s*=\s*16/);
+    expect(src).toMatch(/module\s+destination_cone\s*\(/);
+    // The cone rises from under the plate through whatever stands at its
+    // foot, on a map plate and on the key plate that shows it as a sample.
+    const main = src.slice(src.indexOf('module tactile_map()'));
+    expect(main).toMatch(
+      /destination_cone\(\);[\s\S]*if \(plate_kind == "Key"\)/
+    );
+  });
+
   it('ships the sample levels file it defaults to', () => {
     const m = manifest();
     const p = params();

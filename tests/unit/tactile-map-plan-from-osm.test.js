@@ -14,6 +14,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
+  addressName,
   draftPlan,
   DRAFT_LIMIT,
 } from '../../src/js/tactile-map/plan-from-osm.js';
@@ -456,21 +457,46 @@ describe('draftPlan', () => {
     expect(byId(plan, 'osm-way-17').on).toBe(false);
   });
 
-  it('puts the You are here point in the middle, on, and counts what it drew', () => {
+  it('marks the address with the destination cone in the middle, named by the place, carries You are here off at the middle for the reader to place, and counts what it drew', () => {
     const { plan, counts } = DRAFT();
-    const here = byId(plan, 'you-are-here');
-    expect([here.class, here.kind, here.on, here.at]).toEqual([
-      'you-are-here',
+    const destination = byId(plan, 'destination');
+    expect([
+      destination.class,
+      destination.kind,
+      destination.on,
+      destination.at,
+      destination.size,
+      destination.name,
+    ]).toEqual([
+      'destination',
       'point',
       true,
       [240, 180],
+      4.9,
+      'Pine Street Station',
     ]);
+    // Off until the person puts it where they stand: the draft cannot know,
+    // and an on mark at the middle once read as the address.
+    const here = byId(plan, 'you-are-here');
+    expect([here.class, here.kind, here.on, here.at, here.name]).toEqual([
+      'you-are-here',
+      'point',
+      false,
+      [240, 180],
+      'You are here',
+    ]);
+    expect(plan.meta.address).toEqual({
+      name: 'Pine Street Station, Seattle, Washington',
+      typed: '',
+      lat: CENTER.lat,
+      lon: CENTER.lon,
+    });
     expect(counts).toEqual({
       walkways: 5,
       crossings: 2,
       buildings: 1,
       landmarks: 7,
-      total: 22,
+      total: 23,
       on: 8,
       leftOut: 0,
     });
@@ -497,7 +523,38 @@ describe('draftPlan', () => {
       radiusM: 250,
       size: { w: 480, h: 360 },
     });
-    expect(plan.features.map((f) => f.id)).toEqual(['you-are-here']);
+    expect(plan.features.map((f) => f.id)).toEqual([
+      'destination',
+      'you-are-here',
+    ]);
+  });
+
+  it("names the destination by what was typed, up to its first comma, else by the geocoder's house number and street, else by the place's name", () => {
+    const uw =
+      'Center on Human Development and Disability South, 3600, Ferry Place Northeast, University District, Seattle, King County, Washington, 98195, United States';
+    expect(
+      addressName({ name: uw, query: '3600 Ferry Pl NE, Seattle, WA 98195' })
+    ).toBe('3600 Ferry Pl NE');
+    expect(addressName({ name: uw })).toBe('3600 Ferry Place Northeast');
+    expect(
+      addressName({
+        name: '3600, Ferry Place Northeast, University District, Seattle, King County, Washington, 98195, United States',
+      })
+    ).toBe('3600 Ferry Place Northeast');
+    expect(
+      addressName({ name: 'Plaza Cafe, University of Washington, Seattle' })
+    ).toBe('Plaza Cafe');
+    expect(addressName({ name: '' })).toBe('Destination');
+    expect(addressName(null)).toBe('Destination');
+    const { plan } = draftPlan({
+      elements: ELEMENTS,
+      center: CENTER,
+      radiusM: 250,
+      size: { w: 480, h: 360 },
+      place: { name: uw, query: '3600 Ferry Pl NE', ...CENTER },
+    });
+    expect(byId(plan, 'destination').name).toBe('3600 Ferry Pl NE');
+    expect(plan.meta.address.typed).toBe('3600 Ferry Pl NE');
   });
 });
 
@@ -663,7 +720,8 @@ describe('a draft within the editor', () => {
     });
     expect(plan.features.length).toBe(DRAFT_LIMIT);
     expect(counts.total).toBe(DRAFT_LIMIT);
-    expect(counts.leftOut).toBe(1201 + 1 - DRAFT_LIMIT);
+    // The destination and You are here take two of the seats.
+    expect(counts.leftOut).toBe(1201 + 2 - DRAFT_LIMIT);
     // The on sidewalk near the address stays; the kept off ones are the nearest.
     expect(plan.features.find((f) => f.id === 'osm-way-9').on).toBe(true);
     const kept = new Set(plan.features.map((f) => f.id));

@@ -542,4 +542,53 @@ describe('the pedestrian base classes', () => {
     expect(Math.abs(area('curb-ramp') - 43.3) / 43.3).toBeLessThan(0.02);
     expect(Math.abs(area('raised-curb') - 81) / 81).toBeLessThan(0.02);
   });
+
+  it('draws the destination cone footprint, 4.9 mm across on the symbol level, with no too-small warning: the cone is read by its height', () => {
+    const plan = emptyPlan(100, 100);
+    plan.features.push({
+      id: 'destination',
+      class: 'destination',
+      kind: 'point',
+      name: '3600 Ferry Pl NE',
+      size: 4.9,
+      at: [50, 50],
+      on: true,
+    });
+    const { svg, warnings } = buildLevelsSvg(plan);
+    expect(warnings.filter((w) => w.code === 'symbol-too-small')).toEqual([]);
+    const disc = ringsOf(groupsOf(svg).level2);
+    expect(disc).toHaveLength(1);
+    expect(Math.abs(regionArea(disc) - Math.PI * 2.45 ** 2)).toBeLessThan(1);
+  });
+
+  it('lists where each solid symbol stands, for the model to raise the cone there; a map without one lists nothing', () => {
+    const plan = emptyPlan(100, 100);
+    plan.features.push(
+      {
+        id: 'destination',
+        class: 'destination',
+        kind: 'point',
+        name: '3600 Ferry Pl NE',
+        size: 4.9,
+        at: [50, 50],
+        on: true,
+      },
+      {
+        id: 'cafe',
+        class: 'landmark',
+        kind: 'point',
+        at: [20, 20],
+        on: true,
+      },
+      {
+        id: 'off',
+        class: 'destination',
+        kind: 'point',
+        at: [80, 80],
+        on: false,
+      }
+    );
+    expect(buildLevelRings(plan).cones).toEqual([[50, 50]]);
+    expect(buildLevelRings(emptyPlan(100, 100)).cones).toEqual([]);
+  });
 });

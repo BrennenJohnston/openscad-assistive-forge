@@ -34,6 +34,7 @@ import { intersect, simplify } from '../ring-geometry.js';
 import { mmPerMeterAt, sidewalksAsOneLine } from './scales.js';
 import { DEFAULT_SETTINGS } from './levels-svg.js';
 import { kindOf, isFurniture } from './feature-kinds.js';
+import { DESTINATION_CONE_MM } from './symbol-library.js';
 
 /** A walkway with a point this close to the address starts on. */
 export const NEAR_M = 30;
@@ -263,6 +264,29 @@ function clipRing(ring, w, h) {
   );
   const rings = inside ? [subject] : intersect([subject], [box]);
   return simplify(rings, SIMPLIFY_MM).map((r) => r.map((p) => [p.x, p.y]));
+}
+
+/**
+ * The destination's name: what was typed, up to its first comma; else the
+ * geocoder's house number and the street after it; else the place's own
+ * name, the display name's first part; else the word Destination.
+ *
+ * @param {{name?: string, query?: string}|null} place
+ * @returns {string}
+ */
+export function addressName(place) {
+  const typed = String(place?.query || '')
+    .split(',')[0]
+    .trim();
+  if (typed) return typed;
+  const parts = String(place?.name || '')
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const number = parts.findIndex((p) => /^\d+[a-z]?$/i.test(p));
+  if (number >= 0 && parts[number + 1])
+    return `${parts[number]} ${parts[number + 1]}`;
+  return parts[0] || 'Destination';
 }
 
 /**
@@ -624,7 +648,9 @@ export function draftPlan({
       .map((f) => [reach(f), f])
       .sort((a, b) => a[0] - b[0])
       .map(([, f]) => f);
-    const room = Math.max(0, DRAFT_LIMIT - 1 - on.length);
+    // Two seats kept for the marks pushed below: the destination and You
+    // are here.
+    const room = Math.max(0, DRAFT_LIMIT - 2 - on.length);
     const keep = new Set([...on, ...off.slice(0, room)]);
     leftOut = features.length - keep.size;
     const kept = features.filter((f) => keep.has(f));
@@ -632,14 +658,36 @@ export function draftPlan({
     features.push(...kept);
   }
 
-  features.push({
-    id: 'you-are-here',
-    class: 'you-are-here',
-    kind: 'point',
-    name: 'You are here',
-    at: [w / 2, h / 2],
-    on: true,
-  });
+  // The typed address is the destination, marked by the cone at the
+  // geocoder's point (the map's center on the first draft) and named by what
+  // was typed. You are here is the reader's own place: the draft carries it
+  // off, at the center, for the person to put where they stand in the
+  // editor (Place You are here, or a drag); nothing prints until they do.
+  features.push(
+    {
+      id: 'destination',
+      class: 'destination',
+      kind: 'point',
+      name: addressName(place),
+      size: DESTINATION_CONE_MM,
+      at: [w / 2, h / 2],
+      on: true,
+    },
+    {
+      id: 'you-are-here',
+      class: 'you-are-here',
+      kind: 'point',
+      name: 'You are here',
+      at: [w / 2, h / 2],
+      on: false,
+    }
+  );
+  plan.meta.address = {
+    name: place?.name || '',
+    typed: place?.query || '',
+    lat: center.lat,
+    lon: center.lon,
+  };
 
   for (const f of features) {
     counts.total += 1;
@@ -650,6 +698,7 @@ export function draftPlan({
       if (isBuilding(f, elements)) counts.buildings += 1;
     } else if (
       f.kind === 'point' &&
+      f.class !== 'destination' &&
       f.class !== 'you-are-here' &&
       f.class !== 'crossing' &&
       !CURB_CLASSES.has(f.class)

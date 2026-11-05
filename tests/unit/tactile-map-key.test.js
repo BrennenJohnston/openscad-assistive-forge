@@ -79,15 +79,20 @@ function fixture() {
       what: 'Cafe',
       on: false,
     }),
-    point('you-are-here', 'you-are-here', [100, 75], { name: 'You are here' })
+    point('you-are-here', 'you-are-here', [100, 75], { name: 'You are here' }),
+    point('destination', 'destination', [120, 60], {
+      name: '3600 Ferry Place Northeast',
+      size: 4.9,
+    })
   );
   return plan;
 }
 
 describe('keyFor', () => {
-  it('lists You are here first, then the symbols by importance, the lines, the areas; only what the map draws', () => {
+  it('lists the destination with its address first, then You are here, then the symbols by importance, the lines, the areas; only what the map draws', () => {
     const { entries } = keyFor(fixture());
     expect(entries.map((e) => [e.kind, e.name])).toEqual([
+      ['point', 'Destination, 3600 Ferry Place Northeast'],
       ['point', 'You are here'],
       ['point', 'Entrance'],
       ['point', 'Stairs'],
@@ -98,7 +103,14 @@ describe('keyFor', () => {
       ['line', 'Crossing'],
       ['area', 'Area'],
     ]);
-    const here = entries[0];
+    const cone = entries[0];
+    expect([cone.symbolKey, cone.sizeMm, cone.raised, cone.shape]).toEqual([
+      'destination-cone',
+      4.9,
+      false,
+      'a cone 4.9 mm across and 4.9 mm tall, flat at the top',
+    ]);
+    const here = entries[1];
     expect([here.symbolKey, here.sizeMm, here.raised]).toEqual([
       'you-are-here',
       10,
@@ -201,12 +213,17 @@ describe('the key as words', () => {
     const text = keyText(key);
     expect(text).toMatch(/^Key\n/);
     expect(text).toContain(
+      'Destination, 3600 Ferry Place Northeast: a cone 4.9 mm across and 4.9 mm tall, flat at the top'
+    );
+    expect(text).toContain(
       'You are here: a disc 10 mm across with a center dot one step higher'
     );
     expect(text).toContain('pc: Restaurant: Plaza Cafe');
     expect(text).toContain('Walkway: a solid line 1.5 mm wide, low');
     expect(text).toContain('Area: a raised area, low');
-    expect(keySentence(key)).toBe('The key has 9 symbols and 3 abbreviations.');
+    expect(keySentence(key)).toBe(
+      'The key has 10 symbols and 3 abbreviations.'
+    );
   });
 });
 

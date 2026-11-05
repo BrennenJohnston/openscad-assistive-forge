@@ -42,6 +42,11 @@ export const SYMBOL_CHECK_SIZE_MM = 10;
 
 const S3 = Math.sqrt(3);
 const DISC = 'M 0.5 0 A 0.5 0.5 0 1 1 0.5 1 A 0.5 0.5 0 1 1 0.5 0 Z';
+/**
+ * The destination cone's foot and height (mm): Touch Mapper's marker,
+ * BUILDING_HEIGHT_MM 2.9 + 2 tall and half as wide in radius.
+ */
+export const DESTINATION_CONE_MM = 4.9;
 /** A center dot 0.4 of the symbol across: 4 mm on a 10 mm symbol. */
 const CENTER_DOT =
   'M 0.5 0.3 A 0.2 0.2 0 1 1 0.5 0.7 A 0.2 0.2 0 1 1 0.5 0.3 Z';
@@ -118,6 +123,17 @@ export const BUILT_IN_SYMBOLS = [
     minSizeMm: SYMBOL_MIN_SIZE_MM,
     source:
       'BANA 2022 8.5.6 (the most prominent symbol, first in the key); ISO 19028 6.5.1 (the present location higher than the other marks), via Wabinski, Moscicka and Touya 2024: a disc with a 4 mm center dot one symbol step higher',
+  },
+  {
+    key: 'destination-cone',
+    name: 'Destination cone',
+    // The footprint; the model raises the cone itself (solid), 4.9 mm tall
+    // with a flat top 0.6 mm across, from the plate's underside.
+    pathData: DISC,
+    minSizeMm: DESTINATION_CONE_MM,
+    solid: 'cone',
+    source:
+      "Touch Mapper's address marker (skarkkai/touch-mapper, converter/tactile_constants.py and obj-to-tactile.py, AGPL-3.0): a 16-sided cone 4.9 mm tall and 4.9 mm across, its top cut flat at an eighth of the radius so it prints",
   },
   {
     key: 'transit-stop',
