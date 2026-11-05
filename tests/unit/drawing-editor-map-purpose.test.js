@@ -910,3 +910,50 @@ describe('the marks: the destination and You are here', () => {
     expect(placeButton().hidden).toBe(true);
   });
 });
+
+describe("the editor's navigation", () => {
+  const zoomGroup = () => surface.querySelector('.drawing-editor-zoom');
+  const viewBox = () =>
+    surface
+      .querySelector('.drawing-editor-canvas-svg')
+      .getAttribute('viewBox')
+      .split(/\s+/)
+      .map(Number);
+
+  it('offers Pan left, up, down and right beside Fit and the zoom buttons, each moving the view a tenth, and says so in the help', async () => {
+    openMap();
+    await vi.waitFor(() =>
+      expect(
+        surface.querySelectorAll(
+          '.drawing-editor-canvas-svg [data-layer="regions"] path'
+        )
+      ).toHaveLength(3)
+    );
+    expect(zoomGroup().hidden).toBe(false);
+    const names = [...zoomGroup().querySelectorAll('button')].map(
+      (b) => b.getAttribute('aria-label') || b.textContent
+    );
+    expect(names).toEqual([
+      'Fit',
+      'Zoom in',
+      'Zoom out',
+      'Pan left',
+      'Pan up',
+      'Pan down',
+      'Pan right',
+    ]);
+    const [x0, y0, w, h] = viewBox();
+    zoomGroup().querySelector('[data-action="pan-right"]').click();
+    expect(viewBox()[0]).toBeCloseTo(x0 + w / 10, 5);
+    zoomGroup().querySelector('[data-action="pan-down"]').click();
+    expect(viewBox()[1]).toBeCloseTo(y0 + h / 10, 5);
+    zoomGroup().querySelector('[data-action="pan-left"]').click();
+    zoomGroup().querySelector('[data-action="pan-up"]').click();
+    expect(viewBox()[0]).toBeCloseTo(x0, 5);
+    expect(viewBox()[1]).toBeCloseTo(y0, 5);
+    expect(S.mapCanvasHelp).toContain(
+      'Shift and the arrow keys move the picture'
+    );
+    expect(S.canvasHelp).toContain('Shift and the arrow keys move the picture');
+  });
+});

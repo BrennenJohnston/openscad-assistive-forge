@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   puts it down); Place You are here puts the reader's mark at the middle of
   the view, and one Undo takes a whole move back.
 
+### Changed
+
+- The drawing editor's picture moves in every tool: a drag on empty ground
+  pans it with the mouse or a finger, Shift with an arrow key moves it a
+  tenth of the view (the arrow keys alone in the Hand tool), and four pan
+  buttons stand beside Fit and the zoom buttons, on a phone as on a desktop.
+
 ### Fixed
 
 - A place map marks the typed address: a destination cone (Touch Mapper's

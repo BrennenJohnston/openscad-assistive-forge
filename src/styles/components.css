@@ -18423,6 +18423,16 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   box-shadow: inset 0 0 0 1px var(--color-accent);
 }
 
+/* The pan buttons carry one arrow each: a square the size of a finger,
+   the glyph centred and large enough to read at arm's length. */
+.drawing-editor-pan {
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs);
+  font-size: var(--font-size-lg);
+  line-height: 1;
+}
+
 .drawing-editor-paint-select,
 .drawing-editor-merge-select {
   min-height: var(--size-touch-target);

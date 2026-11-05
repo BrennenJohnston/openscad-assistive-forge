@@ -338,6 +338,58 @@ describe('the region canvas', () => {
     expect(canvas.getViewBox().w).toBeLessThan(before.w);
   });
 
+  it('a drag on empty ground pans in every tool, a click on nothing still clears, and a drag that starts on a shape is a click on it', () => {
+    const before = canvas.getViewBox();
+    pointer(canvas.svg, 'pointerdown', 300, 50);
+    // The press still hands the keyboard to the picture.
+    expect(document.activeElement).toBe(canvas.svg);
+    pointer(canvas.svg, 'pointermove', 250, 50);
+    pointer(canvas.svg, 'pointermove', 200, 50);
+    pointer(canvas.svg, 'pointerup', 200, 50);
+    expect(canvas.getViewBox().x).toBeGreaterThan(before.x);
+    expect(canvas.getViewBox().w).toBe(before.w);
+    expect(on.onEmptyClick).not.toHaveBeenCalled();
+    pointer(canvas.svg, 'pointerdown', 300, 50);
+    pointer(canvas.svg, 'pointerup', 300, 50);
+    expect(on.onEmptyClick).toHaveBeenCalledWith(false);
+    canvas.setTool('route');
+    const mid = canvas.getViewBox();
+    pointer(canvas.svg, 'pointerdown', 300, 50);
+    pointer(canvas.svg, 'pointermove', 200, 50);
+    pointer(canvas.svg, 'pointerup', 200, 50);
+    expect(canvas.getViewBox().x).toBeGreaterThan(mid.x);
+    canvas.setTool('select');
+    const a = canvas.svg.querySelector('[data-region="a"]');
+    const vb = canvas.getViewBox();
+    pointer(a, 'pointerdown', 10, 50);
+    pointer(canvas.svg, 'pointermove', 60, 50);
+    pointer(a, 'pointerup', 60, 50);
+    expect(canvas.getViewBox()).toEqual(vb);
+    expect(on.onClick).toHaveBeenLastCalledWith('a', false);
+  });
+
+  it('Shift with an arrow pans a tenth of the view in Select, the bare arrow walks the shapes, in Hand the bare arrow pans too, and panBy moves the view by a fraction', () => {
+    const before = canvas.getViewBox();
+    const key = (k, init = {}) =>
+      canvas.svg.dispatchEvent(
+        new KeyboardEvent('keydown', { key: k, bubbles: true, ...init })
+      );
+    key('ArrowRight', { shiftKey: true });
+    expect(canvas.getViewBox().x).toBeCloseTo(before.x + before.w / 10, 5);
+    expect(on.onHighlight).not.toHaveBeenCalled();
+    key('ArrowDown', { shiftKey: true });
+    expect(canvas.getViewBox().y).toBeCloseTo(before.y + before.h / 10, 5);
+    key('ArrowRight');
+    expect(on.onHighlight).toHaveBeenCalledWith('a');
+    canvas.setTool('hand');
+    const mid = canvas.getViewBox();
+    key('ArrowLeft');
+    expect(canvas.getViewBox().x).toBeCloseTo(mid.x - mid.w / 10, 5);
+    expect(on.onHighlight).toHaveBeenCalledTimes(1);
+    canvas.panBy(0, -0.1);
+    expect(canvas.getViewBox().y).toBeCloseTo(mid.y - mid.h / 10, 5);
+  });
+
   it('arrow keys move the highlight to the next region and say which', () => {
     canvas.svg.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })

@@ -314,6 +314,67 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
         `${Math.round(moved[0] * 10)}:${Math.round((360 - moved[1]) * 10)}`
       );
   });
+
+  test('the picture pans by a drag on empty ground, by Shift with the arrows, by the arrows in the Hand tool, and by four buttons of 44 px', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await openFerryDraft(page);
+    const editor = page.locator('#drawingEditorSurface');
+    const svg = editor.locator('.drawing-editor-canvas-svg');
+    const viewBox = () => svg.getAttribute('viewBox');
+    // The shapes drawn and the view fitted to them, before any move.
+    await expect(
+      editor.locator('[data-layer="regions"] path').first()
+    ).toBeAttached();
+    const before = await viewBox();
+    // The canvas's top left corner is empty ground: a drag there pans
+    // under the Select tool, the tool the editor opens with.
+    await expect(svg).toHaveAttribute('data-tool', 'select');
+    const box = await svg.boundingBox();
+    await page.mouse.move(box.x + 20, box.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 50, box.y + 35, { steps: 4 });
+    await page.mouse.move(box.x + 80, box.y + 50, { steps: 4 });
+    await page.mouse.up();
+    const afterDrag = await viewBox();
+    expect(afterDrag).not.toBe(before);
+    await expect(svg).toHaveAttribute('data-tool', 'select');
+
+    // Shift with an arrow pans; the bare arrow walks the shapes instead.
+    await svg.focus();
+    await page.keyboard.press('Shift+ArrowRight');
+    const afterKey = await viewBox();
+    expect(afterKey).not.toBe(afterDrag);
+    await page.keyboard.press('ArrowRight');
+    expect(await viewBox()).toBe(afterKey);
+    await expect(editor.locator('.drawing-editor-status')).toHaveText(/, /);
+
+    // In the Hand tool the bare arrow pans too.
+    await editor.locator('.drawing-editor-tool[data-tool="hand"]').click();
+    await svg.focus();
+    await page.keyboard.press('ArrowLeft');
+    expect(await viewBox()).not.toBe(afterKey);
+
+    // The four buttons beside Fit, + and -, each the app's touch target:
+    // 44 px where a finger points (the phone case below), 36 px with a
+    // mouse, the desktop value of the token every button here takes.
+    await editor.getByRole('button', { name: 'Fit' }).click();
+    const fitted = await viewBox();
+    for (const name of ['Pan left', 'Pan up', 'Pan down', 'Pan right']) {
+      const b = editor.getByRole('button', { name });
+      await expect(b).toBeVisible();
+      const bb = await b.boundingBox();
+      expect(bb.width, `${name} wide enough`).toBeGreaterThanOrEqual(36);
+      expect(bb.height, `${name} tall enough`).toBeGreaterThanOrEqual(36);
+      await expect(b).toHaveAttribute('aria-label', name);
+    }
+    await editor.getByRole('button', { name: 'Pan right' }).click();
+    expect(await viewBox()).not.toBe(fitted);
+    await editor.getByRole('button', { name: 'Pan left' }).click();
+    expect(await viewBox()).toBe(fitted);
+    await axeClean(page, 'the editor with the pan buttons');
+  });
 });
 
 test.describe('the marks on a phone', () => {
@@ -325,12 +386,8 @@ test.describe('the marks on a phone', () => {
     hasTouch: true,
   });
 
-  test('the cone is dragged by touch', async ({ page, browserName }) => {
-    test.skip(
-      browserName !== 'chromium',
-      "a finger's touch is sent through CDP, which only Chromium has"
-    );
-    test.setTimeout(240_000);
+  /** The Ferry Place draft open in the editor on a phone, by taps. */
+  async function openFerryDraftOnPhone(page) {
     await routeMapServices(page);
     await page.route('https://nominatim.openstreetmap.org/search*', (route) =>
       route.fulfill({
@@ -373,6 +430,44 @@ test.describe('the marks on a phone', () => {
     await expect(
       page.locator('#drawingEditorSurface .drawing-editor').first()
     ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });
+  }
+
+  /** A finger's drag, as the browser sends it. */
+  async function touchDrag(page, from, to) {
+    const cdp = await page.context().newCDPSession(page);
+    const touch = (type, x, y) =>
+      cdp.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: type === 'touchEnd' ? [] : [{ x, y }],
+      });
+    await touch('touchStart', from[0], from[1]);
+    await touch(
+      'touchMove',
+      (from[0] + to[0]) / 2,
+      (from[1] + to[1]) / 2
+    );
+    await touch('touchMove', to[0], to[1]);
+    await touch('touchEnd', 0, 0);
+  }
+
+  /** A finger's tap, as the browser sends it: down and up in one place. */
+  async function touchTap(page, x, y) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x, y }],
+    });
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchEnd',
+      touchPoints: [],
+    });
+  }
+
+  // A finger's touch is sent through CDP, which only Chromium has.
+  test('the cone is dragged by touch', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'a touch through CDP, Chromium only');
+    test.setTimeout(240_000);
+    await openFerryDraftOnPhone(page);
     const editor = page.locator('#drawingEditorSurface');
     const status = editor.locator('.drawing-editor-status');
     const cone = await markRegion(page, '3600 Ferry Pl NE');
@@ -380,21 +475,48 @@ test.describe('the marks on a phone', () => {
     const box = await cone.boundingBox();
     const cx = box.x + box.width / 2;
     const cy = box.y + box.height / 2;
-    const cdp = await page.context().newCDPSession(page);
-    const touch = (type, x, y) =>
-      cdp.send('Input.dispatchTouchEvent', {
-        type,
-        touchPoints: type === 'touchEnd' ? [] : [{ x, y }],
-      });
-    await touch('touchStart', cx, cy);
-    await touch('touchMove', cx + 20, cy + 10);
-    await touch('touchMove', cx + 40, cy + 20);
-    await touch('touchEnd', 0, 0);
+    await touchDrag(page, [cx, cy], [cx + 40, cy + 20]);
     await expect(status).toHaveText(
       /^3600 Ferry Pl NE moved to [\d.]+, [\d.]+ mm\.$/
     );
     const moved = await placeOf(status);
     expect(moved[0]).toBeGreaterThan(240);
     expect(moved[1]).toBeGreaterThan(180);
+  });
+
+  test('a finger on empty ground pans the picture, and the pan buttons stand in the view row', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'a touch through CDP, Chromium only');
+    test.setTimeout(240_000);
+    await openFerryDraftOnPhone(page);
+    const editor = page.locator('#drawingEditorSurface');
+    const svg = editor.locator('.drawing-editor-canvas-svg');
+    // The shapes drawn and the view fitted to them, before any move.
+    await expect(
+      editor.locator('[data-layer="regions"] path').first()
+    ).toBeAttached();
+    const before = await svg.getAttribute('viewBox');
+    // The button first, by a finger: 44 px and a tenth of the view.
+    const right = editor.getByRole('button', { name: 'Pan right' });
+    await right.scrollIntoViewIfNeeded();
+    await expect(right).toBeInViewport();
+    const bb = await right.boundingBox();
+    expect(bb.width).toBeGreaterThanOrEqual(44);
+    expect(bb.height).toBeGreaterThanOrEqual(44);
+    await touchTap(page, bb.x + bb.width / 2, bb.y + bb.height / 2);
+    await expect.poll(() => svg.getAttribute('viewBox')).not.toBe(before);
+    const afterTap = await svg.getAttribute('viewBox');
+    // Then a finger on empty ground drags the picture.
+    await svg.scrollIntoViewIfNeeded();
+    const box = await svg.boundingBox();
+    await touchDrag(
+      page,
+      [box.x + 20, box.y + 20],
+      [box.x + 80, box.y + 60]
+    );
+    await expect.poll(() => svg.getAttribute('viewBox')).not.toBe(afterTap);
+    await expect(svg).toHaveAttribute('data-tool', 'select');
   });
 });
