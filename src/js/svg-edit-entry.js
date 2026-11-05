@@ -27,7 +27,11 @@ import { createTraceRunner, TraceCancelled } from './trace-runner.js';
 import { createConversionJob, TraceRefused } from './conversion-job.js';
 import { createConversionDialog } from './conversion-dialog.js';
 import { COST_BANDS, quickLook } from './quick-look.js';
-import { cropImageDataRect, imageDataToDataUrl } from './image-crop.js';
+import {
+  cropImageDataRect,
+  imageDataToDataUrl,
+  insetRect,
+} from './image-crop.js';
 import { EDITOR_STRINGS as EDITOR_S } from './drawing-editor/strings.js';
 import { DEFAULT_DESIGN_WIDTH_MM } from './svg-preparer-workspace.js';
 
@@ -391,6 +395,9 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
             : `${currentFileName} has no shapes Forge can work with. ` +
               `A photo needs dark lines on a light background to trace.`;
       fail(reason);
+      // The panel's waiting line would otherwise stand as if the trace
+      // were still running.
+      if (inkControls) inkControls.setFailed(reason);
       return false;
     }
 
@@ -444,16 +451,32 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
    * result. A picture is cropped in its pixels and traced again, through the
    * same dialog as the first trace; a drawing is clipped, the clip loading
    * with the ring engine on demand. One level of undo, this session.
+   *
+   * The rectangle is in the drawing's units. For a traced picture those are
+   * the pixels of the copy the trace worked on, smaller than the picture
+   * itself when the picture was over the pixel cap, so the picture is
+   * cropped by the insets instead: shares of the whole, the same on the copy
+   * and on the picture.
    */
-  async function handleCrop(rect) {
+  async function handleCrop(rect, insets) {
     if (!currentShown) return;
     const before = {
       imageData: currentImageData,
       sourceDataUrl: currentSourceDataUrl,
       shown: currentShown,
+      undo: cropUndo,
     };
     if (currentImageData) {
-      const cropped = cropImageDataRect(currentImageData, rect);
+      const pixelRect = insetRect(
+        {
+          x: 0,
+          y: 0,
+          width: currentImageData.width,
+          height: currentImageData.height,
+        },
+        insets
+      );
+      const cropped = cropImageDataRect(currentImageData, pixelRect);
       currentImageData = cropped;
       currentSourceDataUrl = imageDataToDataUrl(cropped);
       const settings = inkControls
@@ -467,11 +490,19 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
           { startedBy: 'person' }
         );
         cropUndo = before;
-        await showSvg(svg, {
+        const shown = await showSvg(svg, {
           summary,
           removeCredit: true,
           announceOpen: (shapes) => EDITOR_S.cropped(shapes),
         });
+        if (!shown) {
+          // The crop kept nothing to trace: the editor still shows the
+          // drawing it showed, so the pixels go back to the ones it came
+          // from, and there is no crop to undo.
+          currentImageData = before.imageData;
+          currentSourceDataUrl = before.sourceDataUrl;
+          cropUndo = before.undo;
+        }
       } catch (error) {
         // Stopped, or failed: the pixels go back to what they were and the
         // editor is still showing the drawing it showed.
