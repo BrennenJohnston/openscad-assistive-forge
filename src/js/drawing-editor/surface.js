@@ -790,6 +790,16 @@ export function createDrawingEditor({
   // The workspace hears its buttons through the footer they left: More has
   // to pass their presses on, or Save, Keep original and Reset do nothing.
   morePanel.addEventListener('click', workspace.footerClick);
+  /**
+   * On the standalone door Save (and Save DXF, for a drawing that came in as
+   * one) is the main action, since there is no model and so no Apply, and a
+   * main action does not wait behind More: they keep their place on the row
+   * there, and go behind More wherever Apply leads.
+   */
+  function placeSave(onRow) {
+    if (onRow) refs.footer.append(refs.saveBtn, refs.saveDxfBtn);
+    else morePanel.prepend(refs.saveBtn, refs.saveDxfBtn);
+  }
   // The map purpose's column name, above the list the menus sit in.
   const classHeading = document.createElement('p');
   classHeading.className = 'drawing-editor-class-heading';
@@ -1211,6 +1221,7 @@ export function createDrawingEditor({
     // a tile of plates, and a control labeled Charm would be naming something
     // that is not there.
     viewSwitch.hidden = rest.mode === 'file' || purpose !== 'relief';
+    placeSave(rest.mode === 'file');
     syncRenderCharm();
     isOpen = true;
     currentSvg = svgString;

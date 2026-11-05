@@ -18006,6 +18006,23 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
     flex-direction: column;
   }
 
+  /* A row is two lines here: the name and its marks, then the switches with
+     More at the end, each line centred on itself. */
+  .drawing-editor-panel .svg-prep-object {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+
+  .drawing-editor-panel .svg-prep-role-group,
+  .drawing-editor-panel .drawing-editor-class-select {
+    grid-column: 1 / 4;
+    grid-row: 2;
+  }
+
+  .drawing-editor-panel .svg-prep-more-btn {
+    grid-column: 4;
+    grid-row: 2;
+  }
+
   .drawing-editor-panel {
     position: static;
     width: 100%;
@@ -18115,16 +18132,18 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   flex-direction: column;
 }
 
+/* The workspace grows into the room the stage has and never below what its
+   pane needs: shrunk past that, the pane spilled over whatever follows the
+   workspace in the stage (the standalone door's ink settings), and the
+   picture sat over controls a person was pressing. */
 .drawing-editor-stage .svg-prep-workspace {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  min-height: 0;
 }
 
 .drawing-editor-stage .svg-prep-previews {
   flex: 1 1 auto;
-  min-height: 0;
 }
 
 .drawing-editor-stage .svg-prep-pane-wrap {
@@ -18172,11 +18191,14 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 }
 
 /* ── A row on one line ───────────────────────────────────────────────────
-   Name above its mark, the switches and More beside them, so the side panel's
-   304 px at a 1280 window holds a row in one line where it took two. */
+   The mark, the name, its thin mark and warning, the switches and More, each
+   in a column of its own on one row, so the side panel's 304 px at a 1280
+   window holds a row in one line where it took two, and every piece of the
+   row sits on the same centre line. (Columns the row does not use are
+   empty, and cost nothing but a gap.) */
 .drawing-editor-panel .svg-prep-object {
   display: grid;
-  grid-template-columns: auto minmax(5ch, 1fr) auto auto;
+  grid-template-columns: auto minmax(5ch, 1fr) auto auto auto auto;
   align-items: center;
   column-gap: var(--space-2xs);
   padding: var(--space-2xs);
@@ -18184,29 +18206,34 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 
 .drawing-editor-panel .svg-prep-object-name {
   grid-column: 2;
+  grid-row: 1;
   min-width: 0;
 }
 
 .drawing-editor-panel .svg-prep-swatch {
   grid-column: 1;
-  grid-row: 1 / span 2;
+  grid-row: 1;
+}
+
+.drawing-editor-panel .svg-prep-thin-mark {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.drawing-editor-panel .svg-prep-object-warning {
+  grid-column: 4;
+  grid-row: 1;
 }
 
 .drawing-editor-panel .svg-prep-role-group,
 .drawing-editor-panel .drawing-editor-class-select {
-  grid-column: 3;
-  grid-row: 1 / span 2;
+  grid-column: 5;
+  grid-row: 1;
 }
 
 .drawing-editor-panel .svg-prep-more-btn {
-  grid-column: 4;
-  grid-row: 1 / span 2;
-}
-
-.drawing-editor-panel .svg-prep-object-warning,
-.drawing-editor-panel .svg-prep-thin-mark {
-  grid-column: 2;
-  justify-self: start;
+  grid-column: 6;
+  grid-row: 1;
 }
 
 .drawing-editor-panel .svg-prep-more-panel {

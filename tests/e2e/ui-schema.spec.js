@@ -2334,26 +2334,38 @@ async function expectS9Movement(page, size, { svg, shape, empty }) {
     .soft(afterDrag[0], 'S9: a drag on empty ground pans')
     .toBeLessThan(atFit[0]);
 
-  // A shape chosen on the picture opens the list on its row.
+  // A shape chosen on the picture opens the list on its row: the row marked
+  // chosen, or, in the map purpose, the row whose Class menu took the focus.
+  // Fit first, so the drag above has not carried the shape out of view.
+  await buttons.nth(0).click();
   await shape.click({ force: true });
   await expect(
     page.locator('#drawingEditorSurface details[data-section="regions"]')
   ).toHaveAttribute('open', '');
-  const row = page
-    .locator('#drawingEditorSurface .svg-prep-object--selected')
-    .first();
-  await expect(row).toBeVisible();
-  const inView = await page.evaluate(() => {
-    const chosen = document.querySelector(
-      '#drawingEditorSurface .svg-prep-object--selected'
-    );
-    const list = chosen?.closest('.svg-prep-objects');
-    if (!chosen || !list) return null;
-    const a = chosen.getBoundingClientRect();
-    const b = list.getBoundingClientRect();
-    return a.top >= b.top - 1 && a.bottom <= b.bottom + 1;
-  });
-  expect.soft(inView, "S9: the chosen row is in the list's view").toBe(true);
+  const chosenRow = () =>
+    page.evaluate(() => {
+      const marked = document.querySelector(
+        '#drawingEditorSurface .svg-prep-object--selected'
+      );
+      const row =
+        marked || document.activeElement?.closest?.('.svg-prep-object') || null;
+      if (!row) return null;
+      const list = row.closest('.svg-prep-objects') || row.parentElement;
+      const a = row.getBoundingClientRect();
+      const b = list.getBoundingClientRect();
+      return {
+        shown: a.height > 0,
+        inView: a.top >= b.top - 1 && a.bottom <= b.bottom + 1,
+      };
+    });
+  await expect
+    .poll(async () => (await chosenRow()) !== null, { timeout: 5_000 })
+    .toBe(true);
+  const chosen = await chosenRow();
+  expect.soft(chosen.shown, 'S9: the chosen row is on screen').toBe(true);
+  expect
+    .soft(chosen.inView, "S9: the chosen row is in the list's view")
+    .toBe(true);
 }
 
 for (const size of S9_SIZES) {
@@ -2398,8 +2410,9 @@ for (const size of S9_SIZES) {
       await expect(svg).toBeVisible();
       await expectS9Movement(page, size, {
         svg,
+        // The hit paths are the only part of the picture a pointer can hit.
         shape: page
-          .locator('#drawingEditorSurface .svg-prep-result-pane .svg-prep-standin-path')
+          .locator('#drawingEditorSurface .svg-prep-result-pane .svg-prep-hit-path')
           .nth(1),
         empty: { x: 4, y: 4 },
       });
