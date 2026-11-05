@@ -1151,6 +1151,21 @@ describe('what the map file holds, told to the model', () => {
       () => expect(params().map_file_kind).toBe('drawing'),
       SETTLE
     );
+    // The panel's next pass (here, a new bed) leaves the drawing in the
+    // control: its own file waits for the classes.
+    const written = files.length;
+    const bed = document.getElementById('tactileMapBed');
+    bed.value = 'custom';
+    bed.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('tactileMapBedWidth').value = '300';
+    document.getElementById('tactileMapBedDepth').value = '300';
+    document
+      .getElementById('tactileMapBedWidth')
+      .dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(summary()).toMatch(/^\d+ plates of/), SETTLE);
+    expect(params().map_file.name).toBe('station.svg');
+    expect(params().map_file_kind).toBe('drawing');
+    expect(files.length).toBe(written);
     // A levels file a person saved and chose again is levels.
     const saved = files[files.length - 1].svg;
     stateManager.setState({

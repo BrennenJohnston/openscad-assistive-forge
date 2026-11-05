@@ -407,6 +407,10 @@ class MapPanel {
     // drawing's classes; Edit drawing as a map reopens that source.
     this.source = null;
     this.lastPictureData = null;
+    // Whether the file control holds a picture of the person's own rather
+    // than this panel's levels file: the panel's file then waits for the
+    // drawing's classes instead of writing over it.
+    this.holdsDrawing = false;
     this.drawingWidthMm = null;
     this.planWarnings = [];
     this.running = false;
@@ -752,14 +756,15 @@ class MapPanel {
     if (data === this.lastPictureData) return;
     this.lastPictureData = data;
     const picture = this.currentPicture();
+    this.holdsDrawing = Boolean(picture) && !isLevelsFile(picture.svg);
     if (picture) {
       // After the file control's own change has reached the preview: its
       // handler hands the preview the values it had, without this one, and
       // the preview renders the last values it was given.
-      const kind = isLevelsFile(picture.svg) ? 'levels' : 'drawing';
+      const kind = this.holdsDrawing ? 'drawing' : 'levels';
       queueMicrotask(() => this.setFileKind(kind));
     }
-    if (!picture || isLevelsFile(picture.svg)) return;
+    if (!this.holdsDrawing) return;
     const svg = filledOutlines(picture.svg);
     if (this.drawing && this.drawing.svg === svg) return;
     this.drawing = {
@@ -2820,11 +2825,15 @@ class MapPanel {
         coneRows(cones, frame, edge)
       );
     }
-    this.setFileKind('levels');
-    if (!this.setFile(this.config.mapFileParam, fileName, svg)) {
-      console.warn(
-        `[MapPanel] No file control for parameter: ${this.config.mapFileParam}`
-      );
+    // A drawing chosen in the control stays there until its shapes are
+    // classed: the model raises it whole, and this file would replace it.
+    if (!this.holdsDrawing || this.drawing?.regions) {
+      this.setFileKind('levels');
+      if (!this.setFile(this.config.mapFileParam, fileName, svg)) {
+        console.warn(
+          `[MapPanel] No file control for parameter: ${this.config.mapFileParam}`
+        );
+      }
     }
     if (this.previewManager()) {
       this.paper = this.paperFor({
