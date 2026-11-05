@@ -1300,6 +1300,12 @@ test.describe('the shapes you left out, and a view you can steer', () => {
     // Held by its index from here: the locator above would resolve to the
     // next raised row once this one is set to Ignore.
     const row = page.locator(`.svg-prep-object[data-index="${index}"]`);
+    // The panel's bottom rows sit under the messages bar at the foot of the
+    // preview; a forced click on a radio there lands on the bar. The row is
+    // brought to the middle of the panel before each press.
+    const centre = () =>
+      row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    await centre();
     await row
       .locator('input[type=radio][value="ignore"]')
       .check({ force: true });
@@ -1315,6 +1321,7 @@ test.describe('the shapes you left out, and a view you can steer', () => {
       editor.locator('.svg-prep-live, [aria-live="polite"].sr-only').first()
     ).toContainText(/1 of \d+ shapes selected\./, { timeout: 10000 });
     // Back to Raised from its row: it is ink again.
+    await centre();
     await row
       .locator('input[type=radio][value="foreground"]')
       .check({ force: true });
@@ -2275,7 +2282,9 @@ test.describe('Reset puts the Layer column back and says so', () => {
     // Reset: the layer select goes back to 1, and the sentence names roles,
     // offsets and layers. Reset waits behind More.
     await openMore();
-    await editor.locator('.drawing-editor-more-panel [data-action="reset"]').click();
+    await editor
+      .locator('.drawing-editor-more-panel [data-action="reset"]')
+      .click();
     await expect(layer).toHaveValue('1');
     await expect(offset).toHaveValue('0');
     await expect(
