@@ -165,7 +165,7 @@ Line_20 = "";
 /* [Card Size] */
 // Auto-size the card face to fit the braille text plus margins. Turn Off to use the manual width/height below.
 auto_size_card = "On"; // [On, Off]
-// Margin between the braille block and the card edges when auto-sizing (mm)
+// Clear space between the braille block and the card edges (mm). The card grows around it when auto-sizing; on a fixed size it sets how many cells and rows fit.
 auto_size_margin_mm = 6;     // [2:0.5:20]
 // Manual face width (mm) - only used when auto_size_card = Off
 card_face_width_mm = 200;    // [40:1:300]

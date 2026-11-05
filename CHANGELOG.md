@@ -33,6 +33,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The braille card counts its rows and cells as the model prints them, so a
+  business card holds four rows at the default margin where three were
+  counted before; a margin or rows-per-card value typed in the Customizer
+  now sets the panel's Margin and Max rows per card instead of being
+  written back over at the next change. The Business card preset also sets
+  6.2 mm between cells and a 5 mm margin, the spacing of the Braille
+  Authority's business card examples: 13 cells and 4 rows.
 - A place map marks the typed address: a destination cone (Touch Mapper's
   marker, 4.9 mm tall) stands at the address and the key names it first
   with the address; a route's end carries the same cone. You are here is

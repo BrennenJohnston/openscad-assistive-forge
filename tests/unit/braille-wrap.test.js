@@ -119,7 +119,7 @@ describe('countCells', () => {
 });
 
 describe('computeCapacity', () => {
-  it('matches the wedge card defaults (85mm card, 6mm margin, 7mm cells)', () => {
+  it('counts cells and rows as the model prints them (85 mm card, 6 mm margin, 7 mm cells)', () => {
     const { cellsPerLine, rowsPerCard } = computeCapacity({
       cardWidthMm: 85,
       cardHeightMm: 55,
@@ -128,9 +128,65 @@ describe('computeCapacity', () => {
       lineSpacingMm: 10,
       maxRowsPerCard: 5,
     });
-    // floor((85 - 12) / 7) = 10, floor((55 - 12) / 10) = 4
+    // n cells span (n - 1) pitches plus a cell's own 4.1 mm of dots:
+    // floor((85 - 12 - 4.1) / 7) + 1 = 10; rows the same with a cell's
+    // 6.6 mm height: floor((55 - 12 - 6.6) / 10) + 1 = 4.
     expect(cellsPerLine).toBe(10);
     expect(rowsPerCard).toBe(4);
+  });
+
+  it('a business card at the default margin holds 11 cells and 4 rows', () => {
+    const { cellsPerLine, rowsPerCard } = computeCapacity({
+      cardWidthMm: 89,
+      cardHeightMm: 51,
+      marginMm: 6,
+      cellSpacingMm: 7,
+      lineSpacingMm: 10.1,
+      maxRowsPerCard: 8,
+    });
+    // Four rows stand (3 x 10.1) + 6.6 = 36.9 mm tall, inside the 39 mm
+    // between the margins; a fifth would need 47 mm.
+    expect(cellsPerLine).toBe(11);
+    expect(rowsPerCard).toBe(4);
+  });
+
+  it('the default 200 x 100 card holds 27 cells and 9 rows', () => {
+    const { cellsPerLine, rowsPerCard } = computeCapacity({
+      cardWidthMm: 200,
+      cardHeightMm: 100,
+      marginMm: 6,
+      cellSpacingMm: 7,
+      lineSpacingMm: 10.1,
+      maxRowsPerCard: 20,
+    });
+    expect(cellsPerLine).toBe(27);
+    expect(rowsPerCard).toBe(9);
+  });
+
+  it('the dots count: dots 3 mm wider take a cell and a row away', () => {
+    const tight = computeCapacity({
+      cardWidthMm: 89,
+      cardHeightMm: 51,
+      marginMm: 6,
+      cellSpacingMm: 7,
+      lineSpacingMm: 10.1,
+      maxRowsPerCard: 8,
+      dotSpacingMm: 2.5,
+      dotDiameterMm: 1.6,
+    });
+    const wide = computeCapacity({
+      cardWidthMm: 89,
+      cardHeightMm: 51,
+      marginMm: 6,
+      cellSpacingMm: 7,
+      lineSpacingMm: 10.1,
+      maxRowsPerCard: 8,
+      dotSpacingMm: 2.5,
+      dotDiameterMm: 4.6,
+    });
+    // A cell 7.1 mm wide leaves 69.9 mm for the pitches: 9 of them, 10 cells.
+    expect(wide.cellsPerLine).toBe(tight.cellsPerLine - 1);
+    expect(wide.rowsPerCard).toBe(tight.rowsPerCard - 1);
   });
 
   it('caps rows at maxRowsPerCard when the card is tall', () => {
