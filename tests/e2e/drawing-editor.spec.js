@@ -2778,7 +2778,7 @@ test.describe('a map from your drawing, step by step', () => {
     const width = page.locator('#tactileMapDrawingWidth');
     await expect(width).toHaveValue('340');
     // Half as wide: the shapes span 150 x 100 mm, the map 1 mm (half a
-    // wall) around them.
+    // wall) around them, and the sheet's 10 mm band around that.
     await width.fill('170');
     await width.blur();
 
@@ -2802,11 +2802,11 @@ test.describe('a map from your drawing, step by step', () => {
     await next.click();
     await expect(heading).toHaveText('Step 5 of 5: Check and print');
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      /^One plate of 152 x 102 mm; the whole map fits\. The key takes (one plate|\d+ plates)\.$/,
+      /^One plate of 172 x 122 mm; the whole map fits\. The key takes (one plate|\d+ plates)\.$/,
       { timeout: 10000 }
     );
     await expect(page.locator('#param-map_width_mm-spinbox')).toHaveValue(
-      '152',
+      '172',
       { timeout: 10000 }
     );
   });
