@@ -176,7 +176,7 @@ test.describe('the three map types end to end', () => {
       page.locator('#drawingEditorSurface .drawing-editor').first()
     ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });
     await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
-      /^Route map ready: a \d+ m walk from Husky Union Building to East Stevens Way NE & Benton Ln, .* The journey: 22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony\. The key has \d+ symbols? and \d+ abbreviations?\.$/,
+      /^Route map ready: a \d+ m walk from Husky Union Building to East Stevens Way NE & Benton Ln, .* The journey: 22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony\. The key has \d+ symbols? and \d+ numbered places?\.$/,
       { timeout: 60000 }
     );
     const stop = await page.evaluate(

@@ -21,6 +21,7 @@
 import { ringsToPathData, union } from '../ring-geometry.js';
 import { activeLibrary } from './symbol-library.js';
 import { featureNames } from './feature-names.js';
+import { numberedName } from './map-numbers.js';
 import {
   BUILTIN_SYMBOLS,
   DEFAULT_SETTINGS,
@@ -102,7 +103,7 @@ export function drawingFromPlan(plan, settings = {}, { order = null } = {}) {
     const fillRule = f.kind === 'area' ? ' fill-rule="evenodd"' : '';
     return (
       `<path data-feature="${escapeAttr(f.id)}" data-colour="draft"` +
-      ` data-name="${escapeAttr(names[i])}"${fillRule} d="${d}"/>`
+      ` data-name="${escapeAttr(numberedName(f, names[i]))}"${fillRule} d="${d}"/>`
     );
   });
   return (

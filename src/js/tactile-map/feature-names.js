@@ -39,7 +39,7 @@ function whatWord(f) {
 }
 
 /** A point that stands for the feature: its place, its middle, or its box's center. */
-function anchorOf(f) {
+export function anchorOf(f) {
   if (Array.isArray(f.at)) return f.at;
   const pts = f.points || f.ring;
   if (!Array.isArray(pts) || pts.length === 0) return null;
@@ -85,7 +85,7 @@ function insideRing(p, ring) {
 }
 
 /** How far a point is from a feature: its place, its line, or its outline (0 inside). */
-function distanceTo(f, p) {
+export function distanceTo(f, p) {
   if (Array.isArray(f.at)) return Math.hypot(f.at[0] - p[0], f.at[1] - p[1]);
   const pts = f.points || f.ring;
   if (!Array.isArray(pts) || pts.length === 0) return Infinity;

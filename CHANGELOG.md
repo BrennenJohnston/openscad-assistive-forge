@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Numbers replace the two-letter codes on a tactile map: the key lists every
+  named thing as "3 Building: Haring Center", counted out from the address,
+  or in walking order on a route, and a name that fits goes on tape at the
+  thing, inside a building when it covers at most half of it.
 - Label tape channels are sized by the app's braille translator, contracted
   UEB (Grade 2) to start or uncontracted on a switch in step 5, instead of
   an estimate; the note under the switch, the README and the PDF say what
@@ -76,6 +80,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   marker, 4.9 mm tall) stands at the address and the key names it first
   with the address; a route's end carries the same cone. You are here is
   no longer dropped at the plate's center as if it were the address.
+- Named buildings on a tactile map have an identifier: they had no label
+  and no row in the key, and the key could list codes found nowhere on the
+  map.
 - Choosing All printed for a tactile map no longer stops the model at the
   default 0.4 mm base: it prints at 1.2 mm, as the setting says.
 

@@ -68,6 +68,7 @@ import {
   settingsForSet,
 } from './levels-svg.js';
 import { keyFor, keySentence, keyText } from './map-key.js';
+import { numberNamed } from './map-numbers.js';
 import {
   keyLabel,
   keyPlates,
@@ -1891,7 +1892,9 @@ class MapPanel {
     const opened = this.plan;
     const order = rowOrder(opened.features);
     const rows = order.map((i) => opened.features[i]);
-    const svg = drawingFromPlan(opened, this.levelSettings(), { order });
+    const svg = drawingFromPlan(numberNamed(opened), this.levelSettings(), {
+      order,
+    });
     const initialClasses = Object.fromEntries(
       rows.map((f, i) => [i, f.on ? f.class : 'ignore'])
     );
@@ -2219,7 +2222,7 @@ class MapPanel {
       extension,
       rendered,
       sets,
-      plan: this.plan,
+      plan: numberNamed(this.plan),
       readme,
       grid,
       pdf: pdf.bytes,
@@ -2309,7 +2312,11 @@ class MapPanel {
       whole,
       plates: [...titles, ...plates, ...keys],
       layout: this.layout,
-      keyLines: keyText(labeled.key).trimEnd().split('\n'),
+      // The labels page draws each label's braille as dots; here it would be
+      // a row of question marks, the fonts having no braille to spell it with.
+      keyLines: keyText({ ...labeled.key, labels: [] })
+        .trimEnd()
+        .split('\n'),
       labels,
       tapeWidthMm: this.tapeWidth(),
       tapeLine: tapeSentence(this.tapeSummary(labeled)),
@@ -2414,7 +2421,7 @@ class MapPanel {
   labeled() {
     if (this.source !== 'draft') {
       return {
-        plan: this.plan,
+        plan: numberNamed(this.plan),
         key: keyFor(this.plan, this.levelSettings()),
         warnings: [],
       };
@@ -2460,7 +2467,12 @@ class MapPanel {
 
   /** Every text the labels and the key put on tape. */
   tapeTexts(labeled) {
-    const texts = (labeled.labels || []).map((l) => l.text);
+    // Every numbered thing's name, placed or not: whether a name fits turns
+    // on its measured cells, so one pass settles the labels and the note
+    // never speaks a figure it then takes back.
+    const texts = (labeled.plan?.features || [])
+      .filter((f) => f.number)
+      .map((f) => f.name);
     if (this.config.plateKindParam) {
       for (const row of keyRows(labeled.key, this.keyTitle())) {
         texts.push(row.say);

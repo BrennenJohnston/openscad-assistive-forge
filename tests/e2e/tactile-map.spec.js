@@ -325,7 +325,7 @@ test.describe('Tactile Map tile', () => {
     expect(download.suggestedFilename()).toBe('tactile_map_print.pdf');
     const bytes = readFileSync(await download.path());
     expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
-    expect(bytes.toString('latin1')).toMatch(/\(the waiting area\) Tj/);
+    expect(bytes.toString('latin1')).toMatch(/\(\d+ the waiting area\) Tj/);
     await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
       'The PDF is in tactile_map_print.pdf.'
     );
@@ -804,7 +804,7 @@ test.describe('the draft map', () => {
         .first();
     const cafe = rowOf('Restaurant: Plaza Cafe');
     await expect(cafe.locator('.svg-prep-object-name')).toHaveText(
-      'Restaurant: Plaza Cafe'
+      /^\d+ Restaurant: Plaza Cafe$/
     );
     await expect(cafe.locator('.drawing-editor-class-select')).toHaveValue(
       'landmark'
@@ -961,7 +961,7 @@ test.describe('the draft map', () => {
     const status = page.locator('#tactileMapAddressStatus');
     await expect(status).toContainText('Draft map ready: ', { timeout: 15000 });
     await expect(status).toHaveText(
-      / The key has \d+ symbols and \d+ abbreviations\.$/
+      / The key has \d+ symbols and \d+ numbered places\.$/
     );
     await expect(
       page.locator('#drawingEditorSurface .drawing-editor').first()
@@ -971,18 +971,18 @@ test.describe('the draft map', () => {
     await expect(page.locator('#tactileMapSummary')).toContainText(
       'The key takes'
     );
-    // The named places get channels for their braille labels; the one with
-    // no room is said and keyed.
+    // The named places get channels for their braille labels; one with no
+    // room carries its number, and the key names it.
     const levels = await page.evaluate(() => {
       const d = window.stateManager.getState().parameters.map_file?.data || '';
       const body = d.split(',')[1] || '';
       return d.includes(';base64,') ? atob(body) : decodeURIComponent(body);
     });
     expect(levels).toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
-    await expect(page.locator('#tactileMapWarnings li')).toContainText([
-      "No room for Parking: South Campus Garage's label; it is in the key as sc.",
-    ]);
-    // The ready sentence counts the warnings step 5 lists, labels included.
+    await expect(page.locator('#tactileMapWarnings')).not.toContainText(
+      'No room for'
+    );
+    // The ready sentence counts the warnings step 5 lists.
     const said = Number(
       (await status.textContent()).match(/; (\d+) warnings?\./)?.[1] ?? 0
     );
@@ -996,7 +996,8 @@ test.describe('the draft map', () => {
     );
     // The key plates are the map's plate size; on the trimmed map's 189 mm
     // plates a long row wraps onto two strips, so the pieces are joined.
-    expect(tape.join(' ')).toContain('pc restaurant: plaza cafe');
+    expect(tape.join(' ')).toMatch(/\b\d+ restaurant: plaza cafe\b/);
+    expect(tape.join(' ')).toMatch(/\b\d+ parking: south campus garage\b/);
     // The labels' tape, measured by the braille translator in the grade
     // chosen: contracted UEB to start, uncontracted on a switch, the note
     // saying each and what the other would need.
@@ -1004,17 +1005,17 @@ test.describe('the draft map', () => {
     await expect(grade).toHaveValue('g2');
     const tapeNote = page.locator('#tactileMapTapeNote');
     await expect(tapeNote).toHaveText(
-      /^Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels, \d+ cells, about \d+ mm of 12\.7 mm tape; uncontracted would need about \d+ mm\.$/,
+      /^Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; uncontracted would need about \d+ mm\.$/,
       { timeout: 30000 }
     );
     const contracted = (await tapeNote.textContent()).match(/about (\d+) mm of/)[1];
     const uncontracted = (await tapeNote.textContent()).match(/need about (\d+) mm/)[1];
     expect(Number(uncontracted)).toBeGreaterThan(Number(contracted));
     await grade.selectOption('g1');
+    // Fewer names keep within six cells uncontracted, so the labels themselves
+    // change with the grade; the other figure is the same labels' tape.
     await expect(tapeNote).toHaveText(
-      new RegExp(
-        `^Label tape: uncontracted braille \\(Grade 1\\)\\. \\d+ labels, \\d+ cells, about ${uncontracted} mm of 12\\.7 mm tape; contracted would need about ${contracted} mm\\.$`
-      ),
+      /^Label tape: uncontracted braille \(Grade 1\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; contracted would need about \d+ mm\.$/,
       { timeout: 30000 }
     );
     await grade.selectOption('g2');
@@ -1030,7 +1031,7 @@ test.describe('the draft map', () => {
     );
     expect(destinationRow).toBeGreaterThan(-1);
     expect(destinationRow).toBeLessThan(
-      tape.findIndex((t) => t.startsWith('pc restaurant:'))
+      tape.findIndex((t) => /^\d+ /.test(t))
     );
     const keyRadio = page.locator(
       'input[name="tactileMapPlate"][value^="key"]'

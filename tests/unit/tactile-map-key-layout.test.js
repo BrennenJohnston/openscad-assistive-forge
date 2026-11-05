@@ -102,7 +102,7 @@ function descentMm(text) {
   return -lowest * size;
 }
 
-const CLINIC = 'uw clinic: university of washington medical center - montlake';
+const CLINIC = '2 clinic: university of washington medical center - montlake';
 
 describe('keyLabel', () => {
   it('names a key plate as the plate list does', () => {
@@ -360,7 +360,7 @@ describe('keyPlates', () => {
     expect(small.length).toBeGreaterThan(1);
     expect(small.map((p) => p.id)).toEqual(small.map((_, i) => `key-${i + 1}`));
     const all = small.flatMap((p) => wordsOf(p).map((r) => r.text));
-    expect(all.some((t) => t.startsWith('UW CLINIC'))).toBe(true);
+    expect(all.some((t) => t.startsWith('2 CLINIC'))).toBe(true);
     expect(all.some((t) => /MONTLAKE$/.test(t))).toBe(true);
   });
 

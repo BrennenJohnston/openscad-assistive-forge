@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { featureNames } from '../../src/js/tactile-map/feature-names.js';
 import { drawingFromPlan } from '../../src/js/tactile-map/plan-drawing.js';
+import { numberNamed } from '../../src/js/tactile-map/map-numbers.js';
 import { buildLevelRings } from '../../src/js/tactile-map/levels-svg.js';
 import { describeElement } from '../../src/js/svg-preparer-workspace.js';
 
@@ -153,6 +154,10 @@ describe('feature names', () => {
   it('writes each name onto its path in the drawing the editor opens', () => {
     const svg = drawingFromPlan(PLAN);
     expect(svg).toContain('data-name="Husky Union Building"');
+    // A numbered plan's rows read with the number first.
+    const numbered = drawingFromPlan(numberNamed(PLAN));
+    expect(numbered).toMatch(/data-name="\d+ Husky Union Building"/);
+    expect(numbered).toContain('data-name="Stairs near Husky Union Building"');
     expect(svg).toContain('data-name="East Stevens Way Northeast (2)"');
     expect(svg).toContain('data-name="Stairs near Husky Union Building"');
   });
