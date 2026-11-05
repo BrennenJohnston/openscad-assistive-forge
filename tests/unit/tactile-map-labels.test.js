@@ -55,6 +55,48 @@ describe('labelPlan', () => {
     ).toEqual([]);
   });
 
+  it('takes the cells from the tape measure when the settings carry one: a measured name fits where the estimate would not, and the labels carry the braille and the grade', () => {
+    const plan = emptyPlan(300, 200);
+    plan.features.push(
+      pt('pine', 'landmark', [80, 100], { name: 'Pine', what: 'Cafe' }),
+      pt('cafe', 'landmark', [200, 100], {
+        name: 'Plaza Cafe',
+        what: 'Restaurant',
+      })
+    );
+    // A stand-in measure: Plaza Cafe contracts to six cells, so its name
+    // fits a label; Pine to four.
+    const braille = { 'plaza cafe': '⠏⠇⠵⠁⠀⠉', pine: '⠏⠔⠑', pc: '⠏⠉' };
+    const tape = {
+      grade: 'g2',
+      measured: true,
+      of: (text) => {
+        const b = braille[String(text).trim().toLowerCase()];
+        return b
+          ? { cells: [...b].length, braille: b, measured: true, grade: 'g2' }
+          : { cells: 99, braille: '', measured: false, grade: 'g2' };
+      },
+    };
+    const { labels, key } = labelPlan(plan, { tape });
+    const byId = Object.fromEntries(labels.map((l) => [l.featureId, l]));
+    expect([byId.cafe.text, byId.cafe.cells, byId.cafe.braille]).toEqual([
+      'Plaza Cafe',
+      6,
+      '⠏⠇⠵⠁⠀⠉',
+    ]);
+    expect([byId.pine.text, byId.pine.cells, byId.pine.braille]).toEqual([
+      'Pine',
+      3,
+      '⠏⠔⠑',
+    ]);
+    expect(byId.pine.grade).toBe('g2');
+    expect(byId.pine.measured).toBe(true);
+    expect(key.abbreviations).toEqual([]);
+    expect(
+      labels.map((l) => l.cells).every((c) => c === 6 || c === 3)
+    ).toBe(true);
+  });
+
   it('says a place whose label has no room is in the key, and keys it even when its name is short', () => {
     const plan = emptyPlan(120, 90);
     // A named place boxed in by walls on every side, 6 mm out.

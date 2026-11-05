@@ -287,6 +287,69 @@ describe('keyPlates', () => {
     }
   });
 
+  it('cuts the channels to the measured cells when the settings carry a tape measure, and a contracted text takes fewer strips', () => {
+    // A stand-in for the translator: every text in half its letters.
+    const tape = {
+      grade: 'g2',
+      measured: true,
+      of: (text) => ({
+        cells: Math.ceil(String(text).trim().length / 2),
+        braille: '',
+        measured: true,
+        grade: 'g2',
+      }),
+    };
+    const measured = keyPlates(keyFor(plan()), {
+      ...PLATE,
+      title: 'Ferry Place',
+      settings: { tape },
+    });
+    const texts = measured.flatMap((p) => p.tape);
+    const channels = measured.flatMap((p) => channelsOf(p));
+    expect(channels.length).toBe(texts.length);
+    texts.forEach((text, i) => {
+      expect(channels[i].length).toBe(channelLengthMm(tape.of(text).cells));
+    });
+    const pieces = (list) => {
+      const first = list.findIndex((t) => CLINIC.startsWith(t));
+      const parts = [];
+      for (let i = first; i < list.length; i += 1) {
+        parts.push(list[i]);
+        if (parts.join(' ') === CLINIC) break;
+      }
+      return parts;
+    };
+    const estimated = keyPlates(keyFor(plan()), {
+      ...PLATE,
+      title: 'Ferry Place',
+    }).flatMap((p) => p.tape);
+    expect(pieces(texts).join(' ')).toBe(CLINIC);
+    expect(pieces(texts).length).toBeLessThan(pieces(estimated).length);
+  });
+
+  it('cuts the channels through the plate when the settings say so: the same rectangles in cutouts, channels empty, the texts the same', () => {
+    const recess = keyPlates(keyFor(plan()), { ...PLATE, title: 'Ferry Place' });
+    const through = keyPlates(keyFor(plan()), {
+      ...PLATE,
+      title: 'Ferry Place',
+      settings: { channelsThrough: true },
+    });
+    expect(through.length).toBe(recess.length);
+    // A page's group body: empty on a page whose row carried only words.
+    const groupOf = (svg, id) =>
+      svg.match(new RegExp(`<g id="${id}">(.*?)</g>`))[1];
+    through.forEach((page, i) => {
+      expect(page.tape).toEqual(recess[i].tape);
+      expect(channelsOf(page)).toEqual(channelsOf(recess[i]));
+      expect(groupOf(page.svg, 'channels')).toBe('');
+      expect(groupOf(page.svg, 'cutouts')).toBe(
+        groupOf(recess[i].svg, 'channels')
+      );
+      expect(groupOf(recess[i].svg, 'cutouts')).toBe('');
+    });
+    expect(through.some((p) => groupOf(p.svg, 'cutouts') !== '')).toBe(true);
+  });
+
   it('wraps a long name over lines of words and carries the rows onto a second key plate when the first is full', () => {
     const small = keyPlates(keyFor(plan()), {
       plateW: 240,

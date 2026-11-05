@@ -371,8 +371,11 @@ export function keyFor(plan, settings = {}, { needsKey = new Set() } = {}) {
   // whose label found no room), in order of importance.
   const names = featureNames(all);
   const saidById = new Map(all.map((f, i) => [f.id, names[i]]));
+  // A name's cells by the tape measure when the settings carry one
+  // (tape-cells.js), the estimate otherwise: the same count the labels use.
+  const cellsOf = s.tape?.of ? (text) => s.tape.of(text).cells : labelCells;
   const named = namedPoints(plan).filter(
-    (f) => labelCells(f.name) > LABEL_CELLS || needsKey.has(f.id)
+    (f) => cellsOf(f.name) > LABEL_CELLS || needsKey.has(f.id)
   );
   const taken = new Set();
   const abbreviations = [];
@@ -408,7 +411,14 @@ export function keyText(key) {
   }
   if (key.labels?.length) {
     out.push('', 'Labels to write on braille tape, each for its channel:');
-    for (const l of key.labels) out.push(`- ${l.text}: beside ${l.name}`);
+    for (const l of key.labels) {
+      // The translator's braille, its cells and the channel's length when
+      // the tape was measured (tape-cells.js); the text alone otherwise.
+      const detail = l.braille
+        ? ` (${l.braille}, ${l.cells} ${l.cells === 1 ? 'cell' : 'cells'}${l.lengthMm ? `, ${l.lengthMm} mm` : ''})`
+        : '';
+      out.push(`- ${l.text}${detail}: beside ${l.name}`);
+    }
   }
   return out.join('\n') + '\n';
 }

@@ -33,6 +33,9 @@ const EDGE_CLEARANCE_MM = 9.525;
 /** The widest a letter runs, as a share of the font size, for fitting. */
 const LETTER_ADVANCE = 0.6;
 const CHANNEL_END_MM = 2;
+/** A channel cut right through is edged with a dash (mm): the cut's sign. */
+export const THROUGH_DASH_MM = 2;
+export const THROUGH_GAP_MM = 1.5;
 
 /** The tokens each paper color comes from. */
 export const PAPER_TOKENS = Object.freeze({
@@ -255,6 +258,8 @@ export function paperWords(print, letterMm, plateH) {
  * @param {Array<{text: string, at: number[]}>} [input.texts]
  * @param {ReturnType<typeof paperChannels>} [input.channels]
  * @param {ReturnType<typeof paperWords>} [input.words]
+ * @param {boolean} [input.channelsThrough] - The channels cut right
+ *   through the plate: drawn with a dashed edge
  * @param {string} [input.title]
  * @param {string} [input.plateId]
  * @param {ReturnType<typeof paperColors>} input.colors
@@ -266,6 +271,7 @@ export function mapPaperSvg({
   texts = [],
   channels = [],
   words = [],
+  channelsThrough = false,
   title = '',
   plateId = '',
   colors,
@@ -291,12 +297,15 @@ export function mapPaperSvg({
     parts.push(`<g id="paper-${key}" fill="${fill}">${body}</g>`);
   }
   const channelParts = [];
+  const edge = channelsThrough
+    ? ` stroke-dasharray="${THROUGH_DASH_MM} ${THROUGH_GAP_MM}"`
+    : '';
   for (const ch of channels) {
     const [cx, cy] = ch.at;
     const rw = ch.vertical ? ch.across : ch.length;
     const rh = ch.vertical ? ch.length : ch.across;
     channelParts.push(
-      `<rect x="${say(cx - rw / 2)}" y="${say(cy - rh / 2)}" width="${say(rw)}" height="${say(rh)}" fill="${c.ground}" stroke="${c.channel}" stroke-width="0.4"/>`
+      `<rect x="${say(cx - rw / 2)}" y="${say(cy - rh / 2)}" width="${say(rw)}" height="${say(rh)}" fill="${c.ground}" stroke="${c.channel}" stroke-width="0.4"${edge}/>`
     );
     if (ch.text) {
       const room = Math.max(1, ch.length - 2 * CHANNEL_END_MM);

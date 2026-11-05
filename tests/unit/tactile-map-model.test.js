@@ -106,6 +106,15 @@ describe('the Tactile Map tile', () => {
     expect(src).toMatch(/outside 75 to 450 mm/);
   });
 
+  it('lets All printed raise a thin base to the 1.2 mm wall instead of stopping on it', () => {
+    const src = source();
+    expect(src).toMatch(/_min_wall = 1\.2;/);
+    expect(src).toMatch(
+      /base_eff = \(print_style == "All printed"\) \? max\(base_thickness_mm, _min_wall\) : base_thickness_mm;/
+    );
+    expect(src).not.toMatch(/All printed needs/);
+  });
+
   it('raises a drawing not classed yet whole on the first level, with no level lookups, when the panel says so', () => {
     const src = source();
     const p = params();
