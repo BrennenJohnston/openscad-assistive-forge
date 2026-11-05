@@ -254,6 +254,23 @@ describe("the map's PDF", () => {
     expect(after - before).toBe(8 * 4);
   });
 
+  it('draws a channel cut through the plate with a dashed edge, four dashed lines around its white', () => {
+    const recess = parsePdf(mapPdf(input).bytes).text;
+    expect(recess).not.toMatch(/\] 0 d /);
+    const through = parsePdf(
+      mapPdf({
+        ...input,
+        whole: { ...input.whole, channelsThrough: true },
+        plates: input.plates.map((p) => ({ ...p, channelsThrough: true })),
+      }).bytes
+    ).text;
+    // The whole map's two channels and the plates' pieces of them: four
+    // dashed edges each, the dash 2 mm and the gap 1.5 mm in points.
+    const dashed = through.match(/\[5\.67 4\.25\] 0 d /g) || [];
+    const drawn = input.plates.flatMap((p) => p.channels).length + 2;
+    expect(dashed).toHaveLength(drawn * 4);
+  });
+
   it('scales a plate that does not fit the paper, and says so', () => {
     const big = {
       ...input,

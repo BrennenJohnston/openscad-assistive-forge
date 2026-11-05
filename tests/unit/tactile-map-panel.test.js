@@ -1188,6 +1188,106 @@ describe('the warnings in Check and print', () => {
   });
 });
 
+describe('the tape channels, a recess or cut through', () => {
+  const select = () => document.getElementById('tactileMapChannelCut');
+  const box = () => document.getElementById('tactileMapWarningsBox');
+  const lastSvg = () => files[files.length - 1].svg;
+  const choose = async (key) => {
+    const before = files.length;
+    select().value = key;
+    select().dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(before), SETTLE);
+  };
+  const THROUGH_WARNING =
+    'Cut-through channels leave nothing under the tape on an All printed plate; choose Thin plates for a backing board, or a recess.';
+
+  it('offers a recess first; cut through moves the channels into the cutouts group, the key plates too, and the README says which', async () => {
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    expect(
+      document.querySelector('label[for="tactileMapChannelCut"]').textContent
+    ).toBe('Tape channels');
+    expect([...select().options].map((o) => [o.value, o.textContent])).toEqual(
+      [
+        ['recess', 'A recess with a floor'],
+        ['through', 'Cut through, for a backing board'],
+      ]
+    );
+    expect(select().value).toBe('recess');
+    expect(lastSvg()).toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
+    expect(lastSvg()).toMatch(/<g id="cutouts"><\/g>/);
+    await choose('through');
+    expect(lastSvg()).toMatch(/<g id="channels"><\/g>/);
+    expect(lastSvg()).toMatch(/<g id="cutouts"><path d="[^"]+"\/><\/g>/);
+    // Thin plates have the board under the tape: no warning.
+    expect(box().hidden).toBe(true);
+    const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+    expect(panel.levelSettings().channelsThrough).toBe(true);
+    click('tactileMapRenderAll');
+    const { readme } = await readZip();
+    expect(readme).toContain(
+      'Label channels take 12.7 mm tape, cut right through the plate so the tape lies on the backing board. '
+    );
+  });
+
+  it('warns with All printed, where nothing is under the tape, and stops when the recess or the thin plates come back', async () => {
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    stateManager.setState({
+      parameters: { ...params(), print_style: 'All printed' },
+    });
+    await choose('through');
+    const list = () => [
+      ...document.querySelectorAll('#tactileMapWarnings li'),
+    ].map((li) => li.textContent);
+    await vi.waitFor(() => expect(list()).toEqual([THROUGH_WARNING]), SETTLE);
+    expect(box().hidden).toBe(false);
+    expect(box().querySelector('summary').textContent).toBe('1 warning');
+    await choose('recess');
+    await vi.waitFor(() => expect(box().hidden).toBe(true), SETTLE);
+    await choose('through');
+    await vi.waitFor(() => expect(list()).toEqual([THROUGH_WARNING]), SETTLE);
+    // The print style changed in the Customizer takes the warning away.
+    stateManager.setState({
+      parameters: {
+        ...params(),
+        print_style: 'Thin plates for a backing board',
+      },
+    });
+    await vi.waitFor(() => expect(box().hidden).toBe(true), SETTLE);
+  });
+
+  it('says the warning under the select while it applies, as a polite live region written once', async () => {
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const note = document.getElementById('tactileMapChannelNote');
+    expect(select().getAttribute('aria-describedby')).toBe(
+      'tactileMapChannelNote'
+    );
+    expect(note.getAttribute('aria-live')).toBe('polite');
+    expect(note.textContent).toBe('');
+    // It follows the select, before Key words.
+    expect(select().nextElementSibling).toBe(note);
+    await choose('through');
+    expect(note.textContent).toBe('');
+    const writes = [];
+    new MutationObserver((records) => writes.push(...records)).observe(note, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+    stateManager.setState({
+      parameters: { ...params(), print_style: 'All printed' },
+    });
+    await vi.waitFor(() => expect(note.textContent).toBe(THROUGH_WARNING), SETTLE);
+    // An update that changes nothing writes nothing: a live region speaks
+    // every write, the same sentence or not.
+    const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+    await panel.update();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(writes).toHaveLength(1);
+    await choose('recess');
+    await vi.waitFor(() => expect(note.textContent).toBe(''), SETTLE);
+  });
+});
+
 describe('render every plate and download', () => {
   it('renders the four plates in order into one archive of eleven entries', async () => {
     await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
@@ -1231,7 +1331,7 @@ describe('render every plate and download', () => {
         'Print one of each: A1, A2, B1, B2. ' +
         'Lay them out as the grid reads, row A at the top, column 1 at the left, and glue them edge to edge onto a backing board of 500 x 380 mm. ' +
         'Levels, measured from the underside: base 0.4 mm, then 1.0, 1.8, 2.4 mm. ' +
-        'Label channels take 12.7 mm tape. ' +
+        'Label channels take 12.7 mm tape, a recess with a floor under the tape so it sits nearly flush. ' +
         'Label tape: contracted braille (UEB Grade 2). No labels on the map. ' +
         'The picture plate_grid.svg shows the layout.\n'
     );

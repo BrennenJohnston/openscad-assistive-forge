@@ -305,7 +305,9 @@ export function plateGridSvg({ rings, layout, size, bedName }) {
       body += `<path d="${ringsToPathData(list, 3)}" fill="${GRID_FILLS[level]}" fill-rule="nonzero"/>`;
     }
   }
-  const channels = rings.channels || [];
+  // The whole map's cutouts are the channels cut through: the plates' name
+  // notches join that group only when a plate is split off.
+  const channels = [...(rings.channels || []), ...(rings.cutouts || [])];
   if (channels.length) {
     body += `<path d="${ringsToPathData(channels, 3)}" fill="none" stroke="${GRID_BLUE}" stroke-width="1.2" stroke-dasharray="4 3"/>`;
   }
@@ -415,6 +417,8 @@ function aboutOf(about) {
  *   trimmed to the shapes; nothing when it was not
  * @param {object} [input.tape] - the labels' tape as `tapeSentence` takes
  *   it, with `failed` when the braille engine did not load
+ * @param {boolean} [input.channelsThrough] - the channels cut right through
+ *   the plate for tape on the backing board; a recess with a floor when not
  * @returns {string}
  */
 export function readmeText({
@@ -432,6 +436,7 @@ export function readmeText({
   unspelled = [],
   trimMm = 0,
   tape = null,
+  channelsThrough = false,
 }) {
   const tapeLists = keyTape.filter((k) => k.texts.length);
   const n = layout.plates.length;
@@ -456,7 +461,10 @@ export function readmeText({
     `and glue them edge to edge onto a backing board of ${size.w} x ${size.h} mm. ` +
     `Levels, measured from the underside: base ${mm(heights.base)} mm, ` +
     `then ${heights.tops.map(mm).join(', ')} mm. ` +
-    `Label channels take ${tapeWidthMm} mm tape. ` +
+    `Label channels take ${tapeWidthMm} mm tape, ` +
+    (channelsThrough
+      ? 'cut right through the plate so the tape lies on the backing board. '
+      : 'a recess with a floor under the tape so it sits nearly flush. ') +
     (tape ? `${tapeSentence(tape)} ` : '') +
     (tape?.failed ? `${ENGINE_ESTIMATE_SENTENCE} ` : '') +
     'The picture plate_grid.svg shows the layout.\n' +

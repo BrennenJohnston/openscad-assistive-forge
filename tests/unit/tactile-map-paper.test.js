@@ -126,6 +126,23 @@ describe('the paper of a plate', () => {
     expect(channelRects.match(/<rect /g)).toHaveLength(2);
     expect(channelRects.match(/>Pine<\/text>/g)).toHaveLength(2);
     expect(svg).toMatch(new RegExp(`font-size="${PAPER_LETTER_MM / 0.72}"`));
+    expect(channelRects).not.toContain('stroke-dasharray');
+  });
+
+  it('draws a channel cut through the plate with a dashed edge', () => {
+    const svg = mapPaperSvg({
+      rings,
+      size: plan.size,
+      channels: paperChannels(plan.features, 13.1, () => 'Pine'),
+      channelsThrough: true,
+      colors,
+    });
+    const channelRects = svg.match(/<g id="paper-channels">[^]*?<\/g>/)[0];
+    expect(channelRects.match(/<rect /g)).toHaveLength(2);
+    expect(
+      channelRects.match(/<rect [^>]*stroke-dasharray="2 1\.5"/g)
+    ).toHaveLength(2);
+    expect(channelRects.match(/>Pine<\/text>/g)).toHaveLength(2);
   });
 
   it('writes the title where the raised one stands, the plate name, the key words, and escapes a name', () => {

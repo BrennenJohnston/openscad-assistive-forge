@@ -16505,6 +16505,12 @@ body.tutorial-body-locked {
   display: none;
 }
 
+/* Out of the panel's flow while empty, so it adds no gap, but never display:
+   none: a live region has to be in the tree before its first sentence. */
+.tactile-map-channel-note:empty {
+  position: absolute;
+}
+
 /* A map from a drawing has one door into the editor, step 3's Edit drawing
    as a map: the Map file control's own doors stay out of its step 1. The
    photo's Crop first, beside Start, stays. */

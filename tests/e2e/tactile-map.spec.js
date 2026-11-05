@@ -156,6 +156,75 @@ test.describe('Tactile Map tile', () => {
     );
   });
 
+  test('Tape channels start as a recess; cut through moves them to the cutouts group, and an All printed plate brings a warning', async ({
+    page,
+  }) => {
+    await openTactileMap(page);
+    await goToStep(page, 5);
+    const cut = page.locator('#tactileMapChannelCut');
+    await expect(cut).toHaveValue('recess');
+    await expect(page.locator('label[for="tactileMapChannelCut"]')).toHaveText(
+      'Tape channels'
+    );
+    // The empty note takes no room: the next control stands as far under this
+    // select as any other control does under its own.
+    const gapUnder = (select, label) =>
+      page.evaluate(
+        ([s, l]) =>
+          document.querySelector(l).getBoundingClientRect().top -
+          document.querySelector(s).getBoundingClientRect().bottom,
+        [select, label]
+      );
+    expect(
+      await gapUnder('#tactileMapChannelCut', 'label[for="tactileMapKeyWords"]')
+    ).toBeCloseTo(
+      await gapUnder('#tactileMapIdStyle', 'label[for="tactileMapTapeGrade"]'),
+      1
+    );
+    const levels = () =>
+      page.evaluate(() => {
+        const d = window.stateManager.getState().parameters.map_file?.data;
+        const body = (d || '').split(',')[1] || '';
+        return d?.includes(';base64,') ? atob(body) : decodeURIComponent(body);
+      });
+    await expect
+      .poll(levels, { timeout: 15000 })
+      .toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
+    expect(await levels()).toMatch(/<g id="cutouts"><\/g>/);
+    await cut.selectOption('through');
+    await expect
+      .poll(levels, { timeout: 15000 })
+      .toMatch(/<g id="channels"><\/g>/);
+    expect(await levels()).toMatch(/<g id="cutouts"><path d="[^"]+"\/><\/g>/);
+    // Thin plates have the board under the tape: no warning.
+    await expect(page.locator('#tactileMapWarningsBox')).toBeHidden();
+    // All printed, chosen in the Customizer's folded Print style group.
+    await page
+      .getByRole('button', { name: 'Expand all parameter groups' })
+      .click();
+    await page.locator('#param-print_style').selectOption('All printed');
+    const warning =
+      'Cut-through channels leave nothing under the tape on an All printed plate; choose Thin plates for a backing board, or a recess.';
+    await expect(page.locator('#tactileMapWarnings li')).toHaveText([warning]);
+    await expect(page.locator('#tactileMapWarningsBox summary')).toHaveText(
+      '1 warning'
+    );
+    // The list is folded, so the sentence also stands under the select.
+    const note = page.locator('#tactileMapChannelNote');
+    await expect(note).toHaveText(warning);
+    await expect(note).toBeVisible();
+    await expect(cut).toHaveAttribute(
+      'aria-describedby',
+      'tactileMapChannelNote'
+    );
+    await cut.selectOption('recess');
+    await expect(page.locator('#tactileMapWarningsBox')).toBeHidden();
+    await expect(note).toHaveText('');
+    await expect
+      .poll(levels, { timeout: 15000 })
+      .toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
+  });
+
   test('the button renders the four plates and the key and downloads them as one zip', async ({
     page,
   }) => {

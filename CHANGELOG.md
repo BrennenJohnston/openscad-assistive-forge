@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so the empty plate around a map is not printed; the editor shows the
   trimmed sheet as a dashed frame, and the README says the plates are
   trimmed to the shapes.
+- Tape channels, a choice in step 5: a recess with a floor under the tape,
+  as before, or cut right through the plate so the tape lies on the backing
+  board; the key plates follow, the map paper and the PDF draw a cut-through
+  channel with a dashed edge, the README says which, and a warning says
+  when a cut-through channel would leave nothing under the tape on an All
+  printed plate.
 
 ### Changed
 

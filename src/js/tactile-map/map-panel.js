@@ -61,6 +61,7 @@ import {
   scaleSentence,
 } from './plan-from-drawing.js';
 import {
+  CHANNEL_CUTS,
   DEFAULT_SETTINGS,
   buildLevelRings,
   levelsSvgFromRings,
@@ -154,6 +155,12 @@ const ENGINE_NOT_READY =
   'The OpenSCAD engine has not initialized yet. Please wait or refresh the page.';
 /** A11Y: the note under Braille on tape while the translator measures the labels. */
 export const MEASURING_TAPE = 'Measuring the braille labels';
+/**
+ * A11Y: the warning when the channels are cut through on a plate printed
+ * whole, where no board lies under the tape.
+ */
+export const THROUGH_ALL_PRINTED_WARNING =
+  'Cut-through channels leave nothing under the tape on an All printed plate; choose Thin plates for a backing board, or a recess.';
 /** A11Y: said once when the Alt View comes on with this panel mounted. */
 export const ALT_VIEW_SENTENCE =
   'The Tactile Map Designer is not available in the Alt View. Its controls return when the Alt View is off.';
@@ -346,6 +353,8 @@ class MapPanel {
     this.measuring = null;
     // An engine that failed is not asked again until the grade changes.
     this.tapeStopped = false;
+    // How the channels are cut: a recess with a floor, or right through.
+    this.channelCut = CHANNEL_CUTS[0].key;
     // The sheet: the band around the face and where the title stands; the
     // empty plate around what prints trimmed away for a place map.
     this.marginMm = MARGIN_MM.start;
@@ -492,18 +501,22 @@ class MapPanel {
     this.lastTape = this.tapeWidth();
     this.lastCue = this.northCue();
     this.lastTitle = this.titleKey();
+    this.lastPrintStyle = this.printStyle();
     this.unsubscribe = stateManager.subscribe(() => {
       const tape = this.tapeWidth();
       const cue = this.northCue();
       const title = this.titleKey();
+      const printStyle = this.printStyle();
       if (
         tape !== this.lastTape ||
         cue !== this.lastCue ||
-        title !== this.lastTitle
+        title !== this.lastTitle ||
+        printStyle !== this.lastPrintStyle
       ) {
         this.lastTape = tape;
         this.lastCue = cue;
         this.lastTitle = title;
+        this.lastPrintStyle = printStyle;
         this.schedule();
       }
       this.adoptPicture();
@@ -1161,6 +1174,35 @@ class MapPanel {
     add('bed', tapeNote);
     this.refs.tapeNote = tapeNote;
 
+    // How the channels are cut: a recess with a floor under the tape, or
+    // right through the plate for tape that lies on the backing board.
+    const cutLabel = el('label', 'braille-panel-label', 'Tape channels');
+    cutLabel.htmlFor = 'tactileMapChannelCut';
+    add('bed', cutLabel);
+    const cutSelect = el('select', 'braille-panel-select');
+    cutSelect.id = 'tactileMapChannelCut';
+    for (const cut of CHANNEL_CUTS) {
+      const option = document.createElement('option');
+      option.value = cut.key;
+      option.textContent = cut.name;
+      cutSelect.appendChild(option);
+    }
+    cutSelect.value = this.channelCut;
+    cutSelect.setAttribute('aria-describedby', 'tactileMapChannelNote');
+    cutSelect.addEventListener('change', () => {
+      this.channelCut = cutSelect.value;
+      this.schedule(0);
+    });
+    add('bed', cutSelect);
+    this.refs.channelCut = cutSelect;
+    // Empty unless the warning applies; in the tree from the start, so its
+    // first sentence is spoken.
+    const channelNote = el('p', 'braille-panel-help tactile-map-channel-note');
+    channelNote.id = 'tactileMapChannelNote';
+    channelNote.setAttribute('aria-live', 'polite');
+    add('bed', channelNote);
+    this.refs.channelNote = channelNote;
+
     if (this.config.plateKindParam) {
       const wordsLabel = el('label', 'braille-panel-label', 'Key words');
       wordsLabel.htmlFor = 'tactileMapKeyWords';
@@ -1756,6 +1798,7 @@ class MapPanel {
     const warnings = [
       ...labeled.warnings,
       ...buildLevelRings(labeled.plan, this.levelSettings()).warnings,
+      ...this.channelWarnings(),
     ];
     this.draft = { counts, warnings: warnings.length };
     this.planWarnings = [];
@@ -2161,6 +2204,7 @@ class MapPanel {
       unspelled: pdf.unspelled,
       tape: this.tapeSummary(this.labeled()),
       trimMm: this.trim ? sheet.marginMm : 0,
+      channelsThrough: this.channelCut === 'through',
     });
     const grid = plateGridSvg({
       rings,
@@ -2386,8 +2430,32 @@ class MapPanel {
     return {
       tapeWidthMm: this.tapeWidth(),
       tape: this.tape.view(this.tapeGrade),
+      channelsThrough: this.channelCut === 'through',
       ...settingsForSet(activeSetKey()),
     };
+  }
+
+  /** The tile's print style: All printed has no board under the plate. */
+  printStyle() {
+    return String(stateManager.getState()?.parameters?.print_style || '');
+  }
+
+  /**
+   * The warning step 5 lists when the channels are cut through on a plate
+   * printed whole: nothing would lie under the tape.
+   */
+  channelWarnings() {
+    const bare =
+      this.channelCut === 'through' && this.printStyle() === 'All printed';
+    return bare
+      ? [
+          {
+            code: 'channels-through-all-printed',
+            featureId: null,
+            text: THROUGH_ALL_PRINTED_WARNING,
+          },
+        ]
+      : [];
   }
 
   /** Every text the labels and the key put on tape. */
@@ -2632,10 +2700,16 @@ class MapPanel {
         this.refs.tapeNote.textContent = note;
     }
 
+    const channelWarnings = this.channelWarnings();
+    // Written only on a change: a live region speaks every write.
+    const channelNote = channelWarnings[0]?.text || '';
+    if (this.refs.channelNote.textContent !== channelNote)
+      this.refs.channelNote.textContent = channelNote;
     const allWarnings = [
       ...this.planWarnings,
       ...labeled.warnings,
       ...built.warnings,
+      ...channelWarnings,
     ];
     this.refs.warnings.replaceChildren(
       ...allWarnings.map((warning) => el('li', '', warning.text))
@@ -2822,6 +2896,7 @@ class MapPanel {
       texts,
       channels,
       words,
+      channelsThrough: this.channelCut === 'through',
       title: title ? String(parameters[this.config.titleParam] || '') : '',
       plateId,
     };

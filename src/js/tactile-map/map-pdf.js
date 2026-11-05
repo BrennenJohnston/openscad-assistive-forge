@@ -14,6 +14,7 @@
  */
 
 import { PdfWriter, textWidthMm } from './pdf-writer.js';
+import { THROUGH_DASH_MM, THROUGH_GAP_MM } from './map-paper.js';
 
 /** The papers offered, sideways, the first the default. */
 export const PAPER_SIZES = Object.freeze([
@@ -77,11 +78,33 @@ function drawPlate(w, data, { x, y, scale, colors, seams }) {
     const [cx, cy] = ch.at;
     const rw = (ch.vertical ? ch.across : ch.length) * s;
     const rh = (ch.vertical ? ch.length : ch.across) * s;
-    w.rect(px(cx) - rw / 2, py(cy) - rh / 2, rw, rh, {
-      stroke: channel,
-      fill: [1, 1, 1],
-      widthMm: 0.4,
-    });
+    const x0 = px(cx) - rw / 2;
+    const y0 = py(cy) - rh / 2;
+    if (data.channelsThrough) {
+      // A channel cut right through: its white, then a dashed edge, the
+      // same sign the paper draws (the writer dashes lines, not boxes).
+      w.rect(x0, y0, rw, rh, { stroke: null, fill: [1, 1, 1] });
+      const corners = [
+        [x0, y0],
+        [x0 + rw, y0],
+        [x0 + rw, y0 + rh],
+        [x0, y0 + rh],
+      ];
+      corners.forEach(([ax, ay], i) => {
+        const [bx, by] = corners[(i + 1) % 4];
+        w.line(ax, ay, bx, by, {
+          stroke: channel,
+          widthMm: 0.4,
+          dash: [THROUGH_DASH_MM, THROUGH_GAP_MM],
+        });
+      });
+    } else {
+      w.rect(x0, y0, rw, rh, {
+        stroke: channel,
+        fill: [1, 1, 1],
+        widthMm: 0.4,
+      });
+    }
     if (ch.text) {
       const room = Math.max(1, (ch.length - 2 * CHANNEL_END_MM) * s);
       let pt = NAME_PT;

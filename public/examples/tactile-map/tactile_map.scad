@@ -10,7 +10,9 @@
 // group per height: <g id="level1"> is the floor (platforms, walkways, areas),
 // <g id="level2"> the symbols and routes, <g id="level3"> the walls,
 // <g id="channels"> the strips sunk for label tape, and <g id="cutouts"> what
-// is cut right through the plate (a plate's name as notches on its edge).
+// is cut right through the plate (a plate's name as notches on its edge, and
+// the label channels when the panel's Tape channels cuts them through, for
+// tape that lies on the backing board).
 // Each group is imported on its own by its id and raised to its level, so one
 // file carries the whole map and the heights never drift apart. The Tactile
 // Map Designer panel writes this file; a saved one works the same in desktop
@@ -353,7 +355,10 @@ module channels() {
 }
 
 // What is cut right through the plate: a plate's name as notches on its
-// bottom edge, slots a finger finds and the eye sees from the back.
+// bottom edge, slots a finger finds and the eye sees from the back; and the
+// label channels when the panel writes them here instead of the channels
+// group, so the tape lies on the backing board with nothing of the plate
+// under it (the depth above is then not used).
 module cutouts() {
     if (map_file_kind == "levels")
         translate([0, 0, -_fuse])

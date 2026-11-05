@@ -273,6 +273,19 @@ describe('plateGridSvg', () => {
     );
   });
 
+  it('draws the label channels dashed in blue whether they are a recess or cut through', () => {
+    const plan = sampleStationPlan();
+    const drawn = (settings) =>
+      plateGridSvg({
+        rings: buildLevelRings(plan, settings).rings,
+        layout,
+        size: { w: 480, h: 360 },
+        bedName: x1c.name,
+      }).match(/<path [^>]*stroke-dasharray="4 3"\/>/g);
+    expect(drawn({})).toHaveLength(1);
+    expect(drawn({ channelsThrough: true })).toEqual(drawn({}));
+  });
+
   it('draws the title plates above row A with their names, and says so in the caption', () => {
     const split = planPlates({
       w: 500,
@@ -387,10 +400,23 @@ describe('the README says what the map is', () => {
       tape: { ...measured, measured: false, failed: true },
     });
     expect(readme).toContain(
-      'Label channels take 12.7 mm tape. Label tape: contracted braille (UEB Grade 2), sized by an estimate. 7 labels, 23 cells, about 199 mm of 12.7 mm tape; uncontracted would need about 241 mm. The braille engine did not load; the channels are sized by an estimate. The picture'
+      'Label channels take 12.7 mm tape, a recess with a floor under the tape so it sits nearly flush. Label tape: contracted braille (UEB Grade 2), sized by an estimate. 7 labels, 23 cells, about 199 mm of 12.7 mm tape; uncontracted would need about 241 mm. The braille engine did not load; the channels are sized by an estimate. The picture'
     );
     expect(ENGINE_ESTIMATE_SENTENCE).toBe(
       'The braille engine did not load; the channels are sized by an estimate.'
+    );
+  });
+
+  it('says the channels are a recess with a floor, or cut through for the backing board', () => {
+    const drawing = { ...base, about: { type: 'drawing' } };
+    expect(readmeText(drawing)).toContain(
+      'Label channels take 12.7 mm tape, a recess with a floor under the tape so it sits nearly flush. The picture'
+    );
+    expect(readmeText({ ...drawing, channelsThrough: true })).toContain(
+      'Label channels take 12.7 mm tape, cut right through the plate so the tape lies on the backing board. The picture'
+    );
+    expect(readmeText({ ...drawing, tapeWidthMm: 9.5 })).toContain(
+      'Label channels take 9.5 mm tape, a recess'
     );
   });
 
@@ -481,7 +507,7 @@ describe('the archive and its README', () => {
       tapeWidthMm: 12.7,
     });
     expect(readme).toMatch(
-      /Label channels take 12\.7 mm tape\. The picture plate_grid\.svg shows the layout\.\n$/
+      /Label channels take 12\.7 mm tape, a recess with a floor under the tape so it sits nearly flush\. The picture plate_grid\.svg shows the layout\.\n$/
     );
     const entries = archiveEntries({
       stem: 'm',

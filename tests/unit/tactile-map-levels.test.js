@@ -22,6 +22,7 @@ import {
   strokePolyline,
   STROKE_METHOD,
   BUILTIN_SYMBOLS,
+  CHANNEL_CUTS,
   LEVELS_BY_CLASS,
 } from '../../src/js/tactile-map/levels-svg.js';
 import { offsetRing } from '../../src/js/svg-offset.js';
@@ -452,6 +453,46 @@ describe('the sample station plan', () => {
     const dir = join(tmpdir(), 'tactile-map-levels');
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'sample-plan.svg'), svg);
+  });
+});
+
+describe('tape channels cut through', () => {
+  it('offers a recess first, then a cut through for tape on a backing board', () => {
+    expect(CHANNEL_CUTS.map((c) => [c.key, c.name])).toEqual([
+      ['recess', 'A recess with a floor'],
+      ['through', 'Cut through, for a backing board'],
+    ]);
+  });
+
+  it('writes the channel rectangles into cutouts and leaves channels empty when the settings say through', () => {
+    const plan = sampleStationPlan();
+    const recess = buildLevelRings(plan);
+    const through = buildLevelRings(plan, { channelsThrough: true });
+    expect(recess.rings.channels.length).toBeGreaterThan(0);
+    expect(recess.rings.cutouts).toEqual([]);
+    expect(through.rings.channels).toEqual([]);
+    expect(through.rings.cutouts).toEqual(recess.rings.channels);
+    expect(through.stats.levelsUsed).toBe(recess.stats.levelsUsed);
+    const { svg } = buildLevelsSvg(plan, { channelsThrough: true });
+    const groups = groupsOf(svg);
+    expect(groups.channels).toBe('');
+    expect(ringsOf(groups.cutouts)).toHaveLength(recess.rings.channels.length);
+  });
+
+  it('keeps the clearance check on a channel cut through', () => {
+    const plan = emptyPlan(200, 150);
+    plan.features.push(triangle('t', 50, 50), {
+      id: 'c',
+      class: 'channel',
+      kind: 'channel',
+      at: [50, 62],
+      length: 30,
+      on: true,
+    });
+    const recess = buildLevelRings(plan);
+    const through = buildLevelRings(plan, { channelsThrough: true });
+    expect(recess.warnings.map((w) => w.code)).toEqual(['channel-too-close']);
+    expect(through.warnings).toEqual(recess.warnings);
   });
 });
 

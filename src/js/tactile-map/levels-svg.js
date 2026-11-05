@@ -4,9 +4,10 @@
  * The levels file is one SVG in millimeters with a group per height,
  * <g id="level1"> to <g id="level3">, <g id="here"> (the part of a symbol
  * that stands one symbol step above the symbol level: You are here's center
- * dot), <g id="channels"> and
+ * dot), <g id="channels"> (the label tape's recesses) and
  * <g id="cutouts"> (what is cut right through the plate: a plate's name as
- * notches, added by the plate splitter), which the Tactile Map tile imports
+ * notches, added by the plate splitter, and the channels when the settings
+ * cut them through), which the Tactile Map tile imports
  * one group at a time by id; every group is written, empty or not, since a
  * missing id is a warning. One more group, <g id="letters">, holds the box
  * the raised title will take, for the checks only: the model draws the
@@ -149,6 +150,17 @@ function shapeRings(shape) {
  */
 export const LEVELS_BY_CLASS = levelsByClass();
 
+/**
+ * How a label channel is cut: a recess with a floor under the tape (the
+ * model's depth), or right through the plate, for a map glued to a backing
+ * board that the tape then lies on. The panel's "Tape channels" offers
+ * these in this order.
+ */
+export const CHANNEL_CUTS = Object.freeze([
+  { key: 'recess', name: 'A recess with a floor' },
+  { key: 'through', name: 'Cut through, for a backing board' },
+]);
+
 export const DEFAULT_SETTINGS = {
   classes: LEVELS_BY_CLASS,
   // null means the symbol library in use (activeLibrary()).
@@ -158,6 +170,8 @@ export const DEFAULT_SETTINGS = {
   tapeWidthMm: 12.7,
   channelClearanceMm: 0.4,
   channelKeepClearMm: 3,
+  // true writes the channels into the cutouts group, cut right through.
+  channelsThrough: false,
   dotSpacingMm: 3,
   dashMm: 6,
   dashGapMm: 3,
@@ -649,7 +663,7 @@ export function buildLevelRings(plan, settings = {}) {
       channels.push({ f, r });
       built.push({
         f,
-        level: 'channels',
+        level: s.channelsThrough ? 'cutouts' : 'channels',
         rings: [rectRing(r.x0, r.y0, r.x1, r.y1)],
       });
     } else if (kind === 'text') {
@@ -764,7 +778,7 @@ export function buildLevelRings(plan, settings = {}) {
   }
   for (const c of channels) {
     for (const b of built) {
-      if (b.f === c.f || b.level === 'channels') continue;
+      if (b.f === c.f || b.f.kind === 'channel') continue;
       const d = distanceRectRings(c.r, b.rings);
       if (d < s.channelKeepClearMm) {
         warn(
@@ -791,10 +805,9 @@ export function buildLevelRings(plan, settings = {}) {
     );
   }
   // A raised part stands on its symbol: the same level, by the count.
+  const GROUPS = ['channels', 'cutouts', 'here'];
   const levelsUsed = new Set(
-    built
-      .filter((b) => b.level !== 'channels' && b.level !== 'here')
-      .map((b) => b.level)
+    built.filter((b) => !GROUPS.includes(b.level)).map((b) => b.level)
   );
   if (levelsUsed.size > s.maxLevels) {
     warn(
@@ -805,8 +818,9 @@ export function buildLevelRings(plan, settings = {}) {
   }
 
   // The groups: one NonZero union per level.
-  // cutouts stays empty here: a plate's name as notches joins it in the
-  // plate splitter, and the tile imports every group, so each is present.
+  // cutouts holds the channels only when they are cut through: a plate's
+  // name as notches joins it in the plate splitter, and the tile imports
+  // every group, so each is present.
   const groupRings = {
     level1: [],
     level2: [],
@@ -816,10 +830,7 @@ export function buildLevelRings(plan, settings = {}) {
     cutouts: [],
   };
   for (const b of built) {
-    const key =
-      b.level === 'channels' || b.level === 'here'
-        ? b.level
-        : `level${b.level}`;
+    const key = GROUPS.includes(b.level) ? b.level : `level${b.level}`;
     if (!groupRings[key]) groupRings[key] = [];
     groupRings[key].push(...b.rings);
   }
