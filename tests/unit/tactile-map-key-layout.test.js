@@ -287,6 +287,46 @@ describe('keyPlates', () => {
     }
   });
 
+  it('cuts the channels to the measured cells when the settings carry a tape measure, and a contracted text takes fewer strips', () => {
+    // A stand-in for the translator: every text in half its letters.
+    const tape = {
+      grade: 'g2',
+      measured: true,
+      of: (text) => ({
+        cells: Math.ceil(String(text).trim().length / 2),
+        braille: '',
+        measured: true,
+        grade: 'g2',
+      }),
+    };
+    const measured = keyPlates(keyFor(plan()), {
+      ...PLATE,
+      title: 'Ferry Place',
+      settings: { tape },
+    });
+    const texts = measured.flatMap((p) => p.tape);
+    const channels = measured.flatMap((p) => channelsOf(p));
+    expect(channels.length).toBe(texts.length);
+    texts.forEach((text, i) => {
+      expect(channels[i].length).toBe(channelLengthMm(tape.of(text).cells));
+    });
+    const pieces = (list) => {
+      const first = list.findIndex((t) => CLINIC.startsWith(t));
+      const parts = [];
+      for (let i = first; i < list.length; i += 1) {
+        parts.push(list[i]);
+        if (parts.join(' ') === CLINIC) break;
+      }
+      return parts;
+    };
+    const estimated = keyPlates(keyFor(plan()), {
+      ...PLATE,
+      title: 'Ferry Place',
+    }).flatMap((p) => p.tape);
+    expect(pieces(texts).join(' ')).toBe(CLINIC);
+    expect(pieces(texts).length).toBeLessThan(pieces(estimated).length);
+  });
+
   it('wraps a long name over lines of words and carries the rows onto a second key plate when the first is full', () => {
     const small = keyPlates(keyFor(plan()), {
       plateW: 240,

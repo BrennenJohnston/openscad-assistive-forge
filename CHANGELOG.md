@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Label tape channels are sized by the app's braille translator, contracted
+  UEB (Grade 2) to start or uncontracted on a switch in step 5, instead of
+  an estimate; the note under the switch, the README and the PDF say what
+  the tape comes to, and the PDF draws each label's braille as dots.
 - The plates are cut from the sheet, the map in its band: the sample's
   480 x 360 mm map prints as four 250 x 190 mm plates on a 256 mm bed, and
   the README's backing board is the sheet's size.

@@ -14,8 +14,35 @@ import { keyLabel } from './key-layout.js';
 import { plateLevelsSvg, titleLabel } from './plate-tiling.js';
 import { levelsSvgFromRings } from './levels-svg.js';
 import { plateRows, rowsText } from './sheet.js';
+import { TAPE_GRADES, gradeOf } from './tape-cells.js';
 import { ATTRIBUTION } from './overpass.js';
 import { TRANSIT_STRINGS } from './transit.js';
+
+/** A11Y: said once in step 5 when the engine cannot load; in the README too. */
+export const ENGINE_ESTIMATE_SENTENCE =
+  'The braille engine did not load; the channels are sized by an estimate.';
+
+/**
+ * The tape a map's labels take, in one sentence: the grade, the labels,
+ * their cells and length, and what the other grade would need.
+ *
+ * @param {{ grade: string, labels: number, cells: number, lengthMm: number, measured: boolean, tapeWidthMm: number, otherLengthMm?: number|null }} tape
+ * @returns {string}
+ */
+export function tapeSentence(tape) {
+  const grade = gradeOf(tape.grade);
+  const other = TAPE_GRADES.find((g) => g.key !== grade.key);
+  const head = `Label tape: ${grade.said}${tape.measured ? '' : ', sized by an estimate'}.`;
+  const n = tape.labels;
+  if (!n) return `${head} No labels on the map.`;
+  let s =
+    `${head} ${n} ${n === 1 ? 'label' : 'labels'}, ${tape.cells} ${tape.cells === 1 ? 'cell' : 'cells'}, ` +
+    `about ${Math.round(tape.lengthMm)} mm of ${tape.tapeWidthMm} mm tape`;
+  if (tape.otherLengthMm != null) {
+    s += `; ${other.key === 'g1' ? 'uncontracted' : 'contracted'} would need about ${Math.round(tape.otherLengthMm)} mm`;
+  }
+  return `${s}.`;
+}
 
 const OSM_COPYRIGHT_URL = 'https://www.openstreetmap.org/copyright';
 
@@ -386,6 +413,8 @@ function aboutOf(about) {
  * @param {string[]} [input.unspelled] - names the PDF's fonts could not spell
  * @param {number} [input.trimMm] - the margin kept when the sheet was
  *   trimmed to the shapes; nothing when it was not
+ * @param {object} [input.tape] - the labels' tape as `tapeSentence` takes
+ *   it, with `failed` when the braille engine did not load
  * @returns {string}
  */
 export function readmeText({
@@ -402,8 +431,9 @@ export function readmeText({
   pdfName = '',
   unspelled = [],
   trimMm = 0,
+  tape = null,
 }) {
-  const tape = keyTape.filter((k) => k.texts.length);
+  const tapeLists = keyTape.filter((k) => k.texts.length);
   const n = layout.plates.length;
   const ids = layout.plates.map((plate) => plate.id).join(', ');
   const titles = layout.titlePlates || [];
@@ -427,14 +457,16 @@ export function readmeText({
     `Levels, measured from the underside: base ${mm(heights.base)} mm, ` +
     `then ${heights.tops.map(mm).join(', ')} mm. ` +
     `Label channels take ${tapeWidthMm} mm tape. ` +
+    (tape ? `${tapeSentence(tape)} ` : '') +
+    (tape?.failed ? `${ENGINE_ESTIMATE_SENTENCE} ` : '') +
     'The picture plate_grid.svg shows the layout.\n' +
     (keyIds.length
       ? `The key prints on its own ${keyIds.length === 1 ? 'plate' : 'plates'}, ${keyIds.join(', ')}, to read before the map.\n`
       : '') +
     credits.map((line) => `${line}\n`).join('') +
     (keyText ? `\n${keyText}` : '') +
-    (tape.length ? '\n' : '') +
-    tape
+    (tapeLists.length ? '\n' : '') +
+    tapeLists
       .map(
         (k) =>
           `${keyLabel(k.id)} plate, label tape top to bottom:\n` +

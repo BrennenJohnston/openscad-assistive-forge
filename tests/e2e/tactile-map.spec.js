@@ -917,6 +917,30 @@ test.describe('the draft map', () => {
     // The key plates are the map's plate size; on the trimmed map's 189 mm
     // plates a long row wraps onto two strips, so the pieces are joined.
     expect(tape.join(' ')).toContain('pc restaurant: plaza cafe');
+    // The labels' tape, measured by the braille translator in the grade
+    // chosen: contracted UEB to start, uncontracted on a switch, the note
+    // saying each and what the other would need.
+    const grade = page.locator('#tactileMapTapeGrade');
+    await expect(grade).toHaveValue('g2');
+    const tapeNote = page.locator('#tactileMapTapeNote');
+    await expect(tapeNote).toHaveText(
+      /^Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels, \d+ cells, about \d+ mm of 12\.7 mm tape; uncontracted would need about \d+ mm\.$/,
+      { timeout: 30000 }
+    );
+    const contracted = (await tapeNote.textContent()).match(/about (\d+) mm of/)[1];
+    const uncontracted = (await tapeNote.textContent()).match(/need about (\d+) mm/)[1];
+    expect(Number(uncontracted)).toBeGreaterThan(Number(contracted));
+    await grade.selectOption('g1');
+    await expect(tapeNote).toHaveText(
+      new RegExp(
+        `^Label tape: uncontracted braille \\(Grade 1\\)\\. \\d+ labels, \\d+ cells, about ${uncontracted} mm of 12\\.7 mm tape; contracted would need about ${contracted} mm\\.$`
+      ),
+      { timeout: 30000 }
+    );
+    await grade.selectOption('g2');
+    await expect(tapeNote).toHaveText(/^Label tape: contracted braille/, {
+      timeout: 30000,
+    });
     // The typed address is the destination, the first row after the key's
     // title, named by the words typed up to the first comma.
     // (A row longer than a channel wraps at a space; the first piece holds

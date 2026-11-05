@@ -127,7 +127,40 @@ function drawPlate(w, data, { x, y, scale, colors, seams }) {
   }
 }
 
-/** Lines of text down a page, a new page when the first runs out. */
+/** A braille cell on tape: its pitch, its dots' spacing and their ink. */
+const CELL_MM = 6.2;
+const DOT_PITCH_MM = 2.5;
+const DOT_R_MM = 0.75;
+/** A row of braille dots with the gap under it. */
+const BRAILLE_ROW_MM = 9;
+
+/**
+ * A braille string as dots, at the labeler's pitch, so a strip of tape laid
+ * on the page lines up with it: dots 1 to 3 down the left of each cell,
+ * 4 to 6 down the right (the Unicode cell's six low bits).
+ */
+function writeBraille(w, x, y, braille) {
+  let cx = x;
+  for (const ch of braille) {
+    const bits = (ch.codePointAt(0) - 0x2800) & 0x3f;
+    for (let d = 0; d < 6; d++) {
+      if (!(bits & (1 << d))) continue;
+      const col = d < 3 ? 0 : 1;
+      const row = d % 3;
+      w.circle(
+        cx + DOT_PITCH_MM / 2 + col * DOT_PITCH_MM,
+        y + DOT_PITCH_MM / 2 + row * DOT_PITCH_MM,
+        DOT_R_MM
+      );
+    }
+    cx += CELL_MM;
+  }
+}
+
+/**
+ * Lines of text down a page, a new page when the first runs out. A line
+ * may be `{ text, braille }`: its braille is drawn as dots under the text.
+ */
 function writeLines(w, size, heading, lines) {
   const bottom = size.h - PDF_MARGIN_MM;
   let y = PDF_MARGIN_MM + 6;
@@ -138,9 +171,16 @@ function writeLines(w, size, heading, lines) {
   };
   start();
   for (const line of lines) {
-    if (y > bottom) start();
-    w.text(PDF_MARGIN_MM, y, BODY_PT, line);
+    const text = typeof line === 'string' ? line : line.text;
+    const braille = typeof line === 'string' ? '' : line.braille || '';
+    const tall = LINE_MM + (braille ? BRAILLE_ROW_MM : 0);
+    if (y + tall > bottom + LINE_MM) start();
+    w.text(PDF_MARGIN_MM, y, BODY_PT, text);
     y += LINE_MM;
+    if (braille) {
+      writeBraille(w, PDF_MARGIN_MM, y - 2, braille);
+      y += BRAILLE_ROW_MM;
+    }
   }
 }
 
@@ -155,8 +195,10 @@ function writeLines(w, size, heading, lines) {
  * @param {Array<object>} input.plates - Each plate's paper data with its id (the key plates among them)
  * @param {{ plates: Array<{id: string, x: number, y: number, w: number, h: number}> }} [input.layout]
  * @param {string[]} [input.keyLines] - The key as text, line by line
- * @param {Array<{text: string, cells: number, name: string, lengthMm: number}>} [input.labels]
+ * @param {Array<{text: string, cells: number, name: string, lengthMm: number, braille?: string}>} [input.labels] -
+ *   each with its braille when the tape was measured, drawn as dots
  * @param {number} [input.tapeWidthMm]
+ * @param {string} [input.tapeLine] - the labels' tape in a sentence (plate-export.js `tapeSentence`)
  * @param {Record<string, string>} input.colors - The paper's token values
  * @returns {{ bytes: Uint8Array, pages: number, unspelled: string[] }}
  */
@@ -170,6 +212,7 @@ export function mapPdf({
   keyLines = [],
   labels = [],
   tapeWidthMm = 0,
+  tapeLine = '',
   colors = {},
 }) {
   const size = PAPER_SIZES.find((p) => p.key === paper) || PAPER_SIZES[0];
@@ -210,15 +253,17 @@ export function mapPdf({
     drawPlate(w, plate, { x: M, y: M, scale: s, colors });
   }
 
-  // The labels, then the key.
+  // The labels, each with its braille as dots when the tape was measured,
+  // then the key.
   const labelLines = [
+    tapeLine,
     tapeWidthMm
       ? `Label tape ${tapeWidthMm} mm wide; each channel is its label's cells at 6.2 mm plus 4 mm at each end.`
       : '',
-    ...labels.map(
-      (l) =>
-        `${l.text}: ${l.cells} ${l.cells === 1 ? 'cell' : 'cells'}, a channel ${l.lengthMm} mm long, beside ${l.name}`
-    ),
+    ...labels.map((l) => ({
+      text: `${l.text}: ${l.cells} ${l.cells === 1 ? 'cell' : 'cells'}, a channel ${l.lengthMm} mm long, beside ${l.name}`,
+      braille: l.braille || '',
+    })),
   ].filter((line) => line !== '');
   writeLines(
     w,
