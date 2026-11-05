@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so the empty plate around a map is not printed; the editor shows the
   trimmed sheet as a dashed frame, and the README says the plates are
   trimmed to the shapes.
+- Tape channels, a choice in step 5: a recess with a floor under the tape,
+  as before, or cut right through the plate so the tape lies on the backing
+  board; the key plates follow, the map paper and the PDF draw a cut-through
+  channel with a dashed edge, the README says which, and a warning says
+  when a cut-through channel would leave nothing under the tape on an All
+  printed plate.
 
 - A Drawing editor button in the Customizer's header, beside Undo and Redo,
   on every tile whose file control takes a drawing: it opens the editor on
@@ -43,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Label tape channels are sized by the app's braille translator, contracted
+  UEB (Grade 2) to start or uncontracted on a switch in step 5, instead of
+  an estimate; the note under the switch, the README and the PDF say what
+  the tape comes to, and the PDF draws each label's braille as dots.
 - The plates are cut from the sheet, the map in its band: the sample's
   480 x 360 mm map prints as four 250 x 190 mm plates on a 256 mm bed, and
   the README's backing board is the sheet's size.
@@ -65,6 +75,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - On a phone, the drawing editor's Save, Keep original and Reset did nothing:
   the buttons moved into More, where their presses were never heard.
+- Cropping a traced picture in the drawing editor keeps the part that was
+  framed, whether the picture came through the Customizer or the editor's
+  own door: on a picture over the pixel cap or from a camera, the crop had
+  landed on the picture's top-left corner instead. A crop that keeps nothing
+  now says so in the picture panel instead of leaving its waiting line up.
 - Dragging the picture in the drawing editor moves it smoothly with the
   pointer; before, it flashed between positions until the button was released.
 - The braille card counts its rows and cells as the model prints them, so a
@@ -78,6 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   marker, 4.9 mm tall) stands at the address and the key names it first
   with the address; a route's end carries the same cone. You are here is
   no longer dropped at the plate's center as if it were the address.
+- Choosing All printed for a tactile map no longer stops the model at the
+  default 0.4 mm base: it prints at 1.2 mm, as the setting says.
 
 ## [5.8.0] - 2026-11-04
 

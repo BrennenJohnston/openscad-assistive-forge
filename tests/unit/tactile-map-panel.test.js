@@ -117,6 +117,14 @@ const click = (id) => document.getElementById(id).click();
 let files;
 let downloads;
 
+/**
+ * A stand-in for the braille translator: a cell per letter, none for a
+ * space, so the counts are known (jsdom has no worker for the real one).
+ */
+const letterBraille = vi.fn(async (text) =>
+  '⠁'.repeat(String(text).replace(/\s+/g, '').length)
+);
+
 function mount({ type = 'drawing', config = {}, ...options } = {}) {
   destroyMapPanel();
   initMapPanel(
@@ -131,6 +139,7 @@ function mount({ type = 'drawing', config = {}, ...options } = {}) {
       download: vi.fn((bytes, name, format) => {
         downloads.push({ bytes, name, format });
       }),
+      translate: letterBraille,
       ...options,
     }
   );
@@ -744,6 +753,119 @@ describe('the map panel', () => {
     expect(params().cone_marks).toBe('1100:2700');
   });
 
+  // A draft with two named places, so the map has labels: the translator
+  // measures each, the note sums them, and the other grade's length stands
+  // beside. (The panel labels a draft; a drawing keeps the channels drawn.)
+  const withPlaces = () => {
+    const p = sampleStationPlan();
+    p.features.push(
+      {
+        id: 'pine',
+        class: 'landmark',
+        kind: 'point',
+        at: [80, 100],
+        on: true,
+        name: 'Pine',
+        what: 'Cafe',
+      },
+      {
+        id: 'cafe',
+        class: 'landmark',
+        kind: 'point',
+        at: [200, 100],
+        on: true,
+        name: 'Plaza Cafe',
+        what: 'Restaurant',
+      }
+    );
+    return p;
+  };
+  const draft = (options = {}) => {
+    mount({ plan: withPlaces(), ...options });
+    const p = document.getElementById('tactileMapPanel').__forgeMapPanel;
+    p.source = 'draft';
+    p.schedule(0);
+    return p;
+  };
+
+  it('offers Braille on tape with contracted UEB first, measures the labels through the translator in both grades, and says the tape in the note', async () => {
+    const p = draft();
+    const select = document.getElementById('tactileMapTapeGrade');
+    expect([...select.options].map((o) => [o.value, o.textContent])).toEqual([
+      ['g2', 'Contracted (UEB Grade 2)'],
+      ['g1', 'Uncontracted (Grade 1)'],
+    ]);
+    expect(select.value).toBe('g2');
+    expect(select.getAttribute('aria-describedby')).toBe('tactileMapTapeNote');
+    const note = document.getElementById('tactileMapTapeNote');
+    expect(note.getAttribute('aria-live')).toBe('polite');
+    await vi.waitFor(
+      () => expect(note.textContent).toMatch(/^Label tape: contracted braille \(UEB Grade 2\)\. /),
+      SETTLE
+    );
+    // Both tables were asked, the contracted one first.
+    const tables = [...new Set(letterBraille.mock.calls.map((c) => c[1]))];
+    expect(tables).toEqual(['en-ueb-g2.ctb', 'en-ueb-g1.ctb']);
+    expect(note.textContent, note.textContent).toMatch(
+      /^Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels?, \d+ cells?, about \d+ mm of 12\.7 mm tape; uncontracted would need about \d+ mm\.$/
+    );
+    // The labels carry the measure; a stand-in cell per letter.
+    const labels = p.labeled().labels;
+    expect(labels.length).toBeGreaterThan(0);
+    for (const l of labels) {
+      expect(l.measured).toBe(true);
+      expect(l.grade).toBe('g2');
+      expect(l.braille).toBe('⠁'.repeat(l.text.replace(/\s+/g, '').length));
+    }
+    // The other grade: the same sentence the other way round, no new pass.
+    const calls = letterBraille.mock.calls.length;
+    select.value = 'g1';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(
+      () => expect(note.textContent).toMatch(/^Label tape: uncontracted braille \(Grade 1\)\. /),
+      SETTLE
+    );
+    expect(note.textContent).toMatch(/; contracted would need about \d+ mm\.$/);
+    expect(letterBraille.mock.calls.length).toBe(calls);
+  });
+
+  it('keeps the estimate, says the engine did not load, and asks it no more until the grade changes', async () => {
+    const broken = vi.fn(async () => {
+      throw new Error('liblouis worker failed');
+    });
+    const p = draft({ translate: broken });
+    const note = document.getElementById('tactileMapTapeNote');
+    await vi.waitFor(
+      () =>
+        expect(note.textContent).toMatch(
+          /^Label tape: contracted braille \(UEB Grade 2\), sized by an estimate\. .* The braille engine did not load; the channels are sized by an estimate\.$/
+        ),
+      SETTLE
+    );
+    const asked = broken.mock.calls.length;
+    expect(asked).toBeGreaterThan(0);
+    const labels = p.labeled().labels;
+    expect(labels.length).toBeGreaterThan(0);
+    expect(labels.every((l) => l.measured === false && l.braille === '')).toBe(true);
+    // Another change asks nothing more of the engine.
+    const bed = document.getElementById('tactileMapBed');
+    bed.value = 'a1-mini';
+    bed.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(
+      () => expect(summary()).toMatch(/^9 plates/),
+      SETTLE
+    );
+    expect(broken.mock.calls.length).toBe(asked);
+    // The grade changed: one more try.
+    const select = document.getElementById('tactileMapTapeGrade');
+    select.value = 'g1';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(
+      () => expect(broken.mock.calls.length).toBeGreaterThan(asked),
+      SETTLE
+    );
+  });
+
   it('offers no title placement to a tile that keeps its title to itself, and draws the title inside the map', () => {
     expect(document.getElementById('tactileMapTitlePlacement')).toBeNull();
     expect(document.getElementById('tactileMapMargin')).not.toBeNull();
@@ -1066,6 +1188,106 @@ describe('the warnings in Check and print', () => {
   });
 });
 
+describe('the tape channels, a recess or cut through', () => {
+  const select = () => document.getElementById('tactileMapChannelCut');
+  const box = () => document.getElementById('tactileMapWarningsBox');
+  const lastSvg = () => files[files.length - 1].svg;
+  const choose = async (key) => {
+    const before = files.length;
+    select().value = key;
+    select().dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(before), SETTLE);
+  };
+  const THROUGH_WARNING =
+    'Cut-through channels leave nothing under the tape on an All printed plate; choose Thin plates for a backing board, or a recess.';
+
+  it('offers a recess first; cut through moves the channels into the cutouts group, the key plates too, and the README says which', async () => {
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    expect(
+      document.querySelector('label[for="tactileMapChannelCut"]').textContent
+    ).toBe('Tape channels');
+    expect([...select().options].map((o) => [o.value, o.textContent])).toEqual(
+      [
+        ['recess', 'A recess with a floor'],
+        ['through', 'Cut through, for a backing board'],
+      ]
+    );
+    expect(select().value).toBe('recess');
+    expect(lastSvg()).toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
+    expect(lastSvg()).toMatch(/<g id="cutouts"><\/g>/);
+    await choose('through');
+    expect(lastSvg()).toMatch(/<g id="channels"><\/g>/);
+    expect(lastSvg()).toMatch(/<g id="cutouts"><path d="[^"]+"\/><\/g>/);
+    // Thin plates have the board under the tape: no warning.
+    expect(box().hidden).toBe(true);
+    const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+    expect(panel.levelSettings().channelsThrough).toBe(true);
+    click('tactileMapRenderAll');
+    const { readme } = await readZip();
+    expect(readme).toContain(
+      'Label channels take 12.7 mm tape, cut right through the plate so the tape lies on the backing board. '
+    );
+  });
+
+  it('warns with All printed, where nothing is under the tape, and stops when the recess or the thin plates come back', async () => {
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    stateManager.setState({
+      parameters: { ...params(), print_style: 'All printed' },
+    });
+    await choose('through');
+    const list = () => [
+      ...document.querySelectorAll('#tactileMapWarnings li'),
+    ].map((li) => li.textContent);
+    await vi.waitFor(() => expect(list()).toEqual([THROUGH_WARNING]), SETTLE);
+    expect(box().hidden).toBe(false);
+    expect(box().querySelector('summary').textContent).toBe('1 warning');
+    await choose('recess');
+    await vi.waitFor(() => expect(box().hidden).toBe(true), SETTLE);
+    await choose('through');
+    await vi.waitFor(() => expect(list()).toEqual([THROUGH_WARNING]), SETTLE);
+    // The print style changed in the Customizer takes the warning away.
+    stateManager.setState({
+      parameters: {
+        ...params(),
+        print_style: 'Thin plates for a backing board',
+      },
+    });
+    await vi.waitFor(() => expect(box().hidden).toBe(true), SETTLE);
+  });
+
+  it('says the warning under the select while it applies, as a polite live region written once', async () => {
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const note = document.getElementById('tactileMapChannelNote');
+    expect(select().getAttribute('aria-describedby')).toBe(
+      'tactileMapChannelNote'
+    );
+    expect(note.getAttribute('aria-live')).toBe('polite');
+    expect(note.textContent).toBe('');
+    // It follows the select, before Key words.
+    expect(select().nextElementSibling).toBe(note);
+    await choose('through');
+    expect(note.textContent).toBe('');
+    const writes = [];
+    new MutationObserver((records) => writes.push(...records)).observe(note, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+    stateManager.setState({
+      parameters: { ...params(), print_style: 'All printed' },
+    });
+    await vi.waitFor(() => expect(note.textContent).toBe(THROUGH_WARNING), SETTLE);
+    // An update that changes nothing writes nothing: a live region speaks
+    // every write, the same sentence or not.
+    const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+    await panel.update();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(writes).toHaveLength(1);
+    await choose('recess');
+    await vi.waitFor(() => expect(note.textContent).toBe(''), SETTLE);
+  });
+});
+
 describe('render every plate and download', () => {
   it('renders the four plates in order into one archive of eleven entries', async () => {
     await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
@@ -1109,7 +1331,8 @@ describe('render every plate and download', () => {
         'Print one of each: A1, A2, B1, B2. ' +
         'Lay them out as the grid reads, row A at the top, column 1 at the left, and glue them edge to edge onto a backing board of 500 x 380 mm. ' +
         'Levels, measured from the underside: base 0.4 mm, then 1.0, 1.8, 2.4 mm. ' +
-        'Label channels take 12.7 mm tape. ' +
+        'Label channels take 12.7 mm tape, a recess with a floor under the tape so it sits nearly flush. ' +
+        'Label tape: contracted braille (UEB Grade 2). No labels on the map. ' +
         'The picture plate_grid.svg shows the layout.\n'
     );
     expect(await zip.file('plate_grid.svg').async('string')).toContain(

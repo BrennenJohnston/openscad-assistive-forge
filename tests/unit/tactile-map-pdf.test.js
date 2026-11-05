@@ -229,6 +229,48 @@ describe("the map's PDF", () => {
     expect(pdf.text).toMatch(/\(B2\) Tj/);
   });
 
+  it('draws a measured label’s braille as dots under its line, at the labeler’s pitch, and opens the labels with the tape sentence', () => {
+    const { bytes } = mapPdf({
+      ...input,
+      tapeLine:
+        'Label tape: contracted braille (UEB Grade 2). 1 label, 3 cells, about 27 mm of 12.7 mm tape.',
+      labels: [
+        {
+          featureId: 'label-1',
+          text: 'Pine',
+          cells: 3,
+          braille: '⠏⠔⠑',
+          name: 'Pine Street',
+          lengthMm: 26.6,
+        },
+      ],
+    });
+    const pdf = parsePdf(bytes);
+    expect(pdf.text).toMatch(/\(Label tape: contracted braille/);
+    expect(pdf.text).toMatch(/\(Pine: 3 cells, a channel 26.6 mm long, beside Pine Street\) Tj/);
+    // ⠏ is dots 1, 2, 3, 4; ⠔ dots 3, 5; ⠑ dots 1, 5: eight dots, four curves each.
+    const before = parsePdf(mapPdf(input).bytes).text.match(/ c\n/g)?.length || 0;
+    const after = pdf.text.match(/ c\n/g)?.length || 0;
+    expect(after - before).toBe(8 * 4);
+  });
+
+  it('draws a channel cut through the plate with a dashed edge, four dashed lines around its white', () => {
+    const recess = parsePdf(mapPdf(input).bytes).text;
+    expect(recess).not.toMatch(/\] 0 d /);
+    const through = parsePdf(
+      mapPdf({
+        ...input,
+        whole: { ...input.whole, channelsThrough: true },
+        plates: input.plates.map((p) => ({ ...p, channelsThrough: true })),
+      }).bytes
+    ).text;
+    // The whole map's two channels and the plates' pieces of them: four
+    // dashed edges each, the dash 2 mm and the gap 1.5 mm in points.
+    const dashed = through.match(/\[5\.67 4\.25\] 0 d /g) || [];
+    const drawn = input.plates.flatMap((p) => p.channels).length + 2;
+    expect(dashed).toHaveLength(drawn * 4);
+  });
+
   it('scales a plate that does not fit the paper, and says so', () => {
     const big = {
       ...input,

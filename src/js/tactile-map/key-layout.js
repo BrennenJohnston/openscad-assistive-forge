@@ -89,7 +89,7 @@ function sampleTallMm(entry) {
   return 9;
 }
 
-function keyRows(key, title) {
+export function keyRows(key, title) {
   const head = title ? `Key: ${title}` : 'Key';
   return [
     { print: head, say: head.toLowerCase(), sample: null },
@@ -147,21 +147,25 @@ export function wrapPrint(text, widthMm, letterMm) {
   return lines;
 }
 
-/** A tape text divided at its spaces into pieces of at most `maxCells`. */
-function wrapTape(text, maxCells) {
+/**
+ * A tape text divided at its spaces into pieces of at most `maxCells`,
+ * each piece's cells by `cellsOf` (the tape measure's count, or the
+ * estimate).
+ */
+function wrapTape(text, maxCells, cellsOf = labelCells) {
   const lines = [];
   let line = '';
   for (const word of text.split(/\s+/).filter(Boolean)) {
     const next = line ? `${line} ${word}` : word;
-    if (labelCells(next) <= maxCells) {
+    if (cellsOf(next) <= maxCells) {
       line = next;
       continue;
     }
     if (line) lines.push(line);
     let rest = word;
-    while (labelCells(rest) > maxCells) {
+    while (cellsOf(rest) > maxCells) {
       let cut = rest.length - 1;
-      while (cut > 1 && labelCells(rest.slice(0, cut)) > maxCells) cut -= 1;
+      while (cut > 1 && cellsOf(rest.slice(0, cut)) > maxCells) cut -= 1;
       lines.push(rest.slice(0, cut));
       rest = rest.slice(cut);
     }
@@ -243,6 +247,9 @@ export function keyPlates(
   const withTape = words !== 'print';
   const s = { ...DEFAULT_SETTINGS, ...settings };
   const across = s.tapeWidthMm + s.channelClearanceMm;
+  // The cells a strip of tape takes: the translator's count through the
+  // tape measure the settings carry, or the estimate.
+  const cellsOf = s.tape?.of ? (text) => s.tape.of(text).cells : labelCells;
   const sampleW = Math.max(
     SAMPLE_MM,
     ...key.entries.map((e) => Number(e.sizeMm) || 0)
@@ -269,7 +276,9 @@ export function keyPlates(
     const printLines = withPrint
       ? wrapPrint(clean(row.print).toUpperCase(), textW, letterHeightMm)
       : [];
-    const tapeLines = withTape ? wrapTape(clean(row.say), maxCells) : [];
+    const tapeLines = withTape
+      ? wrapTape(clean(row.say), maxCells, cellsOf)
+      : [];
     const sampleTall = row.sample ? sampleTallMm(row.sample) : 0;
     // Each line's height and the lead before it: the letters and the ink
     // under their baseline at the sign's pitch; a channel the tape's width,
@@ -319,7 +328,7 @@ export function keyPlates(
         top = base - letterHeightMm;
       }
       if (line.tape) {
-        const length = channelLengthMm(labelCells(line.text));
+        const length = channelLengthMm(cellsOf(line.text));
         page.channels.push({
           id: `key-tape-${i}-${line.k}`,
           class: 'channel',

@@ -156,6 +156,86 @@ test.describe('Tactile Map tile', () => {
     );
   });
 
+  test('Tape channels start as a recess; cut through moves them to the cutouts group, and an All printed plate brings a warning and still renders', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await openTactileMap(page);
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await goToStep(page, 5);
+    const cut = page.locator('#tactileMapChannelCut');
+    await expect(cut).toHaveValue('recess');
+    await expect(page.locator('label[for="tactileMapChannelCut"]')).toHaveText(
+      'Tape channels'
+    );
+    // The empty note takes no room: the next control stands as far under this
+    // select as any other control does under its own.
+    const gapUnder = (select, label) =>
+      page.evaluate(
+        ([s, l]) =>
+          document.querySelector(l).getBoundingClientRect().top -
+          document.querySelector(s).getBoundingClientRect().bottom,
+        [select, label]
+      );
+    expect(
+      await gapUnder('#tactileMapChannelCut', 'label[for="tactileMapKeyWords"]')
+    ).toBeCloseTo(
+      await gapUnder('#tactileMapIdStyle', 'label[for="tactileMapTapeGrade"]'),
+      1
+    );
+    const levels = () =>
+      page.evaluate(() => {
+        const d = window.stateManager.getState().parameters.map_file?.data;
+        const body = (d || '').split(',')[1] || '';
+        return d?.includes(';base64,') ? atob(body) : decodeURIComponent(body);
+      });
+    await expect
+      .poll(levels, { timeout: 15000 })
+      .toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
+    expect(await levels()).toMatch(/<g id="cutouts"><\/g>/);
+    await cut.selectOption('through');
+    await expect
+      .poll(levels, { timeout: 15000 })
+      .toMatch(/<g id="channels"><\/g>/);
+    expect(await levels()).toMatch(/<g id="cutouts"><path d="[^"]+"\/><\/g>/);
+    // Thin plates have the board under the tape: no warning.
+    await expect(page.locator('#tactileMapWarningsBox')).toBeHidden();
+    // All printed, chosen in the Customizer's folded Print style group.
+    await page
+      .getByRole('button', { name: 'Expand all parameter groups' })
+      .click();
+    await page.locator('#param-print_style').selectOption('All printed');
+    const warning =
+      'Cut-through channels leave nothing under the tape on an All printed plate; choose Thin plates for a backing board, or a recess.';
+    await expect(page.locator('#tactileMapWarnings li')).toHaveText([warning]);
+    await expect(page.locator('#tactileMapWarningsBox summary')).toHaveText(
+      '1 warning'
+    );
+    // The list is folded, so the sentence also stands under the select.
+    const note = page.locator('#tactileMapChannelNote');
+    await expect(note).toHaveText(warning);
+    await expect(note).toBeVisible();
+    await expect(cut).toHaveAttribute(
+      'aria-describedby',
+      'tactileMapChannelNote'
+    );
+    // At the default thin base the model raises All printed to 1.2 mm itself:
+    // the preview lands, it does not stop on the base's thickness.
+    await previewSettled(page);
+    await expect(page.locator('.preview-state-indicator')).not.toHaveClass(
+      /state-error/
+    );
+    await cut.selectOption('recess');
+    await expect(page.locator('#tactileMapWarningsBox')).toBeHidden();
+    await expect(note).toHaveText('');
+    await expect
+      .poll(levels, { timeout: 15000 })
+      .toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
+  });
+
   test('the button renders the four plates and the key and downloads them as one zip', async ({
     page,
   }) => {
@@ -917,6 +997,30 @@ test.describe('the draft map', () => {
     // The key plates are the map's plate size; on the trimmed map's 189 mm
     // plates a long row wraps onto two strips, so the pieces are joined.
     expect(tape.join(' ')).toContain('pc restaurant: plaza cafe');
+    // The labels' tape, measured by the braille translator in the grade
+    // chosen: contracted UEB to start, uncontracted on a switch, the note
+    // saying each and what the other would need.
+    const grade = page.locator('#tactileMapTapeGrade');
+    await expect(grade).toHaveValue('g2');
+    const tapeNote = page.locator('#tactileMapTapeNote');
+    await expect(tapeNote).toHaveText(
+      /^Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels, \d+ cells, about \d+ mm of 12\.7 mm tape; uncontracted would need about \d+ mm\.$/,
+      { timeout: 30000 }
+    );
+    const contracted = (await tapeNote.textContent()).match(/about (\d+) mm of/)[1];
+    const uncontracted = (await tapeNote.textContent()).match(/need about (\d+) mm/)[1];
+    expect(Number(uncontracted)).toBeGreaterThan(Number(contracted));
+    await grade.selectOption('g1');
+    await expect(tapeNote).toHaveText(
+      new RegExp(
+        `^Label tape: uncontracted braille \\(Grade 1\\)\\. \\d+ labels, \\d+ cells, about ${uncontracted} mm of 12\\.7 mm tape; contracted would need about ${contracted} mm\\.$`
+      ),
+      { timeout: 30000 }
+    );
+    await grade.selectOption('g2');
+    await expect(tapeNote).toHaveText(/^Label tape: contracted braille/, {
+      timeout: 30000,
+    });
     // The typed address is the destination, the first row after the key's
     // title, named by the words typed up to the first comma.
     // (A row longer than a channel wraps at a space; the first piece holds

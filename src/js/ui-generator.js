@@ -27,7 +27,11 @@ import {
   LAYER_CAP,
   DEFAULT_DESIGN_WIDTH_MM,
 } from './svg-limits.js';
-import { cropImageDataRect, imageDataToDataUrl } from './image-crop.js';
+import {
+  cropImageDataRect,
+  imageDataToDataUrl,
+  insetRect,
+} from './image-crop.js';
 import {
   EDITOR_STRINGS as EDITOR_S,
   emptyPictureSentence,
@@ -3685,8 +3689,11 @@ function createFileControl(
    * show the result. A traced picture is cropped in its pixels and traced
    * again through the job and its dialog; a vector drawing is clipped (the
    * clip loads with the ring engine, on demand). One level of undo, this
-   * session. The rectangle is in the drawing's units, which for a traced
-   * picture are its pixels.
+   * session. The rectangle is in the drawing's units. For a traced picture
+   * those are the pixels of the copy the trace worked on, which is smaller
+   * than the picture itself when the picture was over the pixel cap or came
+   * from a camera, so the picture is cropped by the insets instead: shares
+   * of the whole, the same on the copy and on the picture.
    */
   async function handleEditorCrop(rect, insets) {
     if (!currentRawSvg) return;
@@ -3699,12 +3706,21 @@ function createFileControl(
       metadata: currentFileName ? getSvgPrepMetadata(currentFileName) : null,
     };
     if (lastTrace && inkSourceImageData && inkControls) {
-      const cropped = cropImageDataRect(inkSourceImageData, rect);
+      const pixelRect = insetRect(
+        {
+          x: 0,
+          y: 0,
+          width: inkSourceImageData.width,
+          height: inkSourceImageData.height,
+        },
+        insets
+      );
+      const cropped = cropImageDataRect(inkSourceImageData, pixelRect);
       inkSourceImageData = cropped;
       inkSourceDataUrl = imageDataToDataUrl(cropped);
       currentQuickLook = quickLook(cropped);
       cropUndo = before;
-      lastCrop = { rect, insets, source: 'picture' };
+      lastCrop = { rect: pixelRect, insets, source: 'picture' };
       reopenSentence = (n) => EDITOR_S.cropped(n);
       try {
         await applyTracedImage(inkControls.getSettings(), {

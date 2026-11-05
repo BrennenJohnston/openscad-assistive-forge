@@ -61,14 +61,22 @@ import {
   scaleSentence,
 } from './plan-from-drawing.js';
 import {
+  CHANNEL_CUTS,
   DEFAULT_SETTINGS,
   buildLevelRings,
   levelsSvgFromRings,
   settingsForSet,
 } from './levels-svg.js';
 import { keyFor, keySentence, keyText } from './map-key.js';
-import { keyLabel, keyPlates, KEY_LETTER_MM, KEY_WORDS } from './key-layout.js';
-import { labelPlan } from './map-labels.js';
+import {
+  keyLabel,
+  keyPlates,
+  keyRows,
+  KEY_LETTER_MM,
+  KEY_WORDS,
+} from './key-layout.js';
+import { channelLengthMm, labelPlan } from './map-labels.js';
+import { TAPE_GRADES, TapeMeasure } from './tape-cells.js';
 import {
   mapPaperSvg,
   moveTexts,
@@ -116,6 +124,7 @@ import {
 import { applyDetail, judgeSymbols, switchesFor } from './detail-levels.js';
 import {
   EMPTY_RINGS,
+  ENGINE_ESTIMATE_SENTENCE,
   PDF_NAME,
   archiveEntries,
   coneRows,
@@ -125,6 +134,7 @@ import {
   plateParameterSets,
   plateRoles,
   readmeText,
+  tapeSentence,
   titlePlateSets,
 } from './plate-export.js';
 import { OUTPUT_FORMATS, downloadFile, projectStem } from '../download.js';
@@ -143,6 +153,14 @@ const SOURCE = 'tactile-map';
 const PLATE_TIMEOUT_MS = 60_000;
 const ENGINE_NOT_READY =
   'The OpenSCAD engine has not initialized yet. Please wait or refresh the page.';
+/** A11Y: the note under Braille on tape while the translator measures the labels. */
+export const MEASURING_TAPE = 'Measuring the braille labels';
+/**
+ * A11Y: the warning when the channels are cut through on a plate printed
+ * whole, where no board lies under the tape.
+ */
+export const THROUGH_ALL_PRINTED_WARNING =
+  'Cut-through channels leave nothing under the tape on an All printed plate; choose Thin plates for a backing board, or a recess.';
 /** A11Y: said once when the Alt View comes on with this panel mounted. */
 export const ALT_VIEW_SENTENCE =
   'The Tactile Map Designer is not available in the Alt View. Its controls return when the Alt View is off.';
@@ -328,6 +346,15 @@ class MapPanel {
     this.keyWords = KEY_WORDS.some((w) => w.key === options.keyWords)
       ? options.keyWords
       : KEY_WORDS[0].key;
+    // The labels' tape: the grade (contracted first) and the translator's
+    // measure of the texts, a stand-in translator in tests.
+    this.tapeGrade = TAPE_GRADES[0].key;
+    this.tape = new TapeMeasure(options.translate);
+    this.measuring = null;
+    // An engine that failed is not asked again until the grade changes.
+    this.tapeStopped = false;
+    // How the channels are cut: a recess with a floor, or right through.
+    this.channelCut = CHANNEL_CUTS[0].key;
     // The sheet: the band around the face and where the title stands; the
     // empty plate around what prints trimmed away for a place map.
     this.marginMm = MARGIN_MM.start;
@@ -474,18 +501,22 @@ class MapPanel {
     this.lastTape = this.tapeWidth();
     this.lastCue = this.northCue();
     this.lastTitle = this.titleKey();
+    this.lastPrintStyle = this.printStyle();
     this.unsubscribe = stateManager.subscribe(() => {
       const tape = this.tapeWidth();
       const cue = this.northCue();
       const title = this.titleKey();
+      const printStyle = this.printStyle();
       if (
         tape !== this.lastTape ||
         cue !== this.lastCue ||
-        title !== this.lastTitle
+        title !== this.lastTitle ||
+        printStyle !== this.lastPrintStyle
       ) {
         this.lastTape = tape;
         this.lastCue = cue;
         this.lastTitle = title;
+        this.lastPrintStyle = printStyle;
         this.schedule();
       }
       this.adoptPicture();
@@ -1115,6 +1146,63 @@ class MapPanel {
     add('bed', styleSelect);
     this.refs.idStyle = styleSelect;
 
+    // The braille on tape: the grade the translator measures the labels
+    // in, and under it what the tape comes to.
+    const gradeLabel = el('label', 'braille-panel-label', 'Braille on tape');
+    gradeLabel.htmlFor = 'tactileMapTapeGrade';
+    add('bed', gradeLabel);
+    const gradeSelect = el('select', 'braille-panel-select');
+    gradeSelect.id = 'tactileMapTapeGrade';
+    for (const grade of TAPE_GRADES) {
+      const option = document.createElement('option');
+      option.value = grade.key;
+      option.textContent = grade.name;
+      gradeSelect.appendChild(option);
+    }
+    gradeSelect.value = this.tapeGrade;
+    gradeSelect.setAttribute('aria-describedby', 'tactileMapTapeNote');
+    gradeSelect.addEventListener('change', () => {
+      this.tapeGrade = gradeSelect.value;
+      this.tapeStopped = false;
+      this.schedule(0);
+    });
+    add('bed', gradeSelect);
+    this.refs.tapeGrade = gradeSelect;
+    const tapeNote = el('p', 'braille-panel-help tactile-map-tape-note');
+    tapeNote.id = 'tactileMapTapeNote';
+    tapeNote.setAttribute('aria-live', 'polite');
+    add('bed', tapeNote);
+    this.refs.tapeNote = tapeNote;
+
+    // How the channels are cut: a recess with a floor under the tape, or
+    // right through the plate for tape that lies on the backing board.
+    const cutLabel = el('label', 'braille-panel-label', 'Tape channels');
+    cutLabel.htmlFor = 'tactileMapChannelCut';
+    add('bed', cutLabel);
+    const cutSelect = el('select', 'braille-panel-select');
+    cutSelect.id = 'tactileMapChannelCut';
+    for (const cut of CHANNEL_CUTS) {
+      const option = document.createElement('option');
+      option.value = cut.key;
+      option.textContent = cut.name;
+      cutSelect.appendChild(option);
+    }
+    cutSelect.value = this.channelCut;
+    cutSelect.setAttribute('aria-describedby', 'tactileMapChannelNote');
+    cutSelect.addEventListener('change', () => {
+      this.channelCut = cutSelect.value;
+      this.schedule(0);
+    });
+    add('bed', cutSelect);
+    this.refs.channelCut = cutSelect;
+    // Empty unless the warning applies; in the tree from the start, so its
+    // first sentence is spoken.
+    const channelNote = el('p', 'braille-panel-help tactile-map-channel-note');
+    channelNote.id = 'tactileMapChannelNote';
+    channelNote.setAttribute('aria-live', 'polite');
+    add('bed', channelNote);
+    this.refs.channelNote = channelNote;
+
     if (this.config.plateKindParam) {
       const wordsLabel = el('label', 'braille-panel-label', 'Key words');
       wordsLabel.htmlFor = 'tactileMapKeyWords';
@@ -1710,6 +1798,7 @@ class MapPanel {
     const warnings = [
       ...labeled.warnings,
       ...buildLevelRings(labeled.plan, this.levelSettings()).warnings,
+      ...this.channelWarnings(),
     ];
     this.draft = { counts, warnings: warnings.length };
     this.planWarnings = [];
@@ -1717,6 +1806,7 @@ class MapPanel {
     this.leaveWaiting();
     this.schedule(0);
     this.steps?.refresh();
+    await this.measureNow();
     this.sayAddress(
       (warnings.length
         ? ADDRESS_STRINGS.draftReady(counts.on, counts.total, warnings.length)
@@ -1761,6 +1851,7 @@ class MapPanel {
     this.leaveWaiting();
     this.schedule(0);
     this.steps?.refresh();
+    await this.measureNow();
     this.sayAddress(
       ADDRESS_STRINGS.routeReady(
         Math.round(counts.lengthM),
@@ -2111,7 +2202,9 @@ class MapPanel {
       keyTape: this.keyPages.map((p) => ({ id: p.id, texts: p.tape })),
       pdfName: PDF_NAME,
       unspelled: pdf.unspelled,
+      tape: this.tapeSummary(this.labeled()),
       trimMm: this.trim ? sheet.marginMm : 0,
+      channelsThrough: this.channelCut === 'through',
     });
     const grid = plateGridSvg({
       rings,
@@ -2219,6 +2312,7 @@ class MapPanel {
       keyLines: keyText(labeled.key).trimEnd().split('\n'),
       labels,
       tapeWidthMm: this.tapeWidth(),
+      tapeLine: tapeSentence(this.tapeSummary(labeled)),
       colors: this.paperColors(),
     });
   }
@@ -2335,8 +2429,116 @@ class MapPanel {
   levelSettings() {
     return {
       tapeWidthMm: this.tapeWidth(),
+      tape: this.tape.view(this.tapeGrade),
+      channelsThrough: this.channelCut === 'through',
       ...settingsForSet(activeSetKey()),
     };
+  }
+
+  /** The tile's print style: All printed has no board under the plate. */
+  printStyle() {
+    return String(stateManager.getState()?.parameters?.print_style || '');
+  }
+
+  /**
+   * The warning step 5 lists when the channels are cut through on a plate
+   * printed whole: nothing would lie under the tape.
+   */
+  channelWarnings() {
+    const bare =
+      this.channelCut === 'through' && this.printStyle() === 'All printed';
+    return bare
+      ? [
+          {
+            code: 'channels-through-all-printed',
+            featureId: null,
+            text: THROUGH_ALL_PRINTED_WARNING,
+          },
+        ]
+      : [];
+  }
+
+  /** Every text the labels and the key put on tape. */
+  tapeTexts(labeled) {
+    const texts = (labeled.labels || []).map((l) => l.text);
+    if (this.config.plateKindParam) {
+      for (const row of keyRows(labeled.key, this.keyTitle())) {
+        texts.push(row.say);
+      }
+    }
+    return texts;
+  }
+
+  /**
+   * Translate what the layouts will ask for, both grades, once: the
+   * layouts run again when the braille lands. The note says the pass is
+   * under way; an engine that fails leaves the estimate and is not asked
+   * again until the grade changes.
+   */
+  measureTape(labeled) {
+    if (this.measuring || this.tapeStopped) return;
+    const texts = this.tapeTexts(labeled);
+    const grades = TAPE_GRADES.filter(
+      (g) => this.tape.missing(texts, g.key).length > 0
+    );
+    if (!grades.length) return;
+    if (this.refs.tapeNote) this.refs.tapeNote.textContent = MEASURING_TAPE;
+    this.measuring = (async () => {
+      for (const g of grades) await this.tape.measure(texts, g.key);
+    })().finally(() => {
+      this.measuring = null;
+      if (this.tape.failed) this.tapeStopped = true;
+      if (this.el) this.schedule(0);
+    });
+  }
+
+  /**
+   * The same pass, awaited: a draft's ready sentence counts the key with
+   * the labels measured, not estimated and then corrected a moment later.
+   */
+  async measureNow() {
+    if (this.measuring) await this.measuring;
+    if (this.tapeStopped) return;
+    const texts = this.tapeTexts(this.labeled());
+    for (const g of TAPE_GRADES) {
+      if (this.tape.missing(texts, g.key).length) {
+        await this.tape.measure(texts, g.key);
+      }
+    }
+    if (this.tape.failed) this.tapeStopped = true;
+  }
+
+  /**
+   * The labels' tape for the grade in use: the labels, their cells and
+   * length, whether the translator measured them, and the other grade's
+   * length when it is measured too.
+   */
+  tapeSummary(labeled) {
+    const grade = this.tapeGrade;
+    const other = TAPE_GRADES.find((g) => g.key !== grade).key;
+    const labels = labeled.labels || [];
+    const others = labels.map((l) => this.tape.of(l.text, other));
+    return {
+      grade,
+      labels: labels.length,
+      cells: labels.reduce((n, l) => n + l.cells, 0),
+      lengthMm: labels.reduce((n, l) => n + channelLengthMm(l.cells), 0),
+      measured: labels.every((l) => l.measured),
+      tapeWidthMm: this.tapeWidth(),
+      otherLengthMm:
+        labels.length && others.every((m) => m.measured)
+          ? others.reduce((n, m) => n + channelLengthMm(m.cells), 0)
+          : null,
+      failed: this.tape.failed,
+    };
+  }
+
+  /** The note under Braille on tape: the tape sentence, the engine's failure after it. */
+  tapeNoteText(labeled) {
+    const sentence = tapeSentence(this.tapeSummary(labeled));
+    return this.tape.failed
+      ? `${sentence} ${ENGINE_ESTIMATE_SENTENCE}`
+      : sentence;
   }
 
   /**
@@ -2489,11 +2691,25 @@ class MapPanel {
     if (this.refs.summary.textContent !== sentence)
       this.refs.summary.textContent = sentence;
     this.rebuildPlates();
+    // The labels' tape: measured by the translator when a text is new to
+    // it (the note says so until the pass lands), summed under the grade.
+    this.measureTape(labeled);
+    if (this.refs.tapeNote && !this.measuring) {
+      const note = this.tapeNoteText(labeled);
+      if (this.refs.tapeNote.textContent !== note)
+        this.refs.tapeNote.textContent = note;
+    }
 
+    const channelWarnings = this.channelWarnings();
+    // Written only on a change: a live region speaks every write.
+    const channelNote = channelWarnings[0]?.text || '';
+    if (this.refs.channelNote.textContent !== channelNote)
+      this.refs.channelNote.textContent = channelNote;
     const allWarnings = [
       ...this.planWarnings,
       ...labeled.warnings,
       ...built.warnings,
+      ...channelWarnings,
     ];
     this.refs.warnings.replaceChildren(
       ...allWarnings.map((warning) => el('li', '', warning.text))
@@ -2680,6 +2896,7 @@ class MapPanel {
       texts,
       channels,
       words,
+      channelsThrough: this.channelCut === 'through',
       title: title ? String(parameters[this.config.titleParam] || '') : '',
       plateId,
     };

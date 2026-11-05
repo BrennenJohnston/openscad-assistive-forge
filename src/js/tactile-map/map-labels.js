@@ -195,7 +195,9 @@ function candidates([x, y], half, length, across, gap) {
  *
  * @param {object} plan
  * @param {object} [settings] - the levels builder's
- * @returns {{ plan: object, labels: Array<{featureId: string, text: string, cells: number, name: string}>, key: object, warnings: Array<{code: string, featureId: string, text: string}> }}
+ * @param {{ grade: string, measured: boolean, of: (text: string) => {cells: number, braille: string, measured: boolean, grade: string} }} [settings.tape] -
+ *   the tape measure's view (tape-cells.js); without one the cells are estimated
+ * @returns {{ plan: object, labels: Array<{featureId: string, text: string, cells: number, braille: string, measured: boolean, grade: string|null, name: string}>, key: object, warnings: Array<{code: string, featureId: string, text: string}> }}
  */
 export function labelPlan(plan, settings = {}) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
@@ -219,11 +221,22 @@ export function labelPlan(plan, settings = {}) {
     return null;
   };
 
+  // The cells a text takes on tape: the braille translator's count when the
+  // settings carry the tape measure (tape-cells.js), the estimate otherwise.
+  const measure = s.tape?.of
+    ? (text) => s.tape.of(text)
+    : (text) => ({
+        cells: labelCells(text),
+        braille: '',
+        measured: false,
+        grade: null,
+      });
+
   const needsKey = new Set();
   const placed = [];
   const unplaced = [];
   for (const f of namedPoints(plan)) {
-    const cells = labelCells(f.name);
+    const cells = measure(f.name).cells;
     if (cells <= LABEL_CELLS) {
       const spot = tryPlace(f, cells);
       if (spot) {
@@ -246,7 +259,17 @@ export function labelPlan(plan, settings = {}) {
   for (const { f, spot, mode, cells } of placed) {
     const text = mode === 'name' ? f.name : letters.get(f.id);
     if (!text) continue;
-    labels.push({ featureId: f.id, text, cells, name: said.get(f.id) });
+    const m = measure(text);
+    labels.push({
+      featureId: f.id,
+      text,
+      cells,
+      braille: m.braille,
+      measured: m.measured,
+      grade: m.grade,
+      lengthMm: spot.length,
+      name: said.get(f.id),
+    });
     channels.push({
       id: `label-${f.id}`,
       class: 'channel',
