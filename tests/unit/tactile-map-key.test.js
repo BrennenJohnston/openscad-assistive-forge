@@ -1,9 +1,9 @@
 /**
  * The map key, listed from the plan: every symbol, line and area the map
  * draws, You are here first and the rest in order of importance (BANA 2022
- * 8.5.9; ISO 19028 6.4.2), each at its printed size; then the 2-cell keys of
- * the named places whose names do not fit a label, alphabetically, made by
- * BANA 2022 5.8.1's rules.
+ * 8.5.9; ISO 19028 6.4.2), each at its printed size; then every named thing
+ * by its number (ISO 19028 6.4.2: marks first, then codes; BANA 2022 5.7.1:
+ * numbers last).
  *
  * @license GPL-3.0-or-later
  */
@@ -12,7 +12,6 @@ import {
   keyFor,
   keyText,
   keySentence,
-  keyLetters,
   labelCells,
   LABEL_CELLS,
 } from '../../src/js/tactile-map/map-key.js';
@@ -121,30 +120,39 @@ describe('keyFor', () => {
     expect(entries.find((e) => e.name === 'Walkway').widthMm).toBe(1.5);
   });
 
-  it('gives each named place whose name does not fit a label a 2-cell key by BANA 5.8.1, alphabetically', () => {
-    const { abbreviations } = keyFor(fixture());
-    expect(abbreviations).toEqual([
+  it('lists every named thing that is on by its number, nearest the address first, a thing whose name would fit a label among them', () => {
+    const plan = fixture();
+    plan.features.find((f) => f.id === 'far').on = true;
+    const { numbers, abbreviations } = keyFor(plan);
+    expect(labelCells('Pine')).toBeLessThanOrEqual(LABEL_CELLS);
+    expect(numbers).toEqual([
+      { number: 1, featureId: 'cafe', name: 'Restaurant: Plaza Cafe' },
       {
-        key: 'np',
+        number: 2,
         featureId: 'stop',
         name: 'Bus stop 29405: NE Pacific St & Montlake Blvd NE',
       },
-      { key: 'pc', featureId: 'cafe', name: 'Restaurant: Plaza Cafe' },
       {
-        key: 'uw',
+        number: 3,
         featureId: 'clinic',
         name: 'Clinic: University of Washington Medical Center - Montlake',
       },
+      { number: 4, featureId: 'far', name: 'Cafe: Pine' },
     ]);
+    expect(abbreviations).toBeUndefined();
   });
 
-  it('leaves a name that fits its label unkeyed, and keys only what is on', () => {
+  it('numbers a named area too, and only what is on', () => {
     const plan = fixture();
-    plan.features.find((f) => f.id === 'far').on = true;
-    const { abbreviations } = keyFor(plan);
-    expect(labelCells('Pine')).toBeLessThanOrEqual(LABEL_CELLS);
-    expect(abbreviations.some((a) => a.featureId === 'far')).toBe(false);
-    expect(abbreviations.some((a) => a.featureId === 'bench')).toBe(false);
+    plan.features.find((f) => f.id === 'b').name = 'Oceanography Building';
+    const { numbers } = keyFor(plan);
+    expect(numbers.map((n) => n.featureId)).toEqual([
+      'cafe',
+      'stop',
+      'clinic',
+      'b',
+    ]);
+    expect(numbers[3].name).toBe('Oceanography Building');
   });
 
   it('names together the classes a finger cannot tell apart: one entry per printed shape', () => {
@@ -186,27 +194,6 @@ describe('keyFor', () => {
   });
 });
 
-describe('keyLetters', () => {
-  it('takes the first letters of the words, one with dot 3 or 6, never a barred pair, each once', () => {
-    const taken = new Set();
-    const said = (name) => keyLetters(name, taken);
-    expect(said('Plaza Cafe')).toBe('pc');
-    // "ac" is barred (BANA 5.8.1.2), "ae" has no dot 3 or 6: "an".
-    expect(said('Arts Center')).toBe('an');
-    // "ab" is a shortform BANA does not allow, "aa" barred: "ak".
-    expect(said('Alder Bakery')).toBe('ak');
-    // A second "Plaza Cafe" gets the next letters.
-    expect(said('Plaza Cafe')).toBe('pa');
-    // A pair that contracted braille writes as one cell is never a key.
-    expect(said('Chase Hall')).not.toBe('ch');
-    for (const k of taken) {
-      expect(k).toMatch(/^[a-z]{2}$/);
-      expect(/[k-z]/.test(k)).toBe(true);
-    }
-    expect(taken.size).toBe(5);
-  });
-});
-
 describe('the key as words', () => {
   it('reads as the README section and one sentence for the status', () => {
     const key = keyFor(fixture());
@@ -218,11 +205,17 @@ describe('the key as words', () => {
     expect(text).toContain(
       'You are here: a disc 10 mm across with a center dot one step higher'
     );
-    expect(text).toContain('pc: Restaurant: Plaza Cafe');
+    expect(text).toContain(
+      'Numbered places on the map:\n- 1 Restaurant: Plaza Cafe\n- 2 Bus stop 29405'
+    );
+    expect(text).not.toMatch(/Abbreviations/);
     expect(text).toContain('Walkway: a solid line 1.5 mm wide, low');
     expect(text).toContain('Area: a raised area, low');
     expect(keySentence(key)).toBe(
-      'The key has 10 symbols and 3 abbreviations.'
+      'The key has 10 symbols and 3 numbered places.'
+    );
+    expect(keySentence({ entries: [{}], numbers: [{}] })).toBe(
+      'The key has 1 symbol and 1 numbered place.'
     );
   });
 });

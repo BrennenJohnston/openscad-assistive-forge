@@ -12,6 +12,7 @@
  * @license GPL-3.0-or-later
  */
 
+import { numberNamed } from '../../src/js/tactile-map/map-numbers.js';
 import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
@@ -829,6 +830,45 @@ describe('the map panel', () => {
     expect(letterBraille.mock.calls.length).toBe(calls);
   });
 
+  it('settles the labels in one pass: a name the estimate refuses and the translator fits is measured at once, and the note says one figure', async () => {
+    const plan = withPlaces();
+    // Eleven cells by the estimate, six by the stand-in translator.
+    plan.features.push({
+      id: 'short',
+      class: 'landmark',
+      kind: 'point',
+      at: [140, 40],
+      on: true,
+      name: 'Al Bo Cy',
+    });
+    mount({ plan });
+    const p = document.getElementById('tactileMapPanel').__forgeMapPanel;
+    const note = document.getElementById('tactileMapTapeNote');
+    const writes = [];
+    new MutationObserver(() => writes.push(note.textContent)).observe(note, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+    p.source = 'draft';
+    p.schedule(0);
+    await vi.waitFor(
+      () =>
+        expect(p.labeled().labels.map((l) => l.featureId)).toContain('short'),
+      SETTLE
+    );
+    await vi.waitFor(
+      () => expect(note.textContent).toMatch(/^Label tape: /),
+      SETTLE
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const sentences = [...new Set(writes)].filter((w) =>
+      w.startsWith('Label tape: ')
+    );
+    expect(sentences).toHaveLength(1);
+    expect(sentences[0]).toMatch(/^Label tape: contracted braille/);
+  });
+
   it('keeps the estimate, says the engine did not load, and asks it no more until the grade changes', async () => {
     const broken = vi.fn(async () => {
       throw new Error('liblouis worker failed');
@@ -1111,6 +1151,21 @@ describe('what the map file holds, told to the model', () => {
       () => expect(params().map_file_kind).toBe('drawing'),
       SETTLE
     );
+    // The panel's next pass (here, a new bed) leaves the drawing in the
+    // control: its own file waits for the classes.
+    const written = files.length;
+    const bed = document.getElementById('tactileMapBed');
+    bed.value = 'custom';
+    bed.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('tactileMapBedWidth').value = '300';
+    document.getElementById('tactileMapBedDepth').value = '300';
+    document
+      .getElementById('tactileMapBedWidth')
+      .dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(summary()).toMatch(/^\d+ plates of/), SETTLE);
+    expect(params().map_file.name).toBe('station.svg');
+    expect(params().map_file_kind).toBe('drawing');
+    expect(files.length).toBe(written);
     // A levels file a person saved and chose again is levels.
     const saved = files[files.length - 1].svg;
     stateManager.setState({
@@ -1924,7 +1979,7 @@ describe('the map data row', () => {
     make().click();
     await vi.waitFor(() => expect(opened).not.toBeNull());
     expect(addressStatus()).toMatch(
-      /^Draft map ready: .* Choose what stays\. 2\.5 MB of map data arrived\. A scale with less ground makes a lighter map\. The key has \d+ symbols? and \d+ abbreviations?\.$/
+      /^Draft map ready: .* Choose what stays\. 2\.5 MB of map data arrived\. A scale with less ground makes a lighter map\. The key has \d+ symbols? and \d+ numbered places?\.$/
     );
   });
 
@@ -1974,7 +2029,7 @@ describe('the map data row', () => {
     // Two of the thousand seats are the marks', the destination and You
     // are here.
     expect(addressStatus()).toMatch(
-      / 103 features far from the address were left out: the editor works with 1,000 at a time\. The key has \d+ symbols? and \d+ abbreviations?\.$/
+      / 103 features far from the address were left out: the editor works with 1,000 at a time\. The key has \d+ symbols? and \d+ numbered places?\.$/
     );
   });
 
@@ -2177,7 +2232,7 @@ describe('the map Make the map drafts', () => {
     await pullData();
     await vi.waitFor(() => expect(opened).not.toBeNull());
     expect(addressStatus()).toMatch(
-      /^Draft map ready: \d+ of 22 features on; (\d+ warnings|no warnings)\. Choose what stays\. The key has \d+ symbols? and \d+ abbreviations?\.$/
+      /^Draft map ready: \d+ of 22 features on; (\d+ warnings|no warnings)\. Choose what stays\. The key has \d+ symbols? and \d+ numbered places?\.$/
     );
     expect(announce).toHaveBeenCalledWith(addressStatus(), {
       source: 'tactile-map',
@@ -2295,7 +2350,9 @@ describe('the map Make the map drafts', () => {
       const plan = getMapPlan();
       const order = rowOrder(plan.features);
       expect(opened.svg).toBe(
-        drawingFromPlan(plan, settingsForSet('oregon-2012'), { order })
+        drawingFromPlan(numberNamed(plan), settingsForSet('oregon-2012'), {
+          order,
+        })
       );
       document.getElementById('tactileMapRenderAll').click();
       const { readme } = await readZip();
@@ -2657,6 +2714,37 @@ describe('the PDF for the transcriber', () => {
     await vi.waitFor(() => expect(downloads.length).toBe(2), SETTLE);
     expect(mediaBox(downloads[1].bytes)).toEqual([841.89, 595.28]);
     expect(status()).toBe('The PDF is in tactile_map_print.pdf.');
+  });
+
+  it("leaves the tape's braille off the key page: the labels page draws it as dots, and the PDF's fonts cannot spell it", async () => {
+    const plan = sampleStationPlan();
+    plan.features.push({
+      id: 'pine',
+      class: 'landmark',
+      kind: 'point',
+      at: [400, 300],
+      on: true,
+      name: 'Pine',
+    });
+    mount({ plan });
+    const p = document.getElementById('tactileMapPanel').__forgeMapPanel;
+    p.source = 'draft';
+    p.schedule(0);
+    await vi.waitFor(
+      () =>
+        expect(p.labeled().labels.find((l) => l.text === 'Pine')?.braille).toBe(
+          '⠁⠁⠁⠁'
+        ),
+      SETTLE
+    );
+    const { unspelled, bytes } = p.buildPdf({
+      stem: 'tactile_map',
+      parameters: params(),
+    });
+    expect(unspelled).toEqual([]);
+    const text = new TextDecoder('latin1').decode(bytes);
+    expect(text).toMatch(/Pine: 4 cells, a channel/);
+    expect(text).not.toMatch(/Labels to write on braille tape/);
   });
 });
 

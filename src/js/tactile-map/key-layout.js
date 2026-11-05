@@ -11,7 +11,7 @@
  * better than dots printed flat. Words, channels and samples keep the
  * sign's 9.525 mm (3/8 in) from each other and from the raised frame
  * (ADA 703.2.7, 703.3.2). The title row comes first, then You are here
- * and the rest in the key's order, then the abbreviations. Rows continue
+ * and the rest in the key's order, then the numbered places. Rows continue
  * on a second key plate when the first is full; a 1 mm raised line frames
  * each plate (Wabinski and others 2022: a key framed by a line when it is
  * its own sheet).
@@ -98,9 +98,9 @@ export function keyRows(key, title) {
       say: e.name.toLowerCase(),
       sample: e,
     })),
-    ...key.abbreviations.map((a) => ({
-      print: `${a.key} ${a.name}`,
-      say: `${a.key} ${a.name}`.toLowerCase(),
+    ...key.numbers.map((n) => ({
+      print: `${n.number} ${n.name}`,
+      say: `${n.number} ${n.name}`.toLowerCase(),
       sample: null,
     })),
   ];
@@ -220,7 +220,7 @@ function sampleOf(entry, id, [cx, cy]) {
 /**
  * The key plates.
  *
- * @param {{ entries: Array<object>, abbreviations: Array<object> }} key
+ * @param {{ entries: Array<object>, numbers: Array<object> }} key
  * @param {object} options
  * @param {number} options.plateW - mm
  * @param {number} options.plateH - mm

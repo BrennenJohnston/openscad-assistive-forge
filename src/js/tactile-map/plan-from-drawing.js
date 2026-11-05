@@ -699,6 +699,10 @@ function clusterWithin(centers, withinMm) {
 // The plan
 // ---------------------------------------------------------------------------
 
+/** The names describeElement and the editor make for an unnamed shape. */
+const MADE_NAME =
+  /^(Circle|Ellipse|Rectangle|Polygon|Polyline|Line|Path|Shape) \d+( \(.*\))?$/;
+
 /**
  * Turn the editor's classed regions into a map plan.
  *
@@ -825,12 +829,17 @@ export function planFromRegions({
     return n === 1 ? region.key : `${region.key}-${n}`;
   };
   const nameOf = (region) => region.name || region.key;
+  // What the editor calls a shape it has no name for ("Rectangle 3"): the
+  // feature keeps it to be read by, and takes no number on the map.
+  const madeName = (region) =>
+    !region.name || MADE_NAME.test(region.name) ? { madeName: true } : {};
   const pairs = (ring) => ring.map((p) => [round2(p.x), round2(p.y)]);
   const areaFeature = (e, id) => ({
     id,
     class: e.cls,
     kind: 'area',
     name: nameOf(e.region),
+    ...madeName(e.region),
     ring: pairs(e.mm),
     ...(e.holes.length ? { holes: e.holes.map((hole) => pairs(hole.mm)) } : {}),
     on: true,
@@ -935,6 +944,7 @@ export function planFromRegions({
         class: cls,
         kind: 'point',
         name: nameOf(members[0].e.region),
+        ...madeName(members[0].e.region),
         at: [round2(x), round2(y)],
         on: true,
       });

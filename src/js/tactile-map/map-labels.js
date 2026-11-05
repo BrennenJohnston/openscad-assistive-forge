@@ -1,24 +1,22 @@
 /**
- * Labels on the map: a channel for braille label tape beside each named
- * place the map shows, laid in when the map is built (the plan the editor
- * edits keeps none of them).
- *
- * A place whose name fits a label (map-key.js LABEL_CELLS) gets a channel
- * for its name; a longer name gets a 2-cell channel for its key, the full
- * name in the key (BANA 2022 8.5.10). A channel stands beside the symbol,
- * right, left, below, above or at a corner, the first that keeps 3 mm from
- * every symbol, line, area, title and other channel (BANA 2022 8.5.3; the
- * levels builder's channelKeepClearMm). A place whose name fits but finds
- * no room tries its 2-cell key; a place with no room at all is said in a
- * warning and is in the key. The most important places are placed first
- * (map-key.js namedPoints), so they get the room.
+ * Labels on the map: the name of a named thing on braille label tape at the
+ * thing, laid in when the map is built (the plan the editor edits keeps none
+ * of them). A point's channel stands beside its symbol, right, left, below,
+ * above or at a corner, and takes a name of at most LABEL_CELLS cells. An
+ * area's stands inside the area, at its centroid or the nearest place that
+ * works, and covers at most half of it. Each keeps 3 mm from every symbol,
+ * line, area, title and other channel (BANA 2022 8.5.3; the levels builder's
+ * channelKeepClearMm). A thing with no room for its name carries only its
+ * number, and the key names it. The lower numbers are placed first, so they
+ * get the room.
  *
  * No DOM here: a worker may import this file.
  *
  * @license GPL-3.0-or-later
  */
-import { keyFor, labelCells, LABEL_CELLS, namedPoints } from './map-key.js';
-import { featureNames } from './feature-names.js';
+import { centroid } from '../ring-geometry.js';
+import { keyFor, labelCells, LABEL_CELLS } from './map-key.js';
+import { numberedName, numberedThings, numberNamed } from './map-numbers.js';
 import { buildLevelRings, DEFAULT_SETTINGS } from './levels-svg.js';
 
 /** A braille labeler's cell pitch on tape (ADA 703.3.1: 6.1 to 7.6 mm). */
@@ -31,6 +29,10 @@ export const channelLengthMm = (cells) =>
 
 /** A channel keeps this far inside the plate's edge. */
 const EDGE_MM = 2;
+/** A channel covers at most this share of the area it stands in. */
+export const LABEL_MAX_SHARE = 0.5;
+/** The steps of the search for a place inside an area (mm). */
+const GRID_MM = 2;
 
 const rect = (cx, cy, hw, hh) => ({
   x0: cx - hw,
@@ -127,7 +129,7 @@ function obstaclesOf(plan, s, textBoxes) {
         out.push({ seg: [f.points[i - 1], f.points[i]], half });
       }
     } else if (f.kind === 'area' && Array.isArray(f.ring)) {
-      out.push({ ring: f.ring });
+      out.push({ ring: f.ring, featureId: f.id });
     } else if (f.kind === 'channel' && Array.isArray(f.at)) {
       const across = s.tapeWidthMm + s.channelClearanceMm;
       const half = f.vertical
@@ -170,6 +172,48 @@ function clearance(r, obstacles) {
   return best;
 }
 
+function ringArea(ring) {
+  let twice = 0;
+  for (let i = 0; i < ring.length; i += 1) {
+    const [x0, y0] = ring[i];
+    const [x1, y1] = ring[(i + 1) % ring.length];
+    twice += x0 * y1 - x1 * y0;
+  }
+  return Math.abs(twice) / 2;
+}
+
+/** How far a rectangle inside a ring stands from the ring's edges. */
+function edgeClearance(r, ring) {
+  if (ring.some((p) => pointRect(p, r) === 0)) return 0;
+  let best = Infinity;
+  for (let i = 0; i < ring.length; i += 1) {
+    best = Math.min(best, segmentRect(ring[i], ring[(i + 1) % ring.length], r));
+  }
+  return best;
+}
+
+/**
+ * The places a channel may stand inside an area: its centroid, then a grid
+ * over its box, nearest the centroid first.
+ */
+function placesInside(ring, length, across, keep) {
+  const xs = ring.map((p) => p[0]);
+  const ys = ring.map((p) => p[1]);
+  const x0 = Math.min(...xs) + keep + length / 2;
+  const x1 = Math.max(...xs) - keep - length / 2;
+  const y0 = Math.min(...ys) + keep + across / 2;
+  const y1 = Math.max(...ys) - keep - across / 2;
+  if (x1 < x0 || y1 < y0) return [];
+  const c = centroid(ring.map(([x, y]) => ({ x, y })));
+  const spots = [];
+  for (let x = x0; x <= x1 + 1e-9; x += GRID_MM) {
+    for (let y = y0; y <= y1 + 1e-9; y += GRID_MM) spots.push([x, y]);
+  }
+  const away = ([x, y]) => Math.hypot(x - c.x, y - c.y);
+  spots.sort((a, b) => away(a) - away(b));
+  return [[c.x, c.y], ...spots];
+}
+
 /**
  * The places a channel `length` long may stand beside a symbol: right,
  * left, below, above, then the four corners.
@@ -197,7 +241,7 @@ function candidates([x, y], half, length, across, gap) {
  * @param {object} [settings] - the levels builder's
  * @param {{ grade: string, measured: boolean, of: (text: string) => {cells: number, braille: string, measured: boolean, grade: string} }} [settings.tape] -
  *   the tape measure's view (tape-cells.js); without one the cells are estimated
- * @returns {{ plan: object, labels: Array<{featureId: string, text: string, cells: number, braille: string, measured: boolean, grade: string|null, name: string}>, key: object, warnings: Array<{code: string, featureId: string, text: string}> }}
+ * @returns {{ plan: object, labels: Array<{featureId: string, number: number, text: string, cells: number, braille: string, measured: boolean, grade: string|null, name: string, inside: boolean}>, key: object, warnings: Array<{code: string, featureId: string, text: string}> }}
  */
 export function labelPlan(plan, settings = {}) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
@@ -207,14 +251,45 @@ export function labelPlan(plan, settings = {}) {
   const obstacles = obstaclesOf(plan, s, textBoxes);
   const { w, h } = plan.size;
 
-  const tryPlace = (f, cells) => {
+  const inBounds = (r) =>
+    r.x0 >= EDGE_MM &&
+    r.y0 >= EDGE_MM &&
+    r.x1 <= w - EDGE_MM &&
+    r.y1 <= h - EDGE_MM;
+
+  const placeBeside = (f, cells) => {
     const length = channelLengthMm(cells);
     const half = (f.size ?? s.symbolSizeMm) / 2;
     for (const [cx, cy] of candidates(f.at, half, length, across, keep + 0.2)) {
       const r = rect(cx, cy, length / 2, across / 2);
-      if (r.x0 < EDGE_MM || r.y0 < EDGE_MM) continue;
-      if (r.x1 > w - EDGE_MM || r.y1 > h - EDGE_MM) continue;
-      if (clearance(r, obstacles) < keep) continue;
+      if (!inBounds(r) || clearance(r, obstacles) < keep) continue;
+      obstacles.push({ rect: r });
+      return { at: [round(cx), round(cy)], length };
+    }
+    return null;
+  };
+
+  const placeInside = (f, cells) => {
+    const length = channelLengthMm(cells);
+    const area =
+      ringArea(f.ring) -
+      (f.holes || []).reduce((sum, hole) => sum + ringArea(hole), 0);
+    if (length * across > LABEL_MAX_SHARE * area) return null;
+    // Its own ring and any area around it hold the channel; what else stands
+    // in the area, its holes among them, keeps the channel clear.
+    const within = (ring) => f.ring.every((p) => insideRing(p, ring));
+    const others = [
+      ...obstacles.filter(
+        (o) => !(o.ring && (o.featureId === f.id || within(o.ring)))
+      ),
+      ...(f.holes || []).map((ring) => ({ ring })),
+    ];
+    for (const [cx, cy] of placesInside(f.ring, length, across, keep)) {
+      const r = rect(cx, cy, length / 2, across / 2);
+      if (!inBounds(r)) continue;
+      if (!corners(r).every((p) => insideRing(p, f.ring))) continue;
+      if (edgeClearance(r, f.ring) < keep) continue;
+      if (clearance(r, others) < keep) continue;
       obstacles.push({ rect: r });
       return { at: [round(cx), round(cy)], length };
     }
@@ -232,43 +307,37 @@ export function labelPlan(plan, settings = {}) {
         grade: null,
       });
 
-  const needsKey = new Set();
   const placed = [];
-  const unplaced = [];
-  for (const f of namedPoints(plan)) {
+  for (const f of numberedThings(plan)) {
     const cells = measure(f.name).cells;
-    if (cells <= LABEL_CELLS) {
-      const spot = tryPlace(f, cells);
-      if (spot) {
-        placed.push({ f, spot, mode: 'name', cells });
-        continue;
-      }
-    }
-    needsKey.add(f.id);
-    const spot = tryPlace(f, 2);
-    if (spot) placed.push({ f, spot, mode: 'key', cells: 2 });
-    else unplaced.push(f);
+    const spot =
+      f.kind === 'area'
+        ? placeInside(f, cells)
+        : cells <= LABEL_CELLS
+          ? placeBeside(f, cells)
+          : null;
+    if (spot) placed.push({ f, spot, cells });
   }
 
-  const key = keyFor(plan, s, { needsKey });
-  const letters = new Map(key.abbreviations.map((a) => [a.featureId, a.key]));
-  const names = featureNames(plan.features || []);
-  const said = new Map((plan.features || []).map((f, i) => [f.id, names[i]]));
+  const numbered = numberNamed(plan);
+  const key = keyFor(plan, s);
+  const numberOf = new Map(key.numbers.map((n) => [n.featureId, n]));
   const labels = [];
   const channels = [];
-  for (const { f, spot, mode, cells } of placed) {
-    const text = mode === 'name' ? f.name : letters.get(f.id);
-    if (!text) continue;
-    const m = measure(text);
+  for (const { f, spot, cells } of placed) {
+    const row = numberOf.get(f.id);
+    const m = measure(f.name);
     labels.push({
       featureId: f.id,
-      text,
+      number: row.number,
+      text: f.name,
       cells,
       braille: m.braille,
       measured: m.measured,
       grade: m.grade,
       lengthMm: spot.length,
-      name: said.get(f.id),
+      name: numberedName(row, row.name),
+      inside: f.kind === 'area',
     });
     channels.push({
       id: `label-${f.id}`,
@@ -279,16 +348,11 @@ export function labelPlan(plan, settings = {}) {
       on: true,
     });
   }
-  const warnings = unplaced.map((f) => ({
-    code: 'no-room-for-label',
-    featureId: f.id,
-    text: `No room for ${said.get(f.id)}'s label; it is in the key as ${letters.get(f.id)}.`,
-  }));
   return {
-    plan: { ...plan, features: [...(plan.features || []), ...channels] },
+    plan: { ...numbered, features: [...numbered.features, ...channels] },
     labels,
     key: { ...key, labels },
-    warnings,
+    warnings: [],
   };
 }
 

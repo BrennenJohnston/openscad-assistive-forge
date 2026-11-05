@@ -227,6 +227,8 @@ describe('plateLevelsSvg', () => {
     const B3 = nine.plates.find((p) => p.id === 'B3');
     const out = plateLevelsSvg(rings, B3, { id: 'notches' });
     expect(groupRings(out.svg, 'cutouts')).toHaveLength(5);
+    // Every plate's file carries every group the model imports, leads too.
+    expect(out.svg).toContain('<g id="leads">');
     expect(groupRings(out.svg, 'channels')).toHaveLength(0);
     expect(out.size).toEqual({ w: 160, h: 120 });
   });

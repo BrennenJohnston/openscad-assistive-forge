@@ -7,13 +7,9 @@
  * The entries: every symbol, line and area the map draws, You are here
  * first and the rest in order of importance, each at its printed size (ISO
  * 19028 6.4.2 and 6.4.3). Classes that draw the same shape share an entry,
- * since a finger cannot tell them apart. Then the 2-cell keys of the named
- * places whose names do not fit a label beside their symbol, in
- * alphabetical order (BANA 2022 8.5.10; ISO 19028 6.4.2), each made by
- * BANA 2022 5.8.1's rules: suggestive of the place, its first letter the
- * place's own, one of its two letters with dot 3 or dot 6, never aa, ac, cc
- * or ca, and never a pair braille writes as a shortform BANA does not allow
- * or as one contracted cell.
+ * since a finger cannot tell them apart. Then every named thing by its
+ * number (map-numbers.js), marks first and codes after them (ISO 19028
+ * 6.4.2), numbers last (BANA 2022 5.7.1).
  *
  * No DOM here: a worker may import this file.
  *
@@ -21,6 +17,7 @@
  */
 import { MAP_CLASSES } from './map-classes.js';
 import { featureNames } from './feature-names.js';
+import { numberedThings } from './map-numbers.js';
 import {
   activeLibrary,
   activeSet,
@@ -35,8 +32,9 @@ import {
 import { regionArea } from '../ring-geometry.js';
 
 /**
- * The braille cells a label channel holds: 12.7 mm tape beside a 10 mm
- * symbol, about 40 mm of it, at about 6.2 mm a cell.
+ * The most braille cells a name takes on tape beside a point's symbol: 12.7
+ * mm tape beside a 10 mm symbol, about 40 mm of it, at about 6.2 mm a cell.
+ * A longer name's point carries only its number.
  */
 export const LABEL_CELLS = 6;
 
@@ -138,140 +136,14 @@ export function labelCells(text) {
   return s.length + capitals + numbers;
 }
 
-/** Letters with dot 3 or dot 6 in braille: k to z (w is 2-4-5-6). */
-const LOWER_ROW = /[k-z]/;
 /**
- * Pairs never used as a key: the four BANA 5.8.1.2 names; the 2-cell UEB
- * shortforms BANA 5.8.1.5 does not allow; and the pairs contracted braille
- * writes as one cell (groupsigns), which would make a 1-cell key.
- */
-const BARRED = new Set([
-  'aa',
-  'ac',
-  'cc',
-  'ca',
-  'ab',
-  'af',
-  'ag',
-  'cd',
-  'ei',
-  'gd',
-  'gt',
-  'ch',
-  'gh',
-  'sh',
-  'th',
-  'wh',
-  'ed',
-  'er',
-  'ou',
-  'ow',
-  'st',
-  'ar',
-  'ea',
-  'bb',
-  'ff',
-  'gg',
-  'be',
-  'en',
-  'in',
-]);
-/** Words a key never starts from. */
-const MINOR = new Set([
-  'of',
-  'the',
-  'and',
-  'at',
-  'on',
-  'in',
-  'for',
-  'a',
-  'an',
-  'to',
-  'de',
-]);
-
-const usable = (pair, taken) =>
-  /^[a-z]{2}$/.test(pair) &&
-  LOWER_ROW.test(pair) &&
-  !BARRED.has(pair) &&
-  !taken.has(pair);
-
-/**
- * A 2-cell key for a place's name, by BANA 2022 5.8.1: the first letter of
- * its first word, then the first letter of each later word, then the later
- * letters of those words, then of the first word, then any letter; the
- * first pair that has a letter with dot 3 or dot 6, is not barred and is
- * not taken. The key is added to `taken`.
- *
- * @param {string} name
- * @param {Set<string>} taken
- * @returns {string|null}
- */
-export function keyLetters(name, taken) {
-  const words = String(name || '')
-    .toLowerCase()
-    .split(/[^a-z]+/)
-    .filter(Boolean);
-  const main = words.filter((w) => !MINOR.has(w));
-  const list = main.length ? main : words;
-  if (!list.length) return null;
-  const first = list[0][0];
-  const seconds = [
-    ...list.slice(1).map((w) => w[0]),
-    ...list.slice(1).flatMap((w) => [...w.slice(1)]),
-    ...list[0].slice(1),
-    ...'abcdefghijklmnopqrstuvwxyz',
-  ];
-  for (const second of seconds) {
-    const pair = first + second;
-    if (usable(pair, taken)) {
-      taken.add(pair);
-      return pair;
-    }
-  }
-  return null;
-}
-
-/**
- * The named places on a plan that are on, in order of importance: by
- * class (POINT_ORDER), then nearer the address first. The key's letters
- * and the labels on the map are given in this order, so the most
- * important places get the most suggestive keys and the first room.
- *
- * @param {object} plan
- * @returns {object[]}
- */
-export function namedPoints(plan) {
-  const center = [plan.size.w / 2, plan.size.h / 2];
-  const near = (f) => Math.hypot(f.at[0] - center[0], f.at[1] - center[1]);
-  const rank = (key) => {
-    const i = POINT_ORDER.indexOf(key);
-    return i < 0 ? POINT_ORDER.length : i;
-  };
-  return (plan.features || [])
-    .filter(
-      (f) =>
-        f.on !== false &&
-        f.kind === 'point' &&
-        f.class !== 'you-are-here' &&
-        // The destination is named in its own key row, by its cone.
-        f.class !== 'destination' &&
-        f.name
-    )
-    .sort((a, b) => rank(a.class) - rank(b.class) || near(a) - near(b));
-}
-
-/**
- * The key of a plan: its entries and its abbreviations.
+ * The key of a plan: its entries and its numbered things.
  *
  * @param {object} plan
  * @param {object} [settings] - the levels builder's (symbols, size)
- * @param {{ needsKey?: Set<string> }} [options] - places keyed although
- *   their names fit a label (a label with no room on the map)
- * @returns {{ entries: Array<object>, abbreviations: Array<{key: string, featureId: string, name: string}> }}
+ * @returns {{ entries: Array<object>, numbers: Array<{number: number, featureId: string, name: string}> }}
  */
-export function keyFor(plan, settings = {}, { needsKey = new Set() } = {}) {
+export function keyFor(plan, settings = {}) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
   const classes = s.classes || {};
   const symbols = symbolMap(s.symbols || activeLibrary());
@@ -367,29 +239,18 @@ export function keyFor(plan, settings = {}, { needsKey = new Set() } = {}) {
     shape: `a raised area, ${LEVEL_WORDS[classes[c]?.level] || 'low'}`,
   }));
 
-  // Abbreviations: the named places whose names do not fit a label (or
-  // whose label found no room), in order of importance.
+  // The named things, in number order.
   const names = featureNames(all);
   const saidById = new Map(all.map((f, i) => [f.id, names[i]]));
-  // A name's cells by the tape measure when the settings carry one
-  // (tape-cells.js), the estimate otherwise: the same count the labels use.
-  const cellsOf = s.tape?.of ? (text) => s.tape.of(text).cells : labelCells;
-  const named = namedPoints(plan).filter(
-    (f) => cellsOf(f.name) > LABEL_CELLS || needsKey.has(f.id)
-  );
-  const taken = new Set();
-  const abbreviations = [];
-  for (const f of named) {
-    const key = keyLetters(f.name, taken);
-    if (key) {
-      abbreviations.push({ key, featureId: f.id, name: saidById.get(f.id) });
-    }
-  }
-  abbreviations.sort((a, b) => a.key.localeCompare(b.key));
+  const numbers = numberedThings(plan).map((f, i) => ({
+    number: i + 1,
+    featureId: f.id,
+    name: saidById.get(f.id),
+  }));
 
   return {
     entries: [...points, ...lines, ...areas],
-    abbreviations,
+    numbers,
     set: activeSet(),
   };
 }
@@ -397,7 +258,7 @@ export function keyFor(plan, settings = {}, { needsKey = new Set() } = {}) {
 /**
  * The key as text, for the README in the plate zip.
  *
- * @param {{ entries: Array<object>, abbreviations: Array<object> }} key
+ * @param {{ entries: Array<object>, numbers: Array<object> }} key
  * @returns {string}
  */
 export function keyText(key) {
@@ -405,9 +266,9 @@ export function keyText(key) {
   if (key.set?.name) out.push(`Symbols: ${key.set.name}.`);
   out.push('', 'Symbols, You are here first:');
   for (const e of key.entries) out.push(`- ${e.name}: ${e.shape}`);
-  if (key.abbreviations.length) {
-    out.push('', 'Abbreviations on the map, alphabetically:');
-    for (const a of key.abbreviations) out.push(`- ${a.key}: ${a.name}`);
+  if (key.numbers.length) {
+    out.push('', 'Numbered places on the map:');
+    for (const n of key.numbers) out.push(`- ${n.number} ${n.name}`);
   }
   if (key.labels?.length) {
     out.push('', 'Labels to write on braille tape, each for its channel:');
@@ -417,7 +278,7 @@ export function keyText(key) {
       const detail = l.braille
         ? ` (${l.braille}, ${l.cells} ${l.cells === 1 ? 'cell' : 'cells'}${l.lengthMm ? `, ${l.lengthMm} mm` : ''})`
         : '';
-      out.push(`- ${l.text}${detail}: beside ${l.name}`);
+      out.push(`- ${l.text}${detail}: ${l.inside ? 'in' : 'beside'} ${l.name}`);
     }
   }
   return out.join('\n') + '\n';
@@ -426,11 +287,11 @@ export function keyText(key) {
 /**
  * The key in one sentence, for the status line.
  *
- * @param {{ entries: Array<object>, abbreviations: Array<object> }} key
+ * @param {{ entries: Array<object>, numbers: Array<object> }} key
  * @returns {string}
  */
 export function keySentence(key) {
   const n = key.entries.length;
-  const m = key.abbreviations.length;
-  return `The key has ${n} ${n === 1 ? 'symbol' : 'symbols'} and ${m} ${m === 1 ? 'abbreviation' : 'abbreviations'}.`;
+  const m = key.numbers.length;
+  return `The key has ${n} ${n === 1 ? 'symbol' : 'symbols'} and ${m} numbered ${m === 1 ? 'place' : 'places'}.`;
 }

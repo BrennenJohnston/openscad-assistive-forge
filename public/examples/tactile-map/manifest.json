@@ -21,6 +21,7 @@
     "raisedWordsParam": "raised_words",
     "keyLetterParam": "key_letter_height_mm",
     "coneMarksParam": "cone_marks",
+    "numberWedgesParam": "number_wedges",
     "marginParam": "margin_mm",
     "titleBandParam": "title_band_mm"
   },
@@ -35,7 +36,10 @@
     "label_channel_depth_mm",
     "map_width_mm",
     "map_height_mm",
-    "key_letter_height_mm"
+    "key_letter_height_mm",
+    "wedge_face_angle_deg",
+    "wedge_foot_mm",
+    "numeral_raise_mm"
   ],
   "tags": ["tactile", "map", "accessibility", "orientation", "mobility", "braille"],
   "inspired_by": {

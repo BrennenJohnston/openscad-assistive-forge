@@ -7,7 +7,8 @@
  * dot), <g id="channels"> (the label tape's recesses) and
  * <g id="cutouts"> (what is cut right through the plate: a plate's name as
  * notches, added by the plate splitter, and the channels when the settings
- * cut them through), which the Tactile Map tile imports
+ * cut them through) and <g id="leads"> (the lines from a thing to its number
+ * in the margin), which the Tactile Map tile imports
  * one group at a time by id; every group is written, empty or not, since a
  * missing id is a warning. One more group, <g id="letters">, holds the box
  * the raised title will take, for the checks only: the model draws the
@@ -828,6 +829,7 @@ export function buildLevelRings(plan, settings = {}) {
     here: [],
     channels: [],
     cutouts: [],
+    leads: [],
   };
   for (const b of built) {
     const key = GROUPS.includes(b.level) ? b.level : `level${b.level}`;

@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { numberNamed } from '../../src/js/tactile-map/map-numbers.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sampleStationPlan } from '../../src/js/tactile-map/plan.js';
@@ -85,6 +86,18 @@ describe('the names', () => {
     expect(platform.kind).toBe('line');
     expect(byId.has('stairs-1')).toBe(false);
     for (const t of texts) expect(t.text).not.toMatch(/ near /);
+  });
+
+  it('say a named thing with its number first, once the plan is numbered; a street stays as it is', () => {
+    const numbered = numberNamed(plan);
+    const byId = new Map(paperTexts(numbered).map((t) => [t.featureId, t]));
+    const area = numbered.features.find((f) => f.name === 'the waiting area');
+    expect(area.number).toBeGreaterThan(0);
+    expect(byId.get(area.id).text).toMatch(
+      new RegExp(`^${area.number} .*the waiting area`)
+    );
+    const edge = numbered.features.find((f) => f.name === 'the platform edge');
+    expect(byId.get(edge.id).text).toMatch(/^the platform edge/);
   });
 
   it('move with a plate and stay only where they fall inside it', () => {

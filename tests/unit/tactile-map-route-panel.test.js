@@ -251,12 +251,12 @@ describe('Make a route map', () => {
         1,
         172,
         360
-      ) + ' The key has 10 symbols and 4 abbreviations.'
+      ) + ' The key has 10 symbols and 6 numbered places.'
     );
     // The destination is keyed by its cone and named in its own row, so it
-    // takes no two-letter key.
+    // takes no number.
     expect(addressStatus()).toBe(
-      'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk. The key has 10 symbols and 4 abbreviations.'
+      'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk. The key has 10 symbols and 6 numbered places.'
     );
     // The model is told the sheet: the fitted face and the 10 mm band
     // around it (no title typed, so no title band).
@@ -559,7 +559,7 @@ describe('a route by bus and train', () => {
     const end = getMapPlan().features.find((f) => f.id === 'destination-stop');
     expect(end.name).toBe('East Stevens Way NE & Benton Ln, 72');
     expect(addressStatus()).toMatch(
-      /^Route map ready: a \d+ m walk from Husky Union Building to East Stevens Way NE & Benton Ln, .* The journey: 22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony\. The key has \d+ symbols? and \d+ abbreviations?\.$/
+      /^Route map ready: a \d+ m walk from Husky Union Building to East Stevens Way NE & Benton Ln, .* The journey: 22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony\. The key has \d+ symbols? and \d+ numbered places?\.$/
     );
     expect(getMapData().travel).toMatchObject({ mode: 'transit', walk: 'to' });
   });

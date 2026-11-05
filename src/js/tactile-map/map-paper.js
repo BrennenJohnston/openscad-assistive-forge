@@ -21,6 +21,7 @@
 
 import { ringsToPathData } from '../ring-geometry.js';
 import { featureNames } from './feature-names.js';
+import { numberedName } from './map-numbers.js';
 
 /** The capitals' height of a name on the paper (mm). */
 export const PAPER_LETTER_MM = 3.5;
@@ -163,7 +164,12 @@ export function paperTexts(plan) {
     if (f.on === false || !f.name) return;
     const at = placeOf(f);
     if (!at) return;
-    out.push({ featureId: f.id, text: names[i], at, kind: f.kind });
+    out.push({
+      featureId: f.id,
+      text: numberedName(f, names[i]),
+      at,
+      kind: f.kind,
+    });
   });
   return out;
 }

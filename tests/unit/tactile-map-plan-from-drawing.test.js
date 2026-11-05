@@ -263,6 +263,11 @@ describe('a plan from a drawing', () => {
     const ids = plan.features.map((f) => f.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(plan.features.every((f) => f.name)).toBe(true);
+    // "Shape 3" is what the editor calls a shape: read by it, numbered by no one.
+    expect(plan.features.filter((f) => f.kind !== 'line').length).toBeGreaterThan(0);
+    for (const f of plan.features) {
+      if (f.kind !== 'line') expect(f.madeName, f.id).toBe(true);
+    }
     expect(validatePlan(plan).ok).toBe(true);
   });
 

@@ -125,7 +125,7 @@ test('a route map from the Husky Union Building to the Bill & Melinda Gates Cent
   await expect(make).toHaveText('Make the map');
   await make.click();
   await expect(status).toHaveText(
-    /^Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way\. The map is 172 x 360 mm, fitted to the walk\. The key has \d+ symbols? and \d+ abbreviations?\.$/,
+    /^Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way\. The map is 172 x 360 mm, fitted to the walk\. The key has \d+ symbols? and \d+ numbered places?\.$/,
     { timeout: 30000 }
   );
   const editor = page.locator('#drawingEditorSurface .drawing-editor');
@@ -177,14 +177,10 @@ test('a route map from the Husky Union Building to the Bill & Melinda Gates Cent
       expect(toLine(p, route)).toBeGreaterThanOrEqual(3 - 0.05);
     }
   }
-  // No symbol, line or channel crowds another. A place beside the route may
-  // find no room for its label: then it is keyed and said (the cafe here).
+  // No symbol, line or channel crowds another. A place beside the route with
+  // no room for its name carries its number; that is no fault.
   const warned = await page.locator('#tactileMapWarnings li').allTextContents();
-  for (const text of warned) {
-    expect(text).toMatch(
-      /^No room for .+'s label; it is in the key as [a-z]{2}\.$/
-    );
-  }
+  expect(warned).toEqual([]);
 
   // The model takes the fitted size in its 10 mm band and renders with no
   // warning. Escape leaves the editor, and focus goes back to the button
@@ -286,7 +282,7 @@ test('a route by bus and train: the journeys found on a press, the walk to the 7
   await page.locator('#tactileMapMake').click();
   const status = page.locator('#tactileMapAddressStatus');
   await expect(status).toHaveText(
-    /^Route map ready: a \d+ m walk from Husky Union Building to East Stevens Way NE & Benton Ln, .* The journey: 22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony\. The key has \d+ symbols? and \d+ abbreviations?\.$/,
+    /^Route map ready: a \d+ m walk from Husky Union Building to East Stevens Way NE & Benton Ln, .* The journey: 22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony\. The key has \d+ symbols? and \d+ numbered places?\.$/,
     { timeout: 60000 }
   );
   await expect(

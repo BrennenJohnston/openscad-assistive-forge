@@ -284,7 +284,7 @@ export function mapPdf({
       ? `Label tape ${tapeWidthMm} mm wide; each channel is its label's cells at 6.2 mm plus 4 mm at each end.`
       : '',
     ...labels.map((l) => ({
-      text: `${l.text}: ${l.cells} ${l.cells === 1 ? 'cell' : 'cells'}, a channel ${l.lengthMm} mm long, beside ${l.name}`,
+      text: `${l.text}: ${l.cells} ${l.cells === 1 ? 'cell' : 'cells'}, a channel ${l.lengthMm} mm long, ${l.inside ? 'in' : 'beside'} ${l.name}`,
       braille: l.braille || '',
     })),
   ].filter((line) => line !== '');

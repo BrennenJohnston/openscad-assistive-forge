@@ -12,7 +12,8 @@
 // <g id="channels"> the strips sunk for label tape, and <g id="cutouts"> what
 // is cut right through the plate (a plate's name as notches on its edge, and
 // the label channels when the panel's Tape channels cuts them through, for
-// tape that lies on the backing board).
+// tape that lies on the backing board), and <g id="leads"> the lines from a
+// thing to its number in the margin, on a level of their own.
 // Each group is imported on its own by its id and raised to its level, so one
 // file carries the whole map and the heights never drift apart. The Tactile
 // Map Designer panel writes this file; a saved one works the same in desktop
@@ -98,6 +99,16 @@ key_letter_height_mm = 16; // [16:0.1:50.8]
 // Where the destination cones stand, written by the panel: rows of x:y in tenths of a millimeter from the plate's bottom left, rows split by |. A map plate holds the cone at the address; the key plate holds its sample.
 cone_marks = "";
 
+/* [Numbers] */
+// Face angle of a number's braille wedge (degrees), 45 to 90: 75 leans the braille back toward the reader, as my embosser's assembly map does.
+wedge_face_angle_deg = 75; // [45:1:90]
+// Sloped face below the braille on a number's wedge (mm), 2 to 12: it lifts the cells so a fingertip reading them rests on the wedge, not on the plate. A larger foot makes a taller wedge.
+wedge_foot_mm = 2; // [2:1:12]
+// How far a raised numeral stands above what it stands on (mm). 0.8 mm is the ADA 703.2.1 minimum.
+numeral_raise_mm = 1.0; // [0.8:0.05:2]
+// Where the numbers' braille wedges stand, written by the panel: rows of x:y:n, x and y in tenths of a millimeter from the plate's bottom left to the middle of the wedge's front foot, n the number; rows split by |.
+number_wedges = "";
+
 /* [Hidden] */
 $fn = 32;
 
@@ -108,6 +119,28 @@ $fn = 32;
 // sides. Constants, not dials: the form other tactile map makers know.
 CONE_HEIGHT_MM = 4.9;
 CONE_RADIUS_MM = CONE_HEIGHT_MM / 2;
+
+// A number's braille wedge: the form of my embosser's assembly map, its back a
+// 60 degree ramp and a 1.5 mm flat along its top, so it prints with no supports.
+// Dots and cells inside the ranges of ADA 703.3.1 the Braille Sign keeps to: a
+// frustum under a spherical cap, sunk a little into the face so none floats.
+WEDGE_BACK_ANGLE_DEG = 60;
+WEDGE_TOP_MM = 1.5;
+WEDGE_FACE_MARGIN_X_MM = 2.5;
+WEDGE_FACE_MARGIN_TOP_MM = 2.0;
+DOT_BASE_MM = 1.5;
+DOT_DOME_MM = 1.0;
+DOT_BASE_HEIGHT_MM = 0.3;
+DOT_DOME_HEIGHT_MM = 0.5;
+DOT_PITCH_MM = 2.5;
+CELL_PITCH_MM = 6.5;
+DOT_SINK_MM = 0.05;
+// Dot numbers, 1 to 3 the left column from the top, 4 to 6 the right; the
+// numeric indicator stands before the digits (UEB).
+NUMBER_SIGN = [3, 4, 5, 6];
+DIGIT_DOTS = [[2, 4, 5], [1], [1, 2], [1, 4], [1, 4, 5], [1, 5], [1, 2, 4], [1, 2, 4, 5], [1, 2, 5], [2, 4]];
+// A number on a thing stands 10 mm tall; in the margin and on the key, 16 mm.
+NUMERAL_ON_THING_MM = 10;
 
 // Overlap for every boolean, so no two faces touch exactly.
 _fuse = 0.01;
@@ -153,6 +186,14 @@ CHANNEL_DEPTH_RANGE_MM = [0.2, 0.5];   // my printed maps (0.3)
 MAP_WIDTH_RANGE_MM = [100, 600];       // a plate of a split map at the least; about two hand spans at most
 MAP_HEIGHT_RANGE_MM = [75, 450];       // a plate at the least; about one hand span at most
 KEY_LETTER_RANGE_MM = [16, 50.8];      // ADA 703.2.5, 5/8 to 2 in, as the title
+WEDGE_ANGLE_RANGE_DEG = [45, 90];      // a lean a finger can read, up to upright
+WEDGE_FOOT_RANGE_MM = [2, 12];         // the least that clears the plate, up to my assembly map's 12
+NUMERAL_RAISE_RANGE_MM = [0.8, 2.0];   // ADA 703.2.1, 1/32 in, as the title's raise
+NUMBER_RANGE = [1, 99];                // two digits: a cell for the indicator and one for each
+DOT_BASE_RANGE_MM = [1.5, 1.6];        // ADA 703.3.1
+DOT_HEIGHT_RANGE_MM = [0.6, 0.9];      // ADA 703.3.1
+DOT_PITCH_RANGE_MM = [2.3, 2.5];       // ADA 703.3.1
+CELL_PITCH_RANGE_MM = [6.13, 7.6];     // ADA 703.3.1, as the Braille Sign keeps to
 
 function in_range(v, r) = v >= r[0] && v <= r[1];
 
@@ -185,6 +226,17 @@ assert(map_file_kind == "levels" || map_file_kind == "drawing",
 assert(plate_kind == "Map" || plate_kind == "Key", "plate_kind must be Map or Key.");
 assert(in_range(key_letter_height_mm, KEY_LETTER_RANGE_MM),
        str("key_letter_height_mm is ", key_letter_height_mm, " mm; ADA 703.2.5 asks for 16 to 50.8 mm."));
+assert(in_range(wedge_face_angle_deg, WEDGE_ANGLE_RANGE_DEG),
+       str("wedge_face_angle_deg is ", wedge_face_angle_deg, " degrees, outside 45 to 90."));
+assert(in_range(wedge_foot_mm, WEDGE_FOOT_RANGE_MM),
+       str("wedge_foot_mm is ", wedge_foot_mm, " mm, outside 2 to 12 mm."));
+assert(in_range(numeral_raise_mm, NUMERAL_RAISE_RANGE_MM),
+       str("numeral_raise_mm is ", numeral_raise_mm, " mm, outside 0.8 to 2.0 mm."));
+// The braille figures against their spec, should anyone edit the constants.
+assert(in_range(DOT_BASE_MM, DOT_BASE_RANGE_MM), "The wedge's dot base is outside 1.5 to 1.6 mm.");
+assert(in_range(DOT_BASE_HEIGHT_MM + DOT_DOME_HEIGHT_MM, DOT_HEIGHT_RANGE_MM), "The wedge's dot height is outside 0.6 to 0.9 mm.");
+assert(in_range(DOT_PITCH_MM, DOT_PITCH_RANGE_MM), "The wedge's dot pitch is outside 2.3 to 2.5 mm.");
+assert(in_range(CELL_PITCH_MM, CELL_PITCH_RANGE_MM), "The wedge's cell pitch is outside 6.13 to 7.6 mm.");
 
 // =============================================================================
 // HEIGHTS
@@ -412,23 +464,106 @@ module destination_cone() {
 
 // Every raised word the panel wrote: the title's lines on their band, a key
 // plate's words. Each row stands on its own height above the base and is
-// clipped to the plate, so a line across a seam goes on at the next plate.
+// clipped to the plate, so a line across a seam goes on at the next plate. A
+// row whose text starts with # is a number: bold, centered on its x, on a
+// thing 10 mm tall and elsewhere at least the letters' 16 mm.
+function _is_numeral(s) = len(s) > 1 && s[0] == "#";
 module raised_words() {
     for (row = _rows(raised_words)) {
-        assert(in_range(row[2], TITLE_CAP_RANGE_MM),
+        numeral = _is_numeral(row[4]);
+        assert(in_range(row[2], TITLE_CAP_RANGE_MM) || (numeral && row[2] == NUMERAL_ON_THING_MM),
                str("a raised word's capital is ", row[2], " mm; ADA 703.2.5 asks for 16 to 50.8 mm."));
         assert(row[3] >= 0 && row[3] <= level_z(3) - base_eff,
                str("a raised word stands ", row[3], " mm above the base, past the top level."));
-        translate([0, 0, base_eff + row[3] - _fuse])
-            linear_extrude(height = title_raise_mm + _fuse)
+        translate([0, 0, base_eff - _fuse])
+            linear_extrude(height = row[3] + (numeral ? numeral_raise_mm : title_raise_mm) + _fuse)
                 intersection() {
                     square([map_width_mm, map_height_mm]);
                     translate([row[0], row[1]])
-                        text(row[4], size = row[2] / LETTER_CAP_FACTOR,
-                             font = "Liberation Sans", spacing = TITLE_LETTER_SPACING,
-                             halign = "left", valign = "baseline");
+                        if (numeral)
+                            text(_sub(row[4], 1, len(row[4])), size = row[2] / LETTER_CAP_FACTOR,
+                                 font = "Liberation Sans:style=Bold",
+                                 halign = "center", valign = "baseline");
+                        else
+                            text(row[4], size = row[2] / LETTER_CAP_FACTOR,
+                                 font = "Liberation Sans", spacing = TITLE_LETTER_SPACING,
+                                 halign = "left", valign = "baseline");
                 }
     }
+}
+
+// A number's braille cells as lists of dot numbers: the indicator, then a cell a digit.
+function _digits(n) = n < 10 ? [n] : concat(_digits(floor(n / 10)), [n % 10]);
+function _cells(n) = concat([NUMBER_SIGN], [for (d = _digits(n)) DIGIT_DOTS[d]]);
+_cell_w = DOT_PITCH_MM + DOT_BASE_MM;
+_cell_h = 2 * DOT_PITCH_MM + DOT_BASE_MM;
+_face_h = wedge_foot_mm + _cell_h + WEDGE_FACE_MARGIN_TOP_MM;
+_wedge_h = _face_h * sin(wedge_face_angle_deg);
+_face_run = _face_h * cos(wedge_face_angle_deg);
+_wedge_depth = _face_run + WEDGE_TOP_MM + _wedge_h / tan(WEDGE_BACK_ANGLE_DEG);
+function _wedge_w(n) = (len(_cells(n)) - 1) * CELL_PITCH_MM + _cell_w + 2 * WEDGE_FACE_MARGIN_X_MM;
+
+// One dot, base at z = 0: a frustum under a spherical cap of radius
+// (r^2 + h^2) / 2h, smooth under a finger.
+module _braille_dot() {
+    r = DOT_DOME_MM / 2;
+    cap = (r * r + DOT_DOME_HEIGHT_MM * DOT_DOME_HEIGHT_MM) / (2 * DOT_DOME_HEIGHT_MM);
+    cylinder(h = DOT_BASE_HEIGHT_MM + _fuse, r1 = DOT_BASE_MM / 2, r2 = r, $fn = 48);
+    intersection() {
+        translate([0, 0, DOT_BASE_HEIGHT_MM + DOT_DOME_HEIGHT_MM - cap]) sphere(r = cap, $fn = 48);
+        translate([-cap, -cap, DOT_BASE_HEIGHT_MM]) cube([2 * cap, 2 * cap, DOT_DOME_HEIGHT_MM + _fuse]);
+    }
+}
+
+// The cells laid flat about the origin, dots up, reading along +x, the first
+// row of dots at +y.
+module _braille_cells(cs) {
+    x0 = -(len(cs) - 1) * CELL_PITCH_MM / 2;
+    for (i = [0 : len(cs) - 1], k = cs[i])
+        translate([x0 + i * CELL_PITCH_MM + (k <= 3 ? -1 : 1) * DOT_PITCH_MM / 2,
+                   DOT_PITCH_MM * (1 - (k - 1) % 3), -DOT_SINK_MM])
+            _braille_dot();
+}
+
+// The wedge for number n, its front foot along y = 0 and centered on x = 0,
+// the face toward the plate's bottom edge, the reader's: the body, then the
+// cells turned onto its sloped face. It stands on z = 0.
+module _label_wedge(n) {
+    w = _wedge_w(n);
+    up = wedge_foot_mm + _cell_h / 2;
+    translate([-w / 2, 0, 0]) rotate([90, 0, 90])
+        linear_extrude(height = w)
+            polygon([[0, -_fuse], [_face_run, _wedge_h], [_face_run + WEDGE_TOP_MM, _wedge_h], [_wedge_depth, -_fuse]]);
+    translate([0, up * cos(wedge_face_angle_deg), up * sin(wedge_face_angle_deg)])
+        rotate([wedge_face_angle_deg, 0, 0])
+            _braille_cells(_cells(n));
+}
+
+// Rows of "x:y:n" split by "|", x and y in tenths of a millimeter.
+function _xyn(r) =
+    let(a = _at(r, ":"), rest = _sub(r, a + 1, len(r)), b = _at(rest, ":"))
+    [_int(_sub(r, 0, a)) / 10, _int(_sub(rest, 0, b)) / 10, _int(_sub(rest, b + 1, len(rest)))];
+function _xyn_rows(s) = len(s) == 0 ? [] : [for (r = _split(s, "|")) if (len(r) > 0) _xyn(r)];
+
+// The numbers' wedges rise from the base's top through whatever stands at
+// their foot, so none floats on an area's level.
+module number_wedges() {
+    for (row = _xyn_rows(number_wedges)) {
+        assert(in_range(row[2], NUMBER_RANGE),
+               str("a wedge's number is ", row[2], "; a wedge holds 1 to 99."));
+        translate([row[0], row[1], base_eff - _fuse])
+            _label_wedge(row[2]);
+    }
+}
+
+// The lead lines, from a thing to its number in the margin: on a level of
+// their own, one step above the top level the map uses, so nothing else on the
+// map stands at their height.
+module leads() {
+    if (map_file_kind == "levels")
+        translate([0, 0, base_eff - _fuse])
+            linear_extrude(height = level_z(levels_used) + level_step_mm - base_eff + _fuse)
+                import(map_file, id = "leads", center = false);
 }
 
 module tactile_map() {
@@ -439,6 +574,8 @@ module tactile_map() {
             here_mark();
             destination_cone();
             raised_words();
+            number_wedges();
+            leads();
             if (plate_kind != "Key") {
                 title();
                 north_cue();
