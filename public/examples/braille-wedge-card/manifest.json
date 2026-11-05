@@ -38,6 +38,8 @@
       "cardHeight": "card_face_height_mm",
       "cellSpacing": "cell_spacing",
       "lineSpacing": "line_spacing",
+      "dotSpacing": "dot_spacing",
+      "dotDiameter": "rounded_dot_base_diameter",
       "gridColumns": "grid_columns",
       "gridRows": "grid_rows",
       "autoSize": "auto_size_card",

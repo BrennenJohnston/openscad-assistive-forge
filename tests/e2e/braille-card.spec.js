@@ -547,6 +547,18 @@ test.describe('Braille translation workflow (card)', () => {
       '.param-control[data-param-name="auto_size_card"] select'
     );
     await expect(autoSelect).toHaveValue('Off', { timeout: 10000 });
+    // Business card also reads at the Braille Authority's business card
+    // spacing: 6.2 mm between cells and a 5 mm margin, in the Customizer and
+    // in the panel's own Margin field.
+    const cellInput = page.locator(
+      '.param-control[data-param-name="cell_spacing"] input[type="number"]'
+    );
+    await expect(cellInput.first()).toHaveValue('6.2', { timeout: 10000 });
+    const marginInput = page.locator(
+      '.param-control[data-param-name="auto_size_margin_mm"] input[type="number"]'
+    );
+    await expect(marginInput.first()).toHaveValue('5', { timeout: 10000 });
+    await expect(page.locator('#brailleMarginInput')).toHaveValue('5');
 
     // Picking the auto option turns it back on
     await page.locator('#brailleSizePreset').selectOption('auto');
@@ -560,7 +572,7 @@ test.describe('Braille translation workflow (card)', () => {
 
     await openBrailleCard(page);
 
-    // Business card (10 cells x 3 rows capacity) + splitting off + many lines
+    // Business card (13 cells x 4 rows capacity) + splitting off + many lines
     await page.locator('#brailleSizePreset').selectOption('business');
     await page.locator('.braille-panel-layout summary').click();
     await page.locator('#brailleSplitCards').uncheck();
@@ -756,20 +768,22 @@ test.describe('Braille translation workflow (card)', () => {
 
     await openBrailleCard(page);
 
-    // Business card height (51 mm) fits 3 rows at the default 10.1 mm line
-    // spacing and 6 mm margin; the default Max rows per card is 8.
+    // Business card height (51 mm) fits 4 rows at the default 10.1 mm line
+    // spacing and the preset's 5 mm margin (three pitches and a cell's
+    // 6.6 mm of dots in the 41 mm between the margins); the default Max rows
+    // per card is 8.
     await page.locator('#brailleSizePreset').selectOption('business');
     await page.locator('#brailleTextInput').fill('hello');
 
     const warnings = page.locator('#brailleWarnings');
     await expect(warnings).not.toBeEmpty({ timeout: 20000 });
-    await expect(warnings).toContainText('fits 3 rows');
+    await expect(warnings).toContainText('fits 4 rows');
 
     // grid_rows carries the clamped value...
     const gridRowsInput = page.locator(
       '.param-control[data-param-name="grid_rows"] input[type="number"]'
     );
-    await expect(gridRowsInput.first()).toHaveValue('3', { timeout: 10000 });
+    await expect(gridRowsInput.first()).toHaveValue('4', { timeout: 10000 });
     // ...while Max rows per card keeps the user's requested value (sticky)
     await expect(page.locator('#brailleMaxRows')).toHaveValue('8');
   });

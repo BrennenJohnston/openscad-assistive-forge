@@ -54,22 +54,31 @@ export function countCells(braille) {
   return [...braille].length;
 }
 
+/** The card model's dot geometry: the dots within a cell and a dot's base. */
+export const CARD_DEFAULT_DOT_SPACING_MM = 2.5;
+export const CARD_DEFAULT_DOT_DIAMETER_MM = 1.6;
+
 /**
- * Compute line/row capacity from card geometry.
+ * Compute line/row capacity from card geometry, as the card model measures
+ * its block of dots: n cells span (n − 1) cell pitches plus one cell's own
+ * dots, and n rows span (n − 1) line pitches plus one cell's height. A
+ * cell's two dot columns stand one dot spacing apart and its three dot rows
+ * two, and a dot's diameter adds its edges (the model's `_block_w` and
+ * `_block_h`).
  *
- * cellsPerLine = floor((cardWidth − 2·margin) / cellSpacing)
- * rowsPerCard  = min(maxRowsPerCard, floor((cardHeight − 2·margin) / lineSpacing))
- *
- * The flooring intentionally leaves one spacing unit of slack for the
- * physical dot extent beyond cell centers.
+ * cellsPerLine = floor((cardWidth − 2·margin − cellWidth) / cellSpacing) + 1
+ * rowsPerCard  = min(maxRowsPerCard,
+ *                    floor((cardHeight − 2·margin − cellHeight) / lineSpacing) + 1)
  *
  * @param {Object} opts
  * @param {number} opts.cardWidthMm - Card face width (mm)
  * @param {number} opts.cardHeightMm - Card face height (mm)
- * @param {number} opts.marginMm - Margin on every edge (mm)
+ * @param {number} opts.marginMm - Clear space on every edge (mm)
  * @param {number} opts.cellSpacingMm - Horizontal cell pitch (mm)
  * @param {number} opts.lineSpacingMm - Vertical line pitch (mm)
  * @param {number} opts.maxRowsPerCard - User cap on rows per card
+ * @param {number} [opts.dotSpacingMm] - Dot pitch within a cell (mm)
+ * @param {number} [opts.dotDiameterMm] - A dot's base diameter (mm)
  * @returns {{ cellsPerLine: number, rowsPerCard: number }}
  */
 export function computeCapacity({
@@ -79,18 +88,18 @@ export function computeCapacity({
   cellSpacingMm,
   lineSpacingMm,
   maxRowsPerCard,
+  dotSpacingMm = CARD_DEFAULT_DOT_SPACING_MM,
+  dotDiameterMm = CARD_DEFAULT_DOT_DIAMETER_MM,
 }) {
   const usableWidth = cardWidthMm - 2 * marginMm;
   const usableHeight = cardHeightMm - 2 * marginMm;
+  const cellWidth = dotSpacingMm + dotDiameterMm;
+  const cellHeight = 2 * dotSpacingMm + dotDiameterMm;
+  const fit = (usable, extent, pitch) =>
+    Math.max(1, Math.floor((usable - extent) / Math.max(pitch, 0.01)) + 1);
 
-  const cellsPerLine = Math.max(
-    1,
-    Math.floor(usableWidth / Math.max(cellSpacingMm, 0.01))
-  );
-  const rowsFromHeight = Math.max(
-    1,
-    Math.floor(usableHeight / Math.max(lineSpacingMm, 0.01))
-  );
+  const cellsPerLine = fit(usableWidth, cellWidth, cellSpacingMm);
+  const rowsFromHeight = fit(usableHeight, cellHeight, lineSpacingMm);
   const rowsPerCard = Math.max(
     1,
     Math.min(Math.max(1, Math.floor(maxRowsPerCard)), rowsFromHeight)

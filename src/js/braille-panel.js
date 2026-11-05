@@ -30,6 +30,8 @@ import {
   disposeTranslator,
 } from './braille-translator.js';
 import {
+  CARD_DEFAULT_DOT_DIAMETER_MM,
+  CARD_DEFAULT_DOT_SPACING_MM,
   computeCapacity,
   layoutBrailleText,
   layoutSignText,
@@ -90,6 +92,10 @@ const SIZE_PRESETS = [
     label: 'Business card (89 × 51 mm)',
     width: 89,
     height: 51,
+    // The Braille Authority's business card examples are read at the
+    // embosser's spacing, inside ADA's 6.1 to 7.6 mm: 13 cells and 4 rows.
+    cellSpacingMm: 6.2,
+    marginMm: 5,
   },
   { id: 'postcard', label: 'Postcard (152 × 102 mm)', width: 152, height: 102 },
   {
@@ -143,8 +149,11 @@ const CAPACITY_WATCH_KEYS = [
   'cardHeight',
   'cellSpacing',
   'lineSpacing',
+  'dotSpacing',
+  'dotDiameter',
   'gridRows',
   'autoSize',
+  'autoSizeMargin',
   'charHeight',
   'letterSpacing',
   'border',
@@ -938,7 +947,7 @@ class BraillePanel {
     sizeHelp.id = 'brailleSizeHelp';
     sizeHelp.className = 'braille-panel-help';
     sizeHelp.textContent =
-      'Auto-size (the default) grows the card to fit the text plus margin. A size preset sets the card width and height parameters and turns auto-sizing off. Editing the width or height parameters directly switches this to Custom.';
+      'Auto-size (the default) grows the card to fit the text plus margin. A size preset sets the card width and height parameters and turns auto-sizing off; Business card also sets 6.2 mm between cells and a 5 mm margin. Editing the width or height parameters directly switches this to Custom.';
     section.appendChild(sizeHelp);
   }
 
@@ -1289,6 +1298,14 @@ class BraillePanel {
         'lineSpacing',
         CARD_DEFAULT_LINE_SPACING
       ),
+      dotSpacingMm: this.readNumericParam(
+        'dotSpacing',
+        CARD_DEFAULT_DOT_SPACING_MM
+      ),
+      dotDiameterMm: this.readNumericParam(
+        'dotDiameter',
+        CARD_DEFAULT_DOT_DIAMETER_MM
+      ),
       marginMm: Number(this.refs.marginInput?.value) || 6,
       maxRowsPerCard:
         Number(this.refs.rowsInput?.value) || this.lineParams.length || 8,
@@ -1296,39 +1313,70 @@ class BraillePanel {
   }
 
   /**
+   * The parameters a direct edit in the Customizer re-wraps for: the
+   * capacity geometry, and the rows per card the Multi-Card Layout group
+   * holds.
+   */
+  watchedParamNames() {
+    const names = CAPACITY_WATCH_KEYS.map((key) => this.capacityParams[key]);
+    names.push(this.multiCardParams.rowsPerCard);
+    return names.filter(Boolean);
+  }
+
+  /** The watched parameters' values as one string, for a cheap comparison. */
+  readWatchedValues() {
+    const params = stateManager.getState().parameters || {};
+    return this.watchedParamNames()
+      .map((name) => params[name])
+      .join('\u0000');
+  }
+
+  /** The parameters the panel's own fields mirror, as the state holds them. */
+  readMirroredParams() {
+    const params = stateManager.getState().parameters || {};
+    const read = (name) => String((name && params[name]) ?? '');
+    return {
+      gridRows: read(this.capacityParams.gridRows),
+      rowsPerCard: read(this.multiCardParams.rowsPerCard),
+      margin: read(this.capacityParams.autoSizeMargin),
+    };
+  }
+
+  /**
    * Re-wrap when the user edits card geometry directly in the parameter
-   * panel (width, height, spacing, grid rows). Guarded against the
+   * panel (width, height, spacing, margin, rows). Guarded against the
    * panel's own writes.
    */
   watchGeometryParams() {
-    const readWatched = () => {
-      const params = stateManager.getState().parameters || {};
-      return CAPACITY_WATCH_KEYS.map(
-        (key) => params[this.capacityParams[key]]
-      ).join('\u0000');
-    };
-    const readGridRows = () =>
-      String(
-        stateManager.getState().parameters?.[this.capacityParams.gridRows] ?? ''
-      );
-    this.lastWatchedValues = readWatched();
-    this.lastGridRowsParam = readGridRows();
+    this.lastWatchedValues = this.readWatchedValues();
+    this.lastMirrored = this.readMirroredParams();
+    // A project loaded with a margin or rows per card of its own: the
+    // panel's fields start from those, not from their own defaults.
+    this.syncMarginInputFromParam(this.lastMirrored.margin);
+    this.syncRowsInputFromParam(this.lastMirrored.rowsPerCard);
 
     this.unsubscribe = stateManager.subscribe(() => {
       if (this.isApplying) return;
-      const next = readWatched();
+      const next = this.readWatchedValues();
       if (next === this.lastWatchedValues) return;
       this.lastWatchedValues = next;
 
-      // Two-way sync: a direct grid_rows edit updates "Max rows per
-      // card" (the user's intent) so the next layout honors it instead
-      // of silently writing the panel's old value back over it. Other
-      // geometry edits leave the intent untouched (sticky).
-      const nextGridRows = readGridRows();
-      if (nextGridRows !== this.lastGridRowsParam) {
-        this.lastGridRowsParam = nextGridRows;
-        this.syncRowsInputFromParam(nextGridRows);
+      // Two-way sync: a direct edit of grid_rows or rows_per_card updates
+      // "Max rows per card", and one of the margin updates "Margin" (the
+      // user's intent), so the next layout honors it instead of silently
+      // writing the panel's old value back over it. Other geometry edits
+      // leave the intent untouched (sticky).
+      const mirrored = this.readMirroredParams();
+      if (mirrored.gridRows !== this.lastMirrored.gridRows) {
+        this.syncRowsInputFromParam(mirrored.gridRows);
       }
+      if (mirrored.rowsPerCard !== this.lastMirrored.rowsPerCard) {
+        this.syncRowsInputFromParam(mirrored.rowsPerCard);
+      }
+      if (mirrored.margin !== this.lastMirrored.margin) {
+        this.syncMarginInputFromParam(mirrored.margin);
+      }
+      this.lastMirrored = mirrored;
 
       this.syncSizePresetFromParams();
       this.scheduleLayout();
@@ -1336,9 +1384,30 @@ class BraillePanel {
   }
 
   /**
-   * Mirror a direct grid_rows parameter edit into the "Max rows per
-   * card" input (clamped to the input's 1..Line_N range).
-   * @param {string} rawValue - New grid_rows parameter value
+   * Mirror a direct edit of the margin parameter into the panel's Margin
+   * field and its preset select, so the Card Size group and the panel never
+   * hold two margins.
+   * @param {string} rawValue - New auto_size_margin_mm parameter value
+   */
+  syncMarginInputFromParam(rawValue) {
+    const marginInput = this.refs.marginInput;
+    if (!marginInput) return;
+    const value = Number(rawValue);
+    if (!Number.isFinite(value) || value <= 0) return;
+    if (Number(marginInput.value) !== value) {
+      marginInput.value = String(value);
+    }
+    const preset = this.refs.marginPreset;
+    if (preset) {
+      const match = MARGIN_PRESETS.find((p) => p.value === value);
+      preset.value = match ? match.id : 'custom';
+    }
+  }
+
+  /**
+   * Mirror a direct grid_rows or rows_per_card parameter edit into the
+   * "Max rows per card" input (clamped to the input's 1..Line_N range).
+   * @param {string} rawValue - New parameter value
    */
   syncRowsInputFromParam(rawValue) {
     const rowsInput = this.refs.rowsInput;
@@ -1401,6 +1470,17 @@ class BraillePanel {
     // Presets drive the manual size, so auto-size must be off.
     if (this.capacityParams.autoSize) {
       updates[this.capacityParams.autoSize] = 'Off';
+    }
+    // A preset may carry the spacing its card stock is read at; both values
+    // stay in the Customizer to change.
+    if (preset.cellSpacingMm && this.capacityParams.cellSpacing) {
+      updates[this.capacityParams.cellSpacing] = String(preset.cellSpacingMm);
+    }
+    if (preset.marginMm) {
+      this.syncMarginInputFromParam(String(preset.marginMm));
+      if (this.capacityParams.autoSizeMargin) {
+        updates[this.capacityParams.autoSizeMargin] = String(preset.marginMm);
+      }
     }
     this.writeParams(updates);
     this.scheduleLayout(0);
@@ -2419,13 +2499,8 @@ class BraillePanel {
       stateManager.setHistoryEnabled(true);
       this.isApplying = false;
       // Keep the geometry watcher in sync with our own writes.
-      const params = stateManager.getState().parameters || {};
-      this.lastWatchedValues = CAPACITY_WATCH_KEYS.map(
-        (key) => params[this.capacityParams[key]]
-      ).join('\u0000');
-      this.lastGridRowsParam = String(
-        params[this.capacityParams.gridRows] ?? ''
-      );
+      this.lastWatchedValues = this.readWatchedValues();
+      this.lastMirrored = this.readMirroredParams();
     }
     return true;
   }
