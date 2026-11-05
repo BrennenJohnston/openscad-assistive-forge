@@ -17,6 +17,7 @@ import {
   shiftRings,
   titleBandOf,
   titleRows,
+  trimFace,
 } from '../../src/js/tactile-map/sheet.js';
 
 const FACE = { w: 480, h: 360 };
@@ -154,5 +155,85 @@ describe('the sheet', () => {
     expect(rowsText(plateRows(titleRows(tall, 16), title1, tall.h))).toBe(
       '100:395:160:0:FERRY PLACE'
     );
+  });
+});
+
+describe('the trim', () => {
+  const box = (x0, y0, x1, y1) => [
+    { x: x0, y: y0 },
+    { x: x1, y: y0 },
+    { x: x1, y: y1 },
+    { x: x0, y: y1 },
+  ];
+
+  it('cuts a 480 x 360 face to the box around what prints, rounded out to whole millimeters: rings over 40 to 300 by 60 to 200 give 260 x 140 at 40, 60', () => {
+    const out = trimFace({
+      face: FACE,
+      printed: {
+        rings: { level1: [box(40.2, 60, 299.6, 200)], level2: [], channels: [] },
+      },
+    });
+    expect(out).toEqual({
+      face: { w: 260, h: 140 },
+      offset: [40, 60],
+      trimmed: true,
+    });
+  });
+
+  it('counts the cones by their footprint and the letters by their boxes', () => {
+    const out = trimFace({
+      face: FACE,
+      printed: {
+        rings: { level1: [box(100, 100, 200, 150)] },
+        cones: [[100, 50]],
+        coneRadiusMm: 2.45,
+        boxes: [{ x: 300, y: 200, width: 40, height: 16 }],
+      },
+    });
+    // The cone reaches 97.55; the box 340 x 216.
+    expect(out.offset).toEqual([97, 47]);
+    expect(out.face).toEqual({ w: 243, h: 169 });
+  });
+
+  it('never cuts under the smallest plate: rings 30 x 20 mm give 100 x 75, grown to the right and down, or back when the face ends', () => {
+    const small = trimFace({
+      face: FACE,
+      printed: { rings: { level1: [box(200, 100, 230, 120)] } },
+    });
+    expect(small).toEqual({
+      face: { w: 100, h: 75 },
+      offset: [200, 100],
+      trimmed: true,
+    });
+    const corner = trimFace({
+      face: FACE,
+      printed: { rings: { level1: [box(460, 340, 480, 360)] } },
+    });
+    expect(corner).toEqual({
+      face: { w: 100, h: 75 },
+      offset: [380, 285],
+      trimmed: true,
+    });
+  });
+
+  it('leaves the face as it is with nothing printed, or when the box is the face, and never grows past it', () => {
+    expect(trimFace({ face: FACE, printed: { rings: {} } })).toEqual({
+      face: FACE,
+      offset: [0, 0],
+      trimmed: false,
+    });
+    expect(
+      trimFace({
+        face: FACE,
+        printed: { rings: { level1: [box(0, 0, 480, 360)] } },
+      })
+    ).toEqual({ face: FACE, offset: [0, 0], trimmed: false });
+    // A ring past the edge is held to the face.
+    expect(
+      trimFace({
+        face: FACE,
+        printed: { rings: { level1: [box(-5, 300, 100, 370)] } },
+      })
+    ).toEqual({ face: { w: 100, h: 75 }, offset: [0, 285], trimmed: true });
   });
 });

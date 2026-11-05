@@ -914,17 +914,19 @@ test.describe('the draft map', () => {
         .getElementById('tactileMapPanel')
         .__forgeMapPanel.keyPages.flatMap((p) => p.tape)
     );
-    expect(tape).toContain('pc restaurant: plaza cafe');
+    // The key plates are the map's plate size; on the trimmed map's 189 mm
+    // plates a long row wraps onto two strips, so the pieces are joined.
+    expect(tape.join(' ')).toContain('pc restaurant: plaza cafe');
     // The typed address is the destination, the first row after the key's
     // title, named by the words typed up to the first comma.
     // (A row longer than a channel wraps at a space; the first piece holds
     // the start of the name.)
     const destinationRow = tape.findIndex((t) =>
-      t.startsWith('destination, 3600 ferry')
+      t.startsWith('destination, 3600')
     );
     expect(destinationRow).toBeGreaterThan(-1);
     expect(destinationRow).toBeLessThan(
-      tape.indexOf('pc restaurant: plaza cafe')
+      tape.findIndex((t) => t.startsWith('pc restaurant:'))
     );
     const keyRadio = page.locator(
       'input[name="tactileMapPlate"][value^="key"]'

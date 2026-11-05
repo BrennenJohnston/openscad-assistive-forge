@@ -19,6 +19,7 @@
  */
 
 import { PRINT_PITCH, wrapPrint } from './key-layout.js';
+import { PLATE_MIN_MM } from './plate-tiling.js';
 
 /** Raised text keeps 9.525 mm (3/8 in) clear (ADA 703.2.7, 703.3.2). */
 export const SHEET_CLEARANCE_MM = 9.525;
@@ -40,6 +41,71 @@ export const ORIENTATIONS = Object.freeze([
 ]);
 
 const round3 = (v) => Math.round(v * 1000) / 1000;
+
+/**
+ * The face cut down to what prints: the smallest whole-millimeter box
+ * around every ring, cone footprint and letter box, never under the
+ * smallest plate the model takes and never past the face. The box grows
+ * to the right and down to reach the minimum, and back when the face
+ * ends there. The band then goes around the trimmed face as around any
+ * face. Nothing printed gives the face back as it is.
+ *
+ * A view, not a change to the plan: `offset` is what every coordinate
+ * subtracts to land on the trimmed face.
+ *
+ * @param {object} input
+ * @param {{ w: number, h: number }} input.face - the plan's face in mm
+ * @param {object} input.printed
+ * @param {Record<string, Array<Array<{x: number, y: number}>>>} [input.printed.rings]
+ * @param {Array<[number, number]>} [input.printed.cones] - cone centers
+ * @param {number} [input.printed.coneRadiusMm]
+ * @param {Array<{x: number, y: number, width: number, height: number}>} [input.printed.boxes]
+ * @param {{ w: number, h: number }} [input.minMm]
+ * @returns {{ face: { w: number, h: number }, offset: [number, number], trimmed: boolean }}
+ */
+export function trimFace({ face, printed = {}, minMm = PLATE_MIN_MM }) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const take = (x, y) => {
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  };
+  for (const list of Object.values(printed.rings || {})) {
+    for (const ring of list || []) for (const p of ring) take(p.x, p.y);
+  }
+  const r = printed.coneRadiusMm || 0;
+  for (const [x, y] of printed.cones || []) {
+    take(x - r, y - r);
+    take(x + r, y + r);
+  }
+  for (const b of printed.boxes || []) {
+    take(b.x, b.y);
+    take(b.x + b.width, b.y + b.height);
+  }
+  const whole = {
+    face: { w: face.w, h: face.h },
+    offset: [0, 0],
+    trimmed: false,
+  };
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) return whole;
+  const side = (lo, hi, extent, min) => {
+    let a = Math.max(0, Math.floor(lo));
+    let b = Math.min(extent, Math.ceil(hi));
+    if (b - a < min) b = Math.min(extent, a + min);
+    if (b - a < min) a = Math.max(0, b - min);
+    return [a, b];
+  };
+  const [x0, x1] = side(minX, maxX, face.w, Math.min(minMm.w, face.w));
+  const [y0, y1] = side(minY, maxY, face.h, Math.min(minMm.h, face.h));
+  const w = x1 - x0;
+  const h = y1 - y0;
+  if (x0 === 0 && y0 === 0 && w === face.w && h === face.h) return whole;
+  return { face: { w, h }, offset: [x0, y0], trimmed: true };
+}
 
 /**
  * The title band for a title: its lines in capitals, wrapped to the face's

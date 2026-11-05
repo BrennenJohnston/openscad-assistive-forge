@@ -350,6 +350,20 @@ describe('the README says what the map is', () => {
     expect(readme).not.toMatch(/OpenStreetMap/);
   });
 
+  it('says the plates are trimmed to the shapes, with the margin, when the trim is on', () => {
+    const readme = readmeText({
+      ...base,
+      about: { type: 'drawing' },
+      trimMm: 10,
+    });
+    expect(readme).toContain(
+      'each 240 x 180 mm, trimmed to the shapes with a 10 mm margin. Print one of each'
+    );
+    expect(readmeText({ ...base, about: { type: 'drawing' } })).not.toContain(
+      'trimmed'
+    );
+  });
+
   it('says where the title plates go when the title has plates of its own', () => {
     const split = planPlates({
       w: 500,

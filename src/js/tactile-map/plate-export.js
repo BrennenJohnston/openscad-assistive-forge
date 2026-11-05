@@ -384,6 +384,8 @@ function aboutOf(about) {
  *   plate's texts to write on label tape, top to bottom
  * @param {string} [input.pdfName] - the PDF in the archive, named first
  * @param {string[]} [input.unspelled] - names the PDF's fonts could not spell
+ * @param {number} [input.trimMm] - the margin kept when the sheet was
+ *   trimmed to the shapes; nothing when it was not
  * @returns {string}
  */
 export function readmeText({
@@ -399,6 +401,7 @@ export function readmeText({
   keyTape = [],
   pdfName = '',
   unspelled = [],
+  trimMm = 0,
 }) {
   const tape = keyTape.filter((k) => k.texts.length);
   const n = layout.plates.length;
@@ -415,7 +418,8 @@ export function readmeText({
       : '') +
     (lead ? `${lead}\n` : '') +
     `${mapName}: ${n} ${n === 1 ? 'plate' : 'plates'} for a ${bedName} bed, ` +
-    `each ${layout.plateW} x ${layout.plateH} mm. ` +
+    `each ${layout.plateW} x ${layout.plateH} mm` +
+    (trimMm ? `, trimmed to the shapes with a ${trimMm} mm margin. ` : '. ') +
     `Print one of each: ${ids}. ` +
     titleNote +
     'Lay them out as the grid reads, row A at the top, column 1 at the left, ' +

@@ -29,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inside the map's top edge as before, or left off. A title band that would
   force a row of short plates prints on title plates of its own above row A.
   A place map can be made portrait, upright at the same scale.
+- Trim the empty edges, a switch in step 5 that starts on for a place map:
+  the sheet is cut down to the box around what prints, the margin band kept,
+  so the empty plate around a map is not printed; the editor shows the
+  trimmed sheet as a dashed frame, and the README says the plates are
+  trimmed to the shapes.
 
 ### Changed
 

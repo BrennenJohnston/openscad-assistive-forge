@@ -653,6 +653,97 @@ describe('the map panel', () => {
     expect(params().raised_words).toBe('100:3865:200:0:STATION');
   });
 
+  // A hall from 40 to 300 by 60 to 200 and the cone inside it: the printed
+  // box is 260 x 140 mm at 40, 60; in its 10 mm band a 280 x 160 sheet.
+  const trimPlan = () => {
+    const sample = sampleStationPlan();
+    return {
+      ...sample,
+      meta: { ...sample.meta, title: '' },
+      features: [
+        {
+          id: 'hall',
+          class: 'area',
+          kind: 'area',
+          name: 'the hall',
+          ring: [
+            [40, 60],
+            [300, 60],
+            [300, 200],
+            [40, 200],
+          ],
+          on: true,
+        },
+        {
+          id: 'destination',
+          class: 'destination',
+          kind: 'point',
+          name: '3600 Ferry Pl NE',
+          size: 4.9,
+          at: [100, 100],
+          on: true,
+        },
+      ],
+    };
+  };
+
+  it('offers Trim the empty edges above Print bed: checked for a place map, unchecked for a drawing, not for a route', () => {
+    const box = () => document.getElementById('tactileMapTrim');
+    expect(box()).not.toBeNull();
+    expect(box().checked).toBe(false);
+    expect(document.getElementById('tactileMapTrimHelp').textContent).toBe(
+      'Cuts the empty plate around what prints; the margin stays.'
+    );
+    expect(box().getAttribute('aria-describedby')).toBe('tactileMapTrimHelp');
+    expect(document.querySelector('label[for="tactileMapTrim"]').textContent).toBe(
+      'Trim the empty edges'
+    );
+    // Above Print bed in the step.
+    const bed = document.getElementById('tactileMapBed');
+    expect(
+      box().compareDocumentPosition(bed) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    mount({ type: 'place' });
+    expect(box().checked).toBe(true);
+    mount({ type: 'route' });
+    expect(box()).toBeNull();
+  });
+
+  it('trims the sheet to what prints when the switch is on, moves the model rows with it, and gives the whole face back when off', async () => {
+    mount({
+      plan: trimPlan(),
+      config: { coneMarksParam: 'cone_marks' },
+    });
+    await vi.waitFor(
+      () => expect(summary()).toBe('4 plates of 250 x 190 mm, A1 to B2.'),
+      SETTLE
+    );
+    await vi.waitFor(
+      () => expect(params().cone_marks).toBe('1100:2700'),
+      SETTLE
+    );
+    const box = document.getElementById('tactileMapTrim');
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(
+      () => expect(summary()).toBe('2 plates of 140 x 160 mm, A1 to A2.'),
+      SETTLE
+    );
+    expect(String(params().map_width_mm)).toBe('280');
+    expect(String(params().map_height_mm)).toBe('160');
+    // The cone at the face's 100, 100: 60, 40 on the trimmed face, 70, 50
+    // on the sheet, 110 up from its bottom.
+    expect(params().cone_marks).toBe('700:1100');
+    expect(files[files.length - 1].svg).toMatch(/viewBox="0 0 280 160"/);
+    box.checked = false;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(
+      () => expect(summary()).toBe('4 plates of 250 x 190 mm, A1 to B2.'),
+      SETTLE
+    );
+    expect(params().cone_marks).toBe('1100:2700');
+  });
+
   it('offers no title placement to a tile that keeps its title to itself, and draws the title inside the map', () => {
     expect(document.getElementById('tactileMapTitlePlacement')).toBeNull();
     expect(document.getElementById('tactileMapMargin')).not.toBeNull();

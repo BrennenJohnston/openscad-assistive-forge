@@ -97,6 +97,7 @@ import {
   sheetOf,
   shiftRings,
   titleRows,
+  trimFace,
 } from './sheet.js';
 import {
   BUILT_IN_SETS,
@@ -131,6 +132,13 @@ import { OUTPUT_FORMATS, downloadFile, projectStem } from '../download.js';
 const DEBOUNCE_MS = 350;
 const CUSTOM_MIN_MM = 100;
 const CUSTOM_MAX_MM = 600;
+/**
+ * Whether a map type starts with its empty edges trimmed: a place map is
+ * drawn on the whole ground step 2 chose, so most of it may be blank; a
+ * drawing is the size its maker gave it; a route map already fits its walk
+ * and offers no switch.
+ */
+const TRIM_BY_TYPE = { place: true, drawing: false, route: false };
 const SOURCE = 'tactile-map';
 const PLATE_TIMEOUT_MS = 60_000;
 const ENGINE_NOT_READY =
@@ -320,9 +328,16 @@ class MapPanel {
     this.keyWords = KEY_WORDS.some((w) => w.key === options.keyWords)
       ? options.keyWords
       : KEY_WORDS[0].key;
-    // The sheet: the band around the face and where the title stands.
+    // The sheet: the band around the face and where the title stands; the
+    // empty plate around what prints trimmed away for a place map.
     this.marginMm = MARGIN_MM.start;
     this.titlePlacement = TITLE_PLACEMENTS[0].key;
+    this.trim = TRIM_BY_TYPE[this.mapType] ?? false;
+    this.view = {
+      face: { w: this.plan.size.w, h: this.plan.size.h },
+      offset: [0, 0],
+      trimmed: false,
+    };
     // The face a draft is drawn on, before any orientation swaps it.
     this.baseSize = { w: this.plan.size.w, h: this.plan.size.h };
     this.render =
@@ -603,12 +618,39 @@ class MapPanel {
    */
   sheetNow() {
     return sheetOf({
-      face: this.plan.size,
+      face: this.view?.face || this.plan.size,
       marginMm: this.marginMm,
       title: this.titleText(),
       placement: this.config.titleParam ? this.titlePlacement : 'inside',
       letterMm: this.titleLetterMm(),
     });
+  }
+
+  /**
+   * The face the sheet goes around: the plan's whole face, or, with the
+   * trim on, the box around what prints (the rings and the letters; the
+   * tile's own title stands on the sheet's edge and does not count).
+   */
+  measureView(built) {
+    const whole = {
+      face: { w: this.plan.size.w, h: this.plan.size.h },
+      offset: [0, 0],
+      trimmed: false,
+    };
+    if (!this.trim) return whole;
+    return trimFace({
+      face: this.plan.size,
+      printed: {
+        rings: built.rings,
+        boxes: (built.textBoxes || []).filter((b) => !b.title),
+      },
+    });
+  }
+
+  /** What the face's coordinates add to land on the sheet. */
+  faceShift(sheet) {
+    const [ox, oy] = this.view?.offset || [0, 0];
+    return [sheet.faceAt[0] - ox, sheet.faceAt[1] - oy];
   }
 
   /**
@@ -630,9 +672,9 @@ class MapPanel {
    * title's rows on the band.
    */
   sheetParts(sheet, built) {
-    const [dx, dy] = sheet.faceAt;
+    const [dx, dy] = this.faceShift(sheet);
     return {
-      rings: shiftRings(built.rings, sheet.faceAt),
+      rings: shiftRings(built.rings, [dx, dy]),
       cones: (built.cones || []).map(([x, y]) => [x + dx, y + dy]),
       textBoxes: (built.textBoxes || []).map((b) => ({
         ...b,
@@ -866,6 +908,31 @@ class MapPanel {
     );
     help.id = 'tactileMapHelp';
     add('intro', help);
+
+    // The trim: the empty plate around what prints cut away, the band kept.
+    const trimRow = el('div', 'braille-panel-toggle-row');
+    const trimBox = document.createElement('input');
+    trimBox.type = 'checkbox';
+    trimBox.id = 'tactileMapTrim';
+    trimBox.checked = this.trim;
+    trimBox.setAttribute('aria-describedby', 'tactileMapTrimHelp');
+    trimBox.addEventListener('change', () => {
+      this.trim = trimBox.checked;
+      this.schedule(0);
+    });
+    const trimLabel = el('label', '', 'Trim the empty edges');
+    trimLabel.htmlFor = trimBox.id;
+    trimRow.appendChild(trimBox);
+    trimRow.appendChild(trimLabel);
+    add('trim', trimRow);
+    const trimHelp = el(
+      'p',
+      'braille-panel-help',
+      'Cuts the empty plate around what prints; the margin stays.'
+    );
+    trimHelp.id = 'tactileMapTrimHelp';
+    add('trim', trimHelp);
+    this.refs.trim = trimBox;
 
     const bedLabel = el('label', 'braille-panel-label', 'Print bed');
     bedLabel.htmlFor = 'tactileMapBed';
@@ -1283,28 +1350,29 @@ class MapPanel {
         for (const node of group || []) section.appendChild(node);
       }
     };
-    const plates = [p.intro, p.bed, p.warnings, p.door, p.render];
     const [s1, s2, s3, s4, s5] = this.steps.sections;
     this.fileSlot = null;
+    // A route map fits its walk already: no trim switch for it.
+    for (const node of p.trim || []) node.remove();
     if (type.key === 'place') {
       fill(s1, [a.where]);
       fill(s2, [a.scale]);
       fill(s3, [a.landmarks]);
       fill(s4, [a.make]);
-      fill(s5, plates);
+      fill(s5, [p.intro, p.trim, p.bed, p.warnings, p.door, p.render]);
     } else if (type.key === 'route') {
       fill(s1, [a.where, a.to]);
       fill(s2, [a.travel, a.steps]);
       fill(s3, [a.landmarks]);
       fill(s4, [a.make]);
-      fill(s5, plates);
+      fill(s5, [p.intro, p.bed, p.warnings, p.door, p.render]);
     } else {
       this.fileSlot = el('div', 'tactile-map-file-slot');
       fill(s1, [note(WORKFLOW_STRINGS.drawingChoose), [this.fileSlot]]);
       fill(s2, [p.width]);
       fill(s3, [p.door, a.symbolSet]);
       fill(s4, [note(WORKFLOW_STRINGS.drawingApply)]);
-      fill(s5, [p.intro, p.bed, p.warnings, p.render]);
+      fill(s5, [p.intro, p.trim, p.bed, p.warnings, p.render]);
     }
     box.replaceChildren(this.steps.el);
     this.syncFileControl();
@@ -1380,6 +1448,8 @@ class MapPanel {
     if (!type) return;
     this.mapType = type.key;
     this.lastType = type.key;
+    this.trim = TRIM_BY_TYPE[type.key] ?? false;
+    if (this.refs.trim) this.refs.trim.checked = this.trim;
     if (type.key === 'drawing') {
       if (this.plan.meta?.waiting) {
         this.plan = sampleStationPlan();
@@ -1749,6 +1819,15 @@ class MapPanel {
       // The thin-shape check measures the map at its own width.
       designWidthMm: opened.size.w,
       designWidthKnown: true,
+      // The trimmed sheet's frame over the plan, as step 5 has it now.
+      trim: this.view?.trimmed
+        ? {
+            x: this.view.offset[0],
+            y: this.view.offset[1],
+            w: this.view.face.w,
+            h: this.view.face.h,
+          }
+        : null,
       onApply: (result) => {
         const applied = applyRowsToPlan(opened, result?.regions || [], order);
         // The route's segments that meet become one Route line.
@@ -1873,6 +1952,7 @@ class MapPanel {
     const built = buildLevelRings(labeled.plan, {
       ...this.levelSettings(),
     });
+    this.view = this.measureView(built);
     const sheet = this.sheetNow();
     const parts = this.sheetParts(sheet, built);
     const mapParameters = this.mapKindParameters(parameters);
@@ -2031,6 +2111,7 @@ class MapPanel {
       keyTape: this.keyPages.map((p) => ({ id: p.id, texts: p.tape })),
       pdfName: PDF_NAME,
       unspelled: pdf.unspelled,
+      trimMm: this.trim ? sheet.marginMm : 0,
     });
     const grid = plateGridSvg({
       rings,
@@ -2063,9 +2144,11 @@ class MapPanel {
   buildPdf({ stem, parameters }) {
     const labeled = this.labeled();
     const built = buildLevelRings(labeled.plan, this.levelSettings());
+    this.view = this.measureView(built);
     const sheet = this.sheetNow();
     const parts = this.sheetParts(sheet, built);
     const inside = sheet.placement === 'inside';
+    const faceAt = this.faceShift(sheet);
     const whole = this.paperDataFor({
       rings: parts.rings,
       size: { w: sheet.w, h: sheet.h },
@@ -2074,7 +2157,7 @@ class MapPanel {
       plate: null,
       title: inside,
       words: rowsText(parts.rows),
-      faceAt: sheet.faceAt,
+      faceAt,
     });
     const titles = (this.layout?.titlePlates || []).map((plate) => ({
       id: titleLabel(plate.id),
@@ -2086,7 +2169,7 @@ class MapPanel {
         plate,
         title: false,
         words: rowsText(plateRows(parts.rows, plate, sheet.h)),
-        faceAt: sheet.faceAt,
+        faceAt,
       }),
     }));
     const plates = (this.layout?.plates || []).map((plate) => {
@@ -2102,7 +2185,7 @@ class MapPanel {
           plate,
           title: inside && roles.title,
           words: rowsText(plateRows(parts.rows, plate, sheet.h)),
-          faceAt: sheet.faceAt,
+          faceAt,
         }),
       };
     });
@@ -2361,6 +2444,11 @@ class MapPanel {
 
   update() {
     if (!this.el) return;
+    const labeled = this.labeled();
+    const built = buildLevelRings(labeled.plan, {
+      ...this.levelSettings(),
+    });
+    this.view = this.measureView(built);
     const sheet = this.sheetNow();
     this.sheet = sheet;
     const { w, h } = sheet;
@@ -2402,10 +2490,6 @@ class MapPanel {
       this.refs.summary.textContent = sentence;
     this.rebuildPlates();
 
-    const labeled = this.labeled();
-    const built = buildLevelRings(labeled.plan, {
-      ...this.levelSettings(),
-    });
     const allWarnings = [
       ...this.planWarnings,
       ...labeled.warnings,
@@ -2523,7 +2607,7 @@ class MapPanel {
         plate,
         title: showTitle === 'yes',
         words,
-        faceAt: sheet.faceAt,
+        faceAt: this.faceShift(sheet),
       });
       this.syncPaper();
     }
