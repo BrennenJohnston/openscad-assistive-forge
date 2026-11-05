@@ -33,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Dragging the picture in the drawing editor moves it smoothly with the
+  pointer; before, it flashed between positions until the button was released.
+
 - A place map marks the typed address: a destination cone (Touch Mapper's
   marker, 4.9 mm tall) stands at the address and the key names it first
   with the address; a route's end carries the same cone. You are here is
