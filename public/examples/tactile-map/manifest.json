@@ -15,11 +15,14 @@
     "plateShowsTitleParam": "plate_shows_title",
     "plateShowsNorthParam": "plate_shows_north",
     "titleParam": "title_text",
+    "titleLetterParam": "title_char_height_mm",
     "mapFileKindParam": "map_file_kind",
     "plateKindParam": "plate_kind",
-    "keyPrintParam": "key_print",
+    "raisedWordsParam": "raised_words",
     "keyLetterParam": "key_letter_height_mm",
-    "coneMarksParam": "cone_marks"
+    "coneMarksParam": "cone_marks",
+    "marginParam": "margin_mm",
+    "titleBandParam": "title_band_mm"
   },
   "tactile": [
     "base_thickness_mm",

@@ -143,24 +143,53 @@ function layoutFor(w, h, bedW, bedD, marginMm, rotated) {
   };
 }
 
-/**
- * Cut a map into equal plates for a bed.
- *
- * @param {{ w: number, h: number, bed: { w: number, d: number }, marginMm?: number }} args
- * @returns {{ rows: number, cols: number, plateW: number, plateH: number, rotated: boolean, bed: { w: number, d: number }, plates: Array<{ id: string, row: number, col: number, x: number, y: number, w: number, h: number }> }}
- */
-export function planPlates({ w, h, bed, marginMm = PLATE_MARGIN_MM }) {
+/** A title plate's id, and its name in the plate list. */
+export const isTitleId = (id) => /^title-\d+$/.test(String(id));
+export const titleLabel = (id) => `Title ${String(id).slice(6)}`;
+
+/** The fewest equal plates for a sheet on a bed, tried both ways round. */
+function bestLayout(w, h, bed, marginMm) {
   const straight = layoutFor(w, h, bed.w, bed.d, marginMm, false);
   const turned = layoutFor(w, h, bed.d, bed.w, marginMm, true);
   const count = (l) => l.rows * l.cols;
   const area = (l) => l.plateW * l.plateH;
-  let best = straight;
-  if (count(turned) < count(straight)) best = turned;
-  else if (
-    count(turned) === count(straight) &&
-    area(turned) > area(straight) + 1e-9
-  )
-    best = turned;
+  if (count(turned) < count(straight)) return turned;
+  if (count(turned) === count(straight) && area(turned) > area(straight) + 1e-9)
+    return turned;
+  return straight;
+}
+
+/**
+ * Cut a sheet into equal plates for a bed.
+ *
+ * A title band at the top of the sheet rides inside the top row of plates
+ * while the rows stay as the map alone would have them; when the band would
+ * force one more row of shorter plates, the map keeps its rows and the band
+ * goes on a row of plates of its own above row A, one per column, as tall
+ * as the band or the smallest plate the model takes.
+ *
+ * @param {{ w: number, h: number, bed: { w: number, d: number }, marginMm?: number, titleBandMm?: number }} args
+ * @returns {{ rows: number, cols: number, plateW: number, plateH: number, rotated: boolean, bed: { w: number, d: number }, plates: Array<{ id: string, row: number, col: number, x: number, y: number, w: number, h: number }>, titlePlates: Array<{ id: string, row: number, col: number, x: number, y: number, w: number, h: number, title: true }>, titleBandMm: number }}
+ */
+export function planPlates({
+  w,
+  h,
+  bed,
+  marginMm = PLATE_MARGIN_MM,
+  titleBandMm = 0,
+}) {
+  const band = Math.max(0, Number(titleBandMm) || 0);
+  const whole = bestLayout(w, h, bed, marginMm);
+  let best = whole;
+  let bandOnOwn = false;
+  if (band > 0 && h - band > 0) {
+    const map = bestLayout(w, h - band, bed, marginMm);
+    if (whole.rows > map.rows) {
+      best = map;
+      bandOnOwn = true;
+    }
+  }
+  const top = bandOnOwn ? band : 0;
   const plates = [];
   for (let r = 0; r < best.rows; r++) {
     for (let c = 0; c < best.cols; c++) {
@@ -169,9 +198,24 @@ export function planPlates({ w, h, bed, marginMm = PLATE_MARGIN_MM }) {
         row: r,
         col: c,
         x: c * best.plateW,
-        y: r * best.plateH,
+        y: top + r * best.plateH,
         w: best.plateW,
         h: best.plateH,
+      });
+    }
+  }
+  const titlePlates = [];
+  if (bandOnOwn) {
+    for (let c = 0; c < best.cols; c++) {
+      titlePlates.push({
+        id: `title-${c + 1}`,
+        row: -1,
+        col: c,
+        x: c * best.plateW,
+        y: 0,
+        w: best.plateW,
+        h: Math.max(band, PLATE_MIN_MM.h),
+        title: true,
       });
     }
   }
@@ -183,6 +227,8 @@ export function planPlates({ w, h, bed, marginMm = PLATE_MARGIN_MM }) {
     rotated: best.rotated,
     bed: { w: best.bedW, d: best.bedD },
     plates,
+    titlePlates,
+    titleBandMm: band,
   };
 }
 

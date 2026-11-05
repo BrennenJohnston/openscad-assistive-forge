@@ -424,6 +424,28 @@ describe('the map purpose', () => {
     expect(selectOf(0).value).toBe('ignore');
   });
 
+  it("draws a map host's trimmed sheet as a dashed frame over the plan, none without a box, and none for the relief purpose", () => {
+    openMap({ trim: { x: 1, y: 2, w: 30, h: 20 } });
+    const frame = () =>
+      surface.querySelector('.drawing-editor-canvas-svg [data-layer="trim"]');
+    expect(frame().getAttribute('visibility')).toBe('visible');
+    expect(
+      ['x', 'y', 'width', 'height'].map((a) => frame().getAttribute(a))
+    ).toEqual(['1', '2', '30', '20']);
+    expect(frame().getAttribute('aria-hidden')).toBe('true');
+    editor.dismiss();
+    openMap();
+    expect(frame().getAttribute('visibility')).toBe('hidden');
+    editor.dismiss();
+    editor.open(THREE, analyzeSvg(THREE), {
+      purpose: 'relief',
+      trim: { x: 1, y: 2, w: 30, h: 20 },
+      onApply: vi.fn(),
+      onKeepOriginal: vi.fn(),
+    });
+    expect(frame().getAttribute('visibility')).toBe('hidden');
+  });
+
   it('leaves the relief purpose as it was: role switches, no class menus', () => {
     openMap();
     editor.dismiss();

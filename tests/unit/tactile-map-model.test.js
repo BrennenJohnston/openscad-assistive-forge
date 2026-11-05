@@ -152,9 +152,38 @@ describe('the Tactile Map tile', () => {
     // The cone rises from under the plate through whatever stands at its
     // foot, on a map plate and on the key plate that shows it as a sample.
     const main = src.slice(src.indexOf('module tactile_map()'));
-    expect(main).toMatch(
-      /destination_cone\(\);[\s\S]*if \(plate_kind == "Key"\)/
+    expect(main).toMatch(/destination_cone\(\);[\s\S]*if \(plate_kind != "Key"\)/);
+  });
+
+  it('raises words from raised_words rows of x:y:h:z:TEXT on map and key plates alike, clipped to the plate, and draws title_text itself only when there are none; the sheet figures ride along', () => {
+    const src = source();
+    const p = params();
+    expect(p.raised_words, 'raised_words is not a parameter').toBeTruthy();
+    expect(p.raised_words.default).toBe('');
+    expect(p.key_print).toBeUndefined();
+    expect(manifest().tactileMap.raisedWordsParam).toBe('raised_words');
+    expect(manifest().tactileMap.keyPrintParam).toBeUndefined();
+    // The band and the title band, for a saved file's record.
+    expect([p.margin_mm.default, p.margin_mm.minimum, p.margin_mm.maximum]).toEqual([10, 10, 40]);
+    expect(manifest().tactileMap.marginParam).toBe('margin_mm');
+    expect(p.title_band_mm.default).toBe(0);
+    expect(manifest().tactileMap.titleBandParam).toBe('title_band_mm');
+    expect(src).toMatch(/module\s+raised_words\s*\(/);
+    expect(src).not.toMatch(/module\s+key_words\s*\(/);
+    // Every row's capital inside the ADA range and its stand inside the
+    // plate's levels: a bad row fails the build.
+    expect(src).toMatch(/assert\s*\(in_range\(row\[2\],\s*TITLE_CAP_RANGE_MM\)/);
+    expect(src).toMatch(/assert\s*\(row\[3\]\s*>=\s*0/);
+    // Clipped to the plate: a title line crossing a seam continues on the
+    // next plate instead of running off this one.
+    const words = src.slice(src.indexOf('module raised_words()'));
+    expect(words).toMatch(
+      /intersection\(\)\s*\{\s*square\(\[map_width_mm,\s*map_height_mm\]\)/
     );
+    expect(src).toMatch(/len\(raised_words\)\s*==\s*0/);
+    const main = src.slice(src.indexOf('module tactile_map()'));
+    expect(main).toMatch(/raised_words\(\);/);
+    expect(main).not.toMatch(/key_words\(\)/);
   });
 
   it('ships the sample levels file it defaults to', () => {

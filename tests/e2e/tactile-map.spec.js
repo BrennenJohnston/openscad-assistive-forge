@@ -54,8 +54,9 @@ test.describe('Tactile Map tile', () => {
     await expect(page.locator('#tactileMapPanel h2')).toHaveText(
       'A map from your drawing'
     );
+    // The sample's 480 x 360 face in its 10 mm band: a 500 x 380 sheet.
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      /^4 plates of 240 x 180 mm, A1 to B2\. The key takes (one plate|\d+ plates)\.$/,
+      /^4 plates of 250 x 190 mm, A1 to B2\. The key takes (one plate|\d+ plates)\.$/,
       { timeout: 10000 }
     );
     // The whole map, its four plates, then the key's plates.
@@ -121,7 +122,7 @@ test.describe('Tactile Map tile', () => {
     expect((await overlay()).model).toBe(true);
   });
 
-  test('the preview renders the whole map, then plate A1 at 240 x 180', async ({
+  test('the preview renders the whole map, then plate A1 at 250 x 190', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -139,7 +140,7 @@ test.describe('Tactile Map tile', () => {
     await goToStep(page, 5);
     await page.locator('#tactileMapPlates input[value="A1"]').check();
     await expect(page.locator('#param-map_width_mm-spinbox')).toHaveValue(
-      '240',
+      '250',
       {
         timeout: 10000,
       }
@@ -218,8 +219,8 @@ test.describe('Tactile Map tile', () => {
       }
       return hi - lo;
     });
-    expect(size[0]).toBeCloseTo(240, 1);
-    expect(size[1]).toBeCloseTo(180, 1);
+    expect(size[0]).toBeCloseTo(250, 1);
+    expect(size[1]).toBeCloseTo(190, 1);
     expect(size[2]).toBeCloseTo(2.4, 1);
     await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
       `All ${4 + keyIds.length} plates are in tactile_map_plates.zip.`
@@ -256,7 +257,7 @@ test.describe('Tactile Map tile', () => {
     test.setTimeout(300_000);
     await openTactileMap(page);
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      /^4 plates of 240 x 180 mm, A1 to B2\. The key takes (one plate|\d+ plates)\.$/,
+      /^4 plates of 250 x 190 mm, A1 to B2\. The key takes (one plate|\d+ plates)\.$/,
       { timeout: 10000 }
     );
     // A drawing at 340 x 240 mm whose shapes, a 300 x 2 mm bar and a
@@ -311,12 +312,13 @@ test.describe('Tactile Map tile', () => {
     await selects.nth(1).selectOption('area');
     await page.locator('#drawingEditorSurface .drawing-editor-apply').click();
     await expect(page.locator('#drawingEditorSurface')).toBeHidden();
+    // The 302 x 202 face in its 10 mm band: a 322 x 222 sheet.
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      /^2 plates of 151 x 202 mm, A1 to A2\. The key takes (one plate|\d+ plates)\.$/,
+      /^2 plates of 161 x 222 mm, A1 to A2\. The key takes (one plate|\d+ plates)\.$/,
       { timeout: 10000 }
     );
     await expect(page.locator('#param-map_width_mm-spinbox')).toHaveValue(
-      '302',
+      '322',
       { timeout: 10000 }
     );
     await expect
@@ -912,17 +914,19 @@ test.describe('the draft map', () => {
         .getElementById('tactileMapPanel')
         .__forgeMapPanel.keyPages.flatMap((p) => p.tape)
     );
-    expect(tape).toContain('pc restaurant: plaza cafe');
+    // The key plates are the map's plate size; on the trimmed map's 189 mm
+    // plates a long row wraps onto two strips, so the pieces are joined.
+    expect(tape.join(' ')).toContain('pc restaurant: plaza cafe');
     // The typed address is the destination, the first row after the key's
     // title, named by the words typed up to the first comma.
     // (A row longer than a channel wraps at a space; the first piece holds
     // the start of the name.)
     const destinationRow = tape.findIndex((t) =>
-      t.startsWith('destination, 3600 ferry')
+      t.startsWith('destination, 3600')
     );
     expect(destinationRow).toBeGreaterThan(-1);
     expect(destinationRow).toBeLessThan(
-      tape.indexOf('pc restaurant: plaza cafe')
+      tape.findIndex((t) => t.startsWith('pc restaurant:'))
     );
     const keyRadio = page.locator(
       'input[name="tactileMapPlate"][value^="key"]'
@@ -954,7 +958,7 @@ test.describe('the draft map', () => {
       const body = d.split(',')[1] || '';
       return {
         file: p.map_file?.name,
-        print: p.key_print,
+        print: p.raised_words,
         levels: d.includes(';base64,') ? atob(body) : decodeURIComponent(body),
       };
     });
@@ -974,11 +978,11 @@ test.describe('the draft map', () => {
       .poll(
         () =>
           page.evaluate(
-            () => window.stateManager.getState().parameters.key_print
+            () => window.stateManager.getState().parameters.raised_words
           ),
         { timeout: 15000 }
       )
-      .toMatch(/:KEY:/);
+      .toMatch(/:160:0:KEY:/);
     await expect(page.locator('.preview-state-indicator')).toHaveClass(
       /state-current/,
       { timeout: PREVIEW_TIMEOUT }

@@ -258,11 +258,12 @@ describe('Make a route map', () => {
     expect(addressStatus()).toBe(
       'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk. The key has 10 symbols and 4 abbreviations.'
     );
-    // The model is told the fitted size.
+    // The model is told the sheet: the fitted face and the 10 mm band
+    // around it (no title typed, so no title band).
     await vi.waitFor(() => {
       const p = stateManager.getState().parameters;
-      expect(Number(p.map_width_mm)).toBe(172);
-      expect(Number(p.map_height_mm)).toBe(360);
+      expect(Number(p.map_width_mm)).toBe(192);
+      expect(Number(p.map_height_mm)).toBe(380);
     }, SETTLE);
     const plan = getMapPlan();
     expect(plan.features.filter((f) => f.class === 'route')).toHaveLength(1);
@@ -383,7 +384,7 @@ describe('focus after the editor', () => {
 });
 
 describe('the plate summary', () => {
-  it('says plate sizes in tenths of a millimeter at most: a 364 x 253 map on an A1 mini is 6 plates of 121.3 x 126.5 mm', async () => {
+  it('says plate sizes in tenths of a millimeter at most: a 364 x 253 map in its 10 mm band on an A1 mini is 6 plates of 128 x 136.5 mm', async () => {
     mount({
       type: 'drawing',
       plan: { ...sampleStationPlan(), size: { w: 364, h: 253 } },
@@ -394,7 +395,7 @@ describe('the plate summary', () => {
     await vi.waitFor(
       () =>
         expect($('tactileMapSummary').textContent).toBe(
-          '6 plates of 121.3 x 126.5 mm, A1 to B3.'
+          '6 plates of 128 x 136.5 mm, A1 to B3.'
         ),
       SETTLE
     );

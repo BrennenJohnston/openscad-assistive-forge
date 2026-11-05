@@ -183,6 +183,19 @@ export function shiftTexts(items, plate) {
 }
 
 /**
+ * The texts moved by an offset: the face's into the sheet's frame.
+ *
+ * @param {Array<{at: number[]}>} items
+ * @param {[number, number]} offset
+ */
+export function moveTexts(items, [dx, dy]) {
+  return items.map((item) => ({
+    ...item,
+    at: [item.at[0] + dx, item.at[1] + dy],
+  }));
+}
+
+/**
  * The channels to draw, each with the text its tape will carry.
  *
  * @param {Array<object>} features
@@ -209,24 +222,25 @@ export function paperChannels(features, across, textFor) {
 }
 
 /**
- * The raised words of a key plate as the model draws them: rows of
- * `x:y:TEXT` in tenths of a millimeter from the plate's bottom left.
+ * The raised words of a plate as the model draws them: rows of
+ * `x:y:h:z:TEXT` in tenths of a millimeter from the plate's bottom left,
+ * the capital's height in the row (the title's lines, a key plate's words).
  *
  * @param {string} print
- * @param {number} letterMm - The capitals' height
+ * @param {number} letterMm - The capitals' height when a row names none
  * @param {number} plateH
  * @returns {Array<{x: number, y: number, h: number, text: string}>}
  */
 export function paperWords(print, letterMm, plateH) {
   const out = [];
   for (const row of String(print || '').split('|')) {
-    const m = /^(\d+):(\d+):(.*)$/.exec(row);
+    const m = /^(\d+):(\d+):(\d+):(\d+):(.*)$/.exec(row);
     if (!m) continue;
     out.push({
       x: Number(m[1]) / 10,
       y: plateH - Number(m[2]) / 10,
-      h: letterMm,
-      text: m[3],
+      h: Number(m[3]) / 10 || letterMm,
+      text: m[5],
     });
   }
   return out;

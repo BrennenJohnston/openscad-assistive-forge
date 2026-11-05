@@ -11,11 +11,23 @@
 import { svgToDataUrl } from '../svg-text-encoding.js';
 import { ringsToPathData } from '../ring-geometry.js';
 import { keyLabel } from './key-layout.js';
-import { plateLevelsSvg } from './plate-tiling.js';
+import { plateLevelsSvg, titleLabel } from './plate-tiling.js';
+import { levelsSvgFromRings } from './levels-svg.js';
+import { plateRows, rowsText } from './sheet.js';
 import { ATTRIBUTION } from './overpass.js';
 import { TRANSIT_STRINGS } from './transit.js';
 
 const OSM_COPYRIGHT_URL = 'https://www.openstreetmap.org/copyright';
+
+/** A levels file with nothing on it: a title plate's, the band alone. */
+export const EMPTY_RINGS = () => ({
+  level1: [],
+  level2: [],
+  level3: [],
+  here: [],
+  channels: [],
+  cutouts: [],
+});
 
 /** The tile's own defaults, used when a parameter is not in the state. */
 const TILE_DEFAULTS = {
@@ -71,17 +83,26 @@ export function plateRoles(plate, layout, northCue) {
  * values the plate radio writes.
  *
  * @param {Object} input
- * @param {Object} input.rings - buildLevelRings(...).rings
+ * @param {Object} input.rings - buildLevelRings(...).rings, in the sheet's frame
+ * @param {Array<[number, number]>} [input.cones] - Cone centers, sheet mm
+ * @param {Array<[number, number, number, number, string]>} [input.rows] - The
+ *   sheet's raised words (sheet.js titleRows), split per plate
+ * @param {number|null} [input.sheetH] - The sheet's height, for the rows
+ * @param {boolean} [input.titleInside] - Whether the model draws the title
+ *   itself on the top-left plate (the title inside the map's face)
  * @param {{ cols: number, plates: Array<{id: string, row: number, col: number}> }} input.layout - From planPlates
  * @param {string} input.idStyle - 'none', 'margin' or 'notches'
  * @param {string} input.northCue - The tile's north_cue value
- * @param {{ mapFileParam: string, widthParam: string, heightParam: string, plateIdParam?: string, plateShowsTitleParam?: string, plateShowsNorthParam?: string }} input.config
+ * @param {{ mapFileParam: string, widthParam: string, heightParam: string, plateIdParam?: string, plateShowsTitleParam?: string, plateShowsNorthParam?: string, raisedWordsParam?: string }} input.config
  * @param {Object} input.parameters - The state's parameters
  * @returns {Array<{id: string, size: {w: number, h: number}, svg: string, fileName: string, parameters: Object, roles: {title: boolean, north: boolean}}>}
  */
 export function plateParameterSets({
   rings,
   cones = [],
+  rows = [],
+  sheetH = null,
+  titleInside = true,
   layout,
   idStyle,
   northCue,
@@ -109,11 +130,17 @@ export function plateParameterSets({
         lastRow: plate.row === last.row,
       });
     }
+    if (config.raisedWordsParam) {
+      next[config.raisedWordsParam] = rowsText(
+        plateRows(rows, plate, sheetH ?? plate.y + plate.h)
+      );
+    }
     if (config.plateIdParam) {
       next[config.plateIdParam] = idStyle === 'margin' ? plate.id : '';
     }
     if (config.plateShowsTitleParam) {
-      next[config.plateShowsTitleParam] = roles.title ? 'yes' : 'no';
+      next[config.plateShowsTitleParam] =
+        titleInside && roles.title ? 'yes' : 'no';
     }
     if (config.plateShowsNorthParam) {
       next[config.plateShowsNorthParam] = roles.north ? 'yes' : 'no';
@@ -125,6 +152,58 @@ export function plateParameterSets({
       fileName,
       parameters: next,
       roles,
+    };
+  });
+}
+
+/**
+ * The parameter set each title plate renders with: an empty levels file of
+ * the plate's size, no cones, no title or north cue of the model's own, and
+ * the title's rows that fall on the plate as raised words.
+ *
+ * @param {Object} input
+ * @param {Array<{id: string, x: number, y: number, w: number, h: number}>} input.titlePlates - From planPlates
+ * @param {Array<[number, number, number, number, string]>} input.rows - The sheet's raised words
+ * @param {number} input.sheetH - The sheet's height
+ * @param {{ mapFileParam: string, widthParam: string, heightParam: string, plateIdParam?: string, plateShowsTitleParam?: string, plateShowsNorthParam?: string, raisedWordsParam?: string, coneMarksParam?: string }} input.config
+ * @param {Object} input.parameters - The state's parameters, map kind
+ * @returns {Array<{id: string, size: {w: number, h: number}, svg: string, fileName: string, parameters: Object, roles: {title: boolean, north: boolean}}>}
+ */
+export function titlePlateSets({
+  titlePlates = [],
+  rows,
+  sheetH,
+  config,
+  parameters,
+}) {
+  return titlePlates.map((plate) => {
+    const size = { w: plate.w, h: plate.h };
+    const svg = levelsSvgFromRings(EMPTY_RINGS(), size);
+    const fileName = `levels_${plate.id}.svg`;
+    const next = {
+      ...parameters,
+      [config.widthParam]: size.w,
+      [config.heightParam]: size.h,
+      [config.mapFileParam]: {
+        name: fileName,
+        data: svgToDataUrl(svg),
+        type: 'image/svg+xml',
+      },
+    };
+    if (config.coneMarksParam) next[config.coneMarksParam] = '';
+    if (config.raisedWordsParam) {
+      next[config.raisedWordsParam] = rowsText(plateRows(rows, plate, sheetH));
+    }
+    if (config.plateIdParam) next[config.plateIdParam] = '';
+    if (config.plateShowsTitleParam) next[config.plateShowsTitleParam] = 'no';
+    if (config.plateShowsNorthParam) next[config.plateShowsNorthParam] = 'no';
+    return {
+      id: plate.id,
+      size,
+      svg,
+      fileName,
+      parameters: next,
+      roles: { title: false, north: false },
     };
   });
 }
@@ -203,11 +282,17 @@ export function plateGridSvg({ rings, layout, size, bedName }) {
   if (channels.length) {
     body += `<path d="${ringsToPathData(channels, 3)}" fill="none" stroke="${GRID_BLUE}" stroke-width="1.2" stroke-dasharray="4 3"/>`;
   }
-  for (const p of layout.plates) {
+  for (const p of [...(layout.titlePlates || []), ...layout.plates]) {
+    const name = p.title ? titleLabel(p.id) : p.id;
     body += `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="none" stroke="${GRID_RED}" stroke-width="2"/>`;
-    body += `<text x="${p.x + 8}" y="${p.y + 26}" font-family="${GRID_FONT}" font-size="22" font-weight="700" fill="${GRID_RED}">${p.id}</text>`;
+    body += `<text x="${p.x + 8}" y="${p.y + 26}" font-family="${GRID_FONT}" font-size="22" font-weight="700" fill="${GRID_RED}">${escapeXml(name)}</text>`;
   }
-  const caption = `${bedName}: ${layout.rows} x ${layout.cols} plates of ${layout.plateW} x ${layout.plateH} mm`;
+  const titles = (layout.titlePlates || []).length;
+  const caption =
+    `${bedName}: ${layout.rows} x ${layout.cols} plates of ${layout.plateW} x ${layout.plateH} mm` +
+    (titles
+      ? `, and ${titles === 1 ? 'a title plate' : `${titles} title plates`} of ${layout.titlePlates[0].w} x ${layout.titlePlates[0].h} mm above`
+      : '');
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w + 40}" height="${h + 70}" viewBox="-20 -20 ${w + 40} ${h + 70}">` +
     `<rect x="-20" y="-20" width="${w + 40}" height="${h + 70}" fill="#ffffff"/>` +
@@ -299,6 +384,8 @@ function aboutOf(about) {
  *   plate's texts to write on label tape, top to bottom
  * @param {string} [input.pdfName] - the PDF in the archive, named first
  * @param {string[]} [input.unspelled] - names the PDF's fonts could not spell
+ * @param {number} [input.trimMm] - the margin kept when the sheet was
+ *   trimmed to the shapes; nothing when it was not
  * @returns {string}
  */
 export function readmeText({
@@ -314,10 +401,16 @@ export function readmeText({
   keyTape = [],
   pdfName = '',
   unspelled = [],
+  trimMm = 0,
 }) {
   const tape = keyTape.filter((k) => k.texts.length);
   const n = layout.plates.length;
   const ids = layout.plates.map((plate) => plate.id).join(', ');
+  const titles = layout.titlePlates || [];
+  const titleNote = titles.length
+    ? `The title prints on ${titles.length === 1 ? 'a plate of its own' : `${titles.length} plates of its own`}, ` +
+      `${titles.map((p) => titleLabel(p.id)).join(', ')}, ${titles[0].w} x ${titles[0].h} mm, above row A. `
+    : '';
   const { lead, credits } = mapAbout(about);
   return (
     (pdfName
@@ -325,8 +418,10 @@ export function readmeText({
       : '') +
     (lead ? `${lead}\n` : '') +
     `${mapName}: ${n} ${n === 1 ? 'plate' : 'plates'} for a ${bedName} bed, ` +
-    `each ${layout.plateW} x ${layout.plateH} mm. ` +
+    `each ${layout.plateW} x ${layout.plateH} mm` +
+    (trimMm ? `, trimmed to the shapes with a ${trimMm} mm margin. ` : '. ') +
     `Print one of each: ${ids}. ` +
+    titleNote +
     'Lay them out as the grid reads, row A at the top, column 1 at the left, ' +
     `and glue them edge to edge onto a backing board of ${size.w} x ${size.h} mm. ` +
     `Levels, measured from the underside: base ${mm(heights.base)} mm, ` +

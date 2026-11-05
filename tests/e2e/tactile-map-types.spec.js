@@ -251,7 +251,7 @@ test.describe('the three map types end to end', () => {
     await nextStep(page, 4, 'Apply classes');
     await nextStep(page, 5, 'Check and print');
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      /^2 plates of 151 x 202 mm, A1 to A2\. The key takes (one plate|\d+ plates)\.$/,
+      /^2 plates of 161 x 222 mm, A1 to A2\. The key takes (one plate|\d+ plates)\.$/,
       { timeout: 10000 }
     );
     await axeClean(page, 'drawing step 5');

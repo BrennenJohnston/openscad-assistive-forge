@@ -78,11 +78,17 @@ label_tape_width_mm = 12.7; // [9.5, 12.7]
 // How deep the label channels sink below the surface (mm): 0.3 lets the tape sit nearly flush.
 label_channel_depth_mm = 0.3; // [0.2:0.05:0.5]
 
+/* [Sheet] */
+// The blank band around the map face (mm), 10 to 40. The Tactile Map Designer panel lays the map out inside it and records the figure here.
+margin_mm = 10; // [10:1:40]
+// The title band above the map face (mm), written by the panel: 0 when the title stands inside the face or there is none.
+title_band_mm = 0; // [0:0.1:200]
+// Raised words, written by the panel: rows of x:y:h:z:WORDS in tenths of a millimeter from the plate's bottom left: the baseline's start, the capital height, how far above the base's top the letters stand; rows split by |. The title's lines on their band, a key plate's words.
+raised_words = "";
+
 /* [Key plate] */
 // Map draws a plate of the map; Key draws the map's key plate: its words raised, its braille on label tape in channels of the levels file. The Tactile Map Designer panel sets it.
 plate_kind = "Map"; // [Map, Key]
-// The key's raised words, written by the panel: rows of x:y:WORDS, x and y the start of the row's baseline in tenths of a millimeter from the plate's bottom left, rows split by |.
-key_print = "";
 // Height of the capital I in the key's raised words (mm). ADA 703.2.5: 16 to 50.8, as the title and the Braille Sign.
 key_letter_height_mm = 16; // [16:0.1:50.8]
 
@@ -262,8 +268,10 @@ module here_mark() {
 // The title: uppercase, left-aligned 9.525 mm in from the left edge, clipped
 // to the face so a long title never runs off the plate or under the arrow.
 // A split map draws it on its top-left plate only.
+// The title drawn by the model itself, inside the face's top edge, only
+// while the panel writes no raised_words rows (the band's lines come as rows).
 module title() {
-    if (len(title_text) > 0 && plate_shows_title == "yes")
+    if (len(title_text) > 0 && plate_shows_title == "yes" && len(raised_words) == 0)
         translate([0, 0, base_eff - _fuse])
             linear_extrude(height = title_raise_mm + _fuse)
                 intersection() {
@@ -363,17 +371,26 @@ module cutouts() {
 // file, as a map plate's do
 // =============================================================================
 
-// Rows of "x:y:content" split by "|", x and y in tenths of a millimeter.
+// Rows of "x:y:h:z:content" split by "|", the four numbers in tenths of a
+// millimeter; the content may hold a colon of its own.
 function _at(s, c, i = 0) = i >= len(s) ? -1 : s[i] == c ? i : _at(s, c, i + 1);
 function _sub(s, a, b) = a >= b ? "" : chr([for (i = [a : b - 1]) ord(s[i])]);
 function _split(s, c) =
     let(k = _at(s, c))
     k < 0 ? [s] : concat([_sub(s, 0, k)], _split(_sub(s, k + 1, len(s)), c));
-function _int(s, i = 0, n = 0) =
-    i >= len(s) ? n : _int(s, i + 1, n * 10 + ord(s[i]) - 48);
+// A whole number, signed: a row that starts left of its plate (a title line
+// across a seam) has a negative x.
+function _uint(s, i = 0, n = 0) =
+    i >= len(s) ? n : _uint(s, i + 1, n * 10 + ord(s[i]) - 48);
+function _int(s) = len(s) > 0 && s[0] == "-" ? -_uint(s, 1) : _uint(s);
 function _row(r) =
-    let(a = _at(r, ":"), rest = _sub(r, a + 1, len(r)), b = _at(rest, ":"))
-    [_int(_sub(r, 0, a)) / 10, _int(_sub(rest, 0, b)) / 10, _sub(rest, b + 1, len(rest))];
+    let(a = _at(r, ":"), r1 = _sub(r, a + 1, len(r)),
+        b = _at(r1, ":"), r2 = _sub(r1, b + 1, len(r1)),
+        c = _at(r2, ":"), r3 = _sub(r2, c + 1, len(r2)),
+        d = _at(r3, ":"))
+    [_int(_sub(r, 0, a)) / 10, _int(_sub(r1, 0, b)) / 10,
+     _int(_sub(r2, 0, c)) / 10, _int(_sub(r3, 0, d)) / 10,
+     _sub(r3, d + 1, len(r3))];
 function _rows(s) = len(s) == 0 ? [] : [for (r = _split(s, "|")) if (len(r) > 0) _row(r)];
 // Rows of "x:y" split by "|", x and y in tenths of a millimeter.
 function _xy(r) =
@@ -390,14 +407,25 @@ module destination_cone() {
                      r2 = CONE_RADIUS_MM / 8, $fn = 16);
 }
 
-module key_words() {
-    translate([0, 0, base_eff - _fuse])
-        linear_extrude(height = title_raise_mm + _fuse)
-            for (row = _rows(key_print))
-                translate([row[0], row[1]])
-                    text(row[2], size = key_letter_height_mm / LETTER_CAP_FACTOR,
-                         font = "Liberation Sans", spacing = TITLE_LETTER_SPACING,
-                         halign = "left", valign = "baseline");
+// Every raised word the panel wrote: the title's lines on their band, a key
+// plate's words. Each row stands on its own height above the base and is
+// clipped to the plate, so a line across a seam goes on at the next plate.
+module raised_words() {
+    for (row = _rows(raised_words)) {
+        assert(in_range(row[2], TITLE_CAP_RANGE_MM),
+               str("a raised word's capital is ", row[2], " mm; ADA 703.2.5 asks for 16 to 50.8 mm."));
+        assert(row[3] >= 0 && row[3] <= level_z(3) - base_eff,
+               str("a raised word stands ", row[3], " mm above the base, past the top level."));
+        translate([0, 0, base_eff + row[3] - _fuse])
+            linear_extrude(height = title_raise_mm + _fuse)
+                intersection() {
+                    square([map_width_mm, map_height_mm]);
+                    translate([row[0], row[1]])
+                        text(row[4], size = row[2] / LETTER_CAP_FACTOR,
+                             font = "Liberation Sans", spacing = TITLE_LETTER_SPACING,
+                             halign = "left", valign = "baseline");
+                }
+    }
 }
 
 module tactile_map() {
@@ -407,9 +435,8 @@ module tactile_map() {
             levels();
             here_mark();
             destination_cone();
-            if (plate_kind == "Key") {
-                key_words();
-            } else {
+            raised_words();
+            if (plate_kind != "Key") {
                 title();
                 north_cue();
                 border_frame();

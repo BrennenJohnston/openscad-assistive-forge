@@ -23,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or carried by keyboard (Space picks one up, the arrow keys move it, Space
   puts it down); Place You are here puts the reader's mark at the middle of
   the view, and one Undo takes a whole move back.
+- The map prints as a sheet: a blank band of 10 to 40 mm around the map on
+  every side, set in step 5, and the raised title on a band of its own above
+  the map, wrapped to the map's width and spaced as a sign's letters are; or
+  inside the map's top edge as before, or left off. A title band that would
+  force a row of short plates prints on title plates of its own above row A.
+  A place map can be made portrait, upright at the same scale.
+- Trim the empty edges, a switch in step 5 that starts on for a place map:
+  the sheet is cut down to the box around what prints, the margin band kept,
+  so the empty plate around a map is not printed; the editor shows the
+  trimmed sheet as a dashed frame, and the README says the plates are
+  trimmed to the shapes.
 
 - A Drawing editor button in the Customizer's header, beside Undo and Redo,
   on every tile whose file control takes a drawing: it opens the editor on
@@ -31,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stands whatever the control holds.
 
 ### Changed
+
+- The plates are cut from the sheet, the map in its band: the sample's
+  480 x 360 mm map prints as four 250 x 190 mm plates on a 256 mm bed, and
+  the README's backing board is the sheet's size.
 
 - The drawing editor's picture moves in every tool: a drag on empty ground
   pans it with the mouse or a finger, Shift with an arrow key moves it a
@@ -52,7 +67,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the buttons moved into More, where their presses were never heard.
 - Dragging the picture in the drawing editor moves it smoothly with the
   pointer; before, it flashed between positions until the button was released.
-
+- The braille card counts its rows and cells as the model prints them, so a
+  business card holds four rows at the default margin where three were
+  counted before; a margin or rows-per-card value typed in the Customizer
+  now sets the panel's Margin and Max rows per card instead of being
+  written back over at the next change. The Business card preset also sets
+  6.2 mm between cells and a 5 mm margin, the spacing of the Braille
+  Authority's business card examples: 13 cells and 4 rows.
 - A place map marks the typed address: a destination cone (Touch Mapper's
   marker, 4.9 mm tall) stands at the address and the key names it first
   with the address; a route's end carries the same cone. You are here is

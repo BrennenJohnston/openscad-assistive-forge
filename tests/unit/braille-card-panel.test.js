@@ -152,7 +152,8 @@ function mountCardPanel(extra = {}) {
   document.body.innerHTML =
     '<div id="app"><div id="parametersContainer"></div></div>';
   // Mirror the SCAD defaults the parameter UI would expose. With the
-  // default geometry the capacity is 26 cells x 8 rows.
+  // default geometry the capacity is 27 cells x 9 rows, so the panel's
+  // default Max rows per card (8) is what caps the rows.
   const defaults = {
     card_face_width_mm: '200',
     card_face_height_mm: '100',
@@ -575,24 +576,25 @@ describe('braille panel card mode — grid_rows sync and clamp', () => {
       expect(params().Line_1).toBe(word('hi'));
     });
 
-    // Business-card height: floor((51 - 2*6) / 10) = 3 rows < requested 8
+    // Business-card height: floor((51 - 2*6 - 6.6) / 10) + 1 = 4 rows,
+    // under the requested 8
     stateManager.setState({
       parameters: { ...params(), card_face_height_mm: '51' },
     });
 
     await vi.waitFor(() => {
-      expect(params().grid_rows).toBe('3');
+      expect(params().grid_rows).toBe('4');
     }, SETTLE);
 
     // Warning tier (role=status), not a silent reset
     const warnings = document.getElementById('brailleWarnings');
     expect(warnings.textContent).not.toBe('');
     expect(warnings.textContent).toContain('only');
-    expect(warnings.textContent).toContain('fits 3 rows');
+    expect(warnings.textContent).toContain('fits 4 rows');
 
     // Announced via the shared live region
     expect(announceImmediate).toHaveBeenCalledWith(
-      'Rows per card limited to 3 by the card height.'
+      'Rows per card limited to 4 by the card height.'
     );
 
     // Sticky intent: the input keeps the user's requested value
@@ -607,7 +609,7 @@ describe('braille panel card mode — grid_rows sync and clamp', () => {
       parameters: { ...params(), card_face_height_mm: '51' },
     });
     await vi.waitFor(() => {
-      expect(params().grid_rows).toBe('3');
+      expect(params().grid_rows).toBe('4');
     }, SETTLE);
 
     stateManager.setState({
@@ -617,6 +619,120 @@ describe('braille panel card mode — grid_rows sync and clamp', () => {
       expect(params().grid_rows).toBe('8');
     }, SETTLE);
     expect(document.getElementById('brailleMaxRows').value).toBe('8');
+  });
+
+  it('a direct margin parameter edit sets the panel Margin and counts again', async () => {
+    await typeText('hi', () => {
+      expect(params().Line_1).toBe(word('hi'));
+    });
+    stateManager.setState({
+      parameters: { ...params(), card_face_height_mm: '51' },
+    });
+    await vi.waitFor(() => {
+      expect(params().grid_rows).toBe('4');
+    }, SETTLE);
+
+    // The Card Size group's margin, typed as the standard 12.7 mm:
+    // floor((51 - 25.4 - 6.6) / 10) + 1 = 2 rows.
+    stateManager.setState({
+      parameters: { ...params(), auto_size_margin_mm: '12.7' },
+    });
+    await vi.waitFor(() => {
+      expect(document.getElementById('brailleMarginInput').value).toBe('12.7');
+    }, SETTLE);
+    expect(document.getElementById('brailleMarginPreset').value).toBe(
+      'standard'
+    );
+    await vi.waitFor(() => {
+      expect(params().grid_rows).toBe('2');
+    }, SETTLE);
+    // The panel writes the margin it measured with, never its old one.
+    expect(params().auto_size_margin_mm).toBe('12.7');
+
+    // A value no preset names reads as Custom.
+    stateManager.setState({
+      parameters: { ...params(), auto_size_margin_mm: '4' },
+    });
+    await vi.waitFor(() => {
+      expect(document.getElementById('brailleMarginInput').value).toBe('4');
+    }, SETTLE);
+    expect(document.getElementById('brailleMarginPreset').value).toBe(
+      'custom'
+    );
+  });
+
+  it('a direct rows_per_card edit sets "Max rows per card" and the next layout', async () => {
+    await typeText('hi', () => {
+      expect(params().Line_1).toBe(word('hi'));
+    });
+    stateManager.setState({
+      parameters: { ...params(), rows_per_card: '3' },
+    });
+    await vi.waitFor(() => {
+      expect(document.getElementById('brailleMaxRows').value).toBe('3');
+    }, SETTLE);
+    await vi.waitFor(() => {
+      expect(params().grid_rows).toBe('3');
+    }, SETTLE);
+  });
+
+  it('a project loaded with its own margin and rows starts the panel on them', async () => {
+    destroyBraillePanel();
+    document.body.innerHTML = '';
+    document.body.innerHTML =
+      '<div id="app"><div id="parametersContainer"></div></div>';
+    const loaded = {
+      ...Object.fromEntries(LINE_PARAMS.map((name) => [name, ''])),
+      card_face_width_mm: '200',
+      card_face_height_mm: '100',
+      cell_spacing: '7',
+      line_spacing: '10',
+      grid_columns: '26',
+      grid_rows: '8',
+      auto_size_card: 'On',
+      auto_size_margin_mm: '25.4',
+      card_layout: 'Single',
+      rows_per_card: '5',
+    };
+    stateManager.setState({ parameters: { ...loaded }, defaults: loaded });
+    initBraillePanel(CARD_CONFIG);
+    expect(document.getElementById('brailleMarginInput').value).toBe('25.4');
+    expect(document.getElementById('brailleMarginPreset').value).toBe('wide');
+    expect(document.getElementById('brailleMaxRows').value).toBe('5');
+  });
+
+  it('the Business card preset sets 6.2 mm cells and a 5 mm margin: 13 cells, 4 rows', async () => {
+    await typeText('hi', () => {
+      expect(params().Line_1).toBe(word('hi'));
+    });
+    const select = document.getElementById('brailleSizePreset');
+    select.value = 'business';
+    select.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => {
+      expect(params().card_face_width_mm).toBe('89');
+    }, SETTLE);
+    expect(params().card_face_height_mm).toBe('51');
+    expect(params().auto_size_card).toBe('Off');
+    expect(params().cell_spacing).toBe('6.2');
+    expect(params().auto_size_margin_mm).toBe('5');
+    expect(document.getElementById('brailleMarginInput').value).toBe('5');
+    expect(document.getElementById('brailleMarginPreset').value).toBe(
+      'custom'
+    );
+    // 89 - 10 - 4.1 = 74.9 mm holds 12 pitches of 6.2: 13 cells; 51 - 10
+    // - 6.6 = 34.4 mm holds 3 pitches of 10: 4 rows.
+    await vi.waitFor(() => {
+      expect(params().grid_columns).toBe('13');
+    }, SETTLE);
+    expect(params().grid_rows).toBe('4');
+    // The default card keeps 7 mm cells and the margin it had.
+    select.value = 'default';
+    select.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => {
+      expect(params().card_face_width_mm).toBe('200');
+    }, SETTLE);
+    expect(params().cell_spacing).toBe('6.2');
+    expect(params().auto_size_margin_mm).toBe('5');
   });
 });
 
