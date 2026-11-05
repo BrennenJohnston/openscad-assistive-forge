@@ -10,6 +10,7 @@ import {
   updateDependentParameters,
   setGalleryOptions,
   clearGalleryOptions,
+  setEditorDoorExclusions,
   appendUserSvgToGallery,
   getSvgPrepMetadata,
   setSvgPrepMetadata,
@@ -2802,5 +2803,150 @@ describe('the "?" help button', () => {
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
     );
     expect(expanded()).toBe('false');
+  });
+});
+
+// The drawing editor's door: one on every file control that takes a drawing,
+// standing whatever the control holds, and one in the Customizer's sticky
+// header that opens the first control's editor from anywhere on the tile.
+describe('the drawing editor door', () => {
+  let container;
+  let headerDoor;
+  const designSchema = () =>
+    buildParams({
+      params: [
+        {
+          name: 'design_file',
+          type: 'file',
+          default: '',
+          uiType: 'file',
+          acceptedExtensions: ['svg', 'png'],
+        },
+      ],
+    });
+  const opensSoFar = () =>
+    vi
+      .mocked(createSvgPrepWorkspace)
+      .mock.results.reduce(
+        (n, r) => n + (r.value?.open?.mock.calls.length ?? 0),
+        0
+      );
+
+  beforeEach(() => {
+    vi.mocked(isEnabled).mockReturnValue(true);
+    headerDoor = document.createElement('button');
+    headerDoor.id = 'editorDoorBtn';
+    headerDoor.className = 'btn hidden';
+    document.body.appendChild(headerDoor);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    vi.mocked(isEnabled).mockReturnValue(false);
+    vi.mocked(analyzeSvg).mockReset();
+    clearGalleryOptions();
+    setEditorDoorExclusions([]);
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+  });
+
+  it('stands on the control before any file, and the header shows its button', () => {
+    renderParameterUI(designSchema(), container, vi.fn(), {});
+    const door = container.querySelector('.svg-prep-door');
+    expect(door.hidden).toBe(false);
+    expect(door.textContent).toBe('Open the drawing editor');
+    expect(headerDoor.classList.contains('hidden')).toBe(false);
+  });
+
+  it('leaves the header empty for a tile with no drawing control', () => {
+    renderParameterUI(
+      buildParams({
+        params: [{ name: 'width', type: 'number', default: 1, uiType: 'number' }],
+      }),
+      container,
+      vi.fn(),
+      {}
+    );
+    expect(headerDoor.classList.contains('hidden')).toBe(true);
+  });
+
+  it('is kept out of the header for a parameter the tile names, until the name is cleared', () => {
+    setEditorDoorExclusions(['design_file']);
+    renderParameterUI(designSchema(), container, vi.fn(), {});
+    expect(headerDoor.classList.contains('hidden')).toBe(true);
+    expect(container.querySelector('.svg-prep-door').hidden).toBe(false);
+    setEditorDoorExclusions([]);
+    expect(headerDoor.classList.contains('hidden')).toBe(false);
+  });
+
+  it('steps aside while the card offers its own button, and comes back when the file is cleared', async () => {
+    vi.mocked(analyzeSvg).mockReturnValue({
+      status: 'needs_review',
+      recommendation: 'needs_review',
+      elements: [{ type: 'path' }],
+      warnings: [],
+    });
+    renderParameterUI(designSchema(), container, vi.fn(), {});
+    const door = container.querySelector('.svg-prep-door');
+    const fileInput = container.querySelector('input[type="file"]');
+    const file = new File(['<svg><path/></svg>'], 'test.svg', {
+      type: 'image/svg+xml',
+    });
+    Object.defineProperty(fileInput, 'files', {
+      value: [file],
+      configurable: true,
+    });
+    fileInput.dispatchEvent(new Event('change'));
+    await vi.waitFor(
+      () => {
+        if (!container.querySelector('.svg-prep-edit-btn'))
+          throw new Error('no card yet');
+      },
+      { timeout: 8000, interval: 20 }
+    );
+    await vi.waitFor(() => expect(door.hidden).toBe(true));
+    container.querySelector('.file-clear-button').click();
+    await vi.waitFor(() => expect(door.hidden).toBe(false));
+  });
+
+  it('the header reads the design the model shows, opens the editor on it, and takes focus back on close', async () => {
+    setGalleryOptions('design_file', [
+      { file: 'heart.svg', label: 'Heart', url: '/examples/heart.svg' },
+    ]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        text: async () => '<svg><path d="M0 0h1v1z"/></svg>',
+      }))
+    );
+    vi.mocked(analyzeSvg).mockReturnValue({
+      status: 'needs_review',
+      recommendation: 'needs_review',
+      elements: [{ type: 'path' }],
+      warnings: [],
+    });
+    renderParameterUI(designSchema(), container, vi.fn(), {
+      design_file: 'heart.svg',
+    });
+    const before = opensSoFar();
+    headerDoor.click();
+    await vi.waitFor(
+      () => {
+        if (opensSoFar() <= before) throw new Error('the editor has not opened');
+      },
+      { timeout: 8000, interval: 20 }
+    );
+    expect(globalThis.fetch).toHaveBeenCalledWith('/examples/heart.svg');
+    const factory = vi.mocked(createSvgPrepWorkspace);
+    const stub = factory.mock.results[factory.mock.results.length - 1].value;
+    const [svg, , options] =
+      stub.open.mock.calls[stub.open.mock.calls.length - 1];
+    expect(svg).toContain('<path');
+    // The control's own door stands aside now that the card has a button.
+    expect(container.querySelector('.svg-prep-door').hidden).toBe(true);
+    options.onClose();
+    expect(document.activeElement).toBe(headerDoor);
   });
 });

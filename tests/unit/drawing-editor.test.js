@@ -185,13 +185,15 @@ describe('the mounted workspace', () => {
     expect(ws._refs.closeBtn.hidden).toBe(true)
   })
 
-  it('keeps its action row, moved whole into the toolbar', () => {
+  it('keeps its action row in the toolbar: Apply on the row, the finishing moves behind More', () => {
     const editor = make()
     const footer = surface.querySelector('.drawing-editor-toolbar .svg-prep-footer')
     expect(footer).toBe(editor._workspace._refs.footer)
     expect(footer.querySelector('button[data-action="apply"]')).not.toBeNull()
-    expect(footer.querySelector('button[data-action="keep"]')).not.toBeNull()
-    expect(footer.querySelector('button[data-action="save"]')).not.toBeNull()
+    const more = surface.querySelector('.drawing-editor-toolbar .drawing-editor-more-panel')
+    expect(more.querySelector('button[data-action="keep"]')).toBe(editor._workspace._refs.keepBtn)
+    expect(more.querySelector('button[data-action="save"]')).toBe(editor._workspace._refs.saveBtn)
+    expect(more.querySelector('button[data-action="reset"]')).toBe(editor._workspace._refs.resetBtn)
   })
 
   it('has its shape list and its warnings in the panel sections', () => {

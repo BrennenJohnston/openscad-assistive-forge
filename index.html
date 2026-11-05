@@ -2288,6 +2288,33 @@
                     <path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"></path>
                   </svg>
                 </button>
+                <!-- The drawing editor's door, shown while a file control on
+                     the tile takes a drawing; it stays in this sticky header
+                     whatever is folded or scrolled away. -->
+                <button
+                  type="button"
+                  id="editorDoorBtn"
+                  class="btn btn-sm btn-outline btn-with-icon editor-door-btn hidden"
+                >
+                  <svg
+                    class="btn-icon-svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 20h9"></path>
+                    <path
+                      d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"
+                    ></path>
+                  </svg>
+                  <span class="btn-text">Drawing editor</span>
+                </button>
                 <!-- Code Editor toggle, hidden until its feature flag is on -->
                 <button
                   type="button"

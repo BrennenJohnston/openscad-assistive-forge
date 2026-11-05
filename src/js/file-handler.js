@@ -17,6 +17,7 @@ import {
   renderParameterUI,
   setGalleryOptions,
   clearGalleryOptions,
+  setEditorDoorExclusions,
   setFileUploadListener,
   appendUserSvgToGallery,
   getGalleryParamNames,
@@ -148,6 +149,8 @@ async function restoreGalleryFromManifest(exampleKey, { mapType } = {}) {
       };
       // The map file is the model's input, not a picture to lay over it.
       setModelInputVariables([tactileMap.mapFileParam]);
+      // Its drawing editor opens from the map's own steps, not the header.
+      setEditorDoorExclusions([tactileMap.mapFileParam]);
       // Start fetching the panel's chunk now, while the tile's own files
       // load, so the mount below finds it ready and the controls settle in
       // the same breath as before.
@@ -1087,6 +1090,7 @@ export function initFileHandler({
           file?.sourceExampleKey || findExampleKeyByFileName(fileName);
         if (exampleKey) {
           clearGalleryOptions();
+          setEditorDoorExclusions([]);
           await restoreGalleryFromManifest(exampleKey);
         }
       }
@@ -1692,6 +1696,7 @@ export function initFileHandler({
 
       currentExampleKey = exampleKey;
       clearGalleryOptions();
+      setEditorDoorExclusions([]);
       await restoreGalleryFromManifest(exampleKey, { mapType });
 
       const isProgramExample = Object.values(PROGRAM_DEFINITIONS).some((prog) =>

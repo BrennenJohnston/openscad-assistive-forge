@@ -372,6 +372,8 @@ test.describe('the Drawing / Charm switch', () => {
       0
     );
 
+    // Keep original waits behind More.
+    await page.locator('.drawing-editor-more-btn').click();
     await page.getByRole('button', { name: 'Keep original' }).click();
     await page.waitForTimeout(1000);
     await nudge(1.1);
@@ -1039,6 +1041,8 @@ test.describe('the too-thin check on the charm host', () => {
     const raisedBefore = await editor
       .locator('.svg-prep-result-pane .svg-prep-standin-path--raised')
       .count();
+    // The bulk tools fold under List tools.
+    await editor.locator('.svg-prep-bulk-tools > summary').click();
     await editor.locator('[data-action="ignore-thin"]').click();
     await expect
       .poll(
@@ -1384,6 +1388,12 @@ test.describe('the shapes you left out, and a view you can steer', () => {
     // Held by its index from here: the locator above would resolve to the
     // next raised row once this one is set to Ignore.
     const row = page.locator(`.svg-prep-object[data-index="${index}"]`);
+    // The panel's bottom rows sit under the messages bar at the foot of the
+    // preview; a forced click on a radio there lands on the bar. The row is
+    // brought to the middle of the panel before each press.
+    const centre = () =>
+      row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    await centre();
     await row
       .locator('input[type=radio][value="ignore"]')
       .check({ force: true });
@@ -1399,6 +1409,7 @@ test.describe('the shapes you left out, and a view you can steer', () => {
       editor.locator('.svg-prep-live, [aria-live="polite"].sr-only').first()
     ).toContainText(/1 of \d+ shapes selected\./, { timeout: 10000 });
     // Back to Raised from its row: it is ink again.
+    await centre();
     await row
       .locator('input[type=radio][value="foreground"]')
       .check({ force: true });
@@ -1425,7 +1436,10 @@ test.describe('the shapes you left out, and a view you can steer', () => {
       .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
       .toBeGreaterThan(10);
     const pane = editor.locator('.svg-prep-result-pane');
-    const zoom = pane.locator('.svg-prep-zoom-controls');
+    // The editor's one set of buttons moves every purpose's picture; the
+    // pane's own zoom row stays out of the editor.
+    const zoom = editor.locator('.drawing-editor-zoom');
+    await expect(pane.locator('.svg-prep-zoom-controls')).toBeHidden();
     const vb = () =>
       pane
         .locator('svg')
@@ -1436,27 +1450,27 @@ test.describe('the shapes you left out, and a view you can steer', () => {
             .split(/[\s,]+/)
             .map(Number)
         );
-    await zoom.locator('.svg-prep-zoom-in').click();
-    await zoom.locator('.svg-prep-zoom-in').click();
+    await zoom.locator('[data-action="zoom-in"]').click();
+    await zoom.locator('[data-action="zoom-in"]').click();
     const [x0, y0, w] = await vb();
-    const right = zoom.getByRole('button', {
-      name: 'Move the result view right',
-    });
+    const right = zoom.locator('[data-pan="panRight"]');
     await expect(right).toBeVisible();
     await right.click();
     const [x1] = await vb();
-    expect(x1 - x0).toBeCloseTo(w / 4, 3);
-    await zoom.getByRole('button', { name: 'Move the result view up' }).click();
+    // A press moves the view a tenth of itself.
+    expect(x1 - x0).toBeCloseTo(w / 10, 3);
+    await zoom.locator('[data-pan="panUp"]').click();
     const [, y2] = await vb();
     expect(y2).toBeLessThan(y0);
-    // Every one of the seven is a 44 px target.
+    // Every one of the seven is a real target: the token's 36 px with a
+    // mouse, 44 on a touch screen.
     const sizes = await zoom
       .locator('button')
       .evaluateAll((els) =>
         els.map((b) => Math.round(b.getBoundingClientRect().height))
       );
     expect(sizes.length).toBe(7);
-    for (const h of sizes) expect(h).toBeGreaterThanOrEqual(44);
+    for (const h of sizes) expect(h).toBeGreaterThanOrEqual(36);
   });
 });
 
@@ -2314,7 +2328,15 @@ test.describe('Reset puts the Layer column back and says so', () => {
     const apply = editor.locator('.svg-prep-footer [data-action="apply"]');
     await expect(apply).toBeEnabled({ timeout: 240000 });
 
-    // The width box carries the charm's fit box, and says so.
+    // The width box carries the charm's fit box, and says so. The width
+    // control waits behind More with the other now-and-then tools.
+    const moreBtn = editor.locator('.drawing-editor-more-btn');
+    const openMore = async () => {
+      if ((await moreBtn.getAttribute('aria-expanded')) !== 'true') {
+        await moreBtn.click();
+      }
+    };
+    await openMore();
     const help = editor.locator('.svg-prep-design-width-help');
     await expect(help).toBeVisible();
     await expect(help).toHaveText(
@@ -2346,8 +2368,11 @@ test.describe('Reset puts the Layer column back and says so', () => {
     await expect(apply).toBeEnabled({ timeout: 240000 });
 
     // Reset: the layer select goes back to 1, and the sentence names roles,
-    // offsets and layers.
-    await editor.locator('.svg-prep-footer [data-action="reset"]').click();
+    // offsets and layers. Reset waits behind More.
+    await openMore();
+    await editor
+      .locator('.drawing-editor-more-panel [data-action="reset"]')
+      .click();
     await expect(layer).toHaveValue('1');
     await expect(offset).toHaveValue('0');
     await expect(

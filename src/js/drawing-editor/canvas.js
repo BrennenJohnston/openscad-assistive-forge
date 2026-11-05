@@ -37,6 +37,21 @@
  */
 
 import { EDITOR_STRINGS as S } from './strings.js';
+import {
+  ARROW_PANS,
+  ARROW_WALKS,
+  PAN_FRACTION,
+  PAN_MIN_PX,
+  ZOOM_STEP,
+  clientToViewBox,
+  createPinch,
+  nearestInDirection,
+  pannedView,
+  viewAfterDrag,
+  zoomedView,
+} from './navigation.js';
+
+export { clientToViewBox, nearestInDirection, viewAfterDrag };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -52,65 +67,15 @@ export const TOOLS = Object.freeze([
 
 /** Room around the drawing when it is fitted, as a fraction of its size. */
 const FIT_PADDING = 0.04;
-const ZOOM_STEP = 1.5;
 /** A marquee smaller than this is a click that wandered, not a rectangle. */
 const MARQUEE_MIN_UNITS = 0.5;
 /** A drag of a mark shorter than this is a click on it. */
 const MOVE_MIN_UNITS = 0.5;
-/** A press on empty ground that travels less than this is a click, not a pan. */
-const PAN_MIN_PX = 3;
-/** What an arrow key or a pan button moves the view by: a tenth of it. */
-const PAN_FRACTION = 0.1;
 /** The arrow keys' steps during a carry, in drawing units (mm on a map). */
 const NUDGE_UNITS = 1;
 const NUDGE_SHIFT_UNITS = 10;
 
 const round1 = (v) => Math.round(v * 10) / 10;
-
-/**
- * Map a pointer position into viewBox units.
- *
- * @param {{left: number, top: number, width: number, height: number}} box -
- *   The svg element's box on screen
- * @param {{x: number, y: number, w: number, h: number}} vb
- * @param {number} clientX
- * @param {number} clientY
- * @returns {{x: number, y: number}}
- */
-export function clientToViewBox(box, vb, clientX, clientY) {
-  if (!(box.width > 0) || !(box.height > 0) || !(vb.w > 0) || !(vb.h > 0)) {
-    return { x: vb.x, y: vb.y };
-  }
-  const scale = Math.min(box.width / vb.w, box.height / vb.h);
-  const drawnW = vb.w * scale;
-  const drawnH = vb.h * scale;
-  const offsetX = (box.width - drawnW) / 2;
-  const offsetY = (box.height - drawnH) / 2;
-  return {
-    x: vb.x + (clientX - box.left - offsetX) / scale,
-    y: vb.y + (clientY - box.top - offsetY) / scale,
-  };
-}
-
-/**
- * The view a drag has moved to: the view at the press, less the pixels the
- * pointer has traveled since.
- *
- * Always from the press, never from where the pointer reads in the view as
- * it is now. The drag is moving that view, so reading through it feeds each
- * step back into the next and the picture jumps between frames.
- *
- * @param {{x: number, y: number, w: number, h: number}} start - The view at the press
- * @param {{width: number, height: number}} box - The svg element's box on screen
- * @param {number} dx - Pixels traveled across
- * @param {number} dy - Pixels traveled down
- * @returns {{x: number, y: number, w: number, h: number}}
- */
-export function viewAfterDrag(start, box, dx, dy) {
-  if (!(box.width > 0) || !(box.height > 0)) return { ...start };
-  const scale = Math.min(box.width / start.w, box.height / start.h);
-  return { ...start, x: start.x - dx / scale, y: start.y - dy / scale };
-}
 
 /**
  * The regions whose bounding boxes lie wholly inside a rectangle.
@@ -134,46 +99,6 @@ export function regionsInside(regions, rect) {
         r.bbox.maxY <= maxY
     )
     .map((r) => r.key);
-}
-
-/**
- * The nearest region in a direction, by interior point.
- *
- * "In a direction" means the other region's center lies inside a 90-degree
- * cone opening that way, so pressing Right never lands on something that is
- * mostly above; among those, the closest wins.
- *
- * @param {Array<{key: string, interior: {x: number, y: number}}>} regions
- * @param {string|null} fromKey
- * @param {'left'|'right'|'up'|'down'} direction
- * @returns {string|null}
- */
-export function nearestInDirection(regions, fromKey, direction) {
-  const from = regions.find((r) => r.key === fromKey);
-  if (!from) return regions[0]?.key ?? null;
-  const dirs = {
-    left: [-1, 0],
-    right: [1, 0],
-    up: [0, -1],
-    down: [0, 1],
-  };
-  const [dx, dy] = dirs[direction] || [0, 0];
-  let best = null;
-  let bestDist = Infinity;
-  for (const r of regions) {
-    if (r.key === fromKey || !r.interior) continue;
-    const vx = r.interior.x - from.interior.x;
-    const vy = r.interior.y - from.interior.y;
-    const along = vx * dx + vy * dy;
-    const across = Math.abs(vx * dy) + Math.abs(vy * dx);
-    if (along <= 0 || across > along) continue;
-    const dist = vx * vx + vy * vy;
-    if (dist < bestDist) {
-      bestDist = dist;
-      best = r.key;
-    }
-  }
-  return best;
 }
 
 /**
@@ -637,16 +562,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   }
 
   function zoomBy(factor, about = null) {
-    const cx = about ? about.x : vb.x + vb.w / 2;
-    const cy = about ? about.y : vb.y + vb.h / 2;
-    const w = vb.w / factor;
-    const h = vb.h / factor;
-    vb = {
-      x: cx - (cx - vb.x) / factor,
-      y: cy - (cy - vb.y) / factor,
-      w,
-      h,
-    };
+    vb = zoomedView(vb, factor, about);
     applyViewBox();
   }
 
@@ -655,9 +571,19 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
    * looks further right, a positive y further down.
    */
   function panBy(fx, fy) {
-    vb = { ...vb, x: vb.x + fx * vb.w, y: vb.y + fy * vb.h };
+    vb = pannedView(vb, fx, fy, natural);
     applyViewBox();
   }
+
+  const pinch = createPinch({
+    getView: () => ({ ...vb }),
+    setView: (view) => {
+      vb = view;
+      applyViewBox();
+    },
+    getBox: () => svg.getBoundingClientRect(),
+    getNatural: () => natural,
+  });
 
   function startPan(event, at) {
     drag = {
@@ -715,6 +641,11 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   };
 
   function onPointerDown(event) {
+    // A second finger makes it a pinch; whatever the first had begun ends.
+    if (pinch.down(event)) {
+      cancelDrag();
+      return;
+    }
     if (event.button !== 0) return;
     const at = toUnits(event);
     const key = regionKeyOf(event.target);
@@ -760,6 +691,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   }
 
   function onPointerMove(event) {
+    if (pinch.move(event)) return;
     if (!drag) return;
     const at = toUnits(event);
     if (drag.kind === 'pan') {
@@ -775,7 +707,8 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
         drag.vb0,
         svg.getBoundingClientRect(),
         event.clientX - drag.clientX,
-        event.clientY - drag.clientY
+        event.clientY - drag.clientY,
+        natural
       );
       applyViewBox();
     } else if (drag.kind === 'marquee') {
@@ -803,6 +736,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   }
 
   function onPointerUp(event) {
+    pinch.up(event);
     if (!drag) return;
     const at = toUnits(event);
     const current = drag;
@@ -870,12 +804,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   }
 
   function onKeyDown(event) {
-    const dir = {
-      ArrowLeft: 'left',
-      ArrowRight: 'right',
-      ArrowUp: 'up',
-      ArrowDown: 'down',
-    }[event.key];
+    const dir = ARROW_WALKS[event.key];
     if (carry) {
       // A mark in hand: the arrows carry it, Space or Enter puts it down,
       // Escape puts it back; nothing else leaves the carry.
@@ -909,10 +838,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
       // walking the shapes, the keyboard reader's way.
       event.preventDefault();
       event.stopPropagation();
-      panBy(
-        dir === 'left' ? -PAN_FRACTION : dir === 'right' ? PAN_FRACTION : 0,
-        dir === 'up' ? -PAN_FRACTION : dir === 'down' ? PAN_FRACTION : 0
-      );
+      panBy(...ARROW_PANS[event.key]);
       return;
     }
     if (dir) {
@@ -965,7 +891,11 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   svg.addEventListener('pointerdown', onPointerDown);
   svg.addEventListener('pointermove', onPointerMove);
   svg.addEventListener('pointerup', onPointerUp);
-  svg.addEventListener('pointercancel', cancelDrag);
+  const onPointerCancel = (event) => {
+    pinch.up(event);
+    cancelDrag();
+  };
+  svg.addEventListener('pointercancel', onPointerCancel);
   svg.addEventListener('dblclick', onDoubleClick);
   svg.addEventListener('wheel', onWheel, { passive: false });
   svg.addEventListener('keydown', onKeyDown);
@@ -1006,7 +936,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
       svg.removeEventListener('pointerdown', onPointerDown);
       svg.removeEventListener('pointermove', onPointerMove);
       svg.removeEventListener('pointerup', onPointerUp);
-      svg.removeEventListener('pointercancel', cancelDrag);
+      svg.removeEventListener('pointercancel', onPointerCancel);
       svg.removeEventListener('dblclick', onDoubleClick);
       svg.removeEventListener('wheel', onWheel);
       svg.removeEventListener('keydown', onKeyDown);

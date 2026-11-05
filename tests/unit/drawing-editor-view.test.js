@@ -534,23 +534,24 @@ describe('the panel drawer and the two-row toolbar', () => {
     expect(surface.querySelector('.drawing-editor-panel').hidden).toBe(true);
   });
 
-  it('the toolbar is three named rows: actions, view, hands', async () => {
-    // Two rows would not fit: at a 1280 window the toolbar's real width is
-    // 692 px (the editor shares the window with the customizer) and the
-    // groups sum to 1,705 px, so three named rows that never wrap is the
-    // honest answer to a four-row wrap.
+  it('the toolbar is two named rows: the header, then one flowing working row', async () => {
+    // The header names the thing and holds the two ways out and the view
+    // switch; everything a person works with flows on one row and wraps as
+    // the width asks, so the picture and the shapes list keep the height.
     await openCat();
     const rows = surface.querySelectorAll('.drawing-editor-toolbar-row');
-    expect(rows.length).toBe(3);
+    expect(rows.length).toBe(2);
     expect(rows[0].querySelector('.drawing-editor-title')).not.toBeNull();
     expect(rows[0].querySelector('.drawing-editor-close')).not.toBeNull();
     expect(
       rows[0].querySelector('.drawing-editor-panel-toggle')
     ).not.toBeNull();
+    expect(rows[0].querySelector('.drawing-editor-view-switch')).not.toBeNull();
     expect(rows[1].querySelector('.drawing-editor-view')).not.toBeNull();
     expect(rows[1].querySelector('.drawing-editor-zoom')).not.toBeNull();
-    expect(rows[2].querySelector('.drawing-editor-tools')).not.toBeNull();
-    expect(rows[2].querySelector('.drawing-editor-paint')).not.toBeNull();
+    expect(rows[1].querySelector('.drawing-editor-tools')).not.toBeNull();
+    expect(rows[1].querySelector('.drawing-editor-paint')).not.toBeNull();
+    expect(rows[1].querySelector('.drawing-editor-more-btn')).not.toBeNull();
   });
 
   it('Compare belongs to the relief purpose and stays out of the stencil toolbar', async () => {

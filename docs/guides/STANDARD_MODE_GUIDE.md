@@ -310,6 +310,13 @@ happened:
 - **Unsupported features** (red): gradients, clip paths or other features
   that cannot be flattened
 
+**Two ways in.** The Drawing editor button in the Customizer's header, beside
+Undo and Redo, opens the editor from anywhere on the tile: on the design the
+model shows, on a picture still to be converted (its crop view), or, with
+nothing chosen, on an empty editor that asks for a picture. The file control
+has a button of its own, Open the drawing editor, that stands whatever the
+control holds; while the badge offers its own button, that one is the way in.
+
 **One picture.** The editor shows what your drawing will print as, with the
 list of shapes beside it. **Compare with original** shows the before and
 after side by side.

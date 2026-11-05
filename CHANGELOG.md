@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when a cut-through channel would leave nothing under the tape on an All
   printed plate.
 
+- A Drawing editor button in the Customizer's header, beside Undo and Redo,
+  on every tile whose file control takes a drawing: it opens the editor on
+  the design the model shows, or on the empty editor that asks for a
+  picture, from anywhere on the tile. The file control's own button now
+  stands whatever the control holds.
+
 ### Changed
 
 - Label tape channels are sized by the app's braille translator, contracted
@@ -55,9 +61,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pans it with the mouse or a finger, Shift with an arrow key moves it a
   tenth of the view (the arrow keys alone in the Hand tool), and four pan
   buttons stand beside Fit and the zoom buttons, on a phone as on a desktop.
+  The charm's relief picture, the stencil's regions and the map's shapes
+  all move by this one rule; the relief pane's own zoom row is gone.
+- The drawing editor's toolbar is two rows: the name, the view switch and
+  the ways out, then one working row that wraps as the width asks; Save,
+  Keep original and Reset wait behind More where Apply leads, and on the
+  standalone door Save keeps its place on the row. The picture fills the
+  stage, the shape rows are one line each and wrap only when the words are
+  too wide for the list, and a shape chosen on the picture opens the shapes
+  list and brings its row to the middle of the view.
 
 ### Fixed
 
+- On a phone, the drawing editor's Save, Keep original and Reset did nothing:
+  the buttons moved into More, where their presses were never heard.
 - Cropping a traced picture in the drawing editor keeps the part that was
   framed, whether the picture came through the Customizer or the editor's
   own door: on a picture over the pixel cap or from a camera, the crop had

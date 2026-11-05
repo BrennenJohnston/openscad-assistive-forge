@@ -11,6 +11,20 @@
  * @license GPL-3.0-or-later
  */
 
+import {
+  ARROW_PANS,
+  ARROW_WALKS,
+  PAN_FRACTION,
+  PAN_MIN_PX,
+  ZOOM_STEP,
+  centerInScroller,
+  clientToViewBox,
+  createPinch,
+  nearestInDirection,
+  pannedView,
+  viewAfterDrag,
+  zoomedView,
+} from './drawing-editor/navigation.js';
 import { createDocumentFocusTrap, disableKeepingFocus } from './focus-trap.js';
 import { announce } from './announcer.js';
 import {
@@ -470,8 +484,14 @@ function buildWorkspaceDom() {
   undoDeleteBtn.textContent = 'Undo delete';
   undoDeleteBtn.disabled = true;
 
-  bulkBar.append(
-    bulkCount,
+  // Folded, so the first rows stand near the top of the list: open, these
+  // fields took 370 of the 391 px the list has at a 1280 window.
+  const bulkTools = document.createElement('details');
+  bulkTools.className = 'svg-prep-bulk-tools';
+  const bulkToolsSummary = document.createElement('summary');
+  bulkToolsSummary.textContent = 'List tools';
+  bulkTools.append(
+    bulkToolsSummary,
     smallLabel,
     deleteSmallBtn,
     keepLabel,
@@ -479,10 +499,10 @@ function buildWorkspaceDom() {
     thinLabel,
     ignoreThinBtn,
     undoIgnoreBtn,
-    deleteSelectedBtn,
-    undoDeleteBtn,
     bulkHelp
   );
+
+  bulkBar.append(bulkCount, bulkTools, deleteSelectedBtn, undoDeleteBtn);
 
   const resultZoom = buildZoomControls('result');
   resultPane.appendChild(resultZoom);
@@ -699,6 +719,7 @@ function buildWorkspaceDom() {
       sourceZoom,
       resultZoom,
       bulkBar,
+      bulkTools,
       deleteSelectedBtn,
       bulkCount,
       smallInput,
@@ -1319,6 +1340,17 @@ export function createSvgPrepWorkspace(containerEl) {
   // own words, and it is already the biggest thing on the page, so there is
   // no cramped inline box to expand out of.
   let hosted = false;
+  // The hosted picture's tool, its keyboard walk, and the drag now under way.
+  let pictureTool = 'select';
+  let walkIndex = null;
+  let paneDrag = null;
+  let swallowClick = false;
+  /** Each pane's view controls, by pane. */
+  const paneViews = new Map();
+  /** Paints the shape under the pointer or the walk, in every picture. */
+  let paintPointed = () => {};
+  /** What the hosting editor wants to hear about the picture. */
+  let hostHooks = {};
 
   // ARIA live region for role-change and preview announcements: the
   // workspace's one voice for what a press did. A polite region reads its own
@@ -2264,8 +2296,21 @@ export function createSvgPrepWorkspace(containerEl) {
     }
 
     function applyVB(vb) {
+      const text = viewBoxString(vb);
+      if (hosted) {
+        for (const p of [refs.sourcePane, refs.resultPane]) {
+          p.querySelector('svg')?.setAttribute('viewBox', text);
+        }
+        return;
+      }
       const svg = getSvg();
-      if (svg) svg.setAttribute('viewBox', viewBoxString(vb));
+      if (svg) svg.setAttribute('viewBox', text);
+    }
+
+    function currentVB() {
+      const svg = getSvg();
+      if (!svg) return null;
+      return parseViewBox(svg.getAttribute('viewBox')) || { ...naturalVB };
     }
 
     function handleFit() {
@@ -2273,31 +2318,13 @@ export function createSvgPrepWorkspace(containerEl) {
     }
 
     function handleZoomIn() {
-      const svg = getSvg();
-      if (!svg) return;
-      const cur = parseViewBox(svg.getAttribute('viewBox')) || { ...naturalVB };
-      const w = cur.w / 1.5;
-      const h = cur.h / 1.5;
-      applyVB({
-        x: cur.x + cur.w / 2 - w / 2,
-        y: cur.y + cur.h / 2 - h / 2,
-        w,
-        h,
-      });
+      const cur = currentVB();
+      if (cur) applyVB(zoomedView(cur, ZOOM_STEP));
     }
 
     function handleZoomOut() {
-      const svg = getSvg();
-      if (!svg) return;
-      const cur = parseViewBox(svg.getAttribute('viewBox')) || { ...naturalVB };
-      const w = cur.w * 1.5;
-      const h = cur.h * 1.5;
-      applyVB({
-        x: cur.x + cur.w / 2 - w / 2,
-        y: cur.y + cur.h / 2 - h / 2,
-        w,
-        h,
-      });
+      const cur = currentVB();
+      if (cur) applyVB(zoomedView(cur, 1 / ZOOM_STEP));
     }
 
     /**
@@ -2306,47 +2333,76 @@ export function createSvgPrepWorkspace(containerEl) {
      * sight; Fit brings the whole drawing back.
      */
     function handlePan(fx, fy) {
-      const svg = getSvg();
-      if (!svg) return;
-      const cur = parseViewBox(svg.getAttribute('viewBox')) || { ...naturalVB };
-      const x = cur.x + cur.w * fx;
-      const y = cur.y + cur.h * fy;
-      const minX = naturalVB.x - cur.w / 2;
-      const maxX = naturalVB.x + naturalVB.w - cur.w / 2;
-      const minY = naturalVB.y - cur.h / 2;
-      const maxY = naturalVB.y + naturalVB.h - cur.h / 2;
-      applyVB({
-        x: Math.min(Math.max(x, minX), maxX),
-        y: Math.min(Math.max(y, minY), maxY),
-        w: cur.w,
-        h: cur.h,
-      });
+      const cur = currentVB();
+      if (cur) applyVB(pannedView(cur, fx, fy, naturalVB));
     }
-    const PAN_STEP = 0.25;
-    const handlePanLeft = () => handlePan(-PAN_STEP, 0);
-    const handlePanRight = () => handlePan(PAN_STEP, 0);
-    const handlePanUp = () => handlePan(0, -PAN_STEP);
-    const handlePanDown = () => handlePan(0, PAN_STEP);
+    const handlePanLeft = () => handlePan(-PAN_FRACTION, 0);
+    const handlePanRight = () => handlePan(PAN_FRACTION, 0);
+    const handlePanUp = () => handlePan(0, -PAN_FRACTION);
+    const handlePanDown = () => handlePan(0, PAN_FRACTION);
+
+    paneViews.set(pane, {
+      fit: handleFit,
+      zoomIn: handleZoomIn,
+      zoomOut: handleZoomOut,
+      panLeft: handlePanLeft,
+      panUp: handlePanUp,
+      panDown: handlePanDown,
+      panRight: handlePanRight,
+    });
 
     function handlePaneKeydown(e) {
+      if (hosted) {
+        handleHostedPictureKey(e);
+        return;
+      }
       if (e.key === '+' || e.key === '=') {
         e.preventDefault();
         handleZoomIn();
       } else if (e.key === '-') {
         e.preventDefault();
         handleZoomOut();
-      } else if (e.key === 'ArrowLeft') {
+      } else if (ARROW_PANS[e.key]) {
         e.preventDefault();
-        handlePanLeft();
-      } else if (e.key === 'ArrowRight') {
+        handlePan(...ARROW_PANS[e.key]);
+      }
+    }
+
+    /**
+     * The editor's one keyboard for a picture: the arrows walk the shapes,
+     * Shift with an arrow moves the picture (the bare arrows do in the Hand
+     * tool), plus and minus zoom, 0 fits, Enter or Space chooses the shape
+     * walked to.
+     */
+    function handleHostedPictureKey(e) {
+      if (e.target !== pane || e.ctrlKey || e.metaKey || e.altKey) return;
+      const taken = () => {
         e.preventDefault();
-        handlePanRight();
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        handlePanUp();
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        handlePanDown();
+        e.stopPropagation();
+      };
+      if (e.key === '+' || e.key === '=') {
+        taken();
+        handleZoomIn();
+      } else if (e.key === '-') {
+        taken();
+        handleZoomOut();
+      } else if (e.key === '0') {
+        taken();
+        handleFit();
+      } else if (ARROW_PANS[e.key]) {
+        taken();
+        if (e.shiftKey || pictureTool === 'hand') {
+          handlePan(...ARROW_PANS[e.key]);
+        } else {
+          walkPicture(ARROW_WALKS[e.key]);
+        }
+      } else if (e.key === 'Home' || e.key === 'End') {
+        taken();
+        walkTo(e.key === 'Home' ? 0 : liveElements.length - 1);
+      } else if ((e.key === 'Enter' || e.key === ' ') && walkIndex !== null) {
+        taken();
+        chooseRow(walkIndex);
+        revealChosen(walkIndex, true);
       }
     }
 
@@ -2382,82 +2438,101 @@ export function createSvgPrepWorkspace(containerEl) {
     //
     // Nothing here is the only way to do anything (WCAG 2.5.7): Fit, + and -
     // are single-pointer, and the keyboard walks the panes.
-    const pointers = new Map();
-    let pinch = null;
-
-    const spanOf = (a, b) =>
-      Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-    const midOf = (a, b) => ({
-      x: (a.clientX + b.clientX) / 2,
-      y: (a.clientY + b.clientY) / 2,
+    const pinch = createPinch({
+      getView: currentVB,
+      setView: applyVB,
+      getBox: () => pane.getBoundingClientRect(),
+      getNatural: () => naturalVB,
     });
 
-    function currentVB() {
-      const svg = getSvg();
-      if (!svg) return null;
-      return parseViewBox(svg.getAttribute('viewBox')) || { ...naturalVB };
+    function endDrag() {
+      if (!paneDrag) return;
+      try {
+        pane.releasePointerCapture?.(paneDrag.pointerId);
+      } catch {
+        // Not captured in this environment; nothing to release.
+      }
+      paneDrag = null;
+      delete pane.dataset.panning;
     }
 
     function onPointerDown(e) {
-      if (e.pointerType === 'mouse') return;
-      pointers.set(e.pointerId, e);
-      if (pointers.size === 2) {
-        const [a, b] = [...pointers.values()];
-        const vb = currentVB();
-        if (!vb) return;
-        pinch = {
-          span: spanOf(a, b),
-          mid: midOf(a, b),
-          vb,
-          box: pane.getBoundingClientRect(),
-        };
+      if (pinch.down(e)) {
+        endDrag();
+        return;
       }
+      if (!hosted) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      // A press on a shape stays a click on it; on empty ground, or anywhere
+      // under the Hand tool, a drag moves the picture.
+      const onShape = e.target.closest?.('.svg-prep-hit-path');
+      if (onShape && pictureTool !== 'hand') return;
+      if (e.target.closest?.('button')) return;
+      const view = currentVB();
+      if (!view) return;
+      paneDrag = {
+        view,
+        clientX: e.clientX,
+        clientY: e.clientY,
+        moved: false,
+        pointerId: e.pointerId,
+      };
+      pane.setPointerCapture?.(e.pointerId);
+      pane.focus?.({ preventScroll: true });
     }
 
     function onPointerMove(e) {
-      if (!pointers.has(e.pointerId)) return;
-      pointers.set(e.pointerId, e);
-      if (pointers.size !== 2 || !pinch) return;
-      const [a, b] = [...pointers.values()];
-      const span = spanOf(a, b);
-      if (span <= 0 || pinch.span <= 0) return;
-      e.preventDefault();
-
-      // Fingers apart, viewBox smaller: a viewBox IS the window onto the
-      // drawing, so zooming in means asking for less of it.
-      const scale = pinch.span / span;
-      const w = Math.max(
-        naturalVB.w / 64,
-        Math.min(naturalVB.w * 8, pinch.vb.w * scale)
-      );
-      const h = pinch.vb.h * (w / pinch.vb.w);
-
-      // And the drawing follows the fingers: how far the midpoint moved, in
-      // the units the viewBox is written in.
-      const mid = midOf(a, b);
-      const perPxX = pinch.vb.w / Math.max(1, pinch.box.width);
-      const perPxY = pinch.vb.h / Math.max(1, pinch.box.height);
-      const dx = (mid.x - pinch.mid.x) * perPxX;
-      const dy = (mid.y - pinch.mid.y) * perPxY;
-
-      applyVB({
-        x: pinch.vb.x + (pinch.vb.w - w) / 2 - dx,
-        y: pinch.vb.y + (pinch.vb.h - h) / 2 - dy,
-        w,
-        h,
-      });
+      if (pinch.move(e)) return;
+      if (!paneDrag || paneDrag.pointerId !== e.pointerId) return;
+      const dx = e.clientX - paneDrag.clientX;
+      const dy = e.clientY - paneDrag.clientY;
+      if (
+        !paneDrag.moved &&
+        Math.abs(dx) < PAN_MIN_PX &&
+        Math.abs(dy) < PAN_MIN_PX
+      ) {
+        return;
+      }
+      paneDrag.moved = true;
+      pane.dataset.panning = 'true';
+      const box = getSvg()?.getBoundingClientRect();
+      if (box) applyVB(viewAfterDrag(paneDrag.view, box, dx, dy, naturalVB));
     }
 
     function onPointerUp(e) {
-      pointers.delete(e.pointerId);
-      if (pointers.size < 2) pinch = null;
+      pinch.up(e);
+      if (!paneDrag || paneDrag.pointerId !== e.pointerId) return;
+      // The click this release is about to fire was a drag.
+      swallowClick = paneDrag.moved;
+      endDrag();
     }
 
+    function onWheel(e) {
+      if (!hosted) return;
+      const svg = getSvg();
+      const cur = currentVB();
+      if (!svg || !cur) return;
+      e.preventDefault();
+      applyVB(
+        zoomedView(
+          cur,
+          e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP,
+          clientToViewBox(
+            svg.getBoundingClientRect(),
+            cur,
+            e.clientX,
+            e.clientY
+          )
+        )
+      );
+    }
+
+    pane.addEventListener('wheel', onWheel, { passive: false });
     pane.addEventListener('pointerdown', onPointerDown);
     pane.addEventListener('pointermove', onPointerMove);
     pane.addEventListener('pointerup', onPointerUp);
     pane.addEventListener('pointercancel', onPointerUp);
-    pane.addEventListener('pointerleave', onPointerUp);
+    pane.addEventListener('pointerleave', (e) => pinch.up(e));
 
     return () => {
       fitBtn.removeEventListener('click', handleFit);
@@ -2472,9 +2547,10 @@ export function createSvgPrepWorkspace(containerEl) {
       pane.removeEventListener('pointermove', onPointerMove);
       pane.removeEventListener('pointerup', onPointerUp);
       pane.removeEventListener('pointercancel', onPointerUp);
-      pane.removeEventListener('pointerleave', onPointerUp);
-      pointers.clear();
-      pinch = null;
+      pane.removeEventListener('wheel', onWheel);
+      pinch.clear();
+      endDrag();
+      paneViews.delete(pane);
       pane.removeAttribute('tabindex');
     };
   }
@@ -2515,7 +2591,10 @@ export function createSvgPrepWorkspace(containerEl) {
       });
     }
 
+    paintPointed = paint;
+
     function onMove(e) {
+      if (paneDrag) return;
       paint(indexOf(e));
     }
 
@@ -2524,6 +2603,11 @@ export function createSvgPrepWorkspace(containerEl) {
     }
 
     function onClick(e) {
+      if (swallowClick) {
+        swallowClick = false;
+        return;
+      }
+      if (hosted && pictureTool === 'hand') return;
       const index = indexOf(e);
       if (index === null) {
         // Empty picture: the same thing a click on empty space does in every
@@ -2538,14 +2622,7 @@ export function createSvgPrepWorkspace(containerEl) {
         toggle: e.ctrlKey || e.metaKey,
         range: e.shiftKey,
       });
-      // The list can be long; a row chosen on the picture has to be findable
-      // in it.
-      const chosenRow = refs.objects.querySelector(
-        `.svg-prep-object[data-index="${index}"]`
-      );
-      if (chosenRow) {
-        chosenRow.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-      }
+      revealChosen(index, !(e.ctrlKey || e.metaKey || e.shiftKey));
     }
 
     const panes = [refs.sourcePane, refs.resultPane];
@@ -2563,6 +2640,83 @@ export function createSvgPrepWorkspace(containerEl) {
       });
     };
   }
+
+  /**
+   * A row chosen on the picture is found in the list: in its middle, and in
+   * the editor with the list open, whatever state the list was in.
+   *
+   * @param {number} index
+   * @param {boolean} plain - One shape chosen, so the keyboard goes to its row
+   */
+  function revealChosen(index, plain) {
+    const row = refs.objects.querySelector(
+      `.svg-prep-object[data-index="${index}"]`
+    );
+    if (!row) return;
+    if (typeof hostHooks.onPictureChoose === 'function') {
+      hostHooks.onPictureChoose(row, plain);
+      return;
+    }
+    let scroller = row.parentElement;
+    while (scroller && scroller.scrollHeight <= scroller.clientHeight) {
+      scroller = scroller.parentElement;
+    }
+    centerInScroller(row, scroller);
+  }
+
+  /** The middle of a shape, from its path's own coordinates. */
+  function interiorOf(el) {
+    const numbers = (el?.pathData || '').match(/-?\d*\.?\d+(?:e-?\d+)?/gi);
+    if (!numbers || numbers.length < 2) return null;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (let i = 0; i + 1 < numbers.length; i += 2) {
+      const x = Number(numbers[i]);
+      const y = Number(numbers[i + 1]);
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
+    return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+  }
+
+  function walkTo(index) {
+    if (!liveElements[index]) return;
+    walkIndex = index;
+    paintPointed(index);
+    const row = refs.objects.querySelector(
+      `.svg-prep-object[data-index="${index}"]`
+    );
+    hostHooks.onPictureWalk?.(row);
+  }
+
+  function walkPicture(direction) {
+    const regions = liveElements
+      .map((el, i) => ({ key: i, interior: interiorOf(el) }))
+      .filter((r) => r.interior);
+    const next = nearestInDirection(regions, walkIndex, direction);
+    if (next !== null) walkTo(next);
+  }
+
+  /** The hosted picture's movement, for the editor's one set of buttons. */
+  const pictureView = {
+    fit: () => paneViews.get(refs.resultPane)?.fit(),
+    zoomIn: () => paneViews.get(refs.resultPane)?.zoomIn(),
+    zoomOut: () => paneViews.get(refs.resultPane)?.zoomOut(),
+    panLeft: () => paneViews.get(refs.resultPane)?.panLeft(),
+    panUp: () => paneViews.get(refs.resultPane)?.panUp(),
+    panDown: () => paneViews.get(refs.resultPane)?.panDown(),
+    panRight: () => paneViews.get(refs.resultPane)?.panRight(),
+    setTool(name) {
+      pictureTool = name === 'hand' ? 'hand' : 'select';
+      refs.sourcePane.dataset.tool = pictureTool;
+      refs.resultPane.dataset.tool = pictureTool;
+    },
+    getTool: () => pictureTool,
+  };
 
   /** Where the pointer is this instant, in every picture on screen. */
   function hoverLayersIn(scope) {
@@ -3854,6 +4008,13 @@ export function createSvgPrepWorkspace(containerEl) {
     currentSourceName = callbacks.sourceName || null;
     hostMode = callbacks.mode === 'file' ? 'file' : 'parameter';
     hosted = callbacks.hosted === true;
+    hostHooks = {
+      onPictureChoose: callbacks.onPictureChoose,
+      onPictureWalk: callbacks.onPictureWalk,
+    };
+    walkIndex = null;
+    swallowClick = false;
+    pictureView.setTool('select');
     currentSvgString = svgString;
     currentAnalysis = analysis;
     currentSvgMeta = extractSvgMeta(svgString);
@@ -4310,5 +4471,12 @@ export function createSvgPrepWorkspace(containerEl) {
     whenReady: () => (ringEnginePromise || Promise.resolve()).catch(() => {}),
     _root: root,
     _refs: refs,
+    /** The picture's movement, for a hosting editor's own buttons. */
+    picture: pictureView,
+    /**
+     * The footer's press handler, for a host that moves its buttons out of
+     * the footer: a button in another container is otherwise never heard.
+     */
+    footerClick: handleFooterClick,
   };
 }

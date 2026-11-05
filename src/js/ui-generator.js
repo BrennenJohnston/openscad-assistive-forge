@@ -267,6 +267,56 @@ export function setGalleryOptions(paramName, options) {
   galleryOptionsMap[paramName] = options;
 }
 
+// ── The drawing editor's door in the Customizer's header ─────────────────
+// Every file control that takes a drawing registers the way into its editor,
+// and the header's button opens the first one, the model's main design, so
+// the door stands in the sticky header whatever is folded or scrolled away.
+// A tile whose own panel carries the door (the map maker's Map file) is
+// left out by name.
+const editorDoors = new Map();
+let editorDoorExclusions = new Set();
+let boundHeaderDoor = null;
+
+/**
+ * Name the file parameters whose drawing editor has a door of its own, so the
+ * header offers none for them. Called when a manifest loads; an empty list
+ * clears it.
+ * @param {string[]} paramNames
+ */
+export function setEditorDoorExclusions(paramNames) {
+  editorDoorExclusions = new Set(paramNames || []);
+  syncHeaderDoor();
+}
+
+/** The first registered door the header may open, if any. */
+function headerDoorOpener() {
+  for (const [name, open] of editorDoors) {
+    if (!editorDoorExclusions.has(name)) return open;
+  }
+  return null;
+}
+
+function registerEditorDoor(paramName, open) {
+  editorDoors.set(paramName, open);
+  syncHeaderDoor();
+}
+
+/** Show the header's door while a control offers one; each button bound once. */
+function syncHeaderDoor() {
+  const button = document.getElementById('editorDoorBtn');
+  if (!button) return;
+  button.classList.toggle('hidden', !headerDoorOpener());
+  if (boundHeaderDoor === button) return;
+  boundHeaderDoor = button;
+  button.addEventListener('click', () => {
+    const open = headerDoorOpener();
+    if (!open) return;
+    open(button).catch((err) => {
+      console.error('[Drawing editor] the door did not open:', err);
+    });
+  });
+}
+
 /**
  * Clear all gallery options (called when switching examples or clearing files).
  */
@@ -2033,34 +2083,36 @@ function createSvgGallery(options, param, onSelect) {
 
   function selectOption(index) {
     const opt = options[index];
-    if (!opt) return;
+    if (!opt) return null;
     setActiveOption(index);
 
-    fetch(opt.url)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Failed to fetch ${opt.file}`);
-        return res.text();
-      })
-      // The file control reads the design as soon as it is chosen.
-      .then((svgText) => loadSvgGeometry().then(() => svgText))
-      .then((svgText) => {
-        const toUse = isEnabled('svg_preparer')
-          ? svgText
-          : maybePrepareForOpenScad(svgText);
-        const svgDataUrl = svgToDataUrl(toUse);
-        announceChange(`Selected design: ${opt.label}`);
-        onSelect(param.name, {
-          name: opt.file.split('/').pop(),
-          size: toUse.length,
-          type: 'image/svg+xml',
-          data: svgDataUrl,
-          _rawSvg: svgText,
-        });
-      })
-      .catch((err) => {
-        console.error('[SvgGallery] fetch error:', err);
-        announceChange(`Failed to load design: ${opt.label}`);
-      });
+    return (
+      fetch(opt.url)
+        .then((res) => {
+          if (!res.ok) throw new Error(`Failed to fetch ${opt.file}`);
+          return res.text();
+        })
+        // The file control reads the design as soon as it is chosen.
+        .then((svgText) => loadSvgGeometry().then(() => svgText))
+        .then((svgText) => {
+          const toUse = isEnabled('svg_preparer')
+            ? svgText
+            : maybePrepareForOpenScad(svgText);
+          const svgDataUrl = svgToDataUrl(toUse);
+          announceChange(`Selected design: ${opt.label}`);
+          onSelect(param.name, {
+            name: opt.file.split('/').pop(),
+            size: toUse.length,
+            type: 'image/svg+xml',
+            data: svgDataUrl,
+            _rawSvg: svgText,
+          });
+        })
+        .catch((err) => {
+          console.error('[SvgGallery] fetch error:', err);
+          announceChange(`Failed to load design: ${opt.label}`);
+        })
+    );
   }
 
   // Pre-select the option matching the parameter's current default so
@@ -2108,6 +2160,19 @@ function createSvgGallery(options, param, onSelect) {
       `gallery-${param.name}-${activeIndex}`
     );
   }
+
+  /**
+   * Choose an option by its file name, as a press on it would: the file
+   * control's door reads the model's default design this way.
+   * @param {string} name - The file's base name
+   * @returns {Promise<void>|null} the read, or null when no option matches
+   */
+  gallery.selectByFile = (name) => {
+    const index = options.findIndex(
+      (opt) => opt.file.split('/').pop() === name
+    );
+    return index >= 0 ? selectOption(index) : null;
+  };
 
   // Arrow key navigation within the listbox
   listbox.addEventListener('keydown', (e) => {
@@ -2948,8 +3013,6 @@ function createFileControl(
 
   function emitFileValue(value, assignments = null, ringEngine = null) {
     const extra = buildEmissionExtra(value, assignments, ringEngine);
-    hasFile = Boolean(value);
-    if (emptyDoor) syncEmptyDoor();
     onChange(param.name, value, extra);
   }
 
@@ -2960,53 +3023,93 @@ function createFileControl(
   statusCard.setAttribute('role', 'status');
   statusCard.setAttribute('aria-live', 'polite');
 
-  // ── The way into the editor before any picture ─────────────────────────
+  // ── The way into the editor, always on the control ─────────────────────
   // Beside the card rather than in it: the card is a live region, and a
-  // button written into it after Clear would be read out. Shown while the
-  // control has no file and no card; a picture waiting to be converted has
-  // its Crop as the way in.
+  // button written into it after Clear would be read out. Hidden only while
+  // the card offers a button of its own, or refuses a drawing nothing can
+  // edit, so the control shows one door at a time and never none.
   let openAfterChoose = false;
-  let hasFile = Boolean(defaultFileLabel);
-  const emptyDoor = acceptsSvg ? document.createElement('button') : null;
-  if (emptyDoor) {
-    emptyDoor.type = 'button';
-    emptyDoor.className = 'btn btn-ghost svg-prep-empty-door';
-    emptyDoor.textContent = 'Open the drawing editor';
-    emptyDoor.addEventListener('click', async () => {
-      const editor = await getEditor();
-      if (!editor || typeof editor.openEmpty !== 'function') return;
-      editor.openEmpty({
-        sentence: emptyPictureSentence(param.acceptedExtensions || []),
-        onChooseFile: () => {
-          openAfterChoose = true;
-          fileInput.click();
-        },
-        // Closed with nothing chosen: back to the button that opened it.
-        onClose: () => {
-          openAfterChoose = false;
-          emptyDoor.focus();
-        },
+  let cardRefuses = false;
+  let lastOpener = null;
+  let gallerySelectByFile = null;
+  const door = acceptsSvg ? document.createElement('button') : null;
+  if (door) {
+    door.type = 'button';
+    door.className = 'btn btn-ghost svg-prep-door';
+    door.textContent = 'Open the drawing editor';
+    door.addEventListener('click', () => {
+      openDoor(door).catch((err) => {
+        console.error('[Design file] the editor did not open:', err);
       });
     });
-    new MutationObserver(syncEmptyDoor).observe(statusCard, {
+    new MutationObserver(syncDoor).observe(statusCard, {
       attributes: true,
       attributeFilter: ['style'],
+      childList: true,
     });
-    syncEmptyDoor();
-    fileInput.addEventListener('change', () => {
-      if (fileInput.files?.length) {
-        hasFile = true;
-        syncEmptyDoor();
-      }
-    });
+    syncDoor();
     // A chooser closed with nothing chosen leaves no file to open later.
     fileInput.addEventListener('cancel', () => {
       openAfterChoose = false;
     });
   }
 
-  function syncEmptyDoor() {
-    emptyDoor.hidden = hasFile || statusCard.style.display !== 'none';
+  function syncDoor() {
+    if (!door) return;
+    const cardShown = statusCard.style.display !== 'none';
+    const cardHasDoor =
+      cardShown && Boolean(statusCard.querySelector('.svg-prep-edit-btn'));
+    door.hidden = cardHasDoor || (cardShown && cardRefuses);
+  }
+
+  /** The design the model shows, by file name: a chosen one or the default. */
+  function currentDesignName() {
+    const value = currentParameterValues[param.name];
+    const name = typeof value === 'string' ? value : value?.name;
+    return String(name || defaultFileLabel || '')
+      .split('/')
+      .pop();
+  }
+
+  /**
+   * Open the editor on whatever the control holds: the drawing read here; a
+   * picture waiting to be converted (its crop view); a design the model shows
+   * from its own files, read now as the gallery would read it; or nothing,
+   * when the empty editor asks for a picture.
+   * @param {HTMLElement} [opener] - The button focus returns to on close
+   * @returns {Promise<boolean>} whether an editor opened
+   */
+  async function openDoor(opener = door) {
+    lastOpener = opener;
+    if (currentRawSvg && currentSvgAnalysis) return openEditor();
+    if (inkSourceImageData) return openEditorOnPicture();
+    const name = currentDesignName();
+    const read = name && gallerySelectByFile ? gallerySelectByFile(name) : null;
+    if (read) {
+      await read;
+      return openEditor();
+    }
+    return openEmptyEditor();
+  }
+
+  async function openEmptyEditor() {
+    const editor = await getEditor();
+    if (!editor || typeof editor.openEmpty !== 'function') return false;
+    editor.openEmpty({
+      sentence: emptyPictureSentence(param.acceptedExtensions || []),
+      onChooseFile: () => {
+        openAfterChoose = true;
+        fileInput.click();
+      },
+      // Closed with nothing chosen: back to the button that opened it.
+      onClose: () => {
+        openAfterChoose = false;
+        const opener = lastOpener;
+        lastOpener = null;
+        (opener?.isConnected ? opener : door)?.focus();
+      },
+    });
+    return true;
   }
 
   // ── Ink controls, for a picture that had to be traced ──────────────────
@@ -3347,6 +3450,7 @@ function createFileControl(
   function showRefusalCard(count) {
     const { badge: badgeText, sentence } =
       svgGeometry().preparer.shapeCapRefusal(count);
+    cardRefuses = true;
     statusCard.innerHTML = '';
     const badge = document.createElement('span');
     badge.className = 'svg-prep-status-badge';
@@ -3391,6 +3495,7 @@ function createFileControl(
   }
 
   function updateStatusCard(analysis, extraWarnings = null) {
+    cardRefuses = false;
     statusCard.innerHTML = '';
     const badge = document.createElement('span');
     badge.className = 'svg-prep-status-badge';
@@ -3805,9 +3910,20 @@ function createFileControl(
   function handleEditorClose() {
     if (currentSvgAnalysis) updateStatusCard(currentSvgAnalysis);
     // The card was drawn again, its "Open the drawing editor" with it, and
-    // the editor that had focus is hidden: back to the new button, the one
-    // that opened it, not the page body.
-    statusCard.querySelector('.svg-prep-edit-btn')?.focus();
+    // the editor that had focus is hidden: back to the button that opened
+    // it, the header's or the control's while it still shows, else the
+    // card's new one, never the page body.
+    const opener = lastOpener;
+    lastOpener = null;
+    const shown =
+      opener?.isConnected &&
+      !opener.hidden &&
+      !opener.classList.contains('hidden');
+    if (shown) {
+      opener.focus();
+      return;
+    }
+    (statusCard.querySelector('.svg-prep-edit-btn') || door)?.focus();
   }
 
   function handleEditorKeep() {
@@ -4798,6 +4914,7 @@ function createFileControl(
       preview.alt = '';
       emitFileValue(fileObj);
     });
+    gallerySelectByFile = (name) => gallery.selectByFile(name);
     fileContainer.appendChild(gallery);
   }
 
@@ -4806,7 +4923,10 @@ function createFileControl(
   fileContainer.appendChild(fileInfo);
   fileContainer.appendChild(clearButton);
   fileContainer.appendChild(statusCard);
-  if (emptyDoor) fileContainer.appendChild(emptyDoor);
+  if (door) {
+    fileContainer.appendChild(door);
+    registerEditorDoor(param.name, openDoor);
+  }
   fileContainer.appendChild(fileInput);
 
   container.appendChild(fileContainer);
@@ -5204,8 +5324,11 @@ export function renderParameterUI(
   initialValues = null,
   options = {}
 ) {
-  // The file controls of the UI being replaced listened for the fit box.
+  // The file controls of the UI being replaced listened for the fit box, and
+  // offered the header its doors; the new ones register again.
   fitBoxListeners.clear();
+  editorDoors.clear();
+  syncHeaderDoor();
   const {
     openGroupIds = null,
     useStoredState = false,

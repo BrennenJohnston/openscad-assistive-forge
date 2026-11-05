@@ -4463,7 +4463,7 @@ describe('the shapes you left out, and a view you can steer', () => {
     ws.destroy();
   });
 
-  it('four buttons move the view by a quarter of it, and the arrow keys do the same', async () => {
+  it('four buttons move the view by a tenth of it, and Shift with an arrow key does the same', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SVG, analysisOf([BAR, SQUARE]));
     await ws.whenReady();
@@ -4473,17 +4473,17 @@ describe('the shapes you left out, and a view you can steer', () => {
     zoom.querySelector('.svg-prep-zoom-in').click();
     const [x0, y0, w, h] = vbOf(svg());
     zoom.querySelector('.svg-prep-pan-right').click();
-    expect(vbOf(svg())[0]).toBeCloseTo(x0 + w / 4, 5);
+    expect(vbOf(svg())[0]).toBeCloseTo(x0 + w / 10, 5);
     zoom.querySelector('.svg-prep-pan-down').click();
-    expect(vbOf(svg())[1]).toBeCloseTo(y0 + h / 4, 5);
+    expect(vbOf(svg())[1]).toBeCloseTo(y0 + h / 10, 5);
     zoom.querySelector('.svg-prep-pan-left').click();
     zoom.querySelector('.svg-prep-pan-up').click();
     expect(vbOf(svg())[0]).toBeCloseTo(x0, 5);
     expect(vbOf(svg())[1]).toBeCloseTo(y0, 5);
-    pane.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
-    expect(vbOf(svg())[0]).toBeCloseTo(x0 + w / 4, 5);
-    pane.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
-    expect(vbOf(svg())[1]).toBeCloseTo(y0 - h / 4, 5);
+    pane.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true, cancelable: true }));
+    expect(vbOf(svg())[0]).toBeCloseTo(x0 + w / 10, 5);
+    pane.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', shiftKey: true, bubbles: true, cancelable: true }));
+    expect(vbOf(svg())[1]).toBeCloseTo(y0 - h / 10, 5);
     ws.destroy();
   });
 

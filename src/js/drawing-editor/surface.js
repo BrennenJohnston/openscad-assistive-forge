@@ -60,6 +60,7 @@ import { createCropPanel } from './crop-panel.js';
 import { readDrawingBox } from '../image-crop.js';
 import { createCommandStack } from './undo.js';
 import { createRegionCanvas, TOOLS } from './canvas.js';
+import { centerInScroller, NAVIGATION_TOOLS } from './navigation.js';
 import { MAP_CLASSES } from '../tactile-map/map-classes.js';
 import { fitRoute, routeLengthM } from '../tactile-map/route.js';
 
@@ -685,9 +686,6 @@ export function createDrawingEditor({
   const toolbarViewRow = document.createElement('div');
   toolbarViewRow.className =
     'drawing-editor-toolbar-row drawing-editor-toolbar-row--view';
-  const toolbarToolsRow = document.createElement('div');
-  toolbarToolsRow.className =
-    'drawing-editor-toolbar-row drawing-editor-toolbar-row--tools';
 
   // The overflow. In the flow under its row, not over the drawing: the same
   // choice the shapes row's More made, for the same reason - an absolutely
@@ -721,21 +719,20 @@ export function createDrawingEditor({
     return true;
   }
 
-  toolbarHeaderRow.append(title, panelToggleBtn, closeBtn);
+  toolbarHeaderRow.append(title, viewSwitch, panelToggleBtn, closeBtn);
   toolbarViewRow.append(
-    viewSwitch,
+    stencilTools,
+    zoomGroup,
+    viewGroup,
+    historyGroup,
     cropBtn,
     undoCropBtn,
     renderCharmBtn,
     draftNote,
-    viewGroup,
-    zoomGroup,
-    historyGroup,
     applyBtn,
     moreBtn
   );
-  toolbarToolsRow.append(stencilTools);
-  toolbar.append(toolbarHeaderRow, toolbarViewRow, morePanel, toolbarToolsRow);
+  toolbar.append(toolbarHeaderRow, toolbarViewRow, morePanel);
   // The status line and the Apply hint share one block, so the sentence that
   // says why Apply is off sits beside the sentence that says what happened
   // instead of inside the button row.
@@ -772,7 +769,8 @@ export function createDrawingEditor({
   viewControls.append(
     refs.designWidthGroup,
     refs.compareBtn,
-    refs.rolesToggleBtn
+    refs.rolesToggleBtn,
+    refs.designWidthHelp
   );
   // Apply / Save SVG / Save DXF / Keep original / Reset: the workspace's
   // footer IS the action row, listeners and all, so it moves whole - into the
@@ -784,40 +782,24 @@ export function createDrawingEditor({
   morePanel.append(viewControls);
   statusLine.append(refs.applyHint);
 
+  // Save, Keep original and Reset are finishing moves, reached for now and
+  // then: behind More at every width, so the row keeps to what is in use and
+  // the picture keeps the height. Moved, never copied: the same nodes with the
+  // same listeners and one accessible name each.
+  morePanel.prepend(refs.saveBtn, refs.saveDxfBtn, refs.keepBtn, refs.resetBtn);
+  // The workspace hears its buttons through the footer they left: More has
+  // to pass their presses on, or Save, Keep original and Reset do nothing.
+  morePanel.addEventListener('click', workspace.footerClick);
   /**
-   * Below the drawer band the working row cannot hold six controls: at 412 px
-   * it wraps across four lines and the toolbar takes 241 px of a 753 px
-   * screen. The three actions a person finishes with move into More, which is
-   * already on the row, and come back when there is room again.
-   *
-   * Moved, never copied: the same nodes with the same listeners and one
-   * accessible name each. A copy would put two "Reset" buttons in the
-   * accessibility tree and let them drift apart.
+   * On the standalone door Save (and Save DXF, for a drawing that came in as
+   * one) is the main action, since there is no model and so no Apply, and a
+   * main action does not wait behind More: they keep their place on the row
+   * there, and go behind More wherever Apply leads.
    */
-  let toolbarIsNarrow = null;
-  function syncToolbarBand() {
-    const narrow = panelIsDrawer();
-    if (narrow === toolbarIsNarrow) return;
-    toolbarIsNarrow = narrow;
-    const secondary = [
-      refs.saveBtn,
-      refs.saveDxfBtn,
-      refs.keepBtn,
-      refs.resetBtn,
-    ];
-    // Focus would be lost with the button it is on when More is shut.
-    const active = document.activeElement;
-    const movingFocus = narrow && secondary.includes(active);
-    if (narrow) morePanel.prepend(...secondary);
-    else refs.footer.append(...secondary);
-    if (movingFocus) moreBtn.focus();
+  function placeSave(onRow) {
+    if (onRow) refs.footer.append(refs.saveBtn, refs.saveDxfBtn);
+    else morePanel.prepend(refs.saveBtn, refs.saveDxfBtn);
   }
-  syncToolbarBand();
-  const bandObserver =
-    typeof ResizeObserver === 'function'
-      ? new ResizeObserver(() => syncToolbarBand())
-      : null;
-  bandObserver?.observe(root);
   // The map purpose's column name, above the list the menus sit in.
   const classHeading = document.createElement('p');
   classHeading.className = 'drawing-editor-class-heading';
@@ -852,9 +834,12 @@ export function createDrawingEditor({
   mapGroups.append(groupSwitches, showRow);
   const shapesBlock = document.createElement('div');
   shapesBlock.className = 'drawing-editor-shapes';
+  refs.bulkTools.insertBefore(
+    refs.layerSummary,
+    refs.bulkTools.querySelector('summary').nextSibling
+  );
   shapesBlock.append(
     refs.thinNotice,
-    refs.layerSummary,
     refs.bulkBar,
     mapGroups,
     classHeading,
@@ -866,6 +851,11 @@ export function createDrawingEditor({
   // The region canvas lives in the stage beside the workspace's panes and
   // shows for the stencil purpose, where the panes hide.
   stage.appendChild(canvasLabel);
+  const reliefHelp = document.createElement('p');
+  reliefHelp.className = 'sr-only';
+  reliefHelp.id = `${canvasLabelId}-relief-help`;
+  reliefHelp.textContent = S.reliefPictureHelp;
+  stage.appendChild(reliefHelp);
   const canvas = createRegionCanvas({
     container: stage,
     labelId: canvasLabelId,
@@ -881,6 +871,7 @@ export function createDrawingEditor({
         if (shift) toggleSelected(key);
         else setSelection(new Set([key]));
         announceSelection();
+        revealStencilRow(key);
       },
       onEmptyClick: (shift) => {
         if (purpose === 'map') return;
@@ -1018,6 +1009,25 @@ export function createDrawingEditor({
     }, 0);
   };
 
+  /**
+   * A shape chosen on the picture is found in the list, the same way in every
+   * purpose: the list opens if it was closed, and its row comes to the middle.
+   */
+  function revealRow(row) {
+    if (!row) return;
+    if (panel.hidden) setPanel(true);
+    sections.regions.details.open = true;
+    centerInScroller(row, panel);
+  }
+
+  /** The stencil's row for a region; the keyboard stays with the picture. */
+  function revealStencilRow(key) {
+    revealRow(rows.get(key)?.tr);
+  }
+
+  /** The picture on screen, with one way to move: every purpose answers these. */
+  const pictureView = () => (purpose === 'relief' ? workspace.picture : canvas);
+
   /** Put a count beside a section name, or nothing when there is none. */
   const setCount = (name, n) => {
     const el = sections[name];
@@ -1057,7 +1067,6 @@ export function createDrawingEditor({
       cropPanel.close();
       leaveCropView();
     }
-    bandObserver?.disconnect();
     hide();
     cropFirst = false;
     delete root.dataset.cropFirst;
@@ -1215,6 +1224,7 @@ export function createDrawingEditor({
     // a tile of plates, and a control labeled Charm would be naming something
     // that is not there.
     viewSwitch.hidden = rest.mode === 'file' || purpose !== 'relief';
+    placeSave(rest.mode === 'file');
     syncRenderCharm();
     isOpen = true;
     currentSvg = svgString;
@@ -1260,6 +1270,17 @@ export function createDrawingEditor({
         // traced) gets no too-small-to-trace marks.
         purpose,
         draft: isDraft,
+        // A shape chosen on the relief picture: its row found, and a plain
+        // press hands the keyboard to the row, one Tab from its controls.
+        onPictureChoose: (row, plain) => {
+          revealRow(row);
+          if (plain) row.focus({ preventScroll: true });
+        },
+        // The arrow keys' walk says where it is, as the canvas's does. The
+        // status line only: a polite region reads its own changes.
+        onPictureWalk: (row) => {
+          status.textContent = `${row?.getAttribute('aria-label') || ''}.`;
+        },
         onApply: (...args) => finish('onApply', ...args),
         onKeepOriginal: (...args) => finish('onKeepOriginal', ...args),
       });
@@ -1373,9 +1394,17 @@ export function createDrawingEditor({
     if (typeof onViewChange === 'function') onViewChange(view, stage);
     syncRenderCharm();
     syncCrop();
+    syncPictureControls();
     // One action, one announcement: one control pressed, one sentence
     // saying what is now on screen.
     say(view === 'charm' ? S.viewShowingCharm : S.viewShowingDrawing);
+  }
+
+  /** The tools and the movement act on the drawing; the charm has its camera. */
+  function syncPictureControls() {
+    const drawing = view === 'drawing';
+    zoomGroup.hidden = !drawing;
+    stencilTools.hidden = !drawing;
   }
 
   /** Render preview belongs to the charm view of a host that can draw one. */
@@ -1429,6 +1458,7 @@ export function createDrawingEditor({
     setCharmNote(false);
     syncRenderCharm();
     syncCrop();
+    syncPictureControls();
     // Closing or re-opening on the charm view would otherwise leave the
     // preview showing underneath the next drawing.
     if (wasCharm && typeof onViewChange === 'function') {
@@ -1461,21 +1491,28 @@ export function createDrawingEditor({
     // The map purpose takes two of the stencil's hands, Select and Hand (to
     // drag the picture); the marquee, the paint and the remove tools and the
     // paint menu are the stencil's alone.
-    stencilTools.hidden = !(stencil || map);
-    paintGroup.hidden = map;
+    paintGroup.hidden = !stencil;
     for (const [id, el] of toolButtons) {
       el.hidden = map
         ? id !== 'select' && id !== 'hand' && id !== 'route'
-        : id === 'route';
+        : stencil
+          ? id === 'route'
+          : !NAVIGATION_TOOLS.includes(id);
+    }
+    if (!stencil && !map) setTool('select');
+    syncPictureControls();
+    for (const pane of [refs.sourcePane, refs.resultPane]) {
+      if (!stencil && !map)
+        pane.setAttribute('aria-describedby', reliefHelp.id);
+      else pane.removeAttribute('aria-describedby');
     }
     clearRouteBtn.hidden = !map;
     if (!map) placeHereBtn.hidden = true;
     viewGroup.hidden = !stencil;
-    // The region canvas is the picture of the two purposes that work on
-    // shapes one by one: the stencil paints them, the map classes them.
-    zoomGroup.hidden = !(stencil || map);
     // Undo and Redo belong to the two purposes with a command stack.
     historyGroup.hidden = !(stencil || map);
+    // The region canvas is the picture of the two purposes that work on
+    // shapes one by one: the stencil paints them, the map classes them.
     canvas.root.hidden = !(stencil || map);
     canvasLabel.textContent = map ? S.mapCanvasLabel : S.canvasLabel;
     const canvasHelp = document.getElementById(`${canvasLabelId}-help`);
@@ -2075,9 +2112,10 @@ export function createDrawingEditor({
   }
 
   function setTool(id) {
-    canvas.setTool(id);
+    const picture = pictureView();
+    picture.setTool(id);
     for (const [tool, el] of toolButtons) {
-      el.setAttribute('aria-pressed', String(tool === canvas.getTool()));
+      el.setAttribute('aria-pressed', String(tool === picture.getTool()));
     }
   }
 
@@ -2381,10 +2419,16 @@ export function createDrawingEditor({
         ? refs.objects.querySelector(`.svg-prep-object[data-index="${live}"]`)
         : null;
     if (!item) return;
-    if (panel.hidden) setPanel(true);
-    item.scrollIntoView?.({ block: 'nearest' });
+    // A row the Show filter hid is what was asked for: show it.
+    if (item.hidden) {
+      showSelect.value = 'all';
+      filterMapRows();
+    }
+    revealRow(item);
     canvas.setHighlight(key);
-    item.querySelector('.drawing-editor-class-select')?.focus();
+    item
+      .querySelector('.drawing-editor-class-select')
+      ?.focus({ preventScroll: true });
   }
 
   /** The status line as the highlight moves: the shape and its class. */
@@ -3013,11 +3057,11 @@ export function createDrawingEditor({
   undoBtn.addEventListener('click', undo);
   redoBtn.addEventListener('click', redo);
   tableUndoBtn.addEventListener('click', undo);
-  fitBtn.addEventListener('click', () => canvas.fit());
-  zoomInBtn.addEventListener('click', () => canvas.zoomIn());
-  zoomOutBtn.addEventListener('click', () => canvas.zoomOut());
+  fitBtn.addEventListener('click', () => pictureView().fit());
+  zoomInBtn.addEventListener('click', () => pictureView().zoomIn());
+  zoomOutBtn.addEventListener('click', () => pictureView().zoomOut());
   for (const el of panButtons) {
-    el.addEventListener('click', () => canvas[el.dataset.pan]());
+    el.addEventListener('click', () => pictureView()[el.dataset.pan]());
   }
   panelToggleBtn.addEventListener('click', () => setPanel(panel.hidden));
   // The skip link's promise holds with the drawer closed: it opens the
@@ -3091,6 +3135,20 @@ export function createDrawingEditor({
   // parameters back a step and rebuilds the file control under the editor's
   // feet.
   root.addEventListener('keydown', (event) => {
+    if (purpose === 'relief') {
+      // On the picture: V and H pick the tools. The workspace keeps the rest.
+      const onPicture =
+        event.target === refs.resultPane || event.target === refs.sourcePane;
+      if (!onPicture || event.ctrlKey || event.metaKey || event.altKey) return;
+      const tool = { v: 'select', h: 'hand' }[event.key.toLowerCase()];
+      if (tool) {
+        event.preventDefault();
+        event.stopPropagation();
+        setTool(tool);
+        sayTool(tool);
+      }
+      return;
+    }
     if (purpose === 'map') {
       // On the canvas: plus and minus zoom, 0 fits the whole drawing, V and H
       // pick the Select and the Hand tool.
@@ -3157,6 +3215,21 @@ export function createDrawingEditor({
     }
     if (mod || event.altKey || inText) return;
     if (target.tagName === 'SELECT') return;
+
+    // Plus and minus zoom on the picture, as on every other. 0 stays the base
+    // coat's here: the number keys color the selection.
+    if (target === canvas.svg && (event.key === '+' || event.key === '=')) {
+      event.preventDefault();
+      event.stopPropagation();
+      canvas.zoomIn();
+      return;
+    }
+    if (target === canvas.svg && event.key === '-') {
+      event.preventDefault();
+      event.stopPropagation();
+      canvas.zoomOut();
+      return;
+    }
 
     if (NUMBER_KEYS.test(event.key)) {
       if (selected.size === 0) {
@@ -3311,7 +3384,7 @@ export function createDrawingEditor({
       purpose === 'map' ? Object.fromEntries(mapClasses) : null,
     /** The selection and the tool, for a spec that wants to read them. */
     getSelection: () => [...selected],
-    getTool: () => canvas.getTool(),
+    getTool: () => pictureView().getTool(),
     getView: () => canvas.getView(),
     getPlateIndex: () => plateIndex,
     stepPlate,

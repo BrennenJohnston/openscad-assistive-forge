@@ -277,10 +277,13 @@ test.describe('The drawing editor door', () => {
     await expect(page.locator('button[data-action="save"]')).toBeEnabled({
       timeout: 60000,
     })
+    // From the last shape the walk wraps to the toolbar's start: the name,
+    // the two ways out, the two hands, the seven view buttons and Crop stand
+    // before Save on the working row.
     await tabUntil(
       page,
       (s) => s?.text === 'Save SVG',
-      { max: 12, label: 'the Save button' }
+      { max: 24, label: 'the Save button' }
     )
 
     const [download] = await Promise.all([
@@ -649,6 +652,8 @@ test.describe('The drawing editor door', () => {
     await expect(page.locator('.svg-prep-bulk-count')).toHaveText('300 shapes')
 
     // Keep the 40 largest, by keyboard: into the field, type, then the button.
+    // The bulk tools fold under List tools.
+    await page.locator('.svg-prep-bulk-tools > summary').click()
     const keepField = page.locator('.svg-prep-bulk-field', { hasText: 'Keep largest' })
     await keepField.locator('input').fill('40')
     const keepBtn = page.locator('[data-action="keep-largest"]')
@@ -1522,9 +1527,10 @@ test.describe('two fingers on the drawing', () => {
     test.setTimeout(240000)
     await openBird(page)
 
-    // touch-action lives on the picture and nowhere else: a page you cannot
-    // scroll is a worse bargain than a picture you cannot pinch.
-    await expect(picture(page)).toHaveCSS('touch-action', 'pan-y')
+    // touch-action lives on the picture and nowhere else. One finger drags
+    // the picture now, and two pinch it, so the picture takes every touch;
+    // the page still scrolls from everything around it.
+    await expect(picture(page)).toHaveCSS('touch-action', 'none')
 
     const before = await viewBox(page)
 
@@ -1593,9 +1599,8 @@ test.describe('two fingers on the drawing', () => {
     test.setTimeout(240000)
     await openBird(page)
     const before = await viewBox(page)
-    const zoomIn = page.locator('.svg-prep-result-pane button', {
-      hasText: '+',
-    })
+    // The editor's one set of buttons moves every purpose's picture.
+    const zoomIn = page.locator('.drawing-editor-zoom [data-action="zoom-in"]')
     const box = await zoomIn.boundingBox()
     expect(box.width).toBeGreaterThanOrEqual(44)
     expect(box.height).toBeGreaterThanOrEqual(44)
@@ -2113,15 +2118,24 @@ test.describe('the toolbar is two rows that never move', () => {
     [900, 900],
     [412, 915],
   ]) {
-    test(`two rows, each one line, at ${width}`, async ({ page }) => {
+    test(`two rows, the header one line and the working row one or two, at ${width}`, async ({
+      page,
+    }) => {
       test.setTimeout(120000)
       await openEditorAt(page, width, height)
 
       const rows = await toolbarRows(page)
       expect(rows.length).toBe(2)
-      // One line of controls is a 44 px target plus the row's own padding.
-      // Two lines would be 90 or more.
-      for (const row of rows) expect(row.height).toBeLessThan(60)
+      // One line of controls is a 44 px target plus the row's own padding;
+      // each further line is 48 more. The header keeps to one line everywhere.
+      // The working row holds every tool a person works with and wraps, its
+      // groups whole (the seven view buttons stay beside Fit, and More
+      // wraps): one line at 900 in most fonts and two in a wide one (Firefox
+      // on Linux), three at most on a phone.
+      for (const row of rows) {
+        const limit = row.name === 'header' ? 60 : width > 412 ? 110 : 150
+        expect(row.height, `${row.name} row at ${width}`).toBeLessThan(limit)
+      }
     })
 
     test(`Close is on the first row at ${width}`, async ({ page }) => {
@@ -2204,7 +2218,8 @@ test.describe('the toolbar is two rows that never move', () => {
     // The picture's bottom edge is inside the stage.
     expect(fit.roomUnderPicture).toBeGreaterThanOrEqual(0)
     expect(fit.scrolls).toBe(false)
-    expect(fit.toolbar).toBeLessThan(120)
+    // The header's line and the working row's three, with their padding.
+    expect(fit.toolbar).toBeLessThan(200)
   })
 
 
@@ -2227,38 +2242,41 @@ test.describe('the toolbar is two rows that never move', () => {
     // And the editor is still here.
     await expect(page.locator('.drawing-editor-toolbar')).toBeVisible()
   })
-  test('below the drawer band the actions move into More, and come back', async ({
+  test('the finishing moves wait behind More at every width, and Save, this door\'s main action, keeps the row', async ({
     page,
   }) => {
     test.setTimeout(120000)
     await openEditorAt(page, 1280, 900)
 
-    const whereIsReset = () =>
-      page.evaluate(() => {
-        const reset = document.querySelector('.svg-prep-footer [data-action="reset"]')
+    const whereIs = (action) =>
+      page.evaluate((a) => {
+        const place = document.querySelector(`.svg-prep-footer [data-action="${a}"]`)
           ? 'row'
-          : document.querySelector(
-                '.drawing-editor-more-panel [data-action="reset"]'
-              )
+          : document.querySelector(`.drawing-editor-more-panel [data-action="${a}"]`)
             ? 'more'
             : 'nowhere'
         return {
-          reset,
-          // One Reset in the whole editor, wherever it is: a copy would put
+          place,
+          // One of each in the whole editor, wherever it is: a copy would put
           // two of the same name in the accessibility tree.
-          count: document.querySelectorAll('[data-action="reset"]').length,
+          count: document.querySelectorAll(`[data-action="${a}"]`).length,
         }
-      })
+      }, action)
 
-    expect(await whereIsReset()).toEqual({ reset: 'row', count: 1 })
+    for (const width of [1280, 412]) {
+      await page.setViewportSize({ width, height: 900 })
+      await expect.poll(async () => (await whereIs('reset')).place).toBe('more')
+      expect(await whereIs('reset')).toEqual({ place: 'more', count: 1 })
+      expect(await whereIs('keep')).toEqual({ place: 'more', count: 1 })
+      expect(await whereIs('save')).toEqual({ place: 'row', count: 1 })
+    }
 
-    await page.setViewportSize({ width: 412, height: 915 })
-    await expect.poll(async () => (await whereIsReset()).reset).toBe('more')
-    expect((await whereIsReset()).count).toBe(1)
-
-    await page.setViewportSize({ width: 1280, height: 900 })
-    await expect.poll(async () => (await whereIsReset()).reset).toBe('row')
-    expect((await whereIsReset()).count).toBe(1)
+    // And a press behind More is heard: Reset says what it did.
+    await page.locator('.drawing-editor-more-btn').click()
+    await page.locator('.drawing-editor-more-panel [data-action="reset"]').click()
+    await expect(
+      page.locator('.svg-prep-workspace [aria-live="polite"][aria-atomic="true"]')
+    ).toContainText('reset')
   })
 })
 

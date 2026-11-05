@@ -5356,6 +5356,9 @@ export class PreviewManager {
    */
   hideEditorSurface(el) {
     this._isEditorSurfaceActive = false;
+    this._charmHostObserver?.disconnect();
+    this._charmHostObserver = null;
+    this._charmHost = null;
     if (el) {
       el.hidden = true;
       el.classList.add('hidden');
@@ -5399,8 +5402,21 @@ export class PreviewManager {
       );
     }
     this._charmHost = show3D ? host : null;
-    if (show3D) this._sizeCanvasToCharmHost();
-    else this._restoreCanvasBox();
+    // The window's box moves after the switch (a status line that loses a
+    // row, a toolbar that wraps), so the canvas follows it while the view lasts.
+    this._charmHostObserver?.disconnect();
+    this._charmHostObserver = null;
+    if (!show3D) {
+      this._restoreCanvasBox();
+      return;
+    }
+    this._sizeCanvasToCharmHost();
+    if (host && typeof ResizeObserver !== 'undefined') {
+      this._charmHostObserver = new ResizeObserver(() =>
+        this._sizeCanvasToCharmHost()
+      );
+      this._charmHostObserver.observe(host);
+    }
   }
 
   /**
