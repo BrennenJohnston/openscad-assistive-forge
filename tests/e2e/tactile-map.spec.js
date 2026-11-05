@@ -156,10 +156,15 @@ test.describe('Tactile Map tile', () => {
     );
   });
 
-  test('Tape channels start as a recess; cut through moves them to the cutouts group, and an All printed plate brings a warning', async ({
+  test('Tape channels start as a recess; cut through moves them to the cutouts group, and an All printed plate brings a warning and still renders', async ({
     page,
   }) => {
+    test.setTimeout(240_000);
     await openTactileMap(page);
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
     await goToStep(page, 5);
     const cut = page.locator('#tactileMapChannelCut');
     await expect(cut).toHaveValue('recess');
@@ -216,6 +221,12 @@ test.describe('Tactile Map tile', () => {
     await expect(cut).toHaveAttribute(
       'aria-describedby',
       'tactileMapChannelNote'
+    );
+    // At the default thin base the model raises All printed to 1.2 mm itself:
+    // the preview lands, it does not stop on the base's thickness.
+    await previewSettled(page);
+    await expect(page.locator('.preview-state-indicator')).not.toHaveClass(
+      /state-error/
     );
     await cut.selectOption('recess');
     await expect(page.locator('#tactileMapWarningsBox')).toBeHidden();

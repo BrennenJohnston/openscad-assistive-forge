@@ -71,6 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   marker, 4.9 mm tall) stands at the address and the key names it first
   with the address; a route's end carries the same cone. You are here is
   no longer dropped at the plate's center as if it were the address.
+- Choosing All printed for a tactile map no longer stops the model at the
+  default 0.4 mm base: it prints at 1.2 mm, as the setting says.
 
 ## [5.8.0] - 2026-11-04
 

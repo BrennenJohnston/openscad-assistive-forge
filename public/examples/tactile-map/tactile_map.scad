@@ -160,8 +160,6 @@ function in_range(v, r) = v >= r[0] && v <= r[1];
 // ASSERTS: a value a finger depends on fails the build instead of printing wrong
 // =============================================================================
 
-assert(print_style != "All printed" || base_thickness_mm >= _min_wall,
-       str("base_thickness_mm is ", base_thickness_mm, " mm; All printed needs 1.2 mm or more so the plate prints solid."));
 assert(in_range(base_thickness_mm, BASE_RANGE_MM),
        str("base_thickness_mm is ", base_thickness_mm, " mm, outside 0.3 to 3.0 mm."));
 assert(in_range(level_step_mm, LEVEL_STEP_RANGE_MM),
