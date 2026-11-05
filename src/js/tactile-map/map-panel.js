@@ -39,6 +39,12 @@
 import { stateManager } from '../state.js';
 import { setParameterValue } from '../ui-generator.js';
 import {
+  cutZones,
+  keepClear,
+  keptClearNote,
+  northZones,
+} from './keep-clear.js';
+import {
   announce,
   announceChange,
   announceError,
@@ -507,6 +513,19 @@ class MapPanel {
     this.lastCue = this.northCue();
     this.lastTitle = this.titleKey();
     this.lastPrintStyle = this.printStyle();
+    // Once a map has been generated, the file stays current: each change
+    // re-generates when its preview has settled, so Download never hands over
+    // a map that no longer matches the choices on screen.
+    this.generated = false;
+    this.onFullRender = () => {
+      this.generated = true;
+    };
+    this.onPreviewCurrent = () => {
+      if (this.generated)
+        window.dispatchEvent(new CustomEvent('forge:regenerate'));
+    };
+    window.addEventListener('forge:full-render-done', this.onFullRender);
+    window.addEventListener('forge:preview-current', this.onPreviewCurrent);
     this.unsubscribe = stateManager.subscribe(() => {
       const tape = this.tapeWidth();
       const cue = this.northCue();
@@ -710,7 +729,10 @@ class MapPanel {
   sheetParts(sheet, built) {
     const [dx, dy] = this.faceShift(sheet);
     return {
-      rings: shiftRings(built.rings, [dx, dy]),
+      rings: cutZones(
+        shiftRings(built.rings, [dx, dy]),
+        this.northZonesOn(sheet)
+      ),
       cones: (built.cones || []).map(([x, y]) => [x + dx, y + dy]),
       textBoxes: (built.textBoxes || []).map((b) => ({
         ...b,
@@ -718,6 +740,63 @@ class MapPanel {
         y: b.y + dy,
       })),
       rows: sheet.titleBand ? titleRows(sheet, this.titleLetterMm()) : [],
+    };
+  }
+
+  /**
+   * Where the north cue stands on a sheet, in the sheet's frame. The model
+   * draws it at the top of the plate that shows it: the sheet's top for the
+   * whole map, the first plate of the map when the title has plates of its own.
+   */
+  northZonesOn(sheet) {
+    const { plates, titlePlates } = planPlates({
+      w: sheet.w,
+      h: sheet.h,
+      bed: this.bed(),
+      titleBandMm: sheet.titleBand?.h || 0,
+    });
+    const tops = titlePlates.length ? [0, plates[0]?.y ?? 0] : [0];
+    return northZones({
+      sheetW: sheet.w,
+      cue: this.northCue(),
+      plateTops: tops,
+    });
+  }
+
+  /**
+   * The labeled plan with the north cue and the marks kept clear, and its
+   * rings. The sheet is measured from the plan as drawn, so a symbol moved
+   * inside it leaves the sheet as it was.
+   */
+  clearedPlan(labeled) {
+    const settings = this.levelSettings();
+    const first = buildLevelRings(labeled.plan, settings);
+    this.view = this.measureView(first);
+    const sheet = this.sheetNow();
+    const [dx, dy] = this.faceShift(sheet);
+    const toPlan = (z) => ({
+      x0: z.x0 - dx,
+      y0: z.y0 - dy,
+      x1: z.x1 - dx,
+      y1: z.y1 - dy,
+    });
+    const s = { ...DEFAULT_SETTINGS, ...settings };
+    const { features, moved } = keepClear(labeled.plan.features, {
+      zones: this.northZonesOn(sheet).map(toPlan),
+      symbolSizeMm: s.symbolSizeMm,
+      gapMm: s.minGapMm,
+      channelAcrossMm: s.tapeWidthMm + s.channelClearanceMm,
+      bounds: toPlan({ x0: 0, y0: 0, x1: sheet.w, y1: sheet.h }),
+    });
+    const plan =
+      features === labeled.plan.features
+        ? labeled.plan
+        : { ...labeled.plan, features };
+    return {
+      labeled: { ...labeled, plan },
+      built: plan === labeled.plan ? first : buildLevelRings(plan, settings),
+      sheet,
+      moved,
     };
   }
 
@@ -1801,10 +1880,12 @@ class MapPanel {
     this.source = 'draft';
     // Counted as step 5 lists them: the labels' and the plates' warnings.
     const labeled = this.labeled();
+    const cleared = this.clearedPlan(labeled);
     const warnings = [
       ...labeled.warnings,
-      ...buildLevelRings(labeled.plan, this.levelSettings()).warnings,
+      ...cleared.built.warnings,
       ...this.channelWarnings(),
+      ...(keptClearNote(cleared.moved) ? [keptClearNote(cleared.moved)] : []),
     ];
     this.draft = { counts, warnings: warnings.length };
     this.planWarnings = [];
@@ -2047,12 +2128,7 @@ class MapPanel {
     const format = state.outputFormat === '3mf' ? '3mf' : 'stl';
     const stem = projectStem(state.uploadedFile?.name || 'tactile_map');
     const parameters = state.parameters || {};
-    const labeled = this.labeled();
-    const built = buildLevelRings(labeled.plan, {
-      ...this.levelSettings(),
-    });
-    this.view = this.measureView(built);
-    const sheet = this.sheetNow();
+    const { built, sheet } = this.clearedPlan(this.labeled());
     const parts = this.sheetParts(sheet, built);
     const mapParameters = this.mapKindParameters(parameters);
     const sets = [
@@ -2243,10 +2319,7 @@ class MapPanel {
    * Built from the same data as the paper, on the paper size chosen.
    */
   buildPdf({ stem, parameters }) {
-    const labeled = this.labeled();
-    const built = buildLevelRings(labeled.plan, this.levelSettings());
-    this.view = this.measureView(built);
-    const sheet = this.sheetNow();
+    const { labeled, built, sheet } = this.clearedPlan(this.labeled());
     const parts = this.sheetParts(sheet, built);
     const inside = sheet.placement === 'inside';
     const faceAt = this.faceShift(sheet);
@@ -2663,12 +2736,7 @@ class MapPanel {
 
   update() {
     if (!this.el) return;
-    const labeled = this.labeled();
-    const built = buildLevelRings(labeled.plan, {
-      ...this.levelSettings(),
-    });
-    this.view = this.measureView(built);
-    const sheet = this.sheetNow();
+    const { labeled, built, sheet, moved } = this.clearedPlan(this.labeled());
     this.sheet = sheet;
     const { w, h } = sheet;
     const bed = this.bed();
@@ -2725,9 +2793,22 @@ class MapPanel {
     const allWarnings = [
       ...this.planWarnings,
       ...labeled.warnings,
+      ...(labeled.key?.notes || []).map((text) => ({
+        code: 'shared-shape',
+        featureId: null,
+        text,
+      })),
       ...built.warnings,
       ...channelWarnings,
     ];
+    const movedNote = keptClearNote(moved);
+    if (movedNote) {
+      allWarnings.push({
+        code: 'kept-clear',
+        featureId: null,
+        text: movedNote,
+      });
+    }
     this.refs.warnings.replaceChildren(
       ...allWarnings.map((warning) => el('li', '', warning.text))
     );
@@ -3014,6 +3095,8 @@ class MapPanel {
     this.customizerObserver = null;
     this.mapType = null;
     this.syncFileControl();
+    window.removeEventListener('forge:full-render-done', this.onFullRender);
+    window.removeEventListener('forge:preview-current', this.onPreviewCurrent);
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;

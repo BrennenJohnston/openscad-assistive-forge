@@ -8058,6 +8058,10 @@ async function initApp() {
             hfmCtrl.clearPersistence();
           }
           updatePreviewStateUI(newState, extra);
+          // A panel may keep its generated file current (the tactile map's).
+          if (newState === PREVIEW_STATE.CURRENT) {
+            window.dispatchEvent(new CustomEvent('forge:preview-current'));
+          }
         },
         onPreviewReady: (
           stl,
@@ -12439,6 +12443,17 @@ if (rounded) {
     refreshFolderSaveAffordances();
   });
 
+  // A panel asks for this when its generated file has gone out of date. The
+  // button says whether it has: after a full render it reads Download, so this
+  // cannot loop, and a render already under way is left to finish.
+  window.addEventListener('forge:regenerate', () => {
+    if (primaryActionBtn.dataset.action !== 'generate') return;
+    if (primaryActionBtn.disabled || renderController?.isBusy?.()) return;
+    runFullRender({ quiet: true }).catch((error) => {
+      console.error('[Generate] Re-generating failed:', error);
+    });
+  });
+
   /**
    * The full-quality render with all of its UI side effects and no download
    * side effect. Every Render surface (Design ▸ Render, the rebindable
@@ -12447,7 +12462,7 @@ if (rounded) {
    * depending on state the user cannot see: through it, pressing Render
    * would trigger an STL save prompt whenever a full render was cached.
    */
-  async function runFullRender() {
+  async function runFullRender({ quiet = false } = {}) {
     // Publish the editor's pending write-back first, or pressing Render
     // within 500 ms of typing would render the content from before the edit.
     // Every Preview button publishes first too.
@@ -12512,7 +12527,9 @@ if (rounded) {
       );
       // "Generating" is said once a Generate: by the estimate when there is
       // one, else by the first progress report.
-      let generatingSaid = false;
+      // Started by a change the person just made, not by a press: only the
+      // result is worth saying.
+      let generatingSaid = quiet;
       if (estimate.seconds >= 5 || estimate.warning) {
         const estimateMsg =
           estimate.confidence === 'low'
@@ -12521,7 +12538,7 @@ if (rounded) {
         if (estimate.warning) {
           console.warn('[Render] Complexity warning:', estimate.warning);
         }
-        updateStatus(estimateMsg);
+        updateStatus(estimateMsg, 'default', { announce: !quiet });
         generatingSaid = true;
       }
 
@@ -12722,6 +12739,7 @@ if (rounded) {
         stats: result.stats,
         fullQuality: true,
       });
+      window.dispatchEvent(new CustomEvent('forge:full-render-done'));
     } catch (error) {
       if (generateCanceled && error?.code === 'RENDER_CANCELLED') {
         // Stopped on purpose: the status says so, and the preview on screen

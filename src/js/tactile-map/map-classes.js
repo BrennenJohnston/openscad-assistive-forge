@@ -104,6 +104,8 @@ export const MAP_CLASSES = Object.freeze([
     level: 2,
     widthMm: 1.5,
     style: 'ticks',
+    // A crossing drawn as a point: an X, its own form.
+    symbolKey: 'crossing',
     source: 'BANA 2022 line styles: short cross-ticks',
     osm: [
       { tag: 'footway', values: ['crossing'], kind: 'way' },
@@ -165,7 +167,7 @@ export const MAP_CLASSES = Object.freeze([
     kind: 'point',
     level: 2,
     symbolKey: 'stairs',
-    source: 'Ungar 2005 (three bars); BANA 2022',
+    source: 'A zigzag, from my SeaTac key; BANA 2022',
     // A steps way: a stairs point at its middle and a walkway line.
     osm: [{ tag: 'highway', values: ['steps'], kind: 'way' }],
   },
@@ -175,7 +177,7 @@ export const MAP_CLASSES = Object.freeze([
     kind: 'point',
     level: 2,
     symbolKey: 'elevator-up',
-    source: 'Ungar 2005 arrows; Gual 2012: a filled triangle reads best',
+    source: 'An outlined triangle, from my SeaTac key',
   },
   {
     key: 'elevator-down',
@@ -183,7 +185,7 @@ export const MAP_CLASSES = Object.freeze([
     kind: 'point',
     level: 2,
     symbolKey: 'elevator-down',
-    source: 'Ungar 2005 arrows; Gual 2012',
+    source: 'An outlined triangle, turned over, from my SeaTac key',
   },
   {
     key: 'entrance',
@@ -191,7 +193,7 @@ export const MAP_CLASSES = Object.freeze([
     kind: 'point',
     level: 2,
     symbolKey: 'entrance',
-    source: 'ISO 19028: a half-circle for a way in and its direction',
+    source: 'A door frame, open toward the way in',
     osm: [{ tag: 'entrance', kind: 'node' }],
   },
   {
@@ -199,7 +201,7 @@ export const MAP_CLASSES = Object.freeze([
     name: 'Street furniture',
     kind: 'point',
     level: 2,
-    symbolKey: 'landmark-circle',
+    symbolKey: 'furniture',
     source:
       'Holloway and others 2019: benches and bins are not a place to steer by, so they leave the first tier of a map; the library disc until a symbol set gives them a shape',
     // Before the landmark row: an amenity is read here first. Benches when
@@ -218,8 +220,9 @@ export const MAP_CLASSES = Object.freeze([
     name: 'Landmark',
     kind: 'point',
     level: 2,
-    symbolKey: 'landmark-circle',
-    source: 'BANA 2022 8.6.5; Jehoel 2009: 5.0 to 6.4 mm identifies a symbol',
+    symbolKey: 'landmark',
+    source:
+      'A solid diamond; BANA 2022 8.6.5; Jehoel 2009: 5.0 to 6.4 mm identifies a symbol',
     // Shops when their box is ticked; other places with a name.
     osm: [
       { tag: 'shop', kind: 'node' },
@@ -256,7 +259,7 @@ export const MAP_CLASSES = Object.freeze([
     kind: 'point',
     level: 2,
     symbolKey: 'transit-stop',
-    source: 'BANA 2022 8.5.4: a filled square with a notch',
+    source: 'An outlined square with a T, from my SeaTac key; BANA 2022 8.5.4',
     osm: [
       {
         tag: 'public_transport',
@@ -276,7 +279,7 @@ export const MAP_CLASSES = Object.freeze([
     name: 'Curb ramp',
     kind: 'point',
     level: 2,
-    symbolKey: 'landmark-triangle',
+    symbolKey: 'curb-ramp',
     source:
       'OpenSidewalks curb ramps (barrier=kerb, kerb=lowered), and a flush curb, which leaves a cane no edge either; the library triangle, a wedge for a slope (Jehoel 2009: identified at 6.4 mm)',
     osm: [{ tag: 'kerb', values: ['lowered', 'flush'], kind: 'node' }],
@@ -286,7 +289,7 @@ export const MAP_CLASSES = Object.freeze([
     name: 'Raised curb',
     kind: 'point',
     level: 2,
-    symbolKey: 'landmark-square',
+    symbolKey: 'raised-curb',
     source:
       'OpenSidewalks raised curbs (barrier=kerb, kerb=raised), a step a wheel cannot take; the library square (Jehoel 2009: identified at 5.0 mm)',
     osm: [{ tag: 'kerb', values: ['raised'], kind: 'node' }],

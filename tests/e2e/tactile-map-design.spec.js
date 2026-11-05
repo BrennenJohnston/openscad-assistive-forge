@@ -131,10 +131,11 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
 
     // The first draft: the places are named, and most of the data starts off.
     // Every named area and point carries a number, and a place with no room
-    // for its name is no warning: its number carries it.
+    // for its name is no warning: its number carries it. The third warning is
+    // the symbol moved clear of the north arrow.
     await makeTheMap(page);
     await expect(status).toHaveText(
-      'Draft map ready: 19 of 302 features on; 2 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
+      'Draft map ready: 19 of 302 features on; 3 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
     );
     const rows = await page
       .locator('#drawingEditorSurface .svg-prep-object-name')
@@ -186,7 +187,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     // The ready sentence waits for the braille translator, so the count of
     // warnings is taken with the labels measured in contracted UEB.
     await expect(status).toHaveText(
-      'Draft map ready: 19 of 302 features on; 2 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
+      'Draft map ready: 19 of 302 features on; 3 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
     );
     await closeTheEditor(page);
 

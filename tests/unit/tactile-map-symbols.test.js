@@ -18,6 +18,7 @@ import {
 } from '../../src/js/tactile-map/symbol-library.js';
 import { buildLevelsSvg } from '../../src/js/tactile-map/levels-svg.js';
 import { emptyPlan } from '../../src/js/tactile-map/plan.js';
+import { MAP_CLASSES } from '../../src/js/tactile-map/map-classes.js';
 import { regionArea, ringsFromPathData } from '../../src/js/ring-geometry.js';
 
 const KEYS = [
@@ -25,9 +26,11 @@ const KEYS = [
   'elevator-up',
   'elevator-down',
   'entrance',
-  'landmark-circle',
-  'landmark-square',
-  'landmark-triangle',
+  'crossing',
+  'landmark',
+  'furniture',
+  'curb-ramp',
+  'raised-curb',
   'you-are-here',
   'destination-cone',
   'transit-stop',
@@ -42,7 +45,44 @@ const fileOf = (value, name = 'symbols.json') => ({
 afterEach(() => setLibrary(null));
 
 describe('the built-in symbols', () => {
-  it('are the eleven shapes, each with a name and a source; the destination cone the one solid, at its own size', () => {
+  it('give every kind on a map a form of its own: no two share a key or an outline', () => {
+    const pointClasses = MAP_CLASSES.filter((c) => c.kind === 'point');
+    const keys = pointClasses.map((c) => c.symbolKey);
+    expect(new Set(keys).size).toBe(keys.length);
+    const crossing = MAP_CLASSES.find((c) => c.key === 'crossing');
+    expect(crossing.symbolKey).toBe('crossing');
+    expect(keys).not.toContain('crossing');
+    for (const key of [...keys, 'crossing']) {
+      expect(
+        BUILT_IN_SYMBOLS.some((s) => s.key === key),
+        key
+      ).toBe(true);
+    }
+    // The destination's footprint and You are here's are round on purpose:
+    // the cone is read by its height, the disc by its raised center dot.
+    const flat = BUILT_IN_SYMBOLS.filter(
+      (s) => !s.solid && s.key !== 'you-are-here'
+    );
+    const paths = flat.map((s) => s.pathData);
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+
+  it('no flat kind is a plain round shape: only You are here and the cone stand on a disc', () => {
+    const isDisc = (s) => {
+      const rings = ringsFromPathData(s.pathData);
+      if (rings.length !== 1 || rings[0].length < 12) return false;
+      const cx = rings[0].reduce((a, p) => a + p.x, 0) / rings[0].length;
+      const cy = rings[0].reduce((a, p) => a + p.y, 0) / rings[0].length;
+      const r = rings[0].map((p) => Math.hypot(p.x - cx, p.y - cy));
+      return Math.max(...r) - Math.min(...r) < 0.02;
+    };
+    expect(BUILT_IN_SYMBOLS.filter(isDisc).map((s) => s.key)).toEqual([
+      'you-are-here',
+      'destination-cone',
+    ]);
+  });
+
+  it('are the thirteen shapes, each with a name and a source; the destination cone the one solid, at its own size', () => {
     expect(BUILT_IN_SYMBOLS.map((s) => s.key)).toEqual(KEYS);
     for (const s of BUILT_IN_SYMBOLS) {
       expect(typeof s.name, s.key).toBe('string');
@@ -69,7 +109,7 @@ describe('the built-in symbols', () => {
     }
   });
 
-  it('stay inside the unit box and the landmark triangle keeps its area', () => {
+  it('stay inside the unit box and the landmark diamond keeps its area', () => {
     for (const s of BUILT_IN_SYMBOLS) {
       for (const ring of ringsFromPathData(s.pathData)) {
         for (const p of ring) {
@@ -80,9 +120,9 @@ describe('the built-in symbols', () => {
         }
       }
     }
-    const tri = BUILT_IN_SYMBOLS.find((s) => s.key === 'landmark-triangle');
-    const area = regionArea(ringsFromPathData(tri.pathData));
-    expect(Math.abs(area - 0.433) / 0.433).toBeLessThan(0.02);
+    const diamond = BUILT_IN_SYMBOLS.find((s) => s.key === 'landmark');
+    const area = Math.abs(regionArea(ringsFromPathData(diamond.pathData)));
+    expect(Math.abs(area - 0.5) / 0.5).toBeLessThan(0.02);
   });
 
   it('are what the levels builder draws by default', () => {
@@ -168,7 +208,7 @@ describe('the file door', () => {
     expect(activeLibrary()).toHaveLength(2);
     expect(activeLibrary().map((s) => s.key)).toEqual(['a', 'b']);
     setLibrary(null);
-    expect(activeLibrary()).toHaveLength(11);
+    expect(activeLibrary()).toHaveLength(13);
     expect(activeLibrary()).toBe(BUILT_IN_SYMBOLS);
   });
 });

@@ -157,13 +157,10 @@ describe('symbol sets in the library', () => {
     expect(lib['transit-stop'].pathData).toBe(
       oregon('challenging-feature').pathData
     );
-    expect(lib['landmark-circle'].pathData).toBe(
-      oregon('flexible-feature').pathData
-    );
-    // A crossing point has no symbol of its own; it draws the circle.
-    expect(lib.circle.pathData).toBe(oregon('intersection').pathData);
+    expect(lib.landmark.pathData).toBe(oregon('flexible-feature').pathData);
+    expect(lib.crossing.pathData).toBe(oregon('intersection').pathData);
     expect(lib['you-are-here']).toEqual(basic('you-are-here'));
-    expect(lib['landmark-triangle']).toEqual(basic('landmark-triangle'));
+    expect(lib['curb-ramp']).toEqual(basic('curb-ramp'));
     expect(lib['chevron-uphill']).toEqual(basic('chevron-uphill'));
     expect(librarySymbolsFor('forge-basic')).toEqual(BUILT_IN_SYMBOLS);
   });

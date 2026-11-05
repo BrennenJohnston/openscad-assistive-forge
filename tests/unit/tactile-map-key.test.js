@@ -7,6 +7,7 @@
  *
  * @license GPL-3.0-or-later
  */
+import { LEVELS_BY_CLASS } from '../../src/js/tactile-map/levels-svg.js';
 import { describe, it, expect, afterEach } from 'vitest';
 import {
   keyFor,
@@ -96,7 +97,8 @@ describe('keyFor', () => {
       ['point', 'Entrance'],
       ['point', 'Stairs'],
       ['point', 'Transit stop'],
-      ['point', 'Landmark or Street furniture'],
+      ['point', 'Landmark'],
+      ['point', 'Street furniture'],
       ['line', 'Walkway'],
       ['line', 'Crossing'],
       ['line', 'Crossing'],
@@ -155,17 +157,32 @@ describe('keyFor', () => {
     expect(numbers[3].name).toBe('Oceanography Building');
   });
 
-  it('names together the classes a finger cannot tell apart: one entry per printed shape', () => {
+  it('gives every kind a row of its own in the built-in sets, and a set that draws two alike says so', () => {
     const plan = emptyPlan(200, 150);
     plan.features.push(
       point('x', 'crossing', [20, 20]),
       point('l', 'landmark', [60, 20], { name: 'Pine', what: 'Cafe' }),
       point('s', 'stairs', [100, 20])
     );
-    const { entries } = keyFor(plan);
-    expect(entries.map((e) => e.name)).toEqual([
+    const own = keyFor(plan);
+    expect(own.entries.map((e) => e.name)).toEqual([
+      'Stairs',
+      'Crossing',
+      'Landmark',
+    ]);
+    expect(own.notes).toEqual([]);
+    const shared = keyFor(plan, {
+      classes: {
+        ...LEVELS_BY_CLASS,
+        crossing: { kind: 'point', level: 2, symbol: 'landmark' },
+      },
+    });
+    expect(shared.entries.map((e) => e.name)).toEqual([
       'Stairs',
       'Crossing or Landmark',
+    ]);
+    expect(shared.notes).toEqual([
+      'Crossing and Landmark share one shape in this set; the key lists them together.',
     ]);
   });
 
@@ -212,7 +229,7 @@ describe('the key as words', () => {
     expect(text).toContain('Walkway: a solid line 1.5 mm wide, low');
     expect(text).toContain('Area: a raised area, low');
     expect(keySentence(key)).toBe(
-      'The key has 10 symbols and 3 numbered places.'
+      'The key has 11 symbols and 3 numbered places.'
     );
     expect(keySentence({ entries: [{}], numbers: [{}] })).toBe(
       'The key has 1 symbol and 1 numbered place.'

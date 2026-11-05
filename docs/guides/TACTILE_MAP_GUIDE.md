@@ -116,16 +116,16 @@ Every map is a plan: a list of features in millimeters, each with a class and a 
 | Steep sidewalk             | a sidewalk run steeper than your grade | symbol | a line 1.5 mm wide with a chevron every 10 mm, 6 mm across, pointing uphill | Ungar 2005: arrows are read by their point; OpenSidewalks: incline as rise over run |
 | Traffic island             | the crossing's part on an island       | symbol | a plain line 1.5 mm wide, so the ticks pause there               | OpenSidewalks: the island is part of the crossing                   |
 | Area                       | a platform, a building, water          | floor  | a plain raised area                                              | BANA 2022 3.4.3.1                                                   |
-| Stairs                     | a staircase                            | symbol | three bars, 10 mm                                                | Ungar 2005; BANA 2022                                               |
-| Elevator up, Elevator down | an elevator, read as up or down        | symbol | a solid triangle, 10 mm, apex up or down                         | Ungar 2005; Gual 2012                                               |
-| Entrance                   | a door or a gate                       | symbol | a half disc, 10 mm, flat side toward the way in                  | ISO 19028                                                           |
-| Street furniture           | a bench, a bin, a bike rack, a mailbox | symbol | a disc, 10 mm                                                    | Holloway and others 2019: not a place to steer by                   |
-| Landmark                   | a named place: a cafe, a clinic, a garage | symbol | a disc, 10 mm                                                 | BANA 2022 8.6.5; Jehoel 2009                                        |
+| Stairs                     | a staircase                            | symbol | a zigzag, 10 mm | Ungar 2005; BANA 2022                                               |
+| Elevator up, Elevator down | an elevator, read as up or down        | symbol | an outlined triangle, 10 mm, point up or down | Ungar 2005; Gual 2012                                               |
+| Entrance                   | a door or a gate                       | symbol | a door frame, 10 mm, open toward the way in | ISO 19028                                                           |
+| Street furniture           | a bench, a bin, a bike rack, a mailbox | symbol | two dots, 10 mm | Holloway and others 2019: not a place to steer by                   |
+| Landmark                   | a named place: a cafe, a clinic, a garage | symbol | a solid diamond, 10 mm | BANA 2022 8.6.5; Jehoel 2009                                        |
 | Destination                | the address you typed, or a walk's end | symbol | a cone 4.9 mm tall and 4.9 mm across, flat at the top, standing above everything else | Touch Mapper's address marker (skarkkai/touch-mapper, AGPL-3.0)     |
 | You are here               | the reader's place, placed by you      | symbol | a disc, 10 mm, with a 4 mm center dot one symbol step higher    | BANA 2022 8.5.6; ISO 19028 6.5.1                                    |
-| Transit stop               | a bus, train or tram stop              | symbol | a square with a notch, 9 mm                                      | BANA 2022 8.5.4                                                     |
-| Curb ramp                  | a lowered or flush curb, no edge       | symbol | a triangle, 10 mm on a side                                      | OpenSidewalks curbs; Jehoel 2009                                    |
-| Raised curb                | a curb a wheel cannot take             | symbol | a square, 9 mm                                                   | OpenSidewalks curbs; Jehoel 2009                                    |
+| Transit stop               | a bus, train or tram stop              | symbol | an outlined square with a T, 10 mm | BANA 2022 8.5.4                                                     |
+| Curb ramp                  | a lowered or flush curb, no edge       | symbol | three rising bars, 10 mm | OpenSidewalks curbs; Jehoel 2009                                    |
+| Raised curb                | a curb a wheel cannot take             | symbol | a comb, 10 mm | OpenSidewalks curbs; Jehoel 2009                                    |
 | Text                       | a word you drew                        | symbol | the letters as drawn                                             | ADA 703.2                                                           |
 
 The shapes, and how to load a set of your own, are on the [Tactile map symbols](TACTILE_MAP_SYMBOLS.md) page.
@@ -156,6 +156,8 @@ Each of these is a control in the model, and the model refuses a value outside i
 | Gap between symbols  | 3 mm                                                  | a check, not a control                          | BANA 2022 8.5.3                                                                                                                                          |
 
 The north cue starts as the arrow with an N because my printed maps carry one; BANA 8.5.8 prefers a line along the north edge, which many readers find easier to find, and the model offers it. The map starts on plates for a backing board because that is how I print: the board gives the stiffness a 0.4 mm plate lacks and the plates print fast and flat. All printed is for a map that must stand alone.
+
+Nothing stands on the cue. Lines and areas stop 9.525 mm short of it, the clearance raised letters keep, and a symbol in its way moves out by the shortest path, so the arrow has nothing around it but itself. A symbol on the destination or on You are here moves off too, keeping the map's 3 mm. Step 5's warnings say how many moved and how far.
 
 ## Plates
 
@@ -225,8 +227,13 @@ Check and print lists the builder's warnings under one line that counts them ("3
 | "The map is 700 mm wide; more than 600 mm is beyond two hand spans." (and the same for 450 mm tall) | Make the map smaller, or split it into two maps. |
 | "This map uses 4 levels; more than 3 are hard to tell apart by touch."                              | Use three.                                       |
 | "{shape} was traced as a line but is too wide to find its center; it was kept as an area."          | Set the shape to Area, or draw it as a line.     |
+| One symbol moved 6 mm to keep the north arrow and the marks clear. | Nothing, if the move reads well; otherwise move the symbol in the editor, or turn it off |
 
 The sentences give the real numbers; the ones above are examples.
+
+## Generating and downloading
+
+The preview follows every choice. Once you have pressed **Generate**, the file does too: a later change in any step generates the map again by itself when its preview has settled, and **Download** always hands over the map on screen.
 
 ## Printing
 

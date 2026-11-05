@@ -28,11 +28,11 @@ import {
 import { offsetRing } from '../../src/js/svg-offset.js';
 import { regionArea, ringsFromPathData } from '../../src/js/ring-geometry.js';
 
-const triangle = (id, x, y) => ({
+const mark = (id, x, y) => ({
   id,
   class: 'landmark',
   kind: 'point',
-  symbol: 'landmark-triangle',
+  symbol: 'landmark',
   at: [x, y],
   on: true,
 });
@@ -134,8 +134,8 @@ describe('the levels file', () => {
         ],
         on: true,
       },
-      triangle('stairs-1', 100, 200),
-      triangle('stairs-2', 140, 200)
+      mark('stairs-1', 100, 200),
+      mark('stairs-2', 140, 200)
     );
     const { svg, warnings, stats } = buildLevelsSvg(plan);
     expect(svg).toMatch(
@@ -235,12 +235,12 @@ describe('the levels file', () => {
     expect(Math.abs(areas[1] - 320)).toBeLessThan(1);
   });
 
-  it('draws a 10 mm triangle within 2 percent of 43.3 square millimeters', () => {
+  it('draws a 10 mm landmark within 2 percent of 50 square millimeters', () => {
     const plan = emptyPlan(200, 150);
-    plan.features.push(triangle('t', 100, 75));
+    plan.features.push(mark('t', 100, 75));
     const groups = groupsOf(buildLevelsSvg(plan).svg);
     const area = regionArea(ringsOf(groups.level2));
-    expect(Math.abs(area - 43.3) / 43.3).toBeLessThan(0.02);
+    expect(Math.abs(area - 50) / 50).toBeLessThan(0.02);
   });
 
   it('strokes a straight 100 mm wall of width 2 to one ring near 200 plus the round caps', () => {
@@ -326,7 +326,7 @@ describe('You are here, the most prominent mark', () => {
 
   it('writes the here group empty on a map without You are here, since the model imports every group', () => {
     const plan = emptyPlan(200, 150);
-    plan.features.push(triangle('a', 100, 75));
+    plan.features.push(mark('a', 100, 75));
     const { svg } = buildLevelsSvg(plan);
     expect(svg).toContain('<g id="here"></g>');
   });
@@ -335,7 +335,7 @@ describe('You are here, the most prominent mark', () => {
 describe('the clutter checks', () => {
   it('names both symbols when two are closer than the minimum gap', () => {
     const plan = emptyPlan(200, 150);
-    plan.features.push(triangle('a', 100, 75), triangle('b', 112, 75));
+    plan.features.push(mark('a', 100, 75), mark('b', 112, 75));
     const { warnings } = buildLevelsSvg(plan);
     const close = warnings.filter((w) => w.code === 'too-close');
     expect(close).toHaveLength(1);
@@ -373,8 +373,8 @@ describe('the clutter checks', () => {
       bench('b2', 101, 75),
       bench('b3', 100, 76),
       bench('b4', 101, 76),
-      triangle('t1', 150, 20),
-      triangle('t2', 160, 20),
+      mark('t1', 150, 20),
+      mark('t2', 160, 20),
       {
         id: 's1',
         class: 'stairs',
@@ -482,7 +482,7 @@ describe('tape channels cut through', () => {
 
   it('keeps the clearance check on a channel cut through', () => {
     const plan = emptyPlan(200, 150);
-    plan.features.push(triangle('t', 50, 50), {
+    plan.features.push(mark('t', 50, 50), {
       id: 'c',
       class: 'channel',
       kind: 'channel',
@@ -551,16 +551,16 @@ describe('the chevrons style', () => {
 });
 
 describe('the pedestrian base classes', () => {
-  it('puts a curb ramp and a raised curb on the symbol level as the triangle and the square, and a traffic island as a plain line on level 2', () => {
+  it('puts a curb ramp and a raised curb on the symbol level in forms of their own, and a traffic island as a plain line on level 2', () => {
     expect(LEVELS_BY_CLASS['curb-ramp']).toEqual({
       kind: 'point',
       level: 2,
-      symbol: 'landmark-triangle',
+      symbol: 'curb-ramp',
     });
     expect(LEVELS_BY_CLASS['raised-curb']).toEqual({
       kind: 'point',
       level: 2,
-      symbol: 'landmark-square',
+      symbol: 'raised-curb',
     });
     expect(LEVELS_BY_CLASS['traffic-island']).toEqual({
       kind: 'line',
@@ -579,10 +579,11 @@ describe('the pedestrian base classes', () => {
       });
       return regionArea(ringsOf(groupsOf(buildLevelsSvg(plan).svg).level2));
     };
-    // The library's triangle, side 10 mm: 43.3 square millimeters; its
-    // square, 9 mm a side: 81.
-    expect(Math.abs(area('curb-ramp') - 43.3) / 43.3).toBeLessThan(0.02);
-    expect(Math.abs(area('raised-curb') - 81) / 81).toBeLessThan(0.02);
+    // Three bars 2 mm wide, 3, 6 and 9 mm tall: 36 square millimeters. The comb
+    // is another form with about the same material.
+    expect(Math.abs(area('curb-ramp') - 36) / 36).toBeLessThan(0.02);
+    expect(area('raised-curb')).toBeGreaterThan(30);
+    expect(area('raised-curb')).toBeLessThan(45);
   });
 
   it('draws the destination cone footprint, 4.9 mm across on the symbol level, with no too-small warning: the cone is read by its height', () => {
