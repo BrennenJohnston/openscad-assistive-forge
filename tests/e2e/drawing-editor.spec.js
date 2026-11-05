@@ -1217,6 +1217,94 @@ test.describe('crop on the charm host', () => {
     await expect.poll(() => rows.count(), { timeout: 60000 }).toBe(before);
     await expect(undo).toBeHidden();
   });
+
+  test('a picture over the pixel cap is cropped where the rectangle was drawn, not in a corner', async ({
+    page,
+  }) => {
+    test.setTimeout(480000);
+    await openCharmHost(page);
+    // Two thousand pixels square, over the cap, blank but for a black square
+    // in its bottom-right quarter. The trace works on a copy half the size,
+    // and the crop view's rectangle comes back in the copy's units: kept as
+    // pixels of the picture itself, it would hold the empty top-left and
+    // lose the square.
+    await page.evaluate(async () => {
+      const n = 2000;
+      const canvas = document.createElement('canvas');
+      canvas.width = n;
+      canvas.height = n;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, n, n);
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(n * 0.6, n * 0.6, n * 0.3, n * 0.3);
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
+      const input = document.querySelector('#param-design_file');
+      const dt = new DataTransfer();
+      dt.items.add(
+        new File([blob], 'square-corner.png', { type: 'image/png' })
+      );
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const control = page.locator('.param-control--file', {
+      has: page.locator('#param-design_file'),
+    });
+    // A picture this large waits for Start.
+    const start = control.locator('.trace-progress-start');
+    for (let i = 0; i < 60; i++) {
+      const info = (await control.locator('.file-info').textContent()) || '';
+      if (/converted from/.test(info)) break;
+      if (
+        /Ready to convert\./.test(info) &&
+        (await start.isVisible().catch(() => false))
+      ) {
+        await start.click();
+      }
+      await page.waitForTimeout(1000);
+    }
+    await expect(control.locator('.file-info')).toContainText(
+      'converted from',
+      { timeout: 120000 }
+    );
+    const door = control
+      .locator('.svg-prep-status')
+      .getByRole('button', { name: 'Open the drawing editor' });
+    await expect(door).toBeVisible({ timeout: 30000 });
+    await door.scrollIntoViewIfNeeded();
+    await door.click();
+    const editor = surface(page);
+    await expect(editor).toBeVisible({ timeout: 60000 });
+    const rows = page.locator('.svg-prep-object');
+    await expect(rows).toHaveCount(1, { timeout: 60000 });
+
+    await quiet(page);
+    await editor.locator('.drawing-editor-crop-btn').click();
+    const view = editor.locator('.drawing-editor-crop');
+    await expect(view).toBeVisible();
+    await view.locator('.slider-spinbox[data-inset="top"]').fill('50');
+    await view.locator('.slider-spinbox[data-inset="left"]').fill('50');
+    await expect(view.locator('.drawing-editor-crop-keeping')).toHaveText(
+      'Keeping 50 % of the width and 50 % of the height.'
+    );
+    await view.locator('[data-action="save-crop"]').click();
+    await expect(editor.locator('.drawing-editor-status')).toHaveText(
+      /^Cropped\. 1 shape\.$/,
+      { timeout: 180000 }
+    );
+    // The kept quarter is the square's: the one shape fills most of it.
+    const share = await page.evaluate(() => {
+      const svg = document.querySelector('.svg-prep-result-pane svg');
+      const vb = svg
+        .getAttribute('viewBox')
+        .split(/[\s,]+/)
+        .map(Number);
+      const b = svg.querySelector('.svg-prep-hit-path').getBBox();
+      return { across: b.width / vb[2], down: b.height / vb[3] };
+    });
+    expect(share.across).toBeGreaterThan(0.5);
+    expect(share.down).toBeGreaterThan(0.5);
+  });
 });
 
 // ── Every slider row meets the 44 px floor ───────────────────────────────────

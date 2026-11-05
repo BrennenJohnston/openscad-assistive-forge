@@ -2329,6 +2329,61 @@ test.describe('crop at the door', () => {
     await expect(undo).toBeHidden()
   })
 
+  test('a picture over the pixel cap is cropped where the rectangle was drawn, not in a corner', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openApp(page)
+    // Two thousand pixels square, over the cap, blank but for a black square
+    // in its bottom-right quarter. The trace works on a copy half the size,
+    // and the crop view's rectangle comes back in the copy's units: kept as
+    // pixels of the picture itself, it would hold the empty top-left and
+    // lose the square.
+    const png = await page.evaluate(() => {
+      const canvas = document.createElement('canvas')
+      canvas.width = 2000
+      canvas.height = 2000
+      const g = canvas.getContext('2d')
+      g.fillStyle = '#ffffff'
+      g.fillRect(0, 0, 2000, 2000)
+      g.fillStyle = '#000000'
+      g.fillRect(1200, 1200, 600, 600)
+      return canvas.toDataURL('image/png')
+    })
+    await page.locator('#accessibilitySpotlights > summary').click()
+    await page.locator('#svgEditFileInput').setInputFiles({
+      name: 'square-corner.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(png.split(',')[1], 'base64'),
+    })
+    const host = page.locator('#svgEditStandaloneHost')
+    const rows = page.locator('.svg-prep-object')
+    await expect(rows).toHaveCount(1, { timeout: 180000 })
+
+    await host.locator('.drawing-editor-crop-btn').click()
+    const view = host.locator('.drawing-editor-crop')
+    await expect(view).toBeVisible()
+    await view.locator('.slider-spinbox[data-inset="top"]').fill('50')
+    await view.locator('.slider-spinbox[data-inset="left"]').fill('50')
+    await expect(view.locator('.drawing-editor-crop-keeping')).toHaveText(
+      'Keeping 50 % of the width and 50 % of the height.'
+    )
+    await view.locator('[data-action="save-crop"]').click()
+    await expect(host.locator('.drawing-editor-status')).toHaveText(
+      /^Cropped\. 1 shape\.$/,
+      { timeout: 180000 }
+    )
+    // The kept quarter is the square's: the one shape fills most of it.
+    const share = await page.evaluate(() => {
+      const svg = document.querySelector('.svg-prep-result-pane svg')
+      const vb = svg.getAttribute('viewBox').split(/[\s,]+/).map(Number)
+      const b = svg.querySelector('.svg-prep-hit-path').getBBox()
+      return { across: b.width / vb[2], down: b.height / vb[3] }
+    })
+    expect(share.across).toBeGreaterThan(0.5)
+    expect(share.down).toBeGreaterThan(0.5)
+  })
+
   test('axe finds nothing with the crop view open', async ({ page }) => {
     test.setTimeout(240000)
     await openApp(page)

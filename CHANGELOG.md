@@ -58,6 +58,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Cropping a traced picture in the drawing editor keeps the part that was
+  framed, whether the picture came through the Customizer or the editor's
+  own door: on a picture over the pixel cap or from a camera, the crop had
+  landed on the picture's top-left corner instead. A crop that keeps nothing
+  now says so in the picture panel instead of leaving its waiting line up.
 - Dragging the picture in the drawing editor moves it smoothly with the
   pointer; before, it flashed between positions until the button was released.
 - The braille card counts its rows and cells as the model prints them, so a
