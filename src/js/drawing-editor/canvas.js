@@ -93,6 +93,26 @@ export function clientToViewBox(box, vb, clientX, clientY) {
 }
 
 /**
+ * The view a drag has moved to: the view at the press, less the pixels the
+ * pointer has traveled since.
+ *
+ * Always from the press, never from where the pointer reads in the view as
+ * it is now. The drag is moving that view, so reading through it feeds each
+ * step back into the next and the picture jumps between frames.
+ *
+ * @param {{x: number, y: number, w: number, h: number}} start - The view at the press
+ * @param {{width: number, height: number}} box - The svg element's box on screen
+ * @param {number} dx - Pixels traveled across
+ * @param {number} dy - Pixels traveled down
+ * @returns {{x: number, y: number, w: number, h: number}}
+ */
+export function viewAfterDrag(start, box, dx, dy) {
+  if (!(box.width > 0) || !(box.height > 0)) return { ...start };
+  const scale = Math.min(box.width / start.w, box.height / start.h);
+  return { ...start, x: start.x - dx / scale, y: start.y - dy / scale };
+}
+
+/**
  * The regions whose bounding boxes lie wholly inside a rectangle.
  *
  * @param {Array<{key: string, bbox: {minX, minY, maxX, maxY}}>} regions
@@ -726,11 +746,12 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
         return;
       }
       drag.moved = true;
-      vb = {
-        ...drag.vb0,
-        x: drag.vb0.x - (at.x - drag.start.x) * (drag.vb0.w / vb.w),
-        y: drag.vb0.y - (at.y - drag.start.y) * (drag.vb0.h / vb.h),
-      };
+      vb = viewAfterDrag(
+        drag.vb0,
+        svg.getBoundingClientRect(),
+        event.clientX - drag.clientX,
+        event.clientY - drag.clientY
+      );
       applyViewBox();
     } else if (drag.kind === 'marquee') {
       const x = Math.min(drag.start.x, at.x);

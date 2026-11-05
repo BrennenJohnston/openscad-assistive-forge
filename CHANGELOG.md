@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Dragging the picture in the drawing editor moves it smoothly with the
+  pointer; before, it flashed between positions until the button was released.
 - The braille card counts its rows and cells as the model prints them, so a
   business card holds four rows at the default margin where three were
   counted before; a margin or rows-per-card value typed in the Customizer

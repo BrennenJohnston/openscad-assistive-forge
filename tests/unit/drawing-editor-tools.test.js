@@ -338,6 +338,28 @@ describe('the region canvas', () => {
     expect(canvas.getViewBox().w).toBeLessThan(before.w);
   });
 
+  it('a drag moves the picture with the pointer at every step, in every tool that pans', () => {
+    for (const tool of ['hand', 'select']) {
+      canvas.fit();
+      canvas.setTool(tool);
+      const start = canvas.getViewBox();
+      const scale = Math.min(400 / start.w, 100 / start.h);
+      pointer(canvas.svg, 'pointerdown', 300, 50);
+      // Uneven steps, back and forth, as a hand makes them: each one lands
+      // exactly where the pointer has traveled to since the press.
+      for (const x of [290, 283, 261, 270, 240, 205, 210]) {
+        pointer(canvas.svg, 'pointermove', x, 50);
+        expect(canvas.getViewBox().x).toBeCloseTo(
+          start.x - (x - 300) / scale,
+          6
+        );
+      }
+      pointer(canvas.svg, 'pointerup', 210, 50);
+      expect(canvas.getViewBox().x).toBeCloseTo(start.x + 90 / scale, 6);
+      expect(canvas.getViewBox().w).toBe(start.w);
+    }
+  });
+
   it('a drag on empty ground pans in every tool, a click on nothing still clears, and a drag that starts on a shape is a click on it', () => {
     const before = canvas.getViewBox();
     pointer(canvas.svg, 'pointerdown', 300, 50);
