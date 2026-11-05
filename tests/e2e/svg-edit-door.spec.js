@@ -2128,11 +2128,12 @@ test.describe('the toolbar is two rows that never move', () => {
       expect(rows.length).toBe(2)
       // One line of controls is a 44 px target plus the row's own padding;
       // each further line is 48 more. The header keeps to one line everywhere.
-      // The working row holds every tool a person works with; on a phone it
-      // wraps, its groups whole (the seven view buttons stay beside Fit, and
-      // More wraps), to three lines at most.
+      // The working row holds every tool a person works with and wraps, its
+      // groups whole (the seven view buttons stay beside Fit, and More
+      // wraps): one line at 900 in most fonts and two in a wide one (Firefox
+      // on Linux), three at most on a phone.
       for (const row of rows) {
-        const limit = row.name === 'header' || width > 412 ? 60 : 150
+        const limit = row.name === 'header' ? 60 : width > 412 ? 110 : 150
         expect(row.height, `${row.name} row at ${width}`).toBeLessThan(limit)
       }
     })

@@ -57,8 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the ways out, then one working row that wraps as the width asks; Save,
   Keep original and Reset wait behind More where Apply leads, and on the
   standalone door Save keeps its place on the row. The picture fills the
-  stage, the shape rows are one line each (two on a phone), and a shape
-  chosen on the picture opens the shapes list and brings its row to the
+  stage, the shape rows are one line each and wrap only when the words are
+  too wide for the list, and a shape chosen on the picture opens the shapes list and brings its row to the
   middle of the view.
 
 ### Fixed

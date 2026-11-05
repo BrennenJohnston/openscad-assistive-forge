@@ -18006,23 +18006,6 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
     flex-direction: column;
   }
 
-  /* A row is two lines here: the name and its marks, then the switches with
-     More at the end, each line centred on itself. */
-  .drawing-editor-panel .svg-prep-object {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
-  }
-
-  .drawing-editor-panel .svg-prep-role-group,
-  .drawing-editor-panel .drawing-editor-class-select {
-    grid-column: 1 / 4;
-    grid-row: 2;
-  }
-
-  .drawing-editor-panel .svg-prep-more-btn {
-    grid-column: 4;
-    grid-row: 2;
-  }
-
   .drawing-editor-panel {
     position: static;
     width: 100%;
@@ -18197,46 +18180,33 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
    row sits on the same centre line. (Columns the row does not use are
    empty, and cost nothing but a gap.) */
 .drawing-editor-panel .svg-prep-object {
-  display: grid;
-  grid-template-columns: auto minmax(5ch, 1fr) auto auto auto auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  column-gap: var(--space-2xs);
+  gap: var(--space-2xs);
   padding: var(--space-2xs);
 }
 
+/* The name takes the spare width and keeps six characters of itself. Its
+   basis is that floor, so the line is measured with the name at its
+   smallest: everything else stays on the line while it fits beside six
+   characters, and only when it cannot (a wide font in a narrow panel) do
+   the switches and More move to a second line, whole, instead of running
+   past the list's edge. A grid cannot wrap, and did overflow by 20 px in
+   Firefox on Linux. */
 .drawing-editor-panel .svg-prep-object-name {
-  grid-column: 2;
-  grid-row: 1;
-  min-width: 0;
+  flex: 1 1 5ch;
+  min-width: 5ch;
 }
 
-.drawing-editor-panel .svg-prep-swatch {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.drawing-editor-panel .svg-prep-thin-mark {
-  grid-column: 3;
-  grid-row: 1;
-}
-
-.drawing-editor-panel .svg-prep-object-warning {
-  grid-column: 4;
-  grid-row: 1;
-}
-
+/* On a second line the switches and More keep the row's trailing edge. */
 .drawing-editor-panel .svg-prep-role-group,
 .drawing-editor-panel .drawing-editor-class-select {
-  grid-column: 5;
-  grid-row: 1;
-}
-
-.drawing-editor-panel .svg-prep-more-btn {
-  grid-column: 6;
-  grid-row: 1;
+  margin-left: auto;
 }
 
 .drawing-editor-panel .svg-prep-more-panel {
+  flex-basis: 100%;
   grid-column: 1 / -1;
 }
 
