@@ -554,3 +554,47 @@ describe('one editor per surface element', () => {
     surface.remove()
   })
 })
+
+// A picture takes its own keys, so it is an application: in a role="group" NVDA
+// speaks no description in browse mode, and its help went unheard. The help is
+// spoken every time the picture takes focus, so it keeps under the ceiling in
+// docs/notes/SCREEN_READER_LESSONS.md.
+describe('the picture, for a screen reader', () => {
+  const words = (s) => s.trim().split(/\s+/).length
+
+  it('every purpose has a help of at most 25 words', () => {
+    expect(S.reliefPictureHelp).toBe(
+      'Arrow keys move between shapes; Enter or Space chooses one. Shift and arrows move the picture.'
+    )
+    expect(S.mapCanvasHelp).toBe(
+      'Arrow keys move between shapes; Enter opens the Class menu. Space picks up a mark. Shift and arrows move the picture.'
+    )
+    expect(S.canvasHelp).toBe(
+      'Arrow keys move between regions; Enter or Space adds one. Number keys color it. Shift and arrows move the picture.'
+    )
+    for (const help of [S.reliefPictureHelp, S.mapCanvasHelp, S.canvasHelp]) {
+      expect(words(help), help).toBeLessThanOrEqual(25)
+    }
+  })
+
+  it('the relief picture is an application named and described', () => {
+    const editor = make()
+    openOn(editor, BIRD_SVG)
+    const pane = surface.querySelector('.svg-prep-result-pane')
+    expect(pane.getAttribute('role')).toBe('application')
+    expect(pane.getAttribute('aria-label')).toBeTruthy()
+    expect(document.getElementById(pane.getAttribute('aria-describedby')).textContent).toBe(
+      S.reliefPictureHelp
+    )
+  })
+
+  it('the canvas is an application named and described', () => {
+    const editor = make()
+    openOn(editor, CAT_SVG, { purpose: 'stencil' })
+    const svg = surface.querySelector('.drawing-editor-canvas-svg')
+    expect(svg.getAttribute('role')).toBe('application')
+    expect(document.getElementById(svg.getAttribute('aria-describedby')).textContent).toBe(
+      S.canvasHelp
+    )
+  })
+})

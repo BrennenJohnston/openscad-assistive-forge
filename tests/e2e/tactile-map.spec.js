@@ -46,6 +46,28 @@ async function openTactileMap(page, type = 'drawing') {
   await dismissSavePrompt(page);
 }
 
+/** What the app's announcer is given to say, from here on. */
+async function listenToAnnouncer(page) {
+  await page.evaluate(() => {
+    window.__said = [];
+    const node = document.getElementById('srAnnouncer');
+    new MutationObserver(() => {
+      const text = node.textContent.trim();
+      if (text) window.__said.push(text);
+    }).observe(node, { childList: true, characterData: true, subtree: true });
+  });
+}
+
+/** What it was given since the last read. The announcer holds a sentence first. */
+async function saidSince(page, settle = 2500) {
+  await page.waitForTimeout(settle);
+  return page.evaluate(() => {
+    const said = window.__said;
+    window.__said = [];
+    return said;
+  });
+}
+
 test.describe('Tactile Map tile', () => {
   test('the panel sits above the controls and names its map type', async ({
     page,
@@ -279,10 +301,7 @@ test.describe('Tactile Map tile', () => {
     const note = page.locator('#tactileMapChannelNote');
     await expect(note).toHaveText(warning);
     await expect(note).toBeVisible();
-    await expect(cut).toHaveAttribute(
-      'aria-describedby',
-      'tactileMapChannelNote'
-    );
+    await expect(cut).not.toHaveAttribute('aria-describedby');
     // At the default thin base the model raises All printed to 1.2 mm itself:
     // the preview lands, it does not stop on the base's thickness.
     await previewSettled(page);
@@ -1438,5 +1457,55 @@ test.describe('the drawing editor on a phone held sideways', () => {
       );
     });
     expect(seen).toBeGreaterThanOrEqual(150);
+  });
+});
+
+// One action, one announcement. A change in step 5 regenerates a generated map by
+// itself, and only the result is worth saying; the map's own echo line is said
+// when its words change, not every time the model runs again.
+test.describe('Tactile Map, what a change says', () => {
+  test('a regenerate says no Generating, and an unchanged Message is not said again', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await openTactileMap(page);
+    await previewSettled(page);
+    await goToStep(page, 5);
+    await page.locator('#primaryActionBtn').click();
+    await expect(page.locator('#primaryActionBtn')).toHaveAttribute(
+      'data-action',
+      'download',
+      { timeout: 120_000 }
+    );
+    await page.waitForTimeout(3000);
+    await listenToAnnouncer(page);
+
+    // A new margin changes the sheet: the map is generated again by itself.
+    await page.locator('#tactileMapMargin').fill('20');
+    await page.locator('#tactileMapMargin').press('Tab');
+    await expect
+      .poll(() => page.evaluate(() => window.__said.join(' | ')), {
+        timeout: 120_000,
+      })
+      .toMatch(/STL ready/);
+    const regenerated = await saidSince(page, 1500);
+    expect(
+      regenerated.filter((s) => /^Generating/.test(s)),
+      JSON.stringify(regenerated)
+    ).toEqual([]);
+
+    // The plate name style redraws the model and changes no size: the model
+    // ran again, and the echo line's words stand.
+    await page.locator('#tactileMapIdStyle').selectOption({ index: 1 });
+    await expect
+      .poll(() => page.evaluate(() => window.__said.join(' | ')), {
+        timeout: 120_000,
+      })
+      .toMatch(/Preview ready/);
+    const restyled = await saidSince(page, 2500);
+    expect(
+      restyled.filter((s) => /^Message: /.test(s)),
+      JSON.stringify(restyled)
+    ).toEqual([]);
   });
 });

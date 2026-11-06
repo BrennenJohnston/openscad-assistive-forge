@@ -125,7 +125,10 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   svg.setAttribute('class', 'drawing-editor-canvas-svg');
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   svg.setAttribute('tabindex', '0');
-  svg.setAttribute('role', 'group');
+  // An application, because the picture takes the arrow keys and Space itself
+  // and no native element does that. In browse mode NVDA keeps those keys for
+  // its own reading, and on a group it speaks no description either.
+  svg.setAttribute('role', 'application');
   svg.setAttribute('aria-labelledby', labelId);
   svg.setAttribute('aria-describedby', help.id);
   svg.dataset.tool = 'select';

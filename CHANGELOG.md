@@ -79,6 +79,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- With a screen reader, the drawing editor's picture says how it is used, in
+  a shorter sentence, and takes its own keys, so the arrow keys and Space reach
+  it without a mode change first.
+- A change on the Tactile Map says one thing once: the tape and channel notes
+  were spoken twice, a map regenerating itself said Generating, and a model's
+  message repeated even when its words had not changed.
 - On a phone, the drawing editor's Save, Keep original and Reset did nothing:
   the buttons moved into More, where their presses were never heard.
 - Cropping a traced picture in the drawing editor keeps the part that was

@@ -1501,10 +1501,16 @@ export function createDrawingEditor({
     }
     if (!stencil && !map) setTool('select');
     syncPictureControls();
+    // The relief picture takes its own keys as the canvas does, so it is an
+    // application for the same reason (canvas.js).
     for (const pane of [refs.sourcePane, refs.resultPane]) {
-      if (!stencil && !map)
+      if (!stencil && !map) {
+        pane.setAttribute('role', 'application');
         pane.setAttribute('aria-describedby', reliefHelp.id);
-      else pane.removeAttribute('aria-describedby');
+      } else {
+        pane.setAttribute('role', 'group');
+        pane.removeAttribute('aria-describedby');
+      }
     }
     clearRouteBtn.hidden = !map;
     if (!map) placeHereBtn.hidden = true;

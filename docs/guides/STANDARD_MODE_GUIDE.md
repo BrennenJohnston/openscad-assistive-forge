@@ -431,6 +431,9 @@ width are numbers you can change.
 | See the effect | The result combines on its own after each change |
 | See the charm instead of the drawing | The **Drawing / Charm** switch in the toolbar |
 | Draw the charm with the drawing as it stands | **Render preview**, in the Charm view |
+| Walk the picture's shapes | Arrow keys on the picture; Enter or Space chooses one |
+| Move the picture | Shift and an arrow key, the arrow keys alone in the **Hand** tool (H), or a drag on empty ground |
+| Zoom the picture | Plus and minus on the picture; 0 fits the whole drawing |
 | Crop the picture | **Crop** in the toolbar, then **Save crop** |
 | Apply changes | **Apply** |
 | Save it as a file | **Save SVG** (and **Save DXF** through the standalone door) |
