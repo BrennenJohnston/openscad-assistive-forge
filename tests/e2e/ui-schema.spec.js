@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import { hasWebGL } from './helpers/webgl.js';
 import {
@@ -2468,6 +2469,213 @@ for (const size of S9_SIZES) {
           .nth(1),
         empty: { x: 4, y: 4 },
       });
+    });
+  });
+}
+
+// ── The drawing editor held sideways (S6) ─────────────────────────────────
+//
+// The editor stands in for the preview while it is open, so the preview's
+// share holds for it: at least 40 percent of the screen. Under 500 px of
+// height in a landscape window its working row folds behind More, whole; Fit
+// and the main action join Shapes, More and Close on its header row; the
+// shapes list starts shut; its title and status line speak without taking a
+// line; the app header steps aside until Close; the picture fits its pane and
+// the pane ends above the messages bar's band.
+const EDITOR_LOGO = path.join(
+  process.cwd(),
+  'tests',
+  'fixtures',
+  'svg-edit',
+  'create-logo-colors-trace.svg'
+);
+
+/** The charm's editor open on the logo, on a phone held sideways. */
+async function openEditorSideways(page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    localStorage.setItem('openscad-forge-theme', 'dark');
+  });
+  await page.goto('/?example=q-charm', { timeout: 60_000 });
+  test.skip(
+    !(await page.evaluate((q) => matchMedia(q).matches, SIDEWAYS_QUERY)),
+    'this browser does not report a touch screen held sideways'
+  );
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: WASM_READY_TIMEOUT,
+  });
+  await page.locator('#param-design_file').waitFor({
+    state: 'attached',
+    timeout: 60_000,
+  });
+  const notNow = page.locator('#saveProjectNotNow');
+  if (
+    await notNow.waitFor({ state: 'visible', timeout: 3_000 }).then(
+      () => true,
+      () => false
+    )
+  ) {
+    await notNow.click();
+  }
+  await expect(page.locator('.preview-state-indicator')).toHaveText(
+    /Preview ready|Preview \(cached\)/,
+    { timeout: WASM_READY_TIMEOUT }
+  );
+  await page.setInputFiles('#param-design_file', EDITOR_LOGO);
+  await expect(
+    page.locator('#drawingEditorSurface .drawing-editor').first()
+  ).toBeVisible({ timeout: 120_000 });
+  await page.waitForFunction(
+    () => document.querySelectorAll('.svg-prep-object').length > 10,
+    null,
+    { timeout: 60_000 }
+  );
+  await page.waitForTimeout(1_000);
+}
+
+/** The folded editor, read in the page. */
+function readEditorSideways() {
+  const box = (el) => el.getBoundingClientRect();
+  const root = document.querySelector('#drawingEditorSurface .drawing-editor');
+  const header = root.querySelector('.drawing-editor-toolbar-row--header');
+  const viewRow = root.querySelector('.drawing-editor-toolbar-row--view');
+  const status = root.querySelector('.drawing-editor-status');
+  const pane = root.querySelector('.svg-prep-result-pane');
+  const bar = document.getElementById('echoDrawerToggle');
+  const onPicture = (el) =>
+    !!el && !!el.closest('.svg-prep-result-pane, .drawing-editor-stage');
+  let seen = 0;
+  let total = 0;
+  for (let y = 3; y < innerHeight; y += 6) {
+    for (let x = 3; x < innerWidth; x += 6) {
+      total++;
+      if (onPicture(document.elementFromPoint(x, y))) seen++;
+    }
+  }
+  return {
+    short: root.dataset.short || null,
+    header: [...header.children]
+      .filter((c) => !c.hidden && c.getClientRects().length > 0)
+      .map((c) => c.dataset.action || c.className.split(' ')[0]),
+    viewRowShown: !!viewRow && viewRow.getClientRects().length > 0,
+    listOpen: root
+      .querySelector('.drawing-editor-panel-toggle')
+      .getAttribute('aria-expanded'),
+    statusLive: status.getAttribute('aria-live'),
+    statusWidth: Math.round(
+      box(root.querySelector('.drawing-editor-statusline')).width
+    ),
+    paneTop: Math.round(box(pane).top),
+    paneBottom: Math.round(box(pane).bottom),
+    barTop: bar && bar.getClientRects().length ? Math.round(box(bar).top) : null,
+    appHeaderShown:
+      (document.querySelector('.app-header')?.getClientRects().length ?? 0) > 0,
+    share: seen / total,
+  };
+}
+
+for (const size of [
+  { width: 844, height: 390 },
+  { width: 667, height: 375 },
+]) {
+  test.describe(`The drawing editor held sideways, ${size.width} x ${size.height}`, () => {
+    test.use({ viewport: size, hasTouch: true });
+
+    test('S6: the working row folds behind More, and the whole picture is on screen above the messages bar', async ({
+      page,
+    }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 180_000);
+      await openEditorSideways(page);
+      const m = await page.evaluate(readEditorSideways);
+      expect.soft(m.short, 'the editor knows the screen is short').toBe('true');
+      expect
+        .soft(m.header.includes('fit'), `S6: Fit on the header row (${m.header})`)
+        .toBe(true);
+      expect
+        .soft(
+          m.header.slice(-3),
+          `S6: Shapes, More and Close end the header row (${m.header})`
+        )
+        .toEqual(['panel-toggle', 'editor-more', 'editor-close']);
+      expect.soft(m.viewRowShown, 'S6: the working row is behind More').toBe(false);
+      expect.soft(m.listOpen, 'S6: the shapes list starts shut').toBe('false');
+      expect
+        .soft(m.statusLive, 'the status line still speaks (aria-live)')
+        .toBe('polite');
+      expect
+        .soft(m.statusWidth, 'S6: the status line takes no room on screen')
+        .toBeLessThanOrEqual(1);
+      expect
+        .soft(m.paneTop >= 0 && m.paneBottom <= size.height, 'S6: the whole picture on screen')
+        .toBe(true);
+      if (m.barTop !== null) {
+        expect
+          .soft(m.paneBottom, `S6: the picture ends above the messages bar at y ${m.barTop}`)
+          .toBeLessThanOrEqual(m.barTop + 1);
+      }
+      expect
+        .soft(m.share, `S6: the picture's share of the screen (${m.share.toFixed(3)})`)
+        .toBeGreaterThanOrEqual(0.4);
+      expect
+        .soft(m.appHeaderShown, 'S6: the app header steps aside')
+        .toBe(false);
+
+      // Close brings the header back.
+      await page.locator('#drawingEditorSurface .drawing-editor-close').click();
+      await expect(page.locator('.app-header')).toBeVisible();
+    });
+
+    // The ink settings under the picture keep their height, so the picture
+    // keeps its pane and the stage scrolls, rather than the pane collapsing.
+    test("S6: the editor's own door keeps its picture above the ink settings", async ({
+      page,
+    }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 180_000);
+      await page.addInitScript(() => {
+        localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+        localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+        localStorage.setItem('openscad-forge-theme', 'dark');
+      });
+      await page.goto('/', { timeout: 60_000 });
+      await page.waitForSelector('body[data-wasm-ready="true"]', {
+        state: 'attached',
+        timeout: WASM_READY_TIMEOUT,
+      });
+      await page.locator('#accessibilitySpotlights > summary').click();
+      await page
+        .locator('#svgEditFileInput')
+        .setInputFiles(
+          path.join(
+            process.cwd(),
+            'tests',
+            'fixtures',
+            'svg-edit',
+            'bird-drawing.png'
+          )
+        );
+      await page
+        .locator('.svg-prep-object')
+        .first()
+        .waitFor({ state: 'attached', timeout: 180_000 });
+      await page.waitForTimeout(1_000);
+      const heights = await page.evaluate(() => {
+        const h = (s) =>
+          Math.round(
+            document.querySelector(s)?.getBoundingClientRect().height ?? 0
+          );
+        return {
+          pane: h('.svg-prep-result-pane'),
+          picture: h('.svg-prep-result-pane svg'),
+          ink: h('.ink-controls'),
+        };
+      });
+      expect(heights.ink, JSON.stringify(heights)).toBeGreaterThan(0);
+      expect(heights.pane, JSON.stringify(heights)).toBeGreaterThanOrEqual(150);
+      expect(heights.picture, JSON.stringify(heights)).toBeGreaterThanOrEqual(
+        100
+      );
     });
   });
 }
