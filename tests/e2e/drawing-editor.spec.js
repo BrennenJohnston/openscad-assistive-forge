@@ -3159,3 +3159,58 @@ test.describe('the route tool', () => {
     expect(routes).toEqual([{ id: 'route-1', on: true, n: 4 }]);
   });
 });
+
+// ── The shapes list ends above the messages bar ──────────────────────────
+//
+// The collapsed OpenSCAD Messages bar lies over the foot of the preview the
+// editor stands in. The editor keeps a band at its foot as tall as that
+// overlap, so a row scrolled to the panel's end has its switches whole above
+// the bar instead of half under it.
+test.describe('the shapes list ends above the messages bar', () => {
+  test('at 1280 x 720 the last row sits above the collapsed bar', async ({
+    page,
+  }) => {
+    test.setTimeout(480000);
+    await openCharmHost(page);
+    await page.setInputFiles('#param-design_file', LOGO_TRACE);
+    const editor = surface(page);
+    await expect(editor).toBeVisible({ timeout: 60000 });
+    const rows = page.locator('.svg-prep-object');
+    await expect
+      .poll(() => rows.count(), { timeout: 60000 })
+      .toBeGreaterThan(10);
+    // The charm's render has printed its echo lines by now, so the bar is
+    // up; without it there is nothing to keep clear of.
+    const bar = page.locator('#echoDrawer.visible #echoDrawerToggle');
+    await expect(bar).toBeVisible({ timeout: 60000 });
+    await page.waitForTimeout(500);
+    const m = await page.evaluate(() => {
+      const panel = document.querySelector('.drawing-editor-panel');
+      panel.scrollTop = panel.scrollHeight;
+      const list = panel.querySelectorAll('.svg-prep-object');
+      const last = list[list.length - 1].getBoundingClientRect();
+      const bar = document
+        .getElementById('echoDrawerToggle')
+        .getBoundingClientRect();
+      const root = document
+        .querySelector('#drawingEditorSurface .drawing-editor')
+        .getBoundingClientRect();
+      return {
+        lastBottom: Math.round(last.bottom),
+        panelBottom: Math.round(panel.getBoundingClientRect().bottom),
+        barTop: Math.round(bar.top),
+        rootBottom: Math.round(root.bottom),
+        foot: getComputedStyle(
+          document.querySelector('#drawingEditorSurface .drawing-editor')
+        )
+          .getPropertyValue('--drawing-editor-foot')
+          .trim(),
+      };
+    });
+    // The bar is over the editor's foot, and the band is its overlap.
+    expect(m.barTop, JSON.stringify(m)).toBeLessThan(m.rootBottom);
+    expect(m.foot, JSON.stringify(m)).toBe(`${m.rootBottom - m.barTop}px`);
+    expect(m.panelBottom, JSON.stringify(m)).toBeLessThanOrEqual(m.barTop);
+    expect(m.lastBottom, JSON.stringify(m)).toBeLessThanOrEqual(m.barTop);
+  });
+});

@@ -458,12 +458,16 @@ export function createDrawingEditor({
     setPanel(false);
     stage.hidden = true;
     root.dataset.crop = 'open';
+    // On a short screen Crop lives behind More: More shuts over the crop view
+    // it would cover, and focus comes back to More, the button still there.
+    const cropBehindMore = shortScreen && returnTo === cropBtn;
+    if (shortScreen) setMore(false);
     cropPanel.open({
       box,
       previewHref:
         href || callbacks.cropPreviewHref || svgDataUrl(currentSvg || ''),
       insets: callbacks.cropInsets || {},
-      returnTo,
+      returnTo: cropBehindMore ? moreBtn : returnTo,
       ...(sentences ? { sentences } : {}),
     });
   }
@@ -579,11 +583,16 @@ export function createDrawingEditor({
     return width > 0 && width <= PANEL_DRAWER_MAX_WIDTH;
   }
 
+  let shortScreen = false;
+
   /** The drawer's one switch: the panel's own hidden is the state. */
   function setPanel(open) {
     panel.hidden = open !== true;
     panelToggleBtn.setAttribute('aria-expanded', String(open === true));
     root.classList.toggle('drawing-editor--panel-open', open === true);
+    // On a short screen the list and More share the one place beside the
+    // picture.
+    if (open === true && shortScreen) setMore(false);
   }
 
   const status = document.createElement('p');
@@ -702,10 +711,12 @@ export function createDrawingEditor({
   morePanel.className = 'drawing-editor-more-panel';
   morePanel.id = moreId;
   morePanel.hidden = true;
-  const setMore = (open) => {
+  function setMore(open) {
     morePanel.hidden = open !== true;
     moreBtn.setAttribute('aria-expanded', String(open === true));
-  };
+    root.classList.toggle('drawing-editor--more-open', open === true);
+    if (open === true && shortScreen) setPanel(false);
+  }
   moreBtn.addEventListener('click', () => setMore(morePanel.hidden));
   /**
    * Escape shuts the innermost thing that is open, and this menu is one of
@@ -799,6 +810,124 @@ export function createDrawingEditor({
   function placeSave(onRow) {
     if (onRow) refs.footer.append(refs.saveBtn, refs.saveDxfBtn);
     else morePanel.prepend(refs.saveBtn, refs.saveDxfBtn);
+  }
+
+  // ── A short screen ─────────────────────────────────────────────────────
+  // A phone held sideways leaves the editor about 220 px of the screen: the
+  // header row, the working row and the status line took all of it, and the
+  // picture began below the screen's edge. Under 500 px of height the
+  // working row folds behind More, whole; Fit and the main action (Apply,
+  // or Save on the standalone door) join Shapes, More and Close on the
+  // header row; the title and the status line leave the screen for the live
+  // region and the app header steps aside until Close (the stylesheet, on
+  // data-short); the picture keeps what is left.
+  // The same nodes move, listeners and all, and come back to the row in
+  // order when the screen is tall again. More opens beside the picture here,
+  // where the list opens, one at a time: its zoom and pan buttons have to
+  // leave the picture in view to mean anything.
+  //
+  // Landscape as well as short: an on-screen keyboard can take an upright
+  // phone under 500 px, and folding then would move, and so blur, the very
+  // field being typed in.
+  const SHORT_SCREEN = '(max-height: 500px) and (orientation: landscape)';
+  const viewRowOrder = [
+    stencilTools,
+    zoomGroup,
+    viewGroup,
+    historyGroup,
+    cropBtn,
+    undoCropBtn,
+    renderCharmBtn,
+    draftNote,
+    applyBtn,
+    refs.footer,
+    moreBtn,
+  ];
+  // The legend (the colors' key under the picture) goes behind More as
+  // well, and comes back to its own place in the stage.
+  const legendHome = {
+    parent: refs.legendRow.parentNode,
+    next: refs.legendRow.nextSibling,
+  };
+  function foldForHeight(short) {
+    if (short === shortScreen) return;
+    shortScreen = short;
+    if (short) {
+      toolbarHeaderRow.insertBefore(fitBtn, panelToggleBtn);
+      toolbarHeaderRow.insertBefore(applyBtn, panelToggleBtn);
+      toolbarHeaderRow.insertBefore(refs.footer, panelToggleBtn);
+      toolbarHeaderRow.insertBefore(moreBtn, closeBtn);
+      morePanel.prepend(
+        stencilTools,
+        zoomGroup,
+        viewGroup,
+        historyGroup,
+        cropBtn,
+        undoCropBtn,
+        renderCharmBtn,
+        draftNote
+      );
+      morePanel.append(refs.legendRow);
+      body.prepend(morePanel);
+      root.dataset.short = 'true';
+    } else {
+      zoomGroup.prepend(fitBtn);
+      toolbarViewRow.append(...viewRowOrder);
+      toolbar.append(morePanel);
+      if (legendHome.parent) {
+        legendHome.parent.insertBefore(refs.legendRow, legendHome.next);
+      }
+      delete root.dataset.short;
+    }
+  }
+  const shortMedia =
+    typeof window.matchMedia === 'function'
+      ? window.matchMedia(SHORT_SCREEN)
+      : null;
+  if (shortMedia) {
+    foldForHeight(shortMedia.matches === true);
+    if (typeof shortMedia.addEventListener === 'function') {
+      shortMedia.addEventListener('change', (e) => foldForHeight(e.matches));
+    }
+  }
+
+  // ── Clear of the messages bar ───────────────────────────────────────────
+  // On the charm host the collapsed OpenSCAD Messages bar lies over the foot
+  // of the preview the editor stands in: 21 px of the shapes panel's last
+  // row, and of the picture, under it. The editor keeps a band at its foot as
+  // tall as the bar's overlap while the bar is over it (--drawing-editor-foot,
+  // read by the stylesheet), so the panel and the picture pane end above it.
+  // Measured from the bar's own box, so a bar that is not there, or not over
+  // this editor (the standalone door), costs nothing.
+  let footObserver = null;
+  function syncFoot() {
+    const bar = document.querySelector('#echoDrawer .echo-drawer-toggle');
+    let foot = 0;
+    if (bar && typeof bar.getBoundingClientRect === 'function') {
+      const b = bar.getBoundingClientRect();
+      const r = root.getBoundingClientRect();
+      const over =
+        b.height > 0 &&
+        b.left < r.right &&
+        b.right > r.left &&
+        b.top < r.bottom &&
+        b.bottom > r.top;
+      if (over) foot = Math.round(Math.min(b.height, r.bottom - b.top));
+    }
+    root.style.setProperty('--drawing-editor-foot', `${foot}px`);
+  }
+  function watchFoot() {
+    syncFoot();
+    if (footObserver || typeof ResizeObserver !== 'function') return;
+    footObserver = new ResizeObserver(() => syncFoot());
+    const drawer = document.getElementById('echoDrawer');
+    if (drawer) footObserver.observe(drawer);
+    footObserver.observe(root);
+  }
+  function unwatchFoot() {
+    if (!footObserver) return;
+    footObserver.disconnect();
+    footObserver = null;
   }
   // The map purpose's column name, above the list the menus sit in.
   const classHeading = document.createElement('p');
@@ -1040,6 +1169,7 @@ export function createDrawingEditor({
     surfaceEl.classList.remove('hidden');
     requestAnimationFrame(() => {
       statusOnScreen = !surfaceEl.hidden;
+      watchFoot();
     });
   }
 
@@ -1047,6 +1177,7 @@ export function createDrawingEditor({
     surfaceEl.hidden = true;
     surfaceEl.classList.add('hidden');
     statusOnScreen = false;
+    unwatchFoot();
     if (saidThisTurn && typeof announce === 'function') announce(saidThisTurn);
     saidThisTurn = null;
   }
@@ -1404,6 +1535,8 @@ export function createDrawingEditor({
   function syncPictureControls() {
     const drawing = view === 'drawing';
     zoomGroup.hidden = !drawing;
+    // Fit sits outside its group on a short screen, and follows it.
+    fitBtn.hidden = !drawing;
     stencilTools.hidden = !drawing;
   }
 
@@ -1482,7 +1615,9 @@ export function createDrawingEditor({
     // thing seen as well as the first thing read, and the list is one press
     // away on a button already in the header. Nothing changes above the band,
     // where the panel covers nothing.
-    setPanel(!stencil && !panelIsDrawer());
+    // On a short screen the picture is the first thing seen as well, and the
+    // list is the same press away.
+    setPanel(!stencil && !panelIsDrawer() && !shortScreen);
     sections.colours.details.hidden = !stencil;
     sections.plates.details.hidden = !stencil;
     regionsBlock.hidden = !stencil;
