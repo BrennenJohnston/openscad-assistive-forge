@@ -2609,14 +2609,25 @@ class MapPanel {
 
   /**
    * The labels' tape for the grade in use: the labels, their cells and
-   * length, whether the translator measured them, and the other grade's
-   * length when it is measured too.
+   * length, whether the translator measured them, and what a switch to the
+   * other grade would give, once every name is measured in it. That takes
+   * laying the labels out in that grade: which names keep within a channel
+   * changes with the grade, so these labels' length would be a figure the
+   * switch then contradicts.
    */
   tapeSummary(labeled) {
     const grade = this.tapeGrade;
     const other = TAPE_GRADES.find((g) => g.key !== grade).key;
     const labels = labeled.labels || [];
-    const others = labels.map((l) => this.tape.of(l.text, other));
+    const measuredThere =
+      labels.length > 0 &&
+      this.tape.missing(this.tapeTexts(labeled), other).length === 0;
+    const others = measuredThere
+      ? labelPlan(this.plan, {
+          ...this.levelSettings(),
+          tape: this.tape.view(other),
+        }).labels || []
+      : null;
     return {
       grade,
       labels: labels.length,
@@ -2624,10 +2635,10 @@ class MapPanel {
       lengthMm: labels.reduce((n, l) => n + channelLengthMm(l.cells), 0),
       measured: labels.every((l) => l.measured),
       tapeWidthMm: this.tapeWidth(),
-      otherLengthMm:
-        labels.length && others.every((m) => m.measured)
-          ? others.reduce((n, m) => n + channelLengthMm(m.cells), 0)
-          : null,
+      otherLabels: others ? others.length : null,
+      otherLengthMm: others
+        ? others.reduce((n, l) => n + channelLengthMm(l.cells), 0)
+        : null,
       failed: this.tape.failed,
     };
   }

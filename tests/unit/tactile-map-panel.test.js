@@ -811,7 +811,7 @@ describe('the map panel', () => {
     const tables = [...new Set(letterBraille.mock.calls.map((c) => c[1]))];
     expect(tables).toEqual(['en-ueb-g2.ctb', 'en-ueb-g1.ctb']);
     expect(note.textContent, note.textContent).toMatch(
-      /^Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels?, \d+ cells?, about \d+ mm of 12\.7 mm tape; uncontracted would need about \d+ mm\.$/
+      /^Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels?, \d+ cells?, about \d+ mm of 12\.7 mm tape; uncontracted would take (no labels|\d+ labels?, about \d+ mm)\.$/
     );
     // The labels carry the measure; a stand-in cell per letter.
     const labels = p.labeled().labels;
@@ -829,7 +829,9 @@ describe('the map panel', () => {
       () => expect(note.textContent).toMatch(/^Label tape: uncontracted braille \(Grade 1\)\. /),
       SETTLE
     );
-    expect(note.textContent).toMatch(/; contracted would need about \d+ mm\.$/);
+    expect(note.textContent).toMatch(
+      /; contracted would take (no labels|\d+ labels?, about \d+ mm)\.$/
+    );
     expect(letterBraille.mock.calls.length).toBe(calls);
   });
 

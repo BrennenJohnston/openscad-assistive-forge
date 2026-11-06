@@ -257,7 +257,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     expect(readme).toContain('Key 1 plate, label tape top to bottom:');
     // The labels' tape measured by the translator, contracted to start.
     expect(readme).toMatch(
-      /Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; uncontracted would need about \d+ mm\./
+      /Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; uncontracted would take (no labels|\d+ labels?, about \d+ mm)\./
     );
     expect(readme).not.toContain('sized by an estimate');
     // Each label with its braille and its channel's length.

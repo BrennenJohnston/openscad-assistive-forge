@@ -24,7 +24,7 @@ export const ENGINE_ESTIMATE_SENTENCE =
 
 /**
  * The tape a map's labels take, in one sentence: the grade, the labels,
- * their cells and length, and what the other grade would need.
+ * their cells and length, and what a switch to the other grade would give.
  *
  * @param {{ grade: string, labels: number, cells: number, lengthMm: number, measured: boolean, tapeWidthMm: number, otherLengthMm?: number|null }} tape
  * @returns {string}
@@ -39,7 +39,11 @@ export function tapeSentence(tape) {
     `${head} ${n} ${n === 1 ? 'label' : 'labels'}, ${tape.cells} ${tape.cells === 1 ? 'cell' : 'cells'}, ` +
     `about ${Math.round(tape.lengthMm)} mm of ${tape.tapeWidthMm} mm tape`;
   if (tape.otherLengthMm != null) {
-    s += `; ${other.key === 'g1' ? 'uncontracted' : 'contracted'} would need about ${Math.round(tape.otherLengthMm)} mm`;
+    const m = tape.otherLabels;
+    s += `; ${other.key === 'g1' ? 'uncontracted' : 'contracted'} would take `;
+    s += m
+      ? `${m} ${m === 1 ? 'label' : 'labels'}, about ${Math.round(tape.otherLengthMm)} mm`
+      : 'no labels';
   }
   return `${s}.`;
 }

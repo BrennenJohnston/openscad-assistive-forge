@@ -79,6 +79,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Tactile Map's tape note says what switching the braille grade really
+  gives, labels and length; it had given the same labels' tape, which the
+  switch then contradicted because fewer names fit uncontracted.
 - With a screen reader, the drawing editor's picture says how it is used, in
   a shorter sentence, and takes its own keys, so the arrow keys and Space reach
   it without a mode change first.
