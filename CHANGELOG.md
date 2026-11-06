@@ -79,6 +79,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- With a screen reader, the drawing editor's picture says how it is used, in
+  a shorter sentence, and takes its own keys, so the arrow keys and Space reach
+  it without a mode change first.
+- A change on the Tactile Map says one thing once: the tape and channel notes
+  were spoken twice, a map regenerating itself said Generating, and a model's
+  message repeated even when its words had not changed.
 - On a phone held sideways the drawing editor showed none of its picture:
   its rows took the whole height. On a short screen the working row now folds
   behind More, Fit and the main action join the header row, the status line

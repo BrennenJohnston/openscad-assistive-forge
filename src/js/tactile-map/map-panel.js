@@ -1245,7 +1245,6 @@ class MapPanel {
       gradeSelect.appendChild(option);
     }
     gradeSelect.value = this.tapeGrade;
-    gradeSelect.setAttribute('aria-describedby', 'tactileMapTapeNote');
     gradeSelect.addEventListener('change', () => {
       this.tapeGrade = gradeSelect.value;
       this.tapeStopped = false;
@@ -1253,6 +1252,8 @@ class MapPanel {
     });
     add('bed', gradeSelect);
     this.refs.tapeGrade = gradeSelect;
+    // A live region right after its select, and not the select's description
+    // too: as both, NVDA said each change twice.
     const tapeNote = el('p', 'braille-panel-help tactile-map-tape-note');
     tapeNote.id = 'tactileMapTapeNote';
     tapeNote.setAttribute('aria-live', 'polite');
@@ -1273,7 +1274,6 @@ class MapPanel {
       cutSelect.appendChild(option);
     }
     cutSelect.value = this.channelCut;
-    cutSelect.setAttribute('aria-describedby', 'tactileMapChannelNote');
     cutSelect.addEventListener('change', () => {
       this.channelCut = cutSelect.value;
       this.schedule(0);

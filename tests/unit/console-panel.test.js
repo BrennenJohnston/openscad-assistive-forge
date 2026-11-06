@@ -151,3 +151,75 @@ describe('copying the console', () => {
     document.body.innerHTML = ''
   })
 })
+
+// A line a render says again, word for word, is the same news: spoken once, and
+// spoken again only when its words have changed.
+describe('a message that has not changed', () => {
+  let container
+
+  beforeEach(() => {
+    document.body.innerHTML =
+      '<input type="checkbox" id="console-filter-echo" checked>' +
+      '<div id="log" role="log" aria-live="polite" aria-relevant="additions"></div>'
+    container = document.getElementById('log')
+    container.checkVisibility = () => false
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const panel = () =>
+    new ConsolePanel({ container, badge: document.createElement('span') })
+  /** One render's output, then long enough for the panel's debounce. */
+  const run = (p, ...lines) => {
+    p.addOutput(lines.join('\n'))
+    vi.advanceTimersByTime(5000)
+  }
+  const said = () => vi.mocked(announceImmediate).mock.calls.map((c) => c[0])
+
+  it('says a message once across renders that repeat it', () => {
+    const p = panel()
+    run(p, 'ECHO: "Finished map: 370 x 241 mm"')
+    run(p, 'ECHO: "Finished map: 370 x 241 mm"')
+    run(p, 'ECHO: "Finished map: 370 x 241 mm"')
+    expect(said()).toEqual(['Message: "Finished map: 370 x 241 mm"'])
+  })
+
+  it('says it again when the words change, and again if they change back', () => {
+    const p = panel()
+    run(p, 'ECHO: "370 mm"')
+    run(p, 'ECHO: "500 mm"')
+    run(p, 'ECHO: "370 mm"')
+    expect(said()).toEqual([
+      'Message: "370 mm"',
+      'Message: "500 mm"',
+      'Message: "370 mm"',
+    ])
+  })
+
+  it('holds for a render of several lines, saying only the line that changed', () => {
+    const p = panel()
+    run(p, 'ECHO: "box"', 'ECHO: "levels 1"')
+    vi.mocked(announceImmediate).mockClear()
+    run(p, 'ECHO: "box"', 'ECHO: "levels 2"')
+    expect(said()).toEqual(['Message: "levels 2"'])
+  })
+
+  it('still says a warning that repeats: a warning is not settled by being said', () => {
+    const p = panel()
+    run(p, 'WARNING: thin wall')
+    run(p, 'WARNING: thin wall')
+    expect(said()).toEqual(['WARNING: thin wall', 'WARNING: thin wall'])
+  })
+
+  it('says a message again after the console is cleared for another design', () => {
+    const p = panel()
+    run(p, 'ECHO: "ready"')
+    p.clear()
+    run(p, 'ECHO: "ready"')
+    expect(said()).toEqual(['Message: "ready"', 'Message: "ready"'])
+  })
+})

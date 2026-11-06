@@ -798,8 +798,10 @@ describe('the map panel', () => {
       ['g1', 'Uncontracted (Grade 1)'],
     ]);
     expect(select.value).toBe('g2');
-    expect(select.getAttribute('aria-describedby')).toBe('tactileMapTapeNote');
+    // A live region only: as the select's description too, NVDA said it twice.
+    expect(select.hasAttribute('aria-describedby')).toBe(false);
     const note = document.getElementById('tactileMapTapeNote');
+    expect(select.nextElementSibling).toBe(note);
     expect(note.getAttribute('aria-live')).toBe('polite');
     await vi.waitFor(
       () => expect(note.textContent).toMatch(/^Label tape: contracted braille \(UEB Grade 2\)\. /),
@@ -1356,9 +1358,7 @@ describe('the tape channels, a recess or cut through', () => {
   it('says the warning under the select while it applies, as a polite live region written once', async () => {
     await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
     const note = document.getElementById('tactileMapChannelNote');
-    expect(select().getAttribute('aria-describedby')).toBe(
-      'tactileMapChannelNote'
-    );
+    expect(select().hasAttribute('aria-describedby')).toBe(false);
     expect(note.getAttribute('aria-live')).toBe('polite');
     expect(note.textContent).toBe('');
     // It follows the select, before Key words.

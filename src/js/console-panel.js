@@ -48,6 +48,9 @@ export class ConsolePanel {
       options.container || document.getElementById('console-output');
     this.badge = options.badge || document.getElementById('console-badge');
     this.entries = [];
+    // The echo lines of the last output, so a render that repeats one word
+    // for word does not say it again.
+    this._lastEchoes = new Set();
     this.maxEntries = options.maxEntries || 1000;
     this.filters = {
       echo: true,
@@ -408,6 +411,11 @@ export class ConsolePanel {
     for (const entry of parsed) {
       this.addEntry(entry);
     }
+    this._lastEchoes = new Set(
+      parsed
+        .filter((entry) => entry.type === CONSOLE_ENTRY_TYPE.ECHO)
+        .map((entry) => entry.message)
+    );
 
     this.render();
 
@@ -535,6 +543,15 @@ export class ConsolePanel {
     // voice would say it twice. Decided as the line arrives: by the time a
     // deferred announcement runs, the panel may have opened for it.
     if (this._logOnScreen()) return;
+
+    // A message the last output said word for word is no news. A warning is
+    // still said: it is not settled by having been heard once.
+    if (
+      entry.type === CONSOLE_ENTRY_TYPE.ECHO &&
+      this._lastEchoes.has(entry.message)
+    ) {
+      return;
+    }
 
     const now = Date.now();
     if (now - this.lastAnnouncement < this.announcementDebounce) {
@@ -758,6 +775,7 @@ export class ConsolePanel {
    */
   clear() {
     this.entries = [];
+    this._lastEchoes = new Set();
     this.counts = {
       echo: 0,
       warning: 0,

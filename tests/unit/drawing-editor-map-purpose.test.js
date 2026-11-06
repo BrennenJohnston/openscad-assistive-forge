@@ -826,7 +826,7 @@ describe('the marks: the destination and You are here', () => {
     expect(regionAt(2).dataset.movable).toBe('true');
     expect(regionAt(0).dataset.movable).toBeUndefined();
     expect(edgeAt(0).dataset.movable).toBeUndefined();
-    expect(S.mapCanvasHelp).toContain('Space picks up');
+    expect(S.mapCanvasHelp).toContain('Space picks up a mark');
     expect(placeButton().hidden).toBe(false);
     expect(placeButton().textContent).toBe(S.placeHere);
   });
@@ -973,9 +973,7 @@ describe("the editor's navigation", () => {
     zoomGroup().querySelector('[data-action="pan-up"]').click();
     expect(viewBox()[0]).toBeCloseTo(x0, 5);
     expect(viewBox()[1]).toBeCloseTo(y0, 5);
-    expect(S.mapCanvasHelp).toContain(
-      'Shift and the arrow keys move the picture'
-    );
-    expect(S.canvasHelp).toContain('Shift and the arrow keys move the picture');
+    expect(S.mapCanvasHelp).toContain('Shift and arrows move the picture');
+    expect(S.canvasHelp).toContain('Shift and arrows move the picture');
   });
 });
