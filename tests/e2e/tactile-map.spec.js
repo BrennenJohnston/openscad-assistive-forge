@@ -1085,19 +1085,26 @@ test.describe('the draft map', () => {
     await expect(grade).toHaveValue('g2');
     const tapeNote = page.locator('#tactileMapTapeNote');
     await expect(tapeNote).toHaveText(
-      /^Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; uncontracted would need about \d+ mm\.$/,
+      /^Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; uncontracted would take \d+ labels?, about \d+ mm\.$/,
       { timeout: 30000 }
     );
     const contracted = (await tapeNote.textContent()).match(/about (\d+) mm of/)[1];
-    const uncontracted = (await tapeNote.textContent()).match(/need about (\d+) mm/)[1];
-    expect(Number(uncontracted)).toBeGreaterThan(Number(contracted));
+    // What the sentence promises for the other grade is what a switch gives:
+    // fewer names keep within six cells uncontracted, so the labels themselves
+    // change with the grade, and the figure is theirs.
+    const promised = (await tapeNote.textContent()).match(
+      /would take (\d+) labels?, about (\d+) mm/
+    );
+    expect(Number(contracted)).toBeGreaterThan(0);
     await grade.selectOption('g1');
-    // Fewer names keep within six cells uncontracted, so the labels themselves
-    // change with the grade; the other figure is the same labels' tape.
     await expect(tapeNote).toHaveText(
-      /^Label tape: uncontracted braille \(Grade 1\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; contracted would need about \d+ mm\.$/,
+      /^Label tape: uncontracted braille \(Grade 1\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; contracted would take \d+ labels?, about \d+ mm\.$/,
       { timeout: 30000 }
     );
+    const got = (await tapeNote.textContent()).match(
+      /(\d+) labels?, \d+ cells, about (\d+) mm of/
+    );
+    expect([got[1], got[2]]).toEqual([promised[1], promised[2]]);
     await grade.selectOption('g2');
     await expect(tapeNote).toHaveText(/^Label tape: contracted braille/, {
       timeout: 30000,

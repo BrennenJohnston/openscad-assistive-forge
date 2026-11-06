@@ -374,15 +374,22 @@ describe('the README says what the map is', () => {
       lengthMm: 198.6,
       measured: true,
       tapeWidthMm: 12.7,
+      otherLabels: 5,
       otherLengthMm: 241.2,
     };
     expect(tapeSentence(measured)).toBe(
-      'Label tape: contracted braille (UEB Grade 2). 7 labels, 23 cells, about 199 mm of 12.7 mm tape; uncontracted would need about 241 mm.'
+      'Label tape: contracted braille (UEB Grade 2). 7 labels, 23 cells, about 199 mm of 12.7 mm tape; uncontracted would take 5 labels, about 241 mm.'
     );
     expect(
-      tapeSentence({ ...measured, grade: 'g1', otherLengthMm: 160 })
+      tapeSentence({ ...measured, grade: 'g1', otherLabels: 1, otherLengthMm: 160 })
     ).toBe(
-      'Label tape: uncontracted braille (Grade 1). 7 labels, 23 cells, about 199 mm of 12.7 mm tape; contracted would need about 160 mm.'
+      'Label tape: uncontracted braille (Grade 1). 7 labels, 23 cells, about 199 mm of 12.7 mm tape; contracted would take 1 label, about 160 mm.'
+    );
+    // A grade in which no name fits its channel takes no tape at all.
+    expect(
+      tapeSentence({ ...measured, otherLabels: 0, otherLengthMm: 0 })
+    ).toBe(
+      'Label tape: contracted braille (UEB Grade 2). 7 labels, 23 cells, about 199 mm of 12.7 mm tape; uncontracted would take no labels.'
     );
     expect(
       tapeSentence({ ...measured, labels: 1, cells: 1, otherLengthMm: null })
@@ -401,7 +408,7 @@ describe('the README says what the map is', () => {
       tape: { ...measured, measured: false, failed: true },
     });
     expect(readme).toContain(
-      'Label channels take 12.7 mm tape, a recess with a floor under the tape so it sits nearly flush. Label tape: contracted braille (UEB Grade 2), sized by an estimate. 7 labels, 23 cells, about 199 mm of 12.7 mm tape; uncontracted would need about 241 mm. The braille engine did not load; the channels are sized by an estimate. The picture'
+      'Label channels take 12.7 mm tape, a recess with a floor under the tape so it sits nearly flush. Label tape: contracted braille (UEB Grade 2), sized by an estimate. 7 labels, 23 cells, about 199 mm of 12.7 mm tape; uncontracted would take 5 labels, about 241 mm. The braille engine did not load; the channels are sized by an estimate. The picture'
     );
     expect(ENGINE_ESTIMATE_SENTENCE).toBe(
       'The braille engine did not load; the channels are sized by an estimate.'
