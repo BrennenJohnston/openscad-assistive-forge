@@ -40,7 +40,6 @@ export const SYMBOL_MIN_FEATURE_MM = 1.0;
 /** The size the thickness check is made at. */
 export const SYMBOL_CHECK_SIZE_MM = 10;
 
-const S3 = Math.sqrt(3);
 const DISC = 'M 0.5 0 A 0.5 0.5 0 1 1 0.5 1 A 0.5 0.5 0 1 1 0.5 0 Z';
 /**
  * The destination cone's foot and height (mm): Touch Mapper's marker,
@@ -59,58 +58,80 @@ export const BUILT_IN_SYMBOLS = [
     key: 'stairs',
     name: 'Stairs',
     pathData:
-      'M 0 0.08 H 1 V 0.24 H 0 Z M 0 0.42 H 1 V 0.58 H 0 Z M 0 0.76 H 1 V 0.92 H 0 Z',
+      'M 0.958 0.703 L 0.972 0.698 L 0.983 0.689 L 0.992 0.677 L 0.997 0.664 L 0.999 0.65 L 0.997 0.636 L 0.992 0.623 L 0.844 0.323 L 0.835 0.311 L 0.824 0.302 L 0.81 0.297 L 0.796 0.295 L 0.782 0.297 L 0.768 0.302 L 0.757 0.311 L 0.748 0.323 L 0.648 0.526 L 0.548 0.323 L 0.539 0.311 L 0.527 0.302 L 0.514 0.297 L 0.5 0.295 L 0.486 0.297 L 0.472 0.302 L 0.461 0.311 L 0.452 0.323 L 0.352 0.526 L 0.252 0.323 L 0.243 0.311 L 0.231 0.302 L 0.218 0.297 L 0.204 0.295 L 0.19 0.297 L 0.176 0.302 L 0.165 0.311 L 0.156 0.323 L 0.008 0.623 L 0.003 0.636 L 0.001 0.65 L 0.003 0.664 L 0.008 0.677 L 0.017 0.689 L 0.029 0.698 L 0.042 0.703 L 0.056 0.705 L 0.07 0.703 L 0.084 0.698 L 0.095 0.689 L 0.104 0.677 L 0.204 0.474 L 0.304 0.677 L 0.313 0.689 L 0.325 0.698 L 0.338 0.703 L 0.352 0.705 L 0.366 0.703 L 0.38 0.698 L 0.391 0.689 L 0.4 0.677 L 0.5 0.474 L 0.6 0.677 L 0.609 0.689 L 0.621 0.698 L 0.634 0.703 L 0.648 0.705 L 0.662 0.703 L 0.675 0.698 L 0.687 0.689 L 0.696 0.677 L 0.796 0.474 L 0.896 0.677 L 0.905 0.689 L 0.916 0.698 L 0.93 0.703 L 0.944 0.705 Z',
     minSizeMm: SYMBOL_MIN_SIZE_MM,
     source:
-      'McCallum, Ungar and Jehoel 2006, British Journal of Visual Impairment 24(2): stair symbols as parallel bars; BANA 2022 Unit 3, line styles',
+      'A zigzag, a row of sharp turns, from my tactile key for the SeaTac station, scaled to 10 mm with its line at 1.1 mm',
   },
   {
     key: 'elevator-up',
     name: 'Elevator up',
-    pathData: 'M 0.5 0.05 L 1 0.95 H 0 Z',
+    pathData:
+      'M 0.5 0.067 L 0 0.933 L 1 0.933 Z M 0.208 0.813 L 0.5 0.307 L 0.792 0.813 Z',
     minSizeMm: SYMBOL_MIN_SIZE_MM,
     source:
-      'BANA 2022 3.4.3.7 (arrowhead proportions); McCallum, Ungar and Jehoel 2006 (simple arrows read best)',
+      'An outlined triangle, point up, from my SeaTac key; Nolan and Morris 1971: an outline is told from a solid',
   },
   {
     key: 'elevator-down',
     name: 'Elevator down',
-    pathData: 'M 0 0.05 H 1 L 0.5 0.95 Z',
+    pathData:
+      'M 1 0.067 L 0 0.067 L 0.5 0.933 Z M 0.208 0.187 L 0.792 0.187 L 0.5 0.693 Z',
     minSizeMm: SYMBOL_MIN_SIZE_MM,
     source:
-      'BANA 2022 3.4.3.7 (arrowhead proportions); McCallum, Ungar and Jehoel 2006 (simple arrows read best); the up arrow turned over',
+      'An outlined triangle, point down, from my SeaTac key; turned over, so up and down differ by which way the point goes',
   },
   {
     key: 'entrance',
     name: 'Entrance',
-    pathData: 'M 0 0.75 A 0.5 0.5 0 0 1 1 0.75 Z',
+    pathData:
+      'M 0.956 0.998 L 0.97 0.992 L 0.982 0.982 L 0.992 0.97 L 0.998 0.956 L 1 0.94 L 1 0.06 L 0.998 0.044 L 0.992 0.03 L 0.982 0.018 L 0.97 0.008 L 0.956 0.002 L 0.94 0 L 0.06 0 L 0.044 0.002 L 0.03 0.008 L 0.018 0.018 L 0.008 0.03 L 0.002 0.044 L 0 0.06 L 0 0.94 L 0.002 0.956 L 0.008 0.97 L 0.018 0.982 L 0.03 0.992 L 0.044 0.998 L 0.06 1 L 0.076 0.998 L 0.09 0.992 L 0.102 0.982 L 0.112 0.97 L 0.118 0.956 L 0.12 0.94 L 0.12 0.12 L 0.88 0.12 L 0.88 0.94 L 0.882 0.956 L 0.888 0.97 L 0.898 0.982 L 0.91 0.992 L 0.924 0.998 L 0.94 1 Z',
     minSizeMm: SYMBOL_MIN_SIZE_MM,
     source:
-      'ISO 19028, as reviewed by Wabinski, Moscicka and Touya 2024: a semicircle shows a direction, here the way in',
+      'A door frame: three sides, open toward the way in; Nolan and Morris 1971: an open form is told from a closed one',
   },
   {
-    key: 'landmark-circle',
-    name: 'Landmark, circle',
-    pathData: DISC,
+    key: 'crossing',
+    name: 'Crossing',
+    pathData:
+      'M 0.918 0.968 L 0.935 0.961 L 0.949 0.949 L 0.961 0.935 L 0.968 0.918 L 0.97 0.9 L 0.968 0.882 L 0.961 0.865 L 0.949 0.851 L 0.599 0.5 L 0.949 0.149 L 0.961 0.135 L 0.968 0.118 L 0.97 0.1 L 0.968 0.082 L 0.961 0.065 L 0.949 0.051 L 0.935 0.039 L 0.918 0.032 L 0.9 0.03 L 0.882 0.032 L 0.865 0.039 L 0.851 0.051 L 0.5 0.401 L 0.149 0.051 L 0.135 0.039 L 0.118 0.032 L 0.1 0.03 L 0.082 0.032 L 0.065 0.039 L 0.051 0.051 L 0.039 0.065 L 0.032 0.082 L 0.03 0.1 L 0.032 0.118 L 0.039 0.135 L 0.051 0.149 L 0.401 0.5 L 0.051 0.851 L 0.039 0.865 L 0.032 0.882 L 0.03 0.9 L 0.032 0.918 L 0.039 0.935 L 0.051 0.949 L 0.065 0.961 L 0.082 0.968 L 0.1 0.97 L 0.118 0.968 L 0.135 0.961 L 0.149 0.949 L 0.5 0.599 L 0.851 0.949 L 0.865 0.961 L 0.882 0.968 L 0.9 0.97 Z',
     minSizeMm: SYMBOL_MIN_SIZE_MM,
     source:
-      'BANA 2022 3.4.3.11 (point symbols 6 mm or more, 3 mm apart); Jehoel, Ungar, McCallum and Rowell 2009 (a circle is identified at 5.5 mm)',
+      'An X: two crossed lines, four free ends; Wabinski, Moscicka and Touya 2022 list a cross among the shapes that read well',
   },
   {
-    key: 'landmark-square',
-    name: 'Landmark, square',
-    pathData: 'M 0.05 0.05 H 0.95 V 0.95 H 0.05 Z',
+    key: 'landmark',
+    name: 'Landmark',
+    pathData: 'M 1 0.5 L 0.5 0 L 0 0.5 L 0.5 1 Z',
     minSizeMm: SYMBOL_MIN_SIZE_MM,
     source:
-      'BANA 2022 3.4.3.11; Jehoel, Ungar, McCallum and Rowell 2009 (a square is identified at 5.0 mm)',
+      'A solid diamond: four corners and no hollow, so it is not mistaken for the round You are here; BANA 2022 3.4.3.11 (6 mm or more, 3 mm apart)',
   },
   {
-    key: 'landmark-triangle',
-    name: 'Landmark, triangle',
-    pathData: `M 0.5 ${0.5 - S3 / 4} L 1 ${0.5 + S3 / 4} H 0 Z`,
+    key: 'furniture',
+    name: 'Street furniture',
+    pathData:
+      'M 0.223 0.678 L 0.247 0.674 L 0.269 0.666 L 0.29 0.656 L 0.31 0.643 L 0.327 0.627 L 0.343 0.61 L 0.356 0.59 L 0.366 0.569 L 0.374 0.547 L 0.378 0.523 L 0.38 0.5 L 0.378 0.477 L 0.374 0.453 L 0.366 0.431 L 0.356 0.41 L 0.343 0.39 L 0.327 0.373 L 0.31 0.357 L 0.29 0.344 L 0.269 0.334 L 0.247 0.326 L 0.223 0.322 L 0.2 0.32 L 0.177 0.322 L 0.153 0.326 L 0.131 0.334 L 0.11 0.344 L 0.09 0.357 L 0.073 0.373 L 0.057 0.39 L 0.044 0.41 L 0.034 0.431 L 0.026 0.453 L 0.022 0.477 L 0.02 0.5 L 0.022 0.523 L 0.026 0.547 L 0.034 0.569 L 0.044 0.59 L 0.057 0.61 L 0.073 0.627 L 0.09 0.643 L 0.11 0.656 L 0.131 0.666 L 0.153 0.674 L 0.177 0.678 L 0.2 0.68 Z M 0.823 0.678 L 0.847 0.674 L 0.869 0.666 L 0.89 0.656 L 0.91 0.643 L 0.927 0.627 L 0.943 0.61 L 0.956 0.59 L 0.966 0.569 L 0.974 0.547 L 0.978 0.523 L 0.98 0.5 L 0.978 0.477 L 0.974 0.453 L 0.966 0.431 L 0.956 0.41 L 0.943 0.39 L 0.927 0.373 L 0.91 0.357 L 0.89 0.344 L 0.869 0.334 L 0.847 0.326 L 0.823 0.322 L 0.8 0.32 L 0.777 0.322 L 0.753 0.326 L 0.731 0.334 L 0.71 0.344 L 0.69 0.357 L 0.673 0.373 L 0.657 0.39 L 0.644 0.41 L 0.634 0.431 L 0.626 0.453 L 0.622 0.477 L 0.62 0.5 L 0.622 0.523 L 0.626 0.547 L 0.634 0.569 L 0.644 0.59 L 0.657 0.61 L 0.673 0.627 L 0.69 0.643 L 0.71 0.656 L 0.731 0.666 L 0.753 0.674 L 0.777 0.678 L 0.8 0.68 Z',
     minSizeMm: SYMBOL_MIN_SIZE_MM,
     source:
-      'BANA 2022 3.4.3.11; Jehoel, Ungar, McCallum and Rowell 2009 (a triangle is identified at 6.4 mm); Gual, Puyuelo and Lloveras 2012 (pyramids and prisms recognized best)',
+      'Two dots with a gap, an interrupted form; each dot 3.6 mm, over the 2 mm the NSW guidelines keep clear of braille',
+  },
+  {
+    key: 'curb-ramp',
+    name: 'Curb ramp',
+    pathData:
+      'M 0.97 0.05 L 0.77 0.05 L 0.77 0.95 L 0.97 0.95 Z M 0.6 0.35 L 0.4 0.35 L 0.4 0.95 L 0.6 0.95 Z M 0.23 0.65 L 0.03 0.65 L 0.03 0.95 L 0.23 0.95 Z',
+    minSizeMm: SYMBOL_MIN_SIZE_MM,
+    source:
+      'Three rising bars: a row of blocks that climbs, the way the ramp does; an interrupted form',
+  },
+  {
+    key: 'raised-curb',
+    name: 'Raised curb',
+    pathData:
+      'M 1 0.17 L 0.998 0.154 L 0.992 0.14 L 0.982 0.128 L 0.97 0.118 L 0.956 0.112 L 0.94 0.11 L 0.924 0.112 L 0.91 0.118 L 0.898 0.128 L 0.888 0.14 L 0.882 0.154 L 0.88 0.17 L 0.88 0.75 L 0.56 0.75 L 0.56 0.17 L 0.558 0.154 L 0.552 0.14 L 0.542 0.128 L 0.53 0.118 L 0.516 0.112 L 0.5 0.11 L 0.484 0.112 L 0.47 0.118 L 0.458 0.128 L 0.448 0.14 L 0.442 0.154 L 0.44 0.17 L 0.44 0.75 L 0.12 0.75 L 0.12 0.17 L 0.118 0.154 L 0.112 0.14 L 0.102 0.128 L 0.09 0.118 L 0.076 0.112 L 0.06 0.11 L 0.044 0.112 L 0.03 0.118 L 0.018 0.128 L 0.008 0.14 L 0.002 0.154 L 0 0.17 L 0 0.89 L 1 0.89 Z',
+    minSizeMm: SYMBOL_MIN_SIZE_MM,
+    source: 'A comb: a bar with three teeth, an edge a wheel cannot take',
   },
   {
     key: 'you-are-here',
@@ -138,19 +159,20 @@ export const BUILT_IN_SYMBOLS = [
   {
     key: 'transit-stop',
     name: 'Transit stop',
-    pathData: 'M 0.05 0.05 H 0.35 V 0.5 H 0.65 V 0.05 H 0.95 V 0.95 H 0.05 Z',
+    pathData:
+      'M 1 0 L 0 0 L 0 1 L 1 1 Z M 0.11 0.11 L 0.89 0.11 L 0.89 0.89 L 0.11 0.89 Z M 0.555 0.365 L 0.73 0.365 L 0.73 0.255 L 0.27 0.255 L 0.27 0.365 L 0.445 0.365 L 0.445 0.76 L 0.555 0.76 Z',
     minSizeMm: SYMBOL_MIN_SIZE_MM,
     source:
-      'BANA 2022 8.5.4 (landmarks) and 8.6.5 (a shape used twice differs by 25 to 30 percent): a square with a notch',
+      'An outlined square holding a T, a frame with a letter inside, from the ticket machine on my SeaTac key',
   },
   {
     key: 'chevron-uphill',
     name: 'Uphill chevron',
     pathData:
-      'M 0.1 0.9 L 0.5 0.1 L 0.9 0.9 L 0.72 0.9 L 0.5 0.42 L 0.28 0.9 Z',
+      'M 0.074 0.933 L 0.088 0.928 L 0.099 0.919 L 0.108 0.907 L 0.368 0.527 L 0.373 0.514 L 0.375 0.5 L 0.373 0.486 L 0.368 0.472 L 0.108 0.092 L 0.099 0.081 L 0.088 0.072 L 0.074 0.067 L 0.06 0.065 L 0.046 0.067 L 0.033 0.072 L 0.021 0.081 L 0.012 0.092 L 0.007 0.106 L 0.005 0.12 L 0.007 0.134 L 0.012 0.148 L 0.254 0.5 L 0.012 0.853 L 0.007 0.866 L 0.005 0.88 L 0.007 0.894 L 0.012 0.907 L 0.021 0.919 L 0.033 0.928 L 0.046 0.933 L 0.06 0.935 Z M 0.384 0.933 L 0.398 0.928 L 0.409 0.919 L 0.418 0.907 L 0.678 0.527 L 0.683 0.514 L 0.685 0.5 L 0.683 0.486 L 0.678 0.472 L 0.418 0.092 L 0.409 0.081 L 0.398 0.072 L 0.384 0.067 L 0.37 0.065 L 0.356 0.067 L 0.343 0.072 L 0.331 0.081 L 0.322 0.092 L 0.317 0.106 L 0.315 0.12 L 0.317 0.134 L 0.322 0.148 L 0.564 0.5 L 0.322 0.853 L 0.317 0.866 L 0.315 0.88 L 0.317 0.894 L 0.322 0.907 L 0.331 0.919 L 0.343 0.928 L 0.356 0.933 L 0.37 0.935 Z M 0.694 0.933 L 0.708 0.928 L 0.719 0.919 L 0.728 0.907 L 0.988 0.527 L 0.993 0.514 L 0.995 0.5 L 0.993 0.486 L 0.988 0.472 L 0.728 0.092 L 0.719 0.081 L 0.708 0.072 L 0.694 0.067 L 0.68 0.065 L 0.666 0.067 L 0.653 0.072 L 0.641 0.081 L 0.632 0.092 L 0.627 0.106 L 0.625 0.12 L 0.627 0.134 L 0.632 0.148 L 0.874 0.5 L 0.632 0.853 L 0.627 0.866 L 0.625 0.88 L 0.627 0.894 L 0.632 0.907 L 0.641 0.919 L 0.653 0.928 L 0.666 0.933 L 0.68 0.935 Z',
     minSizeMm: SYMBOL_MIN_SIZE_MM,
     source:
-      'Ungar 2005 (arrows read by their point); OpenSidewalks incline as rise over run; drawn along a Steep sidewalk line every 10 mm, 6 mm across (BANA 2022 3.4.3.3 dash figures)',
+      'Three chevrons pointing uphill, from the escalator on my SeaTac key, scaled to 10 mm with the line at 1.1 mm; drawn along a Steep sidewalk',
   },
 ];
 
@@ -364,8 +386,7 @@ export const BUILT_IN_SETS = [
 /**
  * A set's symbols as the library the levels builder reads: every basic
  * shape, with the set's own shape put under the key each class it covers
- * asks for (a crossing point draws the circle). Two classes asking for one
- * key share the set's shape.
+ * asks for. Two classes asking for one key share the set's shape.
  *
  * @param {string} setKey
  * @returns {Array<object>}
@@ -377,10 +398,7 @@ export function librarySymbolsFor(setKey) {
   for (const [cls, symbolKey] of Object.entries(set.classSymbols || {})) {
     const shape = symbolKey && set.symbols.find((s) => s.key === symbolKey);
     if (!shape) continue;
-    const key =
-      cls === 'crossing'
-        ? 'circle'
-        : MAP_CLASSES.find((c) => c.key === cls)?.symbolKey;
+    const key = MAP_CLASSES.find((c) => c.key === cls)?.symbolKey;
     if (!key) continue;
     byKey.set(key, {
       key,

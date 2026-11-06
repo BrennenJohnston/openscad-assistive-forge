@@ -156,6 +156,67 @@ test.describe('Tactile Map tile', () => {
     );
   });
 
+  test('Once a map is generated, a change in step 5 generates it again with no press', async ({
+    page,
+  }) => {
+    test.setTimeout(420_000);
+    await openTactileMap(page);
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await goToStep(page, 5);
+    const button = page.locator('#primaryActionBtn');
+    await expect(button).toHaveAttribute('data-action', 'generate');
+    // Before anything is generated, a change leaves the button as it is.
+    await page.locator('#tactileMapMargin').fill('15');
+    await page.locator('#tactileMapMargin').press('Tab');
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => window.stateManager.getState().parameters.margin_mm
+          ),
+        { timeout: 60_000 }
+      )
+      .toBe(15);
+    await page.waitForTimeout(4000);
+    await expect(button).toHaveAttribute('data-action', 'generate');
+    await button.click();
+    await expect(button).toHaveAttribute('data-action', 'download', {
+      timeout: 240_000,
+    });
+    // After it, the file catches up by itself, and Download is the new map.
+    await page.locator('#tactileMapMargin').fill('20');
+    await page.locator('#tactileMapMargin').press('Tab');
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => window.stateManager.getState().parameters.margin_mm
+          ),
+        { timeout: 60_000 }
+      )
+      .toBe(20);
+    await expect(button).toHaveAttribute('data-action', 'download', {
+      timeout: 240_000,
+    });
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              document.getElementById('primaryActionBtn').dataset.action ===
+                'download' &&
+              document
+                .getElementById('downloadFallbackLink')
+                .classList.contains('hidden')
+          ),
+        { timeout: 240_000 }
+      )
+      .toBe(true);
+  });
+
   test('Tape channels start as a recess; cut through moves them to the cutouts group, and an All printed plate brings a warning and still renders', async ({
     page,
   }) => {

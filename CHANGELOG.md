@@ -95,6 +95,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   written back over at the next change. The Business card preset also sets
   6.2 mm between cells and a 5 mm margin, the spacing of the Braille
   Authority's business card examples: 13 cells and 4 rows.
+- Nothing stands on the north arrow: lines and areas stop 9.525 mm short of it,
+  and a symbol in its way moves out and says so. No symbol sits on the
+  destination or on You are here.
+- Once a map is generated, a change in any step generates it again by itself,
+  so Download is never an older map than the one on screen.
+- One form means one thing on a map: stairs, elevators, entrances, crossings,
+  landmarks, street furniture, transit stops and curbs each print in a shape of
+  their own, where most had been a disc, and the key gives each its own row.
 - A place map marks the typed address: a destination cone (Touch Mapper's
   marker, 4.9 mm tall) stands at the address and the key names it first
   with the address; a route's end carries the same cone. You are here is

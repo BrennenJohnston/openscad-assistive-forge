@@ -23,13 +23,7 @@ import {
   activeSet,
   BUILT_IN_SYMBOLS,
 } from './symbol-library.js';
-import {
-  BUILTIN_SYMBOLS,
-  DEFAULT_SETTINGS,
-  symbolMap,
-  symbolRings,
-} from './levels-svg.js';
-import { regionArea } from '../ring-geometry.js';
+import { BUILTIN_SYMBOLS, DEFAULT_SETTINGS, symbolMap } from './levels-svg.js';
 
 /**
  * The most braille cells a name takes on tape beside a point's symbol: 12.7
@@ -71,15 +65,17 @@ const SHAPE_WORDS = Object.freeze({
     `a cone ${mm} mm across and ${mm} mm tall, flat at the top`,
   'you-are-here': (mm) =>
     `a disc ${mm} mm across with a center dot one step higher`,
-  stairs: (mm) => `three bars, ${mm} mm`,
-  'elevator-up': (mm) => `a triangle pointing up, ${mm} mm`,
-  'elevator-down': (mm) => `a triangle pointing down, ${mm} mm`,
-  entrance: (mm) => `a half disc ${mm} mm across, flat side to the way in`,
-  'landmark-circle': (mm) => `a disc ${mm} mm across`,
+  stairs: (mm) => `a zigzag, ${mm} mm`,
+  'elevator-up': (mm) => `an outlined triangle pointing up, ${mm} mm`,
+  'elevator-down': (mm) => `an outlined triangle pointing down, ${mm} mm`,
+  entrance: (mm) => `a door frame, ${mm} mm, open toward the way in`,
+  crossing: (mm) => `an X, ${mm} mm`,
+  landmark: (mm) => `a solid diamond, ${mm} mm`,
+  furniture: (mm) => `two dots, ${mm} mm`,
+  'curb-ramp': (mm) => `three rising bars, ${mm} mm`,
+  'raised-curb': (mm) => `a comb, ${mm} mm`,
   circle: (mm) => `a disc ${mm} mm across`,
-  'landmark-square': (mm) => `a square, ${mm} mm`,
-  'landmark-triangle': (mm) => `a triangle, ${mm} mm`,
-  'transit-stop': (mm) => `a square with a notch, ${mm} mm`,
+  'transit-stop': (mm) => `an outlined square with a T, ${mm} mm`,
 });
 
 const LINE_WORDS = Object.freeze({
@@ -93,32 +89,12 @@ const LINE_WORDS = Object.freeze({
 
 const say = (n) => String(Math.round(n * 10) / 10);
 
+/** Said when a loaded set draws two kinds alike. A11Y. */
+const sharedShapeNote = (names) =>
+  `${names.join(' and ')} share one shape in this set; the key lists them together.`;
+
 /** A level's height in a word: the floor, the symbols, the walls. */
 const LEVEL_WORDS = Object.freeze({ 1: 'low', 2: 'middle', 3: 'high' });
-
-/**
- * What a finger meets of a shape at 10 mm, as a short signature: its area,
- * its box and where its weight sits (so a triangle pointing up and one
- * pointing down differ), and whether part of it stands higher. Two symbols
- * with one signature print alike, whatever their keys.
- */
-function feel(shape) {
-  const rings = symbolRings(shape, 10, [0, 0]);
-  const pts = rings.flat();
-  if (!pts.length) return 'none';
-  const xs = pts.map((p) => p.x);
-  const ys = pts.map((p) => p.y);
-  const r = (v) => Math.round(v * 2) / 2;
-  const mean = (v) => v.reduce((a, b) => a + b, 0) / v.length;
-  return [
-    Math.round(regionArea(rings)),
-    r(Math.max(...xs) - Math.min(...xs)),
-    r(Math.max(...ys) - Math.min(...ys)),
-    r(mean(xs)),
-    r(mean(ys)),
-    typeof shape.raisedPathData === 'string' ? 'raised' : 'flat',
-  ].join('|');
-}
 
 /**
  * The cells a label takes in uncontracted braille, as an estimate: one a
@@ -148,6 +124,9 @@ export function keyFor(plan, settings = {}) {
   const classes = s.classes || {};
   const symbols = symbolMap(s.symbols || activeLibrary());
   const basicShapes = symbolMap(BUILT_IN_SYMBOLS);
+  const otherSet = Object.values(symbols).some(
+    (x) => basicShapes[x.key] && basicShapes[x.key].pathData !== x.pathData
+  );
   const all = plan?.features || [];
   const on = all.filter((f) => f.on !== false);
   const className = (key) =>
@@ -157,17 +136,14 @@ export function keyFor(plan, settings = {}) {
     return i < 0 ? order.length : i;
   };
 
-  // Points: one entry per shape as printed, its classes named together.
+  // Points: one row per symbol. Two classes share a row only when a loaded
+  // set draws them with one shape.
   const bySymbol = new Map();
   const shapeOf = (key) =>
     symbols[key] || symbols.circle || BUILTIN_SYMBOLS.circle;
   for (const f of on.filter((x) => x.kind === 'point')) {
     const key = f.symbol ?? classes[f.class]?.symbol ?? 'circle';
-    const printed = shapeOf(key);
-    // A solid symbol (the cone) is its own row: its footprint is a disc,
-    // but it prints as nothing else does.
-    const sig = printed?.solid ? `solid:${printed.solid}` : feel(printed);
-    const entry = bySymbol.get(sig) || {
+    const entry = bySymbol.get(key) || {
       kind: 'point',
       symbolKey: key,
       classes: [],
@@ -177,7 +153,7 @@ export function keyFor(plan, settings = {}) {
     entry.sizeMm = Math.max(entry.sizeMm, f.size ?? s.symbolSizeMm);
     // The destination's row carries the address it marks.
     if (f.class === 'destination' && f.name) entry.address = f.name;
-    bySymbol.set(sig, entry);
+    bySymbol.set(key, entry);
   }
   const points = [...bySymbol.values()].map((e) => {
     e.classes.sort((a, b) => rank(POINT_ORDER, a) - rank(POINT_ORDER, b));
@@ -186,6 +162,8 @@ export function keyFor(plan, settings = {}) {
     const basic =
       SHAPE_WORDS[e.symbolKey] &&
       shape?.pathData === basicShapes[e.symbolKey]?.pathData;
+    // A built-in set with no shape for a class keeps the basic one, and says so.
+    const borrowed = basic && otherSet && !shape?.solid;
     return {
       ...e,
       name:
@@ -194,7 +172,7 @@ export function keyFor(plan, settings = {}) {
           : e.classes.map(className).join(' or '),
       raised: typeof shape?.raisedPathData === 'string',
       shape: basic
-        ? SHAPE_WORDS[e.symbolKey](say(e.sizeMm))
+        ? `${SHAPE_WORDS[e.symbolKey](say(e.sizeMm))}${borrowed ? ', basic shape' : ''}`
         : `${shape?.name || e.symbolKey}, ${say(e.sizeMm)} mm`,
     };
   });
@@ -251,6 +229,9 @@ export function keyFor(plan, settings = {}) {
   return {
     entries: [...points, ...lines, ...areas],
     numbers,
+    notes: points
+      .filter((e) => e.classes.length > 1)
+      .map((e) => sharedShapeNote(e.classes.map(className))),
     set: activeSet(),
   };
 }

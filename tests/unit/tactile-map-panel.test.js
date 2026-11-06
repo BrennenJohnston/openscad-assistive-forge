@@ -12,6 +12,7 @@
  * @license GPL-3.0-or-later
  */
 
+import { northZones } from '../../src/js/tactile-map/keep-clear.js';
 import { numberNamed } from '../../src/js/tactile-map/map-numbers.js';
 import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -1187,7 +1188,7 @@ describe('the warnings in Check and print', () => {
     id,
     class: 'landmark',
     kind: 'point',
-    symbol: 'landmark-triangle',
+    symbol: 'landmark',
     at: [x, y],
     on: true,
   });
@@ -1202,6 +1203,48 @@ describe('the warnings in Check and print', () => {
     return plan;
   };
   const box = () => document.getElementById('tactileMapWarningsBox');
+
+  it('keeps the north arrow clear in the levels file: a symbol moves out, a shape stops short, and the list says so once', async () => {
+    const plan = sampleStationPlan();
+    const { w } = plan.size;
+    plan.features.push(
+      landmark('corner', w - 8, 8),
+      {
+        id: 'block',
+        class: 'area',
+        kind: 'area',
+        ring: [
+          [w - 60, 2],
+          [w - 2, 2],
+          [w - 2, 60],
+          [w - 60, 60],
+        ],
+        on: true,
+      }
+    );
+    mount({ type: 'drawing', plan });
+    await vi.waitFor(
+      () => expect(files.length).toBeGreaterThan(0),
+      SETTLE
+    );
+    const panel = document.querySelector('#tactileMapPanel, .tactile-map-panel')
+      ?.__forgeMapPanel;
+    const sheet = panel.sheet;
+    const [zone] = northZones({ sheetW: sheet.w, cue: panel.northCue() });
+    const { svg } = files[files.length - 1];
+    const inZone = [];
+    for (const m of svg.matchAll(/([\d.]+) ([\d.]+)/g)) {
+      const [x, y] = [Number(m[1]), Number(m[2])];
+      if (x > zone.x0 + 0.01 && x < sheet.w && y > 0 && y < zone.y1 - 0.01) {
+        inZone.push([x, y]);
+      }
+    }
+    expect(inZone).toEqual([]);
+    const texts = [
+      ...document.getElementById('tactileMapWarnings').children,
+    ].map((li) => li.textContent);
+    expect(texts.filter((t) => /keep the north arrow/.test(t))).toHaveLength(1);
+  });
 
   it('folds the list into a closed disclosure that says how many there are', async () => {
     mount({ type: 'drawing', plan: planWith(2) });
