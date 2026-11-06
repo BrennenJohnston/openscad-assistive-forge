@@ -85,6 +85,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A change on the Tactile Map says one thing once: the tape and channel notes
   were spoken twice, a map regenerating itself said Generating, and a model's
   message repeated even when its words had not changed.
+- On a phone held sideways the drawing editor showed none of its picture:
+  its rows took the whole height. On a short screen the working row now folds
+  behind More, Fit and the main action join the header row, the status line
+  speaks without taking a line, the app header steps aside until Close, and
+  the whole picture fits on at least 40 percent of the screen, with Shapes
+  and More opening beside it.
+- The drawing editor's shapes list and picture end above the OpenSCAD
+  Messages bar, which had covered the lower half of the last row's switches.
 - On a phone, the drawing editor's Save, Keep original and Reset did nothing:
   the buttons moved into More, where their presses were never heard.
 - Cropping a traced picture in the drawing editor keeps the part that was

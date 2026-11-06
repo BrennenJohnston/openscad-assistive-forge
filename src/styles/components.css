@@ -17622,6 +17622,10 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   min-height: 0;
   gap: var(--space-sm);
   padding: var(--space-sm);
+  /* A band at the foot as tall as the collapsed OpenSCAD Messages bar where
+     that bar lies over the editor (surface.js measures it), so the shapes
+     list and the picture end above the bar instead of under it. */
+  padding-bottom: calc(var(--space-sm) + var(--drawing-editor-foot, 0px));
   /* The editor is the container its own layout rules ask about, not only
      .drawing-editor-surface. In the standalone editor (an image edited with
      no project behind it) the surface is hidden at 0 px wide and the editor
@@ -17879,6 +17883,205 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
    width on a 412 px phone. */
 .drawing-editor-toolbar-row--header {
   flex-wrap: nowrap;
+}
+
+/* ── A short screen ──────────────────────────────────────────────────────
+   Under 500 px of height in a landscape window (a phone held sideways) the
+   working row has folded behind More (surface.js, data-short): the title and
+   the status line leave the screen for the live region, Shapes, More and
+   Close keep the right end of the header row, and the body takes what is
+   left rather than holding a height the screen does not have and scrolling
+   the picture off its foot. */
+@media (max-height: 500px) and (orientation: landscape) {
+  /* The app header steps aside while the editor is open, which is what brings
+     the picture to 40 percent of the screen (the preview's share in S6); the
+     editor has its own Close, and Close brings the header back. A closed
+     editor's surface is hidden, so this stops by itself. */
+  body:has(#drawingEditorSurface:not([hidden]) .drawing-editor[data-short])
+    .app-header {
+    display: none;
+  }
+
+  /* Every pixel of height is the picture's: the rows pack closer. */
+  .drawing-editor[data-short] {
+    gap: var(--space-2xs);
+    padding-top: var(--space-2xs);
+  }
+
+  /* Fit and the main action sit in the header row here, and these two states
+     offer nothing that works on a drawing: the header keeps its name and
+     Close, as it does at any height. */
+  .drawing-editor[data-short][data-empty='true']
+    .drawing-editor-toolbar-row--header
+    > :not(.drawing-editor-title, .drawing-editor-close),
+  .drawing-editor[data-short][data-crop-first='true']
+    .drawing-editor-toolbar-row--header
+    > :not(.drawing-editor-title, .drawing-editor-close),
+  .drawing-editor[data-short][data-crop='open'] [data-action='fit'] {
+    display: none;
+  }
+
+  .drawing-editor[data-short][data-empty='true'] .drawing-editor-close,
+  .drawing-editor[data-short][data-crop-first='true'] .drawing-editor-close {
+    margin-left: auto;
+  }
+
+  /* Packed with Fit at the left rather than pushed to the row's middle. */
+  .drawing-editor[data-short] .drawing-editor-toolbar .svg-prep-footer,
+  .drawing-editor[data-short] .drawing-editor-toolbar .drawing-editor-apply {
+    margin-left: 0;
+  }
+
+  /* The crop picture fits the height and stays in view while its sliders
+     scroll beside it, so an edge can be watched as it moves. */
+  .drawing-editor[data-short] .drawing-editor-crop {
+    padding: var(--space-xs);
+  }
+
+  .drawing-editor[data-short] .drawing-editor-crop-picture {
+    position: sticky;
+    top: 0;
+  }
+
+  .drawing-editor[data-short] .drawing-editor-crop-picture svg {
+    max-height: 40dvh;
+  }
+
+  /* A map or a stencil keeps nothing in the workspace's box: left to grow, the
+     empty box takes half the stage from the picture. */
+  .drawing-editor[data-short]:not([data-purpose='relief'])
+    .drawing-editor-stage
+    .svg-prep-workspace {
+    flex: 0 0 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* The map's picture fits the stage rather than running past its foot. */
+  .drawing-editor[data-short] .drawing-editor-canvas {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .drawing-editor[data-short] .drawing-editor-canvas-svg {
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+  }
+
+  /* With ink settings under it (the editor's own door) the picture takes most
+     of the screen and the first of the settings shows below it, so the whole
+     picture is in view and the stage plainly scrolls. */
+  .drawing-editor[data-short]
+    .drawing-editor-stage:has(.ink-controls)
+    .svg-prep-result-pane {
+    max-height: 70dvh;
+  }
+
+  .drawing-editor[data-short]
+    .drawing-editor-stage:has(.ink-controls)
+    .svg-prep-result-pane
+    svg {
+    max-height: 100%;
+  }
+
+  .drawing-editor[data-short] .drawing-editor-toolbar {
+    padding-bottom: 0;
+  }
+
+  .drawing-editor[data-short] .drawing-editor-title,
+  .drawing-editor[data-short] .drawing-editor-statusline {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .drawing-editor[data-short] .drawing-editor-panel-toggle {
+    margin-left: auto;
+  }
+
+  .drawing-editor[data-short]:not([data-view='charm']) .drawing-editor-body {
+    min-height: 0;
+  }
+
+  /* The list and More open beside the picture at any width here, never under
+     it: under it, the sheet of a narrow editor would open below the screen's
+     edge, and pressing Shapes would seem to do nothing. */
+  .drawing-editor[data-short] .drawing-editor-body {
+    flex-direction: row;
+  }
+
+  .drawing-editor[data-short] .drawing-editor-panel,
+  .drawing-editor[data-short] .drawing-editor-more-panel {
+    position: absolute;
+    inset-block: 0;
+    right: 0;
+    width: clamp(280px, 44%, 460px);
+    flex: none;
+    min-height: 0;
+    overflow: auto;
+    background: var(--color-bg-elevated, var(--color-bg-secondary));
+    border-top: none;
+    border-left: 1px solid var(--color-border);
+    padding-left: var(--space-sm);
+    padding-right: var(--space-2xs);
+    z-index: var(--z-index-drawer);
+  }
+
+  .drawing-editor--panel-open[data-short] .drawing-editor-stage,
+  .drawing-editor--more-open[data-short] .drawing-editor-stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    padding-right: clamp(280px, 44%, 460px);
+  }
+
+  /* The picture scales to the room instead of keeping its natural height
+     and scrolling off the stage's foot: every box down to the picture gives
+     up its floor, and the picture fits its pane. Not with ink settings under
+     the picture (the standalone door): they keep their height, so a pane
+     with no floor would collapse to nothing; there the stage scrolls. */
+  .drawing-editor[data-short]
+    .drawing-editor-stage:not(:has(.ink-controls))
+    .svg-prep-workspace,
+  .drawing-editor[data-short]
+    .drawing-editor-stage:not(:has(.ink-controls))
+    .svg-prep-previews,
+  .drawing-editor[data-short]
+    .drawing-editor-stage:not(:has(.ink-controls))
+    .svg-prep-pane-wrap,
+  .drawing-editor[data-short]
+    .drawing-editor-stage:not(:has(.ink-controls))
+    .svg-prep-result-pane,
+  .drawing-editor[data-short]
+    .drawing-editor-stage:not(:has(.ink-controls))
+    .svg-prep-source-pane {
+    min-height: 0;
+  }
+
+  .drawing-editor[data-short]
+    .drawing-editor-stage:not(:has(.ink-controls))
+    .svg-prep-result-pane,
+  .drawing-editor[data-short]
+    .drawing-editor-stage:not(:has(.ink-controls))
+    .svg-prep-source-pane {
+    flex: 1 1 0;
+    max-height: 100%;
+  }
+
+  .drawing-editor[data-short]
+    .drawing-editor-stage:not(:has(.ink-controls))
+    .svg-prep-result-pane
+    svg,
+  .drawing-editor[data-short]
+    .drawing-editor-stage:not(:has(.ink-controls))
+    .svg-prep-source-pane
+    svg {
+    max-height: 100%;
+  }
 }
 
 /* Row 2 is the work. It may wrap - six controls will not hold one line on a

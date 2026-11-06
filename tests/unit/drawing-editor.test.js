@@ -598,3 +598,160 @@ describe('the picture, for a screen reader', () => {
     )
   })
 })
+
+// ── A short screen ───────────────────────────────────────────────────────
+//
+// Under 500 px of height (a phone held sideways) the working row folds
+// behind More, whole: Fit and the main action join Shapes, More and Close on
+// the header row, the list starts shut, More opens beside the picture where
+// the list does, and the row comes back in order on a tall screen.
+describe('a short screen', () => {
+  /** A window under 500 px tall, or not, that can change its mind later. */
+  function shortScreen(short) {
+    const listeners = new Map()
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn((query) => ({
+        matches: short && /max-height: 500px.*landscape/.test(query),
+        media: query,
+        addEventListener(type, fn) {
+          if (type === 'change') listeners.set(query, fn)
+        },
+        removeEventListener() {},
+      })),
+    })
+    return (nowShort) =>
+      listeners.get('(max-height: 500px) and (orientation: landscape)')?.({
+        matches: nowShort,
+      })
+  }
+
+  afterEach(() => {
+    delete window.matchMedia
+  })
+
+  const names = (row) =>
+    [...row.children].map((c) => c.dataset.action || c.className.split(' ')[0])
+
+  it('folds the working row behind More with Fit and the main action on the header row, and unfolds in order', () => {
+    const flip = shortScreen(true)
+    const editor = make()
+    openOn(editor, BIRD_SVG)
+    const root = surface.querySelector('.drawing-editor')
+    const header = root.querySelector('.drawing-editor-toolbar-row--header')
+    const viewRow = root.querySelector('.drawing-editor-toolbar-row--view')
+    const more = root.querySelector('.drawing-editor-more-panel')
+    expect(root.dataset.short).toBe('true')
+    // Beside the picture, where the list opens.
+    expect(more.parentElement.className).toBe('drawing-editor-body')
+    expect(names(header)).toEqual([
+      'drawing-editor-title',
+      'drawing-editor-view-switch',
+      'fit',
+      'editor-apply',
+      'svg-prep-footer',
+      'panel-toggle',
+      'editor-more',
+      'editor-close',
+    ])
+    expect(viewRow.children.length).toBe(0)
+    for (const cls of [
+      'drawing-editor-stencil-tools',
+      'drawing-editor-zoom',
+      'drawing-editor-view',
+      'drawing-editor-history',
+      'drawing-editor-draft-note',
+      'svg-prep-legend',
+    ]) {
+      expect(more.querySelector(`.${cls}`), cls).not.toBeNull()
+    }
+    expect(more.querySelector('[data-action="crop"]')).not.toBeNull()
+    // The picture is the first thing seen: the list starts shut.
+    expect(
+      root
+        .querySelector('.drawing-editor-panel-toggle')
+        .getAttribute('aria-expanded')
+    ).toBe('false')
+
+    flip(false)
+    expect(root.dataset.short).toBeUndefined()
+    expect(more.parentElement.className).toBe('drawing-editor-toolbar')
+    expect(names(viewRow)).toEqual([
+      'drawing-editor-stencil-tools',
+      'drawing-editor-zoom',
+      'drawing-editor-view',
+      'drawing-editor-history',
+      'crop',
+      'undo-crop',
+      'render-charm',
+      'drawing-editor-draft-note',
+      'editor-apply',
+      'svg-prep-footer',
+      'editor-more',
+    ])
+    expect(names(header)).toEqual([
+      'drawing-editor-title',
+      'drawing-editor-view-switch',
+      'panel-toggle',
+      'editor-close',
+    ])
+    expect(
+      root.querySelector('.drawing-editor-zoom').firstElementChild.dataset.action
+    ).toBe('fit')
+    expect(more.querySelector('.svg-prep-legend')).toBeNull()
+    expect(
+      root.querySelector('.drawing-editor-stage .svg-prep-legend')
+    ).not.toBeNull()
+  })
+
+  it('opens the list and More one at a time, and only on a short screen', () => {
+    const flip = shortScreen(true)
+    const editor = make()
+    openOn(editor, BIRD_SVG)
+    const root = surface.querySelector('.drawing-editor')
+    const moreBtn = root.querySelector('.drawing-editor-more-btn')
+    const listBtn = root.querySelector('.drawing-editor-panel-toggle')
+    moreBtn.click()
+    expect(moreBtn.getAttribute('aria-expanded')).toBe('true')
+    expect(root.classList.contains('drawing-editor--more-open')).toBe(true)
+    listBtn.click()
+    expect(listBtn.getAttribute('aria-expanded')).toBe('true')
+    expect(moreBtn.getAttribute('aria-expanded')).toBe('false')
+    expect(root.classList.contains('drawing-editor--more-open')).toBe(false)
+    moreBtn.click()
+    expect(listBtn.getAttribute('aria-expanded')).toBe('false')
+    moreBtn.click()
+    flip(false)
+    moreBtn.click()
+    listBtn.click()
+    expect(moreBtn.getAttribute('aria-expanded')).toBe('true')
+    expect(listBtn.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('shuts More over the crop view, and brings focus back to More', () => {
+    shortScreen(true)
+    const editor = make()
+    openOn(editor, BIRD_SVG, { onCrop: vi.fn() })
+    const root = surface.querySelector('.drawing-editor')
+    const moreBtn = root.querySelector('.drawing-editor-more-btn')
+    moreBtn.click()
+    root.querySelector('.drawing-editor-crop-btn').click()
+    expect(root.dataset.crop).toBe('open')
+    expect(moreBtn.getAttribute('aria-expanded')).toBe('false')
+    root.querySelector('[data-action="cancel-crop"]').click()
+    expect(root.dataset.crop).toBeUndefined()
+    expect(document.activeElement).toBe(moreBtn)
+  })
+
+  it('leaves the rows alone on a tall screen', () => {
+    shortScreen(false)
+    const editor = make()
+    openOn(editor, BIRD_SVG)
+    const root = surface.querySelector('.drawing-editor')
+    expect(root.dataset.short).toBeUndefined()
+    expect(
+      root.querySelector('.drawing-editor-toolbar-row--view [data-action="fit"]')
+    ).not.toBeNull()
+  })
+})
