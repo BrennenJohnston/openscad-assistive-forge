@@ -17877,6 +17877,26 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   min-width: 0;
 }
 
+/* A combine runs by itself, after a change and whenever the charm reports its
+   width, usually for under a second. Its sentence lies over the top of the
+   picture and lets a press through, so the picture is where a finger was
+   aimed. A sentence that stays, like "No shapes included", keeps its line. */
+.drawing-editor-statusline {
+  position: relative;
+}
+
+.drawing-editor-statusline > .svg-prep-apply-hint[data-combining] {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: var(--z-index-sticky);
+  padding-bottom: var(--space-2xs);
+  background: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-border);
+  pointer-events: none;
+}
+
 /* Row 1 is the name and the two ways out. The title takes the slack
    (margin-right: auto above), so Shapes and Close sit hard right and neither
    ever wraps: two 44 px targets and a heading fit at 376 px, the editor's
@@ -18166,6 +18186,13 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   .drawing-editor--panel-open .drawing-editor-stage {
     padding-right: clamp(280px, 44%, 460px);
   }
+
+  /* The combine's sentence keeps to the picture's side of the open list. */
+  .drawing-editor--panel-open
+    .drawing-editor-statusline
+    > .svg-prep-apply-hint[data-combining] {
+    right: clamp(280px, 44%, 460px);
+  }
 }
 
 /* The picture is the editor. The panel is a drawer laid over the body's
@@ -18340,6 +18367,24 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 
 .drawing-editor-stage .svg-prep-pane-wrap {
   min-height: 0;
+}
+
+/* The combine's bar and Cancel lie over the foot of the picture, as its
+   sentence does over the top. */
+.drawing-editor-stage .svg-prep-pane-wrap--result {
+  position: relative;
+}
+
+.drawing-editor-stage .svg-prep-render-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-index-sticky);
+  margin-top: 0;
+  padding: var(--space-2xs) var(--space-xs);
+  background: var(--color-bg-primary);
+  border-top: 1px solid var(--color-border);
 }
 
 .drawing-editor-stage .svg-prep-zoom-controls {

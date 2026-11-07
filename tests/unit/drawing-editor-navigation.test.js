@@ -225,6 +225,18 @@ describe('the relief picture moves as the others do', () => {
     expect(editor._workspace.getSelected?.() ?? []).toEqual([]);
   });
 
+  it('a drag that fires no click, as a finger does not, leaves the next tap to choose its shape', () => {
+    pointer(pane(), 'pointerdown', 100, 50);
+    pointer(pane(), 'pointermove', 160, 50);
+    pointer(pane(), 'pointerup', 160, 50);
+    pointer(hit(3), 'pointerdown', 50, 25);
+    pointer(hit(3), 'pointerup', 50, 25);
+    pointer(hit(3), 'click', 50, 25);
+    expect(
+      editor._root.querySelectorAll('.svg-prep-object--selected')
+    ).toHaveLength(1);
+  });
+
   it('a press that does not travel is the click it always was, and a press on a shape never pans', () => {
     const [x0] = viewOf();
     pointer(hit(3), 'pointerdown', 50, 25);

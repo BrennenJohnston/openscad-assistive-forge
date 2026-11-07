@@ -860,6 +860,14 @@ describe('the marks: the destination and You are here', () => {
     expect(regions[2].at).toBeUndefined();
   });
 
+  it("a press on a shape is taken over, so a finger's late mouse events cannot pull the focus back from its row", async () => {
+    await openWithMarks();
+    expect(pointer(regionAt(0), 'pointerdown', 40, 40)).toBe(false);
+    expect(document.activeElement).toBe(canvasSvg());
+    pointer(regionAt(0), 'pointerup', 40, 40);
+    expect(document.activeElement).toBe(selectOf(0));
+  });
+
   it('a click on a mark still opens its row, as on any shape', async () => {
     await openWithMarks();
     pointer(regionAt(1), 'pointerdown', 180, 100);
