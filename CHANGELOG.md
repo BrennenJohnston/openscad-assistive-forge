@@ -79,6 +79,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- In the drawing editor's More, Compare with original no longer runs under
+  Show roles on a phone, and Show roles and the help sentence under Design
+  width no longer run past the panel's edge.
 - The drawing editor's picture stays where it is while shapes combine. It
   slid and shrank by up to 123 px, by itself when the charm reported its
   width, so a press could land beside the shape it was aimed at; the
