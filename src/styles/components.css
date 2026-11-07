@@ -18507,6 +18507,7 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 
 .drawing-editor-view-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-sm);
 }

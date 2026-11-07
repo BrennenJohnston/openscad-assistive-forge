@@ -89,7 +89,6 @@ async function openTheEditor(page, fileParam = 'design_file') {
     .getByRole('button', { name: 'Open the drawing editor' })
     .first();
   await door.waitFor({ state: 'visible', timeout: 60000 });
-  await door.scrollIntoViewIfNeeded();
   await door.click({ timeout: 30000 });
 }
 

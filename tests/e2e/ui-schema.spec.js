@@ -2590,6 +2590,102 @@ for (const size of S9_SIZES) {
   });
 }
 
+// S8: a row that is spent breaks, and what is on it is not squeezed. Read in the
+// charm's More, which holds the most: nothing past the panel's edge, a button's
+// words on one line and inside its box, nothing under anything else, and the
+// help sentence under the buttons it explains.
+function readMorePanel(panel) {
+  const shown = (el) => !el.hidden && el.getClientRects().length > 0;
+  const name = (el) => el.textContent.trim().slice(0, 24);
+  const p = panel.getBoundingClientRect();
+  const items = [...panel.querySelectorAll('button, input, select, p')].filter(shown);
+  const past = [];
+  const squeezed = [];
+  const under = [];
+  for (const [i, el] of items.entries()) {
+    const r = el.getBoundingClientRect();
+    if (r.left < p.left - 0.5 || r.right > p.right + 0.5) {
+      past.push(`${name(el)} ${Math.round(r.left)} to ${Math.round(r.right)}`);
+    }
+    if (el.tagName === 'BUTTON') {
+      const words = document.createRange();
+      words.selectNodeContents(el);
+      const lines = new Set(
+        [...words.getClientRects()].map((line) => Math.round(line.top))
+      ).size;
+      const w = words.getBoundingClientRect();
+      if (lines > 1 || w.left < r.left - 0.5 || w.right > r.right + 0.5) {
+        squeezed.push(`${name(el)}: ${lines} lines, ${Math.round(w.width)} in ${Math.round(r.width)}`);
+      }
+    }
+    for (const other of items.slice(i + 1)) {
+      const o = other.getBoundingClientRect();
+      const across = Math.min(r.right, o.right) - Math.max(r.left, o.left);
+      const down = Math.min(r.bottom, o.bottom) - Math.max(r.top, o.top);
+      if (across > 0.5 && down > 0.5) under.push(`${name(el)} / ${name(other)}`);
+    }
+  }
+  const lowest = Math.max(
+    ...[...panel.querySelectorAll('button')]
+      .filter(shown)
+      .map((b) => b.getBoundingClientRect().bottom)
+  );
+  const help = panel.querySelector('.svg-prep-design-width-help');
+  return {
+    past,
+    squeezed,
+    under,
+    sideways: panel.scrollWidth - panel.clientWidth,
+    helpUnderButtons: help.getBoundingClientRect().top >= lowest,
+  };
+}
+
+for (const size of [
+  { width: 1280, height: 720, touch: false },
+  { width: 412, height: 915, touch: true },
+  { width: 412, height: 810, touch: true },
+  { width: 844, height: 390, touch: true },
+  { width: 667, height: 375, touch: true },
+]) {
+  test.describe(`S8 the editor's More, ${size.width} x ${size.height}`, () => {
+    test.use({
+      viewport: { width: size.width, height: size.height },
+      hasTouch: size.touch,
+    });
+
+    test('nothing in it is squeezed, past its edge, or under another', async ({
+      page,
+    }) => {
+      test.setTimeout(300_000);
+      expectRule('S8');
+      await s9Ready(page, '/?example=q-charm');
+      await page.locator('#param-design_file').setInputFiles({
+        name: 'two.svg',
+        mimeType: 'image/svg+xml',
+        buffer: Buffer.from(S9_DRAWING),
+      });
+      await expect(
+        page.locator('.file-upload-container', {
+          has: page.locator('#param-design_file'),
+        })
+      ).toContainText('two.svg', { timeout: 30_000 });
+      await page.evaluate(() => document.querySelector('#editorDoorBtn').click());
+      await expect(
+        page.locator('#drawingEditorSurface .drawing-editor').first()
+      ).toHaveAttribute('data-purpose', 'relief', { timeout: 60_000 });
+      await page.locator('#drawingEditorSurface .drawing-editor-more-btn').click();
+      const panel = page.locator('#drawingEditorSurface .drawing-editor-more-panel');
+      await expect(panel).toBeVisible();
+      const more = await panel.evaluate(readMorePanel);
+      expect.soft(more.past, "S8: nothing past the panel's edge").toEqual([]);
+      expect.soft(more.squeezed, 'S8: a button keeps its words').toEqual([]);
+      expect.soft(more.under, 'S8: nothing under another').toEqual([]);
+      expect.soft(more.sideways, 'S8: the panel does not scroll sideways').toBeLessThanOrEqual(0);
+      expect.soft(more.helpUnderButtons, 'S8: the help sentence has its own line').toBe(true);
+    });
+  });
+}
+
 // ── The drawing editor held sideways (S6) ─────────────────────────────────
 //
 // The editor stands in for the preview while it is open, so the preview's

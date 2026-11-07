@@ -120,7 +120,6 @@ test.describe('the Drawing / Charm switch', () => {
       .getByRole('button', { name: 'Open the drawing editor' })
       .first();
     await door.waitFor({ state: 'visible', timeout: 60000 });
-    await door.scrollIntoViewIfNeeded();
     await door.click({ timeout: 30000 });
     await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible(
       { timeout: 90000 }
@@ -477,7 +476,6 @@ test.describe('the toolbar on the charm host', () => {
       .getByRole('button', { name: 'Open the drawing editor' })
       .first();
     await door.waitFor({ state: 'visible', timeout: 60000 });
-    await door.scrollIntoViewIfNeeded();
     await door.click({ timeout: 30000 });
     await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible(
       { timeout: 90000 }
@@ -751,7 +749,6 @@ test.describe('the toolbar on the charm host', () => {
     await expect(door).toBeVisible({ timeout: 30000 });
 
     // And it goes back in.
-    await door.scrollIntoViewIfNeeded();
     await door.click();
     await expect(surface(page)).toBeVisible({ timeout: 60000 });
     await expect
@@ -785,7 +782,6 @@ test.describe('the toolbar on the charm host', () => {
       });
     const applied = await designSize();
     expect(applied).toBeGreaterThan(0);
-    await door.scrollIntoViewIfNeeded();
     await door.click();
     await expect(surface(page)).toBeVisible({ timeout: 60000 });
     await expect
@@ -1127,7 +1123,6 @@ test.describe('the too-thin check on the charm host', () => {
       .locator('.svg-prep-status')
       .getByRole('button', { name: 'Open the drawing editor' });
     await expect(door).toBeVisible({ timeout: 30000 });
-    await door.scrollIntoViewIfNeeded();
     await door.click();
     const editor = surface(page);
     await expect(editor).toBeVisible({ timeout: 60000 });
@@ -1275,7 +1270,6 @@ test.describe('crop on the charm host', () => {
       .locator('.svg-prep-status')
       .getByRole('button', { name: 'Open the drawing editor' });
     await expect(door).toBeVisible({ timeout: 30000 });
-    await door.scrollIntoViewIfNeeded();
     await door.click();
     const editor = surface(page);
     await expect(editor).toBeVisible({ timeout: 60000 });
@@ -2026,7 +2020,6 @@ test.describe('the editor reopens where it was left', () => {
     const door = control
       .locator('.svg-prep-status')
       .getByRole('button', { name: 'Open the drawing editor' });
-    await door.scrollIntoViewIfNeeded();
     await door.click();
     await expect(editor).toBeVisible({ timeout: 60000 });
     await expect(editor.locator('.drawing-editor-status')).toHaveText(
@@ -2154,7 +2147,6 @@ test.describe('the editor reopens where it was left', () => {
     await expect(door()).toBeVisible({ timeout: 30000 });
 
     // The door goes in.
-    await door().scrollIntoViewIfNeeded();
     await door().click();
     await expect(surface(page)).toBeVisible({ timeout: 60000 });
     await expect
@@ -2468,7 +2460,6 @@ test.describe('the map purpose', () => {
       .getByRole('button', { name: 'Open the drawing editor' })
       .first();
     await door.waitFor({ state: 'visible', timeout: 60000 });
-    await door.scrollIntoViewIfNeeded();
     await door.click({ timeout: 30000 });
     await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible(
       { timeout: 90000 }
@@ -2977,7 +2968,6 @@ test.describe('the drawing editor without a picture', () => {
       name: 'Open the drawing editor',
     });
     await expect(door).toBeVisible({ timeout: 60000 });
-    await door.scrollIntoViewIfNeeded();
     await door.click();
 
     await expect(surface(page)).toBeVisible({ timeout: 60000 });
