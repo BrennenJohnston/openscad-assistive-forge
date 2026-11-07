@@ -9,14 +9,14 @@
             "hook_hand": "Right",
             "quality": "64"
         },
-        "Flat 2-prong lamp plug (NEMA 1-15)": {
-            "plug_preset": "Flat 2-prong lamp plug - NEMA 1-15",
+        "USB-C laptop tip": {
+            "plug_preset": "USB-C laptop tip",
             "size": "Medium",
             "attachment": "Zip ties + Velcro",
             "quality": "64"
         },
-        "Standard 3-prong plug (NEMA 5-15)": {
-            "plug_preset": "Standard 3-prong plug - NEMA 5-15",
+        "Flat 2-prong lamp plug (NEMA 1-15)": {
+            "plug_preset": "Flat 2-prong lamp plug - NEMA 1-15",
             "size": "Medium",
             "attachment": "Zip ties + Velcro",
             "quality": "64"
