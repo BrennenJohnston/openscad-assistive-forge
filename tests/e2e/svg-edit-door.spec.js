@@ -403,12 +403,34 @@ test.describe('The drawing editor door', () => {
     await expect(compareBtn).toBeVisible()
     await expect(compareBtn).toHaveAttribute('aria-pressed', 'false')
 
+    // Pressed, it looks it, as Show roles beside it does: the background
+    // and the border, read with no pointer over either button.
+    const rolesBtn = page.locator('.svg-prep-roles-toggle')
+    await expect(rolesBtn).toHaveAttribute('aria-pressed', 'true')
+    const look = (button) =>
+      button.evaluate((el) => {
+        const s = getComputedStyle(el)
+        return { background: s.backgroundColor, border: s.borderTopColor }
+      })
+    await page.mouse.move(0, 0)
+    const atRest = await look(compareBtn)
+
     // By keyboard, per the file's thesis.
     await compareBtn.focus()
     await page.keyboard.press('Enter')
     await expect(compareBtn).toHaveAttribute('aria-pressed', 'true')
     await expect(sourceWrap).toBeVisible()
     await expect(resultWrap).toBeVisible()
+    // Polled: the button eases into its pressed colour.
+    const rolesPressed = await look(rolesBtn)
+    await expect
+      .poll(() => look(compareBtn), {
+        message: 'Compare pressed looks as Show roles pressed',
+      })
+      .toEqual(rolesPressed)
+    expect(rolesPressed, 'Compare pressed looks unlike Compare at rest').not.toEqual(
+      atRest
+    )
 
     await page.keyboard.press('Enter')
     await expect(compareBtn).toHaveAttribute('aria-pressed', 'false')

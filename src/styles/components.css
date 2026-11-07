@@ -15126,7 +15126,8 @@ body.tutorial-body-locked {
   cursor: pointer;
 }
 
-.svg-prep-roles-toggle[aria-pressed='true'] {
+.svg-prep-roles-toggle[aria-pressed='true'],
+.svg-prep-compare-btn[aria-pressed='true'] {
   background: var(--color-hover-bg);
   border-color: var(--color-accent);
 }

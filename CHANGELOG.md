@@ -79,6 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Compare with original, in the drawing editor's More, looks pressed while
+  the original is shown, as Show roles does.
 - In the drawing editor's More, Compare with original no longer runs under
   Show roles on a phone, and Show roles and the help sentence under Design
   width no longer run past the panel's edge.
