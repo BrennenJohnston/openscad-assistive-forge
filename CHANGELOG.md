@@ -79,6 +79,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The drawing editor's picture stays where it is while shapes combine. It
+  slid and shrank by up to 123 px, by itself when the charm reported its
+  width, so a press could land beside the shape it was aimed at; the
+  sentence and the bar now lie over the picture's edges.
+- On a phone, the first tap on a shape after a drag of the charm's picture
+  no longer does nothing, and a tap on a shape in the map's picture leaves
+  the focus on its row's Class menu, as a mouse click does.
 - The Tactile Map's tape note says what switching the braille grade really
   gives, labels and length; it had given the same labels' tape, which the
   switch then contradicted because fewer names fit uncontracted.

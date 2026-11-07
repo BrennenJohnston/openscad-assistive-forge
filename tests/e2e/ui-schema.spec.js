@@ -2286,6 +2286,104 @@ async function s9OpenCustomizer(page, size) {
   await page.waitForTimeout(600);
 }
 
+/** A box, read again if a combine replaced the picture as it was being read. */
+async function s9BoxOf(locator) {
+  let box = null;
+  await expect
+    .poll(async () => {
+      box = await locator.boundingBox();
+      return box !== null;
+    })
+    .toBe(true);
+  return box;
+}
+
+/**
+ * A real finger's drag: it fires no click, which a mouse's always does. At a
+ * finger's pace: a drag with no time in it is a flick to the browser, whose next
+ * tap stops the flick and clicks nothing, on any page.
+ */
+async function s9FingerDrag(page, from, by) {
+  const cdp = await page.context().newCDPSession(page);
+  const at = (i) => ({
+    x: from.x + (by.x * i) / 6,
+    y: from.y + (by.y * i) / 6,
+    id: 1,
+  });
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [at(0)],
+  });
+  for (let i = 1; i <= 6; i += 1) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [at(i)],
+    });
+    await page.waitForTimeout(16);
+  }
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  });
+  await cdp.detach();
+}
+
+/**
+ * The picture's place through a combine, which comes by itself whenever the
+ * charm reports its width, and after every change. A change is made here and
+ * the picture read at each thing the combine shows and hides, to its end.
+ */
+async function expectCombineLeavesPicture(page) {
+  const apply = page.locator('#drawingEditorSurface button[data-action="apply"]');
+  await expect(apply).toBeEnabled({ timeout: 60_000 });
+  const seen = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const surface = document.querySelector('#drawingEditorSurface');
+        const button = surface.querySelector('button[data-action="apply"]');
+        const places = new Set();
+        let underList = 0;
+        const read = () => {
+          const r = surface
+            .querySelector('.svg-prep-result-pane svg')
+            ?.getBoundingClientRect();
+          if (r) places.add(`y ${Math.round(r.y)}, height ${Math.round(r.height)}`);
+          const hint = surface.querySelector('.svg-prep-apply-hint');
+          const list = surface.querySelector('.drawing-editor-panel');
+          if (!hint || hint.hidden || !list || list.hidden) return;
+          const a = hint.getBoundingClientRect();
+          const b = list.getBoundingClientRect();
+          const across = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+          const down = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+          if (across > 1 && down > 1) underList = Math.round(across);
+        };
+        read();
+        let went = false;
+        new MutationObserver(() => {
+          read();
+          if (button.disabled) went = true;
+          else if (went) resolve({ places: [...places], underList });
+        }).observe(surface, {
+          subtree: true,
+          childList: true,
+          attributes: true,
+          attributeFilter: ['hidden', 'disabled', 'aria-busy'],
+        });
+        surface
+          .querySelector(
+            '.svg-prep-object .svg-prep-role-group input:not(:checked)'
+          )
+          .click();
+      })
+  );
+  expect
+    .soft(seen.places, 'S9: a combine leaves the picture where it is')
+    .toHaveLength(1);
+  expect
+    .soft(seen.underList, "S9: the combine's sentence is clear of the open list")
+    .toBe(0);
+}
+
 /**
  * The movement every editor's picture keeps, read in the open editor:
  * `svg` is the picture, `shape` a path on it, `empty` a point of empty ground.
@@ -2322,14 +2420,26 @@ async function expectS9Movement(page, size, { svg, shape, empty }) {
     .toBeCloseTo(atFit[2] / 10, 1);
 
   // A drag on empty ground carries the picture with the pointer.
+  // On a phone it is a finger, which fires no click at the end of a drag.
+  const finger =
+    size.touch &&
+    page.context().browser().browserType().name() === 'chromium';
   await buttons.nth(0).click();
-  const box = await svg.boundingBox();
-  await page.mouse.move(box.x + empty.x, box.y + empty.y);
-  await page.mouse.down();
-  await page.mouse.move(box.x + empty.x + 60, box.y + empty.y + 30, {
-    steps: 6,
-  });
-  await page.mouse.up();
+  const box = await s9BoxOf(svg);
+  if (finger) {
+    await s9FingerDrag(
+      page,
+      { x: box.x + empty.x, y: box.y + empty.y },
+      { x: 60, y: 30 }
+    );
+  } else {
+    await page.mouse.move(box.x + empty.x, box.y + empty.y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + empty.x + 60, box.y + empty.y + 30, {
+      steps: 6,
+    });
+    await page.mouse.up();
+  }
   const afterDrag = await viewBoxOf(svg);
   expect
     .soft(afterDrag[0], 'S9: a drag on empty ground pans')
@@ -2337,9 +2447,15 @@ async function expectS9Movement(page, size, { svg, shape, empty }) {
 
   // A shape chosen on the picture opens the list on its row: the row marked
   // chosen, or, in the map purpose, the row whose Class menu took the focus.
-  // Fit first, so the drag above has not carried the shape out of view.
+  // Fit first, so the drag above has not carried the shape out of view; the
+  // finger's tap is the next thing it does after its drag.
   await buttons.nth(0).click();
-  await shape.click({ force: true });
+  if (finger) {
+    const at = await s9BoxOf(shape);
+    await page.touchscreen.tap(at.x + at.width / 2, at.y + at.height / 2);
+  } else {
+    await shape.click({ force: true });
+  }
   await expect(
     page.locator('#drawingEditorSurface details[data-section="regions"]')
   ).toHaveAttribute('open', '');
@@ -2417,6 +2533,7 @@ for (const size of S9_SIZES) {
           .nth(1),
         empty: { x: 4, y: 4 },
       });
+      await expectCombineLeavesPicture(page);
     });
 
     test('the map: its own door and no header door, and the picture keeps the rule', async ({
@@ -2625,6 +2742,12 @@ for (const size of [
       // Close brings the header back.
       await page.locator('#drawingEditorSurface .drawing-editor-close').click();
       await expect(page.locator('.app-header')).toBeVisible();
+    });
+
+    test('S9: a combine leaves the picture where it is', async ({ page }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 180_000);
+      await openEditorSideways(page);
+      await expectCombineLeavesPicture(page);
     });
 
     // The ink settings under the picture keep their height, so the picture

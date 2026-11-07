@@ -1838,12 +1838,19 @@ export function createSvgPrepWorkspace(containerEl) {
    * @param {string} [hint] - Why not, when disabled. Naming the real reason
    *   matters: "No shapes included" is a lie when the shapes are there and
    *   only the flatten is waiting.
+   * @param {{combining?: boolean}} [options] - The hint is a combine's, gone
+   *   as soon as it lands, so it must not move what a person is aiming at.
    */
-  function setApplyEnabled(enabled, hint = 'No shapes included') {
+  function setApplyEnabled(
+    enabled,
+    hint = 'No shapes included',
+    { combining = false } = {}
+  ) {
     refs.applyBtn.disabled = !enabled;
     refs.applyBtn.setAttribute('aria-disabled', String(!enabled));
     if (!enabled) refs.applyHint.textContent = hint;
     refs.applyHint.hidden = enabled;
+    refs.applyHint.toggleAttribute('data-combining', combining);
     // Nothing to save either: an empty result is an empty file.
     refs.saveBtn.disabled = !enabled;
     refs.saveBtn.setAttribute('aria-disabled', String(!enabled));
@@ -1944,7 +1951,7 @@ export function createSvgPrepWorkspace(containerEl) {
       const picture = refs.resultPane.querySelector('svg');
       if (picture) picture.setAttribute('viewBox', previousViewBox);
     }
-    setApplyEnabled(false, combiningSentence());
+    setApplyEnabled(false, combiningSentence(), { combining: true });
   }
 
   /** Whether a combine is pending or in flight. */
@@ -2181,7 +2188,7 @@ export function createSvgPrepWorkspace(containerEl) {
         // seconds of worker start-up and work, and Apply's handler refuses a
         // null result by returning - so an enabled button would do nothing at
         // all when pressed.
-        setApplyEnabled(false, combiningSentence());
+        setApplyEnabled(false, combiningSentence(), { combining: true });
         try {
           const size = flattenSizeOf();
           const out = await getFlattenRunner().start(
@@ -2457,6 +2464,10 @@ export function createSvgPrepWorkspace(containerEl) {
     }
 
     function onPointerDown(e) {
+      // Not every drag ends in the click it armed against: a finger's does not,
+      // nor one whose picture was replaced under it. A new press is a new
+      // gesture, so a click still owed then is not coming.
+      swallowClick = false;
       if (pinch.down(e)) {
         endDrag();
         return;

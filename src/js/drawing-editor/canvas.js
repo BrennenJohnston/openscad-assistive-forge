@@ -643,6 +643,17 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
     return el?.dataset.region ?? el?.dataset.edge ?? null;
   };
 
+  // The press is the canvas's, which also stops the browser's own focusing of
+  // it: done here instead, so a click on empty ground still hands the keyboard
+  // to the picture. A finger's mouse events follow its release, so left to run
+  // they would pull the focus back from the row a click on a shape has opened.
+  function takeOverPress(event) {
+    if (typeof svg.focus === 'function' && document.activeElement !== svg) {
+      svg.focus({ preventScroll: true });
+    }
+    event.preventDefault();
+  }
+
   function onPointerDown(event) {
     // A second finger makes it a pinch; whatever the first had begun ends.
     if (pinch.down(event)) {
@@ -677,6 +688,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
       // Select, paint, remove: a click, resolved on release so a drag that
       // began on a region does not fire on the way down.
       drag = { kind: 'click', start: at, key, pointerId: event.pointerId };
+      takeOverPress(event);
       return;
     }
     try {
@@ -684,13 +696,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
     } catch {
       // jsdom has no pointer capture; the events still arrive.
     }
-    // The press is taken over below, which also stops the browser's own
-    // focusing of the canvas: done here instead, so a click on empty ground
-    // still hands the keyboard to the picture.
-    if (typeof svg.focus === 'function' && document.activeElement !== svg) {
-      svg.focus({ preventScroll: true });
-    }
-    event.preventDefault();
+    takeOverPress(event);
   }
 
   function onPointerMove(event) {
