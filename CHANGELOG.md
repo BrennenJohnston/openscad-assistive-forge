@@ -79,6 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Compare with original, in the drawing editor's More, looks pressed while
+  the original is shown, as Show roles does.
 - The drawing editor's picture stays where it is while shapes combine. It
   slid and shrank by up to 123 px, by itself when the charm reported its
   width, so a press could land beside the shape it was aimed at; the
