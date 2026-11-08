@@ -19,11 +19,18 @@
  * @license GPL-3.0-or-later
  */
 
-import { PRINT_PITCH, wrapPrint } from './key-layout.js';
-import { PLATE_MIN_MM } from './plate-tiling.js';
+import { LETTER_SPACING, PRINT_PITCH, wrapPrint } from './key-layout.js';
+import { PLATE_MIN_MM, planPlates } from './plate-tiling.js';
+import { signRowWidthMm } from '../sign-letter-metrics.js';
 
 /** Raised text keeps 9.525 mm (3/8 in) clear (ADA 703.2.7, 703.3.2). */
 export const SHEET_CLEARANCE_MM = 9.525;
+
+/**
+ * A title line stops this far before a plate seam, so a letter the
+ * model draws a little wider than the sign's measure still stands whole.
+ */
+export const SEAM_CLEAR_MM = 3;
 
 /** The band's width (mm): where it starts, and what the dial allows. */
 export const MARGIN_MM = Object.freeze({ start: 10, min: 10, max: 40 });
@@ -117,20 +124,29 @@ export function trimFace({ face, printed = {}, minMm = PLATE_MIN_MM }) {
  * @param {number} letterMm - the capital height
  * @returns {{ lines: string[], h: number } | null}
  */
-export function titleBandOf(title, faceWidthMm, letterMm) {
+export function titleBandOf(
+  title,
+  faceWidthMm,
+  letterMm,
+  minMm = 0,
+  wordMaxMm = faceWidthMm
+) {
   const text = String(title || '')
     .trim()
     .toUpperCase();
   if (!text) return null;
-  const lines = wrapPrint(text, faceWidthMm, letterMm);
+  const lines = wrapPrint(text, faceWidthMm, letterMm, wordMaxMm);
   if (!lines.length) return null;
   // Rounded up to the millimeter: the tile's sizes are whole millimeters,
   // and a band of 40.65 would reach the model as 41 with the third of a
   // millimeter falling at a plate's top edge.
   return {
     lines,
-    h: Math.ceil(
-      lines.length * letterMm * PRINT_PITCH + 2 * SHEET_CLEARANCE_MM - 1e-9
+    h: Math.max(
+      Math.ceil(
+        lines.length * letterMm * PRINT_PITCH + 2 * SHEET_CLEARANCE_MM - 1e-9
+      ),
+      minMm
     ),
   };
 }
@@ -144,6 +160,9 @@ export function titleBandOf(title, faceWidthMm, letterMm) {
  * @param {string} [input.title]
  * @param {'band'|'inside'|'none'} [input.placement]
  * @param {number} [input.letterMm] - the title's capital height
+ * @param {number} [input.bandMinMm] - the band no shallower than this
+ * @param {number} [input.titleWidthMm] - the title wrapped to this, else the face
+ * @param {number} [input.titleWordMaxMm] - a lone word may run to this
  * @returns {{
  *   w: number, h: number, face: {w: number, h: number}, marginMm: number,
  *   faceAt: [number, number], band: {left: number, right: number, top: number, bottom: number},
@@ -156,6 +175,9 @@ export function sheetOf({
   title = '',
   placement = 'band',
   letterMm = 16,
+  bandMinMm = 0,
+  titleWidthMm = null,
+  titleWordMaxMm = null,
 }) {
   const m = Math.min(
     MARGIN_MM.max,
@@ -164,7 +186,16 @@ export function sheetOf({
   const where = TITLE_PLACEMENTS.some((p) => p.key === placement)
     ? placement
     : 'band';
-  const band = where === 'band' ? titleBandOf(title, face.w, letterMm) : null;
+  const band =
+    where === 'band'
+      ? titleBandOf(
+          title,
+          titleWidthMm > 0 ? Math.min(titleWidthMm, face.w) : face.w,
+          letterMm,
+          bandMinMm,
+          titleWordMaxMm > 0 ? Math.min(titleWordMaxMm, face.w) : undefined
+        )
+      : null;
   const bandH = band ? band.h : 0;
   return {
     w: round3(face.w + 2 * m),
@@ -176,6 +207,48 @@ export function sheetOf({
     titleBand: band ? { y: m, h: band.h, lines: band.lines } : null,
     placement: where,
   };
+}
+
+/**
+ * The sheet as the bed cuts it. The title wraps to the first plate column,
+ * the margin and SEAM_CLEAR_MM short of the seam, so no letter is cut by
+ * one (a word that fits the column only without that reserve stands whole
+ * on a line of its own rather than broken); and a band that goes on
+ * plates of its own is as deep as those
+ * plates, the smallest the model takes, so the plates and the board agree.
+ * Each answer can change the other (more lines, a deeper band, a row of
+ * its own), so the sheet is planned again until it holds still.
+ *
+ * @param {Parameters<typeof sheetOf>[0]} input
+ * @param {{ w: number, d: number }} bed
+ * @returns {ReturnType<typeof sheetOf>}
+ */
+export function sheetOnBed(input, bed) {
+  let sheet = sheetOf(input);
+  if (!sheet.titleBand) return sheet;
+  for (let pass = 0; pass < 4; pass += 1) {
+    const layout = planPlates({
+      w: sheet.w,
+      h: sheet.h,
+      bed,
+      titleBandMm: sheet.titleBand.h,
+    });
+    const next = sheetOf({
+      ...input,
+      titleWidthMm:
+        layout.cols > 1 ? layout.plateW - sheet.marginMm - SEAM_CLEAR_MM : null,
+      titleWordMaxMm:
+        layout.cols > 1 ? layout.plateW - sheet.marginMm - 0.5 : null,
+      bandMinMm: layout.titlePlates.length ? PLATE_MIN_MM.h : 0,
+    });
+    const same =
+      next.h === sheet.h &&
+      next.titleBand.h === sheet.titleBand.h &&
+      next.titleBand.lines.join('|') === sheet.titleBand.lines.join('|');
+    sheet = next;
+    if (same) break;
+  }
+  return sheet;
 }
 
 /**
@@ -237,10 +310,12 @@ export function rowsText(rows) {
 }
 
 /**
- * The rows that fall on one plate of the sheet, moved into the plate's
+ * The rows that reach one plate of the sheet, moved into the plate's
  * frame (y up from the plate's bottom). A row's start may lie left of the
  * plate or its text run past the plate's edge: the model clips the letters
- * to the plate, so a line across a seam continues on the next plate.
+ * to the plate, so a line across a seam continues on the next plate. A
+ * row whose letters end before the plate (by the sign's measure, with
+ * SEAM_CLEAR_MM to spare) is not the plate's: it would print nothing.
  *
  * @param {Array<{x: number, y: number, h: number, z: number, text: string}>} rows
  * @param {{ x: number, y: number, w: number, h: number }} plate - in the sheet's frame, y down
@@ -254,7 +329,14 @@ export function plateRows(rows, plate, sheetH) {
       // above it. Keep the row when any of its height lies on the plate.
       const baseline = sheetH - r.y;
       const top = baseline - r.h;
-      return baseline > plate.y && top < plate.y + plate.h;
+      if (!(baseline > plate.y && top < plate.y + plate.h)) return false;
+      const end =
+        r.x +
+        signRowWidthMm(String(r.text), {
+          charHeightMm: r.h,
+          letterSpacing: LETTER_SPACING,
+        });
+      return r.x < plate.x + plate.w && end + SEAM_CLEAR_MM > plate.x;
     })
     .map((r) => ({
       ...r,

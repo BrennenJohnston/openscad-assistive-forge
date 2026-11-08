@@ -109,7 +109,7 @@ import {
   TITLE_PLACEMENTS,
   plateRows,
   rowsText,
-  sheetOf,
+  sheetOnBed,
   shiftRings,
   titleRows,
   trimFace,
@@ -672,13 +672,28 @@ class MapPanel {
    * title inside the face as it always did.
    */
   sheetNow() {
-    return sheetOf({
-      face: this.view?.face || this.plan.size,
-      marginMm: this.marginMm,
-      title: this.titleText(),
-      placement: this.config.titleParam ? this.titlePlacement : 'inside',
-      letterMm: this.titleLetterMm(),
-    });
+    return sheetOnBed(
+      {
+        face: this.view?.face || this.plan.size,
+        marginMm: this.marginMm,
+        title: this.titleText(),
+        placement: this.config.titleParam ? this.titlePlacement : 'inside',
+        letterMm: this.titleLetterMm(),
+      },
+      this.bed()
+    );
+  }
+
+  /**
+   * The title plates no letters reach: the band's level surface is all they
+   * add, and step 5, the README and the PDF say so.
+   */
+  blankTitleIds(layout = this.layout, sheet = this.sheet) {
+    if (!layout?.titlePlates?.length || !sheet?.titleBand) return [];
+    const rows = titleRows(sheet, this.titleLetterMm());
+    return layout.titlePlates
+      .filter((p) => plateRows(rows, p, sheet.h).length === 0)
+      .map((p) => p.id);
   }
 
   /**
@@ -2298,6 +2313,7 @@ class MapPanel {
       tape: this.tapeSummary(this.labeled()),
       trimMm: this.trim ? sheet.marginMm : 0,
       channelsThrough: this.channelCut === 'through',
+      blankTitles: this.blankTitleIds(this.layout, sheet),
     });
     const grid = plateGridSvg({
       rings,
@@ -2342,8 +2358,10 @@ class MapPanel {
       words: rowsText(parts.rows),
       faceAt,
     });
+    const blank = new Set(this.blankTitleIds(this.layout, sheet));
     const titles = (this.layout?.titlePlates || []).map((plate) => ({
       id: titleLabel(plate.id),
+      blank: blank.has(plate.id),
       ...this.paperDataFor({
         rings: EMPTY_RINGS(),
         size: { w: plate.w, h: plate.h },
@@ -2439,14 +2457,28 @@ class MapPanel {
       ...this.keyPages.map((p) => p.id),
     ];
     if (!ids.includes(this.plate)) this.plate = 'whole';
+    const blank = new Set(this.blankTitleIds());
+    const labelFor = (id) =>
+      id === 'whole'
+        ? 'Whole map'
+        : isKeyId(id)
+          ? keyLabel(id)
+          : isTitleId(id)
+            ? `${titleLabel(id)}${blank.has(id) ? ' (blank)' : ''}`
+            : `Plate ${id}`;
     // The same plates keep their radios: one built again takes focus again,
-    // and a screen reader says the plate a second time.
+    // and a screen reader says the plate a second time. Their words follow.
     const shown = [...fieldset.querySelectorAll('input[type="radio"]')];
     if (
       shown.length === ids.length &&
       shown.every((radio, i) => radio.value === ids[i])
     ) {
-      for (const radio of shown) radio.checked = radio.value === this.plate;
+      for (const radio of shown) {
+        radio.checked = radio.value === this.plate;
+        const label = fieldset.querySelector(`label[for="${radio.id}"]`);
+        const words = labelFor(radio.value);
+        if (label && label.textContent !== words) label.textContent = words;
+      }
       return;
     }
     for (const row of [
@@ -2478,17 +2510,7 @@ class MapPanel {
         );
         this.schedule(0);
       });
-      const label = el(
-        'label',
-        '',
-        id === 'whole'
-          ? 'Whole map'
-          : isKeyId(id)
-            ? keyLabel(id)
-            : isTitleId(id)
-              ? titleLabel(id)
-              : `Plate ${id}`
-      );
+      const label = el('label', '', labelFor(id));
       label.htmlFor = input.id;
       row.appendChild(input);
       row.appendChild(label);
@@ -2787,6 +2809,10 @@ class MapPanel {
     const t = layout.titlePlates.length;
     if (t && !tooSmall) {
       sentence += ` The title takes ${t === 1 ? 'a plate of its own' : `${t} plates of its own`} above row A.`;
+      const blank = this.blankTitleIds(layout, sheet);
+      if (blank.length) {
+        sentence += ` ${blank.map(titleLabel).join(' and ')} ${blank.length === 1 ? 'is' : 'are'} blank.`;
+      }
     }
     this.keyPages = this.layout ? this.buildKeyPages(layout) : [];
     const k = this.keyPages.length;
