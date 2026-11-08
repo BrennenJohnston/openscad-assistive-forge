@@ -14,13 +14,17 @@ import {
   plateRows,
   rowsText,
   sheetOf,
+  sheetOnBed,
   shiftRings,
   titleBandOf,
   titleRows,
   trimFace,
 } from '../../src/js/tactile-map/sheet.js';
 
+import { BED_PRESETS } from '../../src/js/tactile-map/plate-tiling.js';
+
 const FACE = { w: 480, h: 360 };
+const x1c = BED_PRESETS.find((b) => b.key === 'x1c');
 
 describe('the sheet', () => {
   it('puts a 10 mm band around a 480 x 360 face and a one-line 16 mm title on its own band above: 500 x 421, the face at 10, 51', () => {
@@ -37,6 +41,47 @@ describe('the sheet', () => {
     expect(s.faceAt[1]).toBe(51);
     expect(s.face).toEqual(FACE);
     expect(s.placement).toBe('band');
+  });
+
+  it("on a bed, wraps the title to the first plate column so no letter meets a seam, and gives a band on plates of its own the smallest plate's depth", () => {
+    // Two columns of 250 on an X1C: the title keeps to 237 mm (the plate
+    // less the margin and 3 mm before the seam). FERRY PLACE NORTHEAST is
+    // 376.8 mm of 16 mm capitals: one line on the face, two in the column.
+    const rides = sheetOnBed(
+      { face: FACE, title: 'Ferry Place Northeast' },
+      x1c
+    );
+    expect(rides.titleBand.lines).toEqual(['FERRY PLACE', 'NORTHEAST']);
+    expect(rides.titleBand.h).toBe(63);
+    expect(rides.h).toBe(443);
+    expect(rides.faceAt).toEqual([10, 73]);
+    expect(
+      sheetOf({ face: FACE, title: 'Ferry Place Northeast' }).titleBand.lines
+    ).toEqual(['FERRY PLACE NORTHEAST']);
+    // A 480 x 480 face: the band would force a third row, so it goes on
+    // plates of its own, and those are 75 mm, the smallest the model
+    // takes; the sheet grows with them, so the plates and the board agree.
+    const own = sheetOnBed({ face: { w: 480, h: 480 }, title: 'Station' }, x1c);
+    expect(own.titleBand.lines).toEqual(['STATION']);
+    expect(own.titleBand.h).toBe(75);
+    expect(own.h).toBe(575);
+    expect(own.faceAt).toEqual([10, 85]);
+    // The letters keep their clearance at the top; the room is under them.
+    expect(titleRows(own, 16)[0].y).toBe(575 - (10 + 9.525 + 16));
+    expect(
+      sheetOf({ face: FACE, title: 'Station', bandMinMm: 75 }).titleBand.h
+    ).toBe(75);
+    // A 370 x 241 sheet cuts into two 185 mm plates: the column is 172 mm
+    // and NORTHEAST 173.6. The word stands whole on a line of its own (it
+    // ends 1.5 mm before the seam) rather than broken, and the band is
+    // three lines, 84 mm, on plates of its own.
+    const narrow = sheetOnBed(
+      { face: { w: 350, h: 221 }, title: 'Ferry Place Northeast' },
+      x1c
+    );
+    expect(narrow.titleBand.lines).toEqual(['FERRY', 'PLACE', 'NORTHEAST']);
+    expect(narrow.titleBand.h).toBe(84);
+    expect(narrow.h).toBe(325);
   });
 
   it('wraps a long title to the face width in lines at the sign pitch, each line 21.6 mm before the band rounds up', () => {
@@ -88,9 +133,7 @@ describe('the sheet', () => {
     ]);
     // A margin outside the range is held to it.
     expect(sheetOf({ face: FACE, marginMm: 3, title: '' }).band.left).toBe(10);
-    expect(sheetOf({ face: FACE, marginMm: 99, title: '' }).band.left).toBe(
-      40
-    );
+    expect(sheetOf({ face: FACE, marginMm: 99, title: '' }).band.left).toBe(40);
   });
 
   it('shifts rings by the face offset, and writes the title rows in the model frame: x:y:h:z:TEXT in tenths, y up from the sheet bottom', () => {
@@ -137,7 +180,7 @@ describe('the sheet', () => {
     expect(rowsText([])).toBe('');
   });
 
-  it('gives each plate the rows that touch it, in its own frame, a row across a seam starting left of the next plate', () => {
+  it('gives each plate the rows that reach it, in its own frame: a row across a seam starts left of the next plate, and one that ends before a plate is not its', () => {
     const s = sheetOf({ face: FACE, marginMm: 10, title: 'Ferry Place' });
     const rows = titleRows(s, 16);
     // The band rides in row A of two 250 x 210.5 plates: the row's baseline
@@ -148,10 +191,18 @@ describe('the sheet', () => {
     expect(plateRows(rows, a1, s.h)).toEqual([
       { x: 10, y: 174.975, h: 16, z: 0, text: 'FERRY PLACE' },
     ]);
-    expect(rowsText(plateRows(rows, a2, s.h))).toBe(
-      '-2400:1750:160:0:FERRY PLACE'
-    );
+    // FERRY PLACE in 16 mm capitals runs 195.5 mm from x 10: it ends
+    // before A2, which carries none of it.
+    expect(plateRows(rows, a2, s.h)).toEqual([]);
     expect(plateRows(rows, b1, s.h)).toEqual([]);
+    const long = sheetOf({
+      face: FACE,
+      marginMm: 10,
+      title: 'Ferry Place Northeast',
+    });
+    expect(rowsText(plateRows(titleRows(long, 16), a2, long.h))).toBe(
+      '-2400:1750:160:0:FERRY PLACE NORTHEAST'
+    );
     // A title plate of its own above row A, 75 mm tall on a 541 sheet.
     const tall = sheetOf({ face: { w: 480, h: 480 }, title: 'Ferry Place' });
     const title1 = { x: 0, y: 0, w: 250, h: 75 };
@@ -173,7 +224,11 @@ describe('the trim', () => {
     const out = trimFace({
       face: FACE,
       printed: {
-        rings: { level1: [box(40.2, 60, 299.6, 200)], level2: [], channels: [] },
+        rings: {
+          level1: [box(40.2, 60, 299.6, 200)],
+          level2: [],
+          channels: [],
+        },
       },
     });
     expect(out).toEqual({
