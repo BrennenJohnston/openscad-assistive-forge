@@ -79,6 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The names on the map paper and in the PDF no longer print over one
+  another, over a tape channel, or past the sheet's edge: a name that
+  cannot stand at its thing moves to the nearest clear line and a thin
+  leader points back to the thing.
 - Compare with original, in the drawing editor's More, looks pressed while
   the original is shown, as Show roles does.
 - In the drawing editor's More, Compare with original no longer runs under

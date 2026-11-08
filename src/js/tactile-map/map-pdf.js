@@ -14,7 +14,7 @@
  */
 
 import { PdfWriter, textWidthMm } from './pdf-writer.js';
-import { THROUGH_DASH_MM, THROUGH_GAP_MM } from './map-paper.js';
+import { THROUGH_DASH_MM, THROUGH_GAP_MM, leaderEnd } from './map-paper.js';
 
 /** The papers offered, sideways, the first the default. */
 export const PAPER_SIZES = Object.freeze([
@@ -116,6 +116,14 @@ function drawPlate(w, data, { x, y, scale, colors, seams }) {
     }
   }
   for (const t of data.texts || []) {
+    if (Array.isArray(t.from)) {
+      // A name moved off its thing points back to it.
+      const [ex, ey] = leaderEnd(t);
+      w.line(px(t.from[0]), py(t.from[1]), px(ex), py(ey), {
+        stroke: FAINT,
+        widthMm: 0.3,
+      });
+    }
     w.text(
       px(t.at[0]),
       py(t.at[1]) + (NAME_PT / PT_OF_MM) * 0.35,

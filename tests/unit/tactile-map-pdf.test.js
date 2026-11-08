@@ -247,9 +247,12 @@ describe("the map's PDF", () => {
     });
     const pdf = parsePdf(bytes);
     expect(pdf.text).toMatch(/\(Label tape: contracted braille/);
-    expect(pdf.text).toMatch(/\(Pine: 3 cells, a channel 26.6 mm long, beside Pine Street\) Tj/);
+    expect(pdf.text).toMatch(
+      /\(Pine: 3 cells, a channel 26.6 mm long, beside Pine Street\) Tj/
+    );
     // ⠏ is dots 1, 2, 3, 4; ⠔ dots 3, 5; ⠑ dots 1, 5: eight dots, four curves each.
-    const before = parsePdf(mapPdf(input).bytes).text.match(/ c\n/g)?.length || 0;
+    const before =
+      parsePdf(mapPdf(input).bytes).text.match(/ c\n/g)?.length || 0;
     const after = pdf.text.match(/ c\n/g)?.length || 0;
     expect(after - before).toBe(8 * 4);
   });
@@ -269,6 +272,34 @@ describe("the map's PDF", () => {
     const dashed = through.match(/\[5\.67 4\.25\] 0 d /g) || [];
     const drawn = input.plates.flatMap((p) => p.channels).length + 2;
     expect(dashed).toHaveLength(drawn * 4);
+  });
+
+  it('draws a leader from a moved name to its place', () => {
+    const one = {
+      ...input.whole,
+      texts: [
+        {
+          featureId: 'b',
+          text: 'B',
+          at: [50, 60],
+          from: [50, 50],
+          kind: 'point',
+        },
+      ],
+    };
+    const text = parsePdf(
+      mapPdf({ ...input, whole: one, plates: [] }).bytes
+    ).text;
+    const lines = text.match(/ l S\n/g) || [];
+    const plain = parsePdf(
+      mapPdf({
+        ...input,
+        whole: { ...one, texts: [{ ...one.texts[0], from: undefined }] },
+        plates: [],
+      }).bytes
+    ).text;
+    const before = plain.match(/ l S\n/g) || [];
+    expect(lines.length).toBe(before.length + 1);
   });
 
   it('scales a plate that does not fit the paper, and says so', () => {
