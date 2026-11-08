@@ -59,7 +59,7 @@ export const KEY_LETTER_MM = 16;
 /** The sample column: a line's 18 mm piece; a wider symbol widens it. */
 const SAMPLE_MM = 18;
 /** The Braille Sign's letter spacing (ADA 703.2.7). */
-const LETTER_SPACING = 1.21;
+export const LETTER_SPACING = 1.21;
 /** Line pitch of the raised words: 135 % of the capital (ADA 703.2.8). */
 export const PRINT_PITCH = 1.35;
 /** Between two channels of one entry (BANA 2022 8.5.3; the map's channels). */
@@ -117,13 +117,18 @@ function descentMm(text, letterMm) {
   return -lowest * size;
 }
 
-/** Words wrapped to a width in raised capitals. */
-export function wrapPrint(text, widthMm, letterMm) {
-  const fits = (s) =>
+/**
+ * Words wrapped to a width in raised capitals. A word wider than the line
+ * stands on a line of its own when it is within `wordMaxMm` (the width
+ * the line may take when a word needs it), and breaks only past that.
+ */
+export function wrapPrint(text, widthMm, letterMm, wordMaxMm = widthMm) {
+  const width = (s) =>
     signRowWidthMm(s, {
       charHeightMm: letterMm,
       letterSpacing: LETTER_SPACING,
-    }) <= widthMm;
+    });
+  const fits = (s) => width(s) <= widthMm;
   const lines = [];
   let line = '';
   for (const word of text.split(/\s+/).filter(Boolean)) {
@@ -133,6 +138,11 @@ export function wrapPrint(text, widthMm, letterMm) {
       continue;
     }
     if (line) lines.push(line);
+    if (width(word) <= Math.max(widthMm, wordMaxMm)) {
+      lines.push(word);
+      line = '';
+      continue;
+    }
     // A word longer than the line breaks where it must.
     let rest = word;
     while (!fits(rest)) {

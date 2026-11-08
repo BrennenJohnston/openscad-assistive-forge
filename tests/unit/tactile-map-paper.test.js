@@ -177,5 +177,9 @@ describe('the paper of a plate', () => {
     expect(svg).toMatch(
       /<g id="paper-words"[^>]*><text x="9.5" y="80"[^>]*>KEY<\/text>/
     );
+    // The word is drawn at the width the model prints it, not the font's.
+    expect(svg).toMatch(
+      /<text x="9.5" y="80"[^>]*textLength="[\d.]+" lengthAdjust="spacingAndGlyphs"[^>]*>KEY<\/text>/
+    );
   });
 });

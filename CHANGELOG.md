@@ -84,6 +84,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preview's buttons lay over the Design, View, Window and Help menus. The
   editor now closes the column while it is open and Close opens it again,
   and the Preview Settings row wraps to two lines beside an open column.
+- A raised title on plates of its own: the band is as deep as the smallest
+  plate, so the title plates no longer stand 12 mm past the backing board;
+  the title wraps to the first plate's width, so no letter is cut by a seam;
+  a title plate no letters reach is named blank in step 5, the README and
+  the PDF; and the paper and the PDF draw raised words at the width the
+  model prints them.
 - Compare with original, in the drawing editor's More, looks pressed while
   the original is shown, as Show roles does.
 - In the drawing editor's More, Compare with original no longer runs under
