@@ -96,6 +96,7 @@ const SIZE_PRESETS = [
     // embosser's spacing, inside ADA's 6.1 to 7.6 mm: 13 cells and 4 rows.
     cellSpacingMm: 6.2,
     marginMm: 5,
+    rowsPerCard: 4,
   },
   { id: 'postcard', label: 'Postcard (152 × 102 mm)', width: 152, height: 102 },
   {
@@ -1480,6 +1481,16 @@ class BraillePanel {
       this.syncMarginInputFromParam(String(preset.marginMm));
       if (this.capacityParams.autoSizeMargin) {
         updates[this.capacityParams.autoSizeMargin] = String(preset.marginMm);
+      }
+    }
+    // A preset that knows the rows its card holds asks for them, so the
+    // card is not clamped the moment the preset is chosen.
+    if (preset.rowsPerCard) {
+      if (this.refs.rowsInput) {
+        this.refs.rowsInput.value = String(preset.rowsPerCard);
+      }
+      if (this.multiCardParams.rowsPerCard) {
+        updates[this.multiCardParams.rowsPerCard] = String(preset.rowsPerCard);
       }
     }
     this.writeParams(updates);

@@ -79,6 +79,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The braille card's Business card preset sets Max rows per card to the
+  four rows its card holds, instead of leaving eight and warning at once
+  that only four fit.
 - Compare with original, in the drawing editor's More, looks pressed while
   the original is shown, as Show roles does.
 - In the drawing editor's More, Compare with original no longer runs under
