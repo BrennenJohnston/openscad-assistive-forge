@@ -307,6 +307,41 @@ describe("the map's PDF", () => {
     expect(lines.length).toBe(before.length + 1);
   });
 
+  it('names a title plate with no letters, and draws raised words at the width the model prints them', () => {
+    const empty = { level1: [], level2: [], level3: [], here: [] };
+    const { bytes } = mapPdf({
+      ...input,
+      plates: [
+        {
+          id: 'Title 1',
+          size: { w: 250, h: 75 },
+          rings: empty,
+          texts: [],
+          channels: [],
+          words: [{ x: 10, y: 39.525, h: 16, text: 'STATION' }],
+        },
+        {
+          id: 'Title 2',
+          size: { w: 250, h: 75 },
+          rings: empty,
+          texts: [],
+          channels: [],
+          words: [],
+          blank: true,
+        },
+      ],
+    });
+    const pdf = parsePdf(bytes);
+    expect(pdf.text).toMatch(/\(Plate Title 1, 250 x 75 mm, at full size\) Tj/);
+    expect(pdf.text).toMatch(
+      /\(Plate Title 2, 250 x 75 mm, at full size, no letters\) Tj/
+    );
+    // The row is stretched or squeezed to the sign's measure (121.95 mm
+    // for STATION at 16 mm), then the scaling is put back.
+    expect(pdf.text).toMatch(/ Tz [^\n]*\(STATION\) Tj 100.00 Tz ET/);
+    expect(pdf.text).not.toMatch(/100.00 Tz [^\n]*\(STATION\) Tj/);
+  });
+
   it('scales a plate that does not fit the paper, and says so', () => {
     const big = {
       ...input,

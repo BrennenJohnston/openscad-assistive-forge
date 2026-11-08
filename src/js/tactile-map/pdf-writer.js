@@ -77,8 +77,89 @@ export function encodeWinAnsi(text) {
   return { bytes, lost };
 }
 
+/** The glyph widths of the two fonts, in thousandths of the em (their AFMs). */
+const widths = (caps, lower, marks) => {
+  const out = {};
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach((c, i) => {
+    out[c] = caps[i];
+  });
+  'abcdefghijklmnopqrstuvwxyz'.split('').forEach((c, i) => {
+    out[c] = lower[i];
+  });
+  for (const d of '0123456789') out[d] = 556;
+  Object.assign(out, marks);
+  return out;
+};
+const HELVETICA = widths(
+  [
+    667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778,
+    667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611,
+  ],
+  [
+    556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556,
+    556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500,
+  ],
+  {
+    ' ': 278,
+    '!': 278,
+    '"': 355,
+    '#': 556,
+    $: 556,
+    '%': 889,
+    '&': 667,
+    "'": 191,
+    '(': 333,
+    ')': 333,
+    '*': 389,
+    '+': 584,
+    ',': 278,
+    '-': 333,
+    '.': 278,
+    '/': 278,
+    ':': 278,
+    ';': 278,
+    '=': 584,
+    '?': 556,
+    '@': 1015,
+  }
+);
+const HELVETICA_BOLD = widths(
+  [
+    722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778,
+    667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611,
+  ],
+  [
+    556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611,
+    611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500,
+  ],
+  {
+    ' ': 278,
+    '!': 333,
+    '"': 474,
+    '#': 556,
+    $: 556,
+    '%': 889,
+    '&': 722,
+    "'": 238,
+    '(': 333,
+    ')': 333,
+    '*': 389,
+    '+': 584,
+    ',': 278,
+    '-': 333,
+    '.': 278,
+    '/': 278,
+    ':': 333,
+    ';': 333,
+    '=': 584,
+    '?': 611,
+    '@': 975,
+  }
+);
+
 /**
- * About how wide a text runs, for centering and fitting.
+ * How wide a text runs, for centering, fitting and stretching: the font's
+ * own glyph widths, an average for a glyph the table lacks.
  *
  * @param {string} text
  * @param {number} sizePt
@@ -86,9 +167,11 @@ export function encodeWinAnsi(text) {
  * @returns {number} mm
  */
 export function textWidthMm(text, sizePt, bold = false) {
-  return (
-    (String(text).length * sizePt * (bold ? ADVANCE_BOLD : ADVANCE)) / PT_PER_MM
-  );
+  const table = bold ? HELVETICA_BOLD : HELVETICA;
+  const fallback = (bold ? ADVANCE_BOLD : ADVANCE) * 1000;
+  let units = 0;
+  for (const ch of String(text)) units += table[ch] ?? fallback;
+  return ((units / 1000) * sizePt) / PT_PER_MM;
 }
 
 const num = (v) => {
@@ -162,21 +245,31 @@ export class PdfWriter {
    * @param {string} text
    * @param {{ bold?: boolean, align?: 'left'|'center'|'right', color?: number[] }} [options]
    */
-  text(xMm, yMm, sizePt, text, { bold = false, align = 'left', color } = {}) {
+  text(
+    xMm,
+    yMm,
+    sizePt,
+    text,
+    { bold = false, align = 'left', color, widthMm = 0 } = {}
+  ) {
     const str = String(text);
     if (!str) return;
     const { bytes, lost } = encodeWinAnsi(str);
     if (lost && !this.lost.includes(str)) this.lost.push(str);
+    const natural = textWidthMm(str, sizePt, bold);
+    // A width asked for: the glyphs are stretched or squeezed to it (Tz,
+    // horizontal scaling), and the scaling put back after the text.
+    const stretch = widthMm > 0 && natural > 0 ? widthMm / natural : 1;
     let x = xMm;
     if (align !== 'left') {
-      const width = textWidthMm(str, sizePt, bold);
+      const width = natural * stretch;
       x = align === 'center' ? xMm - width / 2 : xMm - width;
     }
     this._ascii(
-      `BT ${color ? `${rgb(color)} rg ` : ''}/${bold ? 'F2' : 'F1'} ${num(sizePt)} Tf ${this._x(x)} ${this._y(yMm)} Td `
+      `BT ${color ? `${rgb(color)} rg ` : ''}/${bold ? 'F2' : 'F1'} ${num(sizePt)} Tf ${stretch !== 1 ? `${num(stretch * 100)} Tz ` : ''}${this._x(x)} ${this._y(yMm)} Td `
     );
     this._current().parts.push(literal(bytes));
-    this._ascii(` Tj ET\n`);
+    this._ascii(` Tj${stretch !== 1 ? ' 100.00 Tz' : ''} ET\n`);
   }
 
   /**

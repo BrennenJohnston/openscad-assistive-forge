@@ -21,7 +21,9 @@
 
 import { ringsToPathData } from '../ring-geometry.js';
 import { featureNames } from './feature-names.js';
+import { LETTER_SPACING } from './key-layout.js';
 import { numberedName } from './map-numbers.js';
+import { signRowWidthMm } from '../sign-letter-metrics.js';
 
 /** The capitals' height of a name on the paper (mm). */
 export const PAPER_LETTER_MM = 3.5;
@@ -470,8 +472,15 @@ export function mapPaperSvg({
     `<g id="paper-words" fill="${c.ink}">` +
       words
         .map(
+          // At the width the model prints the row (the sign's measure), so
+          // a letter falls on the paper where it falls on the plate.
           (r) =>
-            `<text x="${say(r.x)}" y="${say(r.y)}" font-size="${say(r.h / CAP_OF_SIZE)}">${escapeXml(r.text)}</text>`
+            `<text x="${say(r.x)}" y="${say(r.y)}" font-size="${say(r.h / CAP_OF_SIZE)}" textLength="${say(
+              signRowWidthMm(String(r.text), {
+                charHeightMm: r.h,
+                letterSpacing: LETTER_SPACING,
+              })
+            )}" lengthAdjust="spacingAndGlyphs">${escapeXml(r.text)}</text>`
         )
         .join('') +
       '</g>'

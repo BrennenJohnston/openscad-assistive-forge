@@ -83,6 +83,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   another, over a tape channel, or past the sheet's edge: a name that
   cannot stand at its thing moves to the nearest clear line and a thin
   leader points back to the thing.
+- A raised title on plates of its own: the band is as deep as the smallest
+  plate, so the title plates no longer stand 12 mm past the backing board;
+  the title wraps to the first plate's width, so no letter is cut by a seam;
+  a title plate no letters reach is named blank in step 5, the README and
+  the PDF; and the paper and the PDF draw raised words at the width the
+  model prints them.
 - Compare with original, in the drawing editor's More, looks pressed while
   the original is shown, as Show roles does.
 - In the drawing editor's More, Compare with original no longer runs under

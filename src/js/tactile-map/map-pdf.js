@@ -15,6 +15,8 @@
 
 import { PdfWriter, textWidthMm } from './pdf-writer.js';
 import { THROUGH_DASH_MM, THROUGH_GAP_MM, leaderEnd } from './map-paper.js';
+import { LETTER_SPACING } from './key-layout.js';
+import { signRowWidthMm } from '../sign-letter-metrics.js';
 
 /** The papers offered, sideways, the first the default. */
 export const PAPER_SIZES = Object.freeze([
@@ -140,8 +142,15 @@ function drawPlate(w, data, { x, y, scale, colors, seams }) {
     );
   }
   for (const r of data.words || []) {
+    // At the width the model prints the row (the sign's measure), so a
+    // letter falls on the page where it falls on the plate.
     w.text(px(r.x), py(r.y), (r.h / CAP_OF_SIZE) * s * PT_OF_MM, r.text, {
       color: INK,
+      widthMm:
+        signRowWidthMm(String(r.text), {
+          charHeightMm: r.h,
+          letterSpacing: LETTER_SPACING,
+        }) * s,
     });
   }
   if (data.title) {
@@ -282,7 +291,7 @@ export function mapPdf({
       M,
       7,
       BODY_PT,
-      `Plate ${plate.id}, ${plate.size.w} x ${plate.size.h} mm, ${how}`,
+      `Plate ${plate.id}, ${plate.size.w} x ${plate.size.h} mm, ${how}${plate.blank ? ', no letters' : ''}`,
       { bold: true }
     );
     drawPlate(w, plate, { x: M, y: M, scale: s, colors });
