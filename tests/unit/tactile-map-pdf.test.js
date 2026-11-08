@@ -216,6 +216,11 @@ describe("the map's PDF", () => {
     expect(pdf.text).toMatch(/\(the waiting area\) Tj/);
     expect(pdf.text).toMatch(/\(Pine\) Tj/);
     expect(pdf.text).toMatch(/\(Plate A1, 240 x 180 mm, at full size\) Tj/);
+    // The names shrink with the whole map on its page (the 480 x 360 sheet
+    // at 0.52 on Letter: 8 pt would be 4.2, held at 5) and stand at 8 pt
+    // on a plate drawn at full size.
+    expect(pdf.text).toMatch(/\/F1 5.00 Tf [^\n]*\(the waiting area\) Tj/);
+    expect(pdf.text).toMatch(/\/F1 8.00 Tf [^\n]*\(the waiting area\) Tj/);
     expect(pdf.text).toMatch(/\(Labels\) Tj/);
     expect(pdf.text).toMatch(/\(- Stairs: a triangle\) Tj/);
     // A 240 mm plate drawn at 1:1 on the page: its outline is 240 mm in points.

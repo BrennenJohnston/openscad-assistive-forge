@@ -232,16 +232,24 @@ export function spreadTexts(
     .map((t, i) => ({ t, i }))
     .sort((a, b) => a.t.at[1] - b.t.at[1] || a.t.at[0] - b.t.at[0]);
   const out = new Array(items.length);
-  const tries = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6];
+  // Where a name may go, nearest first: its place, then a line down or up,
+  // then beside its place (the name's half width and a little, right or
+  // left) on each of those lines, out to eight lines away.
+  const rows = [0];
+  for (let k = 1; k <= 8; k += 1) rows.push(k, -k);
   for (const { t, i } of order) {
     const [ax, ay] = t.at;
+    const half = nameBox(t.text, [ax, ay], letterMm).x1 - ax + 1.5;
     let best = null;
-    for (const k of tries) {
-      const [x, y] = inside(t.text, ax, ay + k * step);
-      const box = nameBox(t.text, [x, y], letterMm);
-      const hit = placed.reduce((sum, p) => sum + overlapArea(box, p), 0);
-      if (!best || hit < best.hit - 1e-9) best = { x, y, box, hit };
-      if (hit === 0) break;
+    for (const k of rows) {
+      for (const dx of [0, half, -half]) {
+        const [x, y] = inside(t.text, ax + dx, ay + k * step);
+        const box = nameBox(t.text, [x, y], letterMm);
+        const hit = placed.reduce((sum, p) => sum + overlapArea(box, p), 0);
+        if (!best || hit < best.hit - 1e-9) best = { x, y, box, hit };
+        if (hit === 0) break;
+      }
+      if (best.hit === 0) break;
     }
     placed.push(best.box);
     const round = (v) => Math.round(v * 1000) / 1000;
