@@ -314,8 +314,9 @@ export function rowsText(rows) {
  * frame (y up from the plate's bottom). A row's start may lie left of the
  * plate or its text run past the plate's edge: the model clips the letters
  * to the plate, so a line across a seam continues on the next plate. A
- * row whose letters end before the plate (by the sign's measure, with
- * SEAM_CLEAR_MM to spare) is not the plate's: it would print nothing.
+ * row whose letters end before the plate is not the plate's: it would
+ * print nothing. The sign's measure runs a little wide of the model's
+ * letters (about 3 percent, measured), so it errs toward keeping a row.
  *
  * @param {Array<{x: number, y: number, h: number, z: number, text: string}>} rows
  * @param {{ x: number, y: number, w: number, h: number }} plate - in the sheet's frame, y down
@@ -336,7 +337,7 @@ export function plateRows(rows, plate, sheetH) {
           charHeightMm: r.h,
           letterSpacing: LETTER_SPACING,
         });
-      return r.x < plate.x + plate.w && end + SEAM_CLEAR_MM > plate.x;
+      return r.x < plate.x + plate.w && end > plate.x;
     })
     .map((r) => ({
       ...r,
