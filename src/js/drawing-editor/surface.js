@@ -1173,6 +1173,11 @@ export function createDrawingEditor({
   // and opens it again when it closes, so the button that opened the
   // editor is there to return to. A column the person closed stays closed.
   let columnClosedHere = false;
+  function focusWhenShown(el, tries = 20) {
+    el.focus();
+    if (document.activeElement === el || tries <= 0) return;
+    requestAnimationFrame(() => focusWhenShown(el, tries - 1));
+  }
   function shareWidth(on) {
     const toggle = document.getElementById('collapseParamPanelBtn');
     if (!toggle || toggle.getClientRects().length === 0) return;
@@ -1230,8 +1235,11 @@ export function createDrawingEditor({
     status.textContent = '';
     leaveEmpty();
     if (typeof onClose === 'function') onClose(surfaceEl);
-    if (fullscreen && previousFocus?.focus) previousFocus.focus();
+    // The opener may be inside the Customizer column that is opening again
+    // this moment, not yet shown: the focus waits a frame at a time for it.
+    const back = fullscreen && previousFocus?.focus ? previousFocus : null;
     previousFocus = null;
+    if (back) focusWhenShown(back);
   }
 
   /**

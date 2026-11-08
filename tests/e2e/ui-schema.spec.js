@@ -3026,6 +3026,20 @@ for (const size of [
       await expect
         .soft(column, 'S6: Close opens the column again')
         .toHaveAttribute('aria-expanded', 'true');
+      // Opened from the header's button inside the column, the editor gives
+      // the focus back to that button, which the column shows again first.
+      const door = page.locator('#editorDoorBtn');
+      await door.click();
+      await expect(root).toBeVisible({ timeout: 60_000 });
+      await expect(column).toHaveAttribute('aria-expanded', 'false');
+      await page.locator('#drawingEditorSurface .drawing-editor-close').click();
+      await expect(column).toHaveAttribute('aria-expanded', 'true');
+      await expect
+        .soft(
+          door,
+          'S6: the focus returns to the button that opened the editor'
+        )
+        .toBeFocused();
     });
 
     // The ink settings under the picture keep their height, so the picture

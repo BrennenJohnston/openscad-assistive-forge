@@ -3919,11 +3919,20 @@ function createFileControl(
       opener?.isConnected &&
       !opener.hidden &&
       !opener.classList.contains('hidden');
-    if (shown) {
-      opener.focus();
-      return;
-    }
-    (statusCard.querySelector('.svg-prep-edit-btn') || door)?.focus();
+    // On a short screen the editor closed the Customizer column for its
+    // width and is opening it again this moment: the button inside it takes
+    // the focus only once the column shows it, so the focus is asked for a
+    // frame at a time until it lands.
+    focusWhenShown(
+      shown ? opener : statusCard.querySelector('.svg-prep-edit-btn') || door
+    );
+  }
+
+  function focusWhenShown(el, tries = 30) {
+    if (!el || typeof el.focus !== 'function') return;
+    el.focus();
+    if (document.activeElement === el || tries <= 0) return;
+    requestAnimationFrame(() => focusWhenShown(el, tries - 1));
   }
 
   function handleEditorKeep() {
