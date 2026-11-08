@@ -5045,8 +5045,22 @@ body[data-mobile-toolbar='relocated']
     display: none;
   }
 
+  /* Beside an open Customizer column the row is too narrow for its menus
+     and its buttons together: it wraps, the menus on the first line and
+     the buttons on a line of their own, so no menu lies under a button,
+     and the closed drawer grows to hold both lines. One line otherwise. */
   body[data-menu-bar='settings-row'] .preview-drawer-header {
     justify-content: flex-start;
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--drawer-header-height);
+  }
+
+  body[data-menu-bar='settings-row']
+    .preview-info-section.preview-drawer-collapsed {
+    height: auto;
+    max-height: none;
+    min-height: var(--drawer-header-height);
   }
 
   body[data-menu-bar='settings-row'] .preview-drawer-header-right {

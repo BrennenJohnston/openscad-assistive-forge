@@ -79,6 +79,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On a phone held sideways with the Customizer column open, the drawing
+  editor's Shapes, More and Close were cut off at its edge, and the
+  preview's buttons lay over the Design, View, Window and Help menus. The
+  editor now closes the column while it is open and Close opens it again,
+  and the Preview Settings row wraps to two lines beside an open column.
 - Compare with original, in the drawing editor's More, looks pressed while
   the original is shown, as Show roles does.
 - In the drawing editor's More, Compare with original no longer runs under
