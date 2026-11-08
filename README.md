@@ -20,12 +20,12 @@ These six links open the examples stored on this branch:
   <https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/forge-manifest-volksswitch-full.json>
 - **The braille card and cylinder generator**:
   <https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/forge-manifest-braille.json>
-- **The Plug Puller, one-sided puller**, from the [Plug Puller](https://github.com/BrennenJohnston/openscad-plug-puller) project: a 3D-printed tool that pulls a wall plug with the whole hand instead of a fingertip pinch, shaped to the plug and the hand, for a plug up to 24 mm thick. Its four Customizer steps are shown first (`defaults.starterParameters`); **Show all parameters** reveals the rest.
+- **The Plug Puller, one-sided puller**, from the [Plug Puller](https://github.com/BrennenJohnston/openscad-plug-puller) project: a 3D-printed tool that pulls a wall plug with the whole hand instead of a fingertip pinch, shaped to the plug and the hand, for a plug with 2 prongs or a USB-C tip, up to 24 mm thick. Its four Customizer steps are shown first (`defaults.starterParameters`); **Show all parameters** reveals the rest.
   <https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/plug-puller/forge-manifest-one-sided.json>
-- **The Plug Puller, two-sided puller**, for a thicker plug, a USB-C tip or a round cord plug:
+- **The Plug Puller, two-sided puller**, for a plug with 3 prongs, or any plug 24 mm thick or more, such as a round extension-cord plug:
   <https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/plug-puller/forge-manifest-two-sided.json>
 
-The Plug Puller's files live under `plug-puller/`: its two manifests, with copies of that project's current single-file builds and preset files. Refresh the copies from its `dist/` and `presets/` folders when it releases a new version; the links stay the same. Those files keep the Plug Puller's own license, PolyForm Noncommercial 1.0.0.
+The Plug Puller's files live under `plug-puller/`: its two manifests, with copies of that project's current single-file builds and preset files. Refresh the copies from its `dist/` and `presets/` folders when it releases a new version; the links stay the same. The one-sided build, `dist/Plug_Puller_One_Sided_SingleFile.scad` since version 1.0.0, keeps its earlier name here, `Plug_Puller_SingleFile.scad`, so the presets people saved in Forge still find it. Those files keep the Plug Puller's own license, PolyForm Noncommercial 1.0.0.
 
 Someone opening Forge for the first time sees the welcome dialog first ("Choose your interface", then "Download & Continue"), and then the project.
 
