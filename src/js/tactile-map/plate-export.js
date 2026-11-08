@@ -223,8 +223,9 @@ export function titlePlateSets({
       },
     };
     if (config.coneMarksParam) next[config.coneMarksParam] = '';
+    const held = plateRows(rows, plate, sheetH);
     if (config.raisedWordsParam) {
-      next[config.raisedWordsParam] = rowsText(plateRows(rows, plate, sheetH));
+      next[config.raisedWordsParam] = rowsText(held);
     }
     if (config.plateIdParam) next[config.plateIdParam] = '';
     if (config.plateShowsTitleParam) next[config.plateShowsTitleParam] = 'no';
@@ -236,6 +237,8 @@ export function titlePlateSets({
       fileName,
       parameters: next,
       roles: { title: false, north: false },
+      // No letters reach it: the band's level surface is all it adds.
+      blank: held.length === 0,
     };
   });
 }
@@ -442,6 +445,7 @@ export function readmeText({
   trimMm = 0,
   tape = null,
   channelsThrough = false,
+  blankTitles = [],
 }) {
   const tapeLists = keyTape.filter((k) => k.texts.length);
   const n = layout.plates.length;
@@ -450,6 +454,12 @@ export function readmeText({
   const titleNote = titles.length
     ? `The title prints on ${titles.length === 1 ? 'a plate of its own' : `${titles.length} plates of its own`}, ` +
       `${titles.map((p) => titleLabel(p.id)).join(', ')}, ${titles[0].w} x ${titles[0].h} mm, above row A. `
+    : '';
+  const blanks = blankTitles.filter((id) => titles.some((p) => p.id === id));
+  const them = blanks.length === 1 ? 'it' : 'them';
+  const blankNote = blanks.length
+    ? `${blanks.map(titleLabel).join(' and ')} ${blanks.length === 1 ? 'carries' : 'carry'} no letters: ` +
+      `print ${them} to keep the band level, or leave ${them} off. `
     : '';
   const { lead, credits } = mapAbout(about);
   return (
@@ -462,6 +472,7 @@ export function readmeText({
     (trimMm ? `, trimmed to the shapes with a ${trimMm} mm margin. ` : '. ') +
     `Print one of each: ${ids}. ` +
     titleNote +
+    blankNote +
     'Lay them out as the grid reads, row A at the top, column 1 at the left, ' +
     `and glue them edge to edge onto a backing board of ${size.w} x ${size.h} mm. ` +
     `Levels, measured from the underside: base ${mm(heights.base)} mm, ` +

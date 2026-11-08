@@ -146,7 +146,7 @@ describe('plateParameterSets', () => {
   // still cuts into two rows, so the band rides in row A: its row goes to
   // A1 and, starting 240 mm left of its edge, to A2; the model's own title
   // stays off every plate.
-  it("writes the title band's rows to the plates of the top row, the second plate's starting left of its edge, and turns the model's title off", () => {
+  it("writes the title band's rows to the plates of the top row that its letters reach, and turns the model's title off", () => {
     const { rings } = buildLevelRings(sampleStationPlan());
     const sheet = sheetOf({ face: { w: 480, h: 360 }, title: 'Station' });
     const rows = titleRows(sheet, 16);
@@ -176,7 +176,8 @@ describe('plateParameterSets', () => {
       ])
     ).toEqual([
       ['A1', '100:1750:160:0:STATION', 'no'],
-      ['A2', '-2400:1750:160:0:STATION', 'no'],
+      // STATION ends at 132 mm, before A2: A2 carries none of it.
+      ['A2', '', 'no'],
       ['B1', '', 'no'],
       ['B2', '', 'no'],
     ]);
@@ -212,10 +213,12 @@ describe('titlePlateSets', () => {
       config,
       parameters: { title_text: 'Station' },
     });
+    // STATION ends at 132 mm: the second plate has no letters, and says so.
     expect(titles.map((t) => [t.id, t.parameters.raised_words])).toEqual([
       ['title-1', '100:395:160:0:STATION'],
-      ['title-2', '-2400:395:160:0:STATION'],
+      ['title-2', ''],
     ]);
+    expect(titles.map((t) => t.blank)).toEqual([false, true]);
     const first = titles[0];
     expect(first.size).toEqual({ w: 250, h: 75 });
     expect(first.fileName).toBe('levels_title-1.svg');
@@ -381,7 +384,12 @@ describe('the README says what the map is', () => {
       'Label tape: contracted braille (UEB Grade 2). 7 labels, 23 cells, about 199 mm of 12.7 mm tape; uncontracted would take 5 labels, about 241 mm.'
     );
     expect(
-      tapeSentence({ ...measured, grade: 'g1', otherLabels: 1, otherLengthMm: 160 })
+      tapeSentence({
+        ...measured,
+        grade: 'g1',
+        otherLabels: 1,
+        otherLengthMm: 160,
+      })
     ).toBe(
       'Label tape: uncontracted braille (Grade 1). 7 labels, 23 cells, about 199 mm of 12.7 mm tape; contracted would take 1 label, about 160 mm.'
     );
@@ -459,6 +467,17 @@ describe('the README says what the map is', () => {
       'Print one of each: A1, A2, B1, B2. The title prints on 2 plates of its own, Title 1, Title 2, 250 x 75 mm, above row A. Lay them out'
     );
     expect(readme).toContain('backing board of 500 x 540.65 mm');
+    expect(readme).not.toContain('no letters');
+    const blank = readmeText({
+      ...base,
+      layout: split,
+      size: { w: 500, h: 540.65 },
+      about: { type: 'drawing' },
+      blankTitles: ['title-2'],
+    });
+    expect(blank).toContain(
+      'above row A. Title 2 carries no letters: print it to keep the band level, or leave it off. Lay them out'
+    );
   });
 
   it("credits a published symbol set's authors last, when the map uses one", () => {

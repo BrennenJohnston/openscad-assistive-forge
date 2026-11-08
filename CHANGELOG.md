@@ -82,6 +82,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The braille card's Business card preset sets Max rows per card to the
   four rows its card holds, instead of leaving eight and warning at once
   that only four fit.
+- A raised title on plates of its own: the band is as deep as the smallest
+  plate, so the title plates no longer stand 12 mm past the backing board;
+  the title wraps to the first plate's width, so no letter is cut by a seam;
+  a title plate no letters reach is named blank in step 5, the README and
+  the PDF; and the paper and the PDF draw raised words at the width the
+  model prints them.
 - Compare with original, in the drawing editor's More, looks pressed while
   the original is shown, as Show roles does.
 - In the drawing editor's More, Compare with original no longer runs under
