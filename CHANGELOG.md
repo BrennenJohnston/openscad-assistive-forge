@@ -79,6 +79,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- One form for a crossing: a crossing mapped as a point draws as a short
+  ticked line across its road, as one mapped as a way does, and one
+  standing on such a way is left to the way, so the key has one Crossing
+  row; a crossing with no marking has its own row, Crossing, unmarked;
+  and a traffic island, the plain stretch of a crossing, has no row of
+  its own: the Crossing row says the ticks pause there.
 - Compare with original, in the drawing editor's More, looks pressed while
   the original is shown, as Show roles does.
 - In the drawing editor's More, Compare with original no longer runs under
