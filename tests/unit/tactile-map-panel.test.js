@@ -468,8 +468,7 @@ describe('the map panel', () => {
     select.value = 'a1-mini';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     await vi.waitFor(
-      () =>
-        expect(summary()).toBe('9 plates of 166.7 x 126.7 mm, A1 to C3.'),
+      () => expect(summary()).toBe('9 plates of 166.7 x 126.7 mm, A1 to C3.'),
       SETTLE
     );
     const radios = [
@@ -590,8 +589,9 @@ describe('the map panel', () => {
     await choose('A1');
     expect(params().plate_shows_title).toBe('no');
     expect(params().raised_words).toBe('100:1750:160:0:STATION');
+    // STATION ends at 132 mm: A2 carries none of it.
     await choose('A2');
-    expect(params().raised_words).toBe('-2400:1750:160:0:STATION');
+    expect(params().raised_words).toBe('');
     await choose('B1');
     expect(params().raised_words).toBe('');
 
@@ -706,9 +706,9 @@ describe('the map panel', () => {
       'Cuts the empty plate around what prints; the margin stays.'
     );
     expect(box().getAttribute('aria-describedby')).toBe('tactileMapTrimHelp');
-    expect(document.querySelector('label[for="tactileMapTrim"]').textContent).toBe(
-      'Trim the empty edges'
-    );
+    expect(
+      document.querySelector('label[for="tactileMapTrim"]').textContent
+    ).toBe('Trim the empty edges');
     // Above Print bed in the step.
     const bed = document.getElementById('tactileMapBed');
     expect(
@@ -804,7 +804,10 @@ describe('the map panel', () => {
     expect(select.nextElementSibling).toBe(note);
     expect(note.getAttribute('aria-live')).toBe('polite');
     await vi.waitFor(
-      () => expect(note.textContent).toMatch(/^Label tape: contracted braille \(UEB Grade 2\)\. /),
+      () =>
+        expect(note.textContent).toMatch(
+          /^Label tape: contracted braille \(UEB Grade 2\)\. /
+        ),
       SETTLE
     );
     // Both tables were asked, the contracted one first.
@@ -826,7 +829,10 @@ describe('the map panel', () => {
     select.value = 'g1';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     await vi.waitFor(
-      () => expect(note.textContent).toMatch(/^Label tape: uncontracted braille \(Grade 1\)\. /),
+      () =>
+        expect(note.textContent).toMatch(
+          /^Label tape: uncontracted braille \(Grade 1\)\. /
+        ),
       SETTLE
     );
     expect(note.textContent).toMatch(
@@ -891,15 +897,14 @@ describe('the map panel', () => {
     expect(asked).toBeGreaterThan(0);
     const labels = p.labeled().labels;
     expect(labels.length).toBeGreaterThan(0);
-    expect(labels.every((l) => l.measured === false && l.braille === '')).toBe(true);
+    expect(labels.every((l) => l.measured === false && l.braille === '')).toBe(
+      true
+    );
     // Another change asks nothing more of the engine.
     const bed = document.getElementById('tactileMapBed');
     bed.value = 'a1-mini';
     bed.dispatchEvent(new Event('change', { bubbles: true }));
-    await vi.waitFor(
-      () => expect(summary()).toMatch(/^9 plates/),
-      SETTLE
-    );
+    await vi.waitFor(() => expect(summary()).toMatch(/^9 plates/), SETTLE);
     expect(broken.mock.calls.length).toBe(asked);
     // The grade changed: one more try.
     const select = document.getElementById('tactileMapTapeGrade');
@@ -1211,28 +1216,23 @@ describe('the warnings in Check and print', () => {
   it('keeps the north arrow clear in the levels file: a symbol moves out, a shape stops short, and the list says so once', async () => {
     const plan = sampleStationPlan();
     const { w } = plan.size;
-    plan.features.push(
-      landmark('corner', w - 8, 8),
-      {
-        id: 'block',
-        class: 'area',
-        kind: 'area',
-        ring: [
-          [w - 60, 2],
-          [w - 2, 2],
-          [w - 2, 60],
-          [w - 60, 60],
-        ],
-        on: true,
-      }
-    );
+    plan.features.push(landmark('corner', w - 8, 8), {
+      id: 'block',
+      class: 'area',
+      kind: 'area',
+      ring: [
+        [w - 60, 2],
+        [w - 2, 2],
+        [w - 2, 60],
+        [w - 60, 60],
+      ],
+      on: true,
+    });
     mount({ type: 'drawing', plan });
-    await vi.waitFor(
-      () => expect(files.length).toBeGreaterThan(0),
-      SETTLE
-    );
-    const panel = document.querySelector('#tactileMapPanel, .tactile-map-panel')
-      ?.__forgeMapPanel;
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const panel = document.querySelector(
+      '#tactileMapPanel, .tactile-map-panel'
+    )?.__forgeMapPanel;
     const sheet = panel.sheet;
     const [zone] = northZones({ sheetW: sheet.w, cue: panel.northCue() });
     const { svg } = files[files.length - 1];
@@ -1298,7 +1298,10 @@ describe('the tape channels, a recess or cut through', () => {
     const before = files.length;
     select().value = key;
     select().dispatchEvent(new Event('change', { bubbles: true }));
-    await vi.waitFor(() => expect(files.length).toBeGreaterThan(before), SETTLE);
+    await vi.waitFor(
+      () => expect(files.length).toBeGreaterThan(before),
+      SETTLE
+    );
   };
   const THROUGH_WARNING =
     'Cut-through channels leave nothing under the tape on an All printed plate; choose Thin plates for a backing board, or a recess.';
@@ -1308,12 +1311,10 @@ describe('the tape channels, a recess or cut through', () => {
     expect(
       document.querySelector('label[for="tactileMapChannelCut"]').textContent
     ).toBe('Tape channels');
-    expect([...select().options].map((o) => [o.value, o.textContent])).toEqual(
-      [
-        ['recess', 'A recess with a floor'],
-        ['through', 'Cut through, for a backing board'],
-      ]
-    );
+    expect([...select().options].map((o) => [o.value, o.textContent])).toEqual([
+      ['recess', 'A recess with a floor'],
+      ['through', 'Cut through, for a backing board'],
+    ]);
     expect(select().value).toBe('recess');
     expect(lastSvg()).toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
     expect(lastSvg()).toMatch(/<g id="cutouts"><\/g>/);
@@ -1337,9 +1338,10 @@ describe('the tape channels, a recess or cut through', () => {
       parameters: { ...params(), print_style: 'All printed' },
     });
     await choose('through');
-    const list = () => [
-      ...document.querySelectorAll('#tactileMapWarnings li'),
-    ].map((li) => li.textContent);
+    const list = () =>
+      [...document.querySelectorAll('#tactileMapWarnings li')].map(
+        (li) => li.textContent
+      );
     await vi.waitFor(() => expect(list()).toEqual([THROUGH_WARNING]), SETTLE);
     expect(box().hidden).toBe(false);
     expect(box().querySelector('summary').textContent).toBe('1 warning');
@@ -1376,7 +1378,10 @@ describe('the tape channels, a recess or cut through', () => {
     stateManager.setState({
       parameters: { ...params(), print_style: 'All printed' },
     });
-    await vi.waitFor(() => expect(note.textContent).toBe(THROUGH_WARNING), SETTLE);
+    await vi.waitFor(
+      () => expect(note.textContent).toBe(THROUGH_WARNING),
+      SETTLE
+    );
     // An update that changes nothing writes nothing: a live region speaks
     // every write, the same sentence or not.
     const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;

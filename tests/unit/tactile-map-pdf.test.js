@@ -247,9 +247,12 @@ describe("the map's PDF", () => {
     });
     const pdf = parsePdf(bytes);
     expect(pdf.text).toMatch(/\(Label tape: contracted braille/);
-    expect(pdf.text).toMatch(/\(Pine: 3 cells, a channel 26.6 mm long, beside Pine Street\) Tj/);
+    expect(pdf.text).toMatch(
+      /\(Pine: 3 cells, a channel 26.6 mm long, beside Pine Street\) Tj/
+    );
     // ⠏ is dots 1, 2, 3, 4; ⠔ dots 3, 5; ⠑ dots 1, 5: eight dots, four curves each.
-    const before = parsePdf(mapPdf(input).bytes).text.match(/ c\n/g)?.length || 0;
+    const before =
+      parsePdf(mapPdf(input).bytes).text.match(/ c\n/g)?.length || 0;
     const after = pdf.text.match(/ c\n/g)?.length || 0;
     expect(after - before).toBe(8 * 4);
   });
@@ -269,6 +272,41 @@ describe("the map's PDF", () => {
     const dashed = through.match(/\[5\.67 4\.25\] 0 d /g) || [];
     const drawn = input.plates.flatMap((p) => p.channels).length + 2;
     expect(dashed).toHaveLength(drawn * 4);
+  });
+
+  it('names a title plate with no letters, and draws raised words at the width the model prints them', () => {
+    const empty = { level1: [], level2: [], level3: [], here: [] };
+    const { bytes } = mapPdf({
+      ...input,
+      plates: [
+        {
+          id: 'Title 1',
+          size: { w: 250, h: 75 },
+          rings: empty,
+          texts: [],
+          channels: [],
+          words: [{ x: 10, y: 39.525, h: 16, text: 'STATION' }],
+        },
+        {
+          id: 'Title 2',
+          size: { w: 250, h: 75 },
+          rings: empty,
+          texts: [],
+          channels: [],
+          words: [],
+          blank: true,
+        },
+      ],
+    });
+    const pdf = parsePdf(bytes);
+    expect(pdf.text).toMatch(/\(Plate Title 1, 250 x 75 mm, at full size\) Tj/);
+    expect(pdf.text).toMatch(
+      /\(Plate Title 2, 250 x 75 mm, at full size, no letters\) Tj/
+    );
+    // The row is stretched or squeezed to the sign's measure (121.95 mm
+    // for STATION at 16 mm), then the scaling is put back.
+    expect(pdf.text).toMatch(/ Tz [^\n]*\(STATION\) Tj 100.00 Tz ET/);
+    expect(pdf.text).not.toMatch(/100.00 Tz [^\n]*\(STATION\) Tj/);
   });
 
   it('scales a plate that does not fit the paper, and says so', () => {

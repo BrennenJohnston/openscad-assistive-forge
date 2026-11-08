@@ -20,6 +20,7 @@ import {
   KEY_FRAME_WIDTH_MM,
   KEY_MARGIN_MM,
   KEY_WORDS,
+  wrapPrint,
 } from '../../src/js/tactile-map/key-layout.js';
 import {
   SIGN_LETTER_CAP_FACTOR,
@@ -103,6 +104,23 @@ function descentMm(text) {
 }
 
 const CLINIC = '2 clinic: university of washington medical center - montlake';
+
+describe('wrapPrint', () => {
+  it('breaks a word wider than the line only when it is wider than the room a lone word may take', () => {
+    // NORTHEAST in 16 mm capitals is 173.6 mm: past a 172 mm line, within 174.5.
+    expect(wrapPrint('FERRY PLACE NORTHEAST', 172, 16)).toEqual([
+      'FERRY',
+      'PLACE',
+      'NORTHEAS',
+      'T',
+    ]);
+    expect(wrapPrint('FERRY PLACE NORTHEAST', 172, 16, 174.5)).toEqual([
+      'FERRY',
+      'PLACE',
+      'NORTHEAST',
+    ]);
+  });
+});
 
 describe('keyLabel', () => {
   it('names a key plate as the plate list does', () => {
@@ -328,7 +346,10 @@ describe('keyPlates', () => {
   });
 
   it('cuts the channels through the plate when the settings say so: the same rectangles in cutouts, channels empty, the texts the same', () => {
-    const recess = keyPlates(keyFor(plan()), { ...PLATE, title: 'Ferry Place' });
+    const recess = keyPlates(keyFor(plan()), {
+      ...PLATE,
+      title: 'Ferry Place',
+    });
     const through = keyPlates(keyFor(plan()), {
       ...PLATE,
       title: 'Ferry Place',
