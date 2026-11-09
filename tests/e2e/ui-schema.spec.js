@@ -1762,6 +1762,61 @@ for (const size of SIDEWAYS_SIZES) {
     // No isMobile: Firefox rejects it when the browser context is created.
     test.use({ viewport: size, hasTouch: true });
 
+    test('S6: beside an open Customizer column, the settings row wraps and no menu is covered', async ({
+      page,
+    }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+      expectRule('S6');
+      await openSideways(page);
+      const column = page.locator('#collapseParamPanelBtn');
+      test.skip(
+        !(await column.isVisible()),
+        'no Customizer column at this width'
+      );
+      if ((await column.getAttribute('aria-expanded')) !== 'true') {
+        await column.click();
+        await expect(column).toHaveAttribute('aria-expanded', 'true');
+      }
+      await page.waitForTimeout(600);
+      const read = await page.evaluate(() => {
+        const header = document.querySelector('.preview-drawer-header');
+        const h = header.getBoundingClientRect();
+        const menus = [...document.querySelectorAll('#toolbarMenuBar button')];
+        const covered = [];
+        const past = [];
+        for (const b of menus) {
+          const r = b.getBoundingClientRect();
+          const hit = document.elementFromPoint(
+            r.left + r.width / 2,
+            r.top + r.height / 2
+          );
+          if (!hit || !b.contains(hit)) covered.push(b.textContent.trim());
+          if (r.right > h.right + 0.5 || r.left < h.left - 0.5)
+            past.push(b.textContent.trim());
+        }
+        const tops = new Set(
+          [...header.querySelectorAll('button')]
+            .filter((b) => b.getClientRects().length)
+            .map((b) => Math.round(b.getBoundingClientRect().top))
+        );
+        return {
+          covered,
+          past,
+          lines: tops.size,
+          headerHeight: Math.round(h.height),
+        };
+      });
+      expect
+        .soft(read.covered, 'S6: no menu under another control')
+        .toEqual([]);
+      expect.soft(read.past, "S6: no menu past the row's edge").toEqual([]);
+      expect
+        .soft(read.lines, 'S6: the row keeps to two lines at most')
+        .toBeLessThanOrEqual(2);
+      await column.click();
+      await expect(column).toHaveAttribute('aria-expanded', 'false');
+    });
+
     test('one row each, the preview kept, the camera controls over its right edge', async ({
       page,
     }) => {
@@ -1997,7 +2052,9 @@ function readRowCrowding(selector) {
       if (ox > 0.5) {
         overlaps.push(`${boxes[a].id} x ${boxes[b].id} = ${Math.round(ox)}px`);
       } else if (ox > -1.5) {
-        close.push(`${boxes[a].id} x ${boxes[b].id} = ${(-ox).toFixed(1)}px apart`);
+        close.push(
+          `${boxes[a].id} x ${boxes[b].id} = ${(-ox).toFixed(1)}px apart`
+        );
       }
     }
   }
@@ -2334,7 +2391,9 @@ async function s9FingerDrag(page, from, by) {
  * the picture read at each thing the combine shows and hides, to its end.
  */
 async function expectCombineLeavesPicture(page) {
-  const apply = page.locator('#drawingEditorSurface button[data-action="apply"]');
+  const apply = page.locator(
+    '#drawingEditorSurface button[data-action="apply"]'
+  );
   await expect(apply).toBeEnabled({ timeout: 60_000 });
   const seen = await page.evaluate(
     () =>
@@ -2347,7 +2406,8 @@ async function expectCombineLeavesPicture(page) {
           const r = surface
             .querySelector('.svg-prep-result-pane svg')
             ?.getBoundingClientRect();
-          if (r) places.add(`y ${Math.round(r.y)}, height ${Math.round(r.height)}`);
+          if (r)
+            places.add(`y ${Math.round(r.y)}, height ${Math.round(r.height)}`);
           const hint = surface.querySelector('.svg-prep-apply-hint');
           const list = surface.querySelector('.drawing-editor-panel');
           if (!hint || hint.hidden || !list || list.hidden) return;
@@ -2380,7 +2440,10 @@ async function expectCombineLeavesPicture(page) {
     .soft(seen.places, 'S9: a combine leaves the picture where it is')
     .toHaveLength(1);
   expect
-    .soft(seen.underList, "S9: the combine's sentence is clear of the open list")
+    .soft(
+      seen.underList,
+      "S9: the combine's sentence is clear of the open list"
+    )
     .toBe(0);
 }
 
@@ -2396,7 +2459,10 @@ async function expectS9Movement(page, size, { svg, shape, empty }) {
   for (let i = 0; i < 7; i += 1) {
     const box = await buttons.nth(i).boundingBox();
     expect
-      .soft(box?.height ?? 0, `S9: zoom button ${i} tall enough (${box?.height})`)
+      .soft(
+        box?.height ?? 0,
+        `S9: zoom button ${i} tall enough (${box?.height})`
+      )
       .toBeGreaterThanOrEqual(size.min - 0.5);
     expect
       .soft(box?.width ?? 0, `S9: zoom button ${i} wide enough (${box?.width})`)
@@ -2422,8 +2488,7 @@ async function expectS9Movement(page, size, { svg, shape, empty }) {
   // A drag on empty ground carries the picture with the pointer.
   // On a phone it is a finger, which fires no click at the end of a drag.
   const finger =
-    size.touch &&
-    page.context().browser().browserType().name() === 'chromium';
+    size.touch && page.context().browser().browserType().name() === 'chromium';
   await buttons.nth(0).click();
   const box = await s9BoxOf(svg);
   if (finger) {
@@ -2502,7 +2567,9 @@ for (const size of S9_SIZES) {
       const header = page.locator('#editorDoorBtn');
       await expect(header).toBeVisible();
       await page.evaluate(() => {
-        let d = document.querySelector('#param-design_file')?.closest('details');
+        let d = document
+          .querySelector('#param-design_file')
+          ?.closest('details');
         while (d) {
           d.open = true;
           d = d.parentElement?.closest('details');
@@ -2519,17 +2586,23 @@ for (const size of S9_SIZES) {
         })
       ).toContainText('two.svg', { timeout: 30_000 });
       await header.click();
-      const editor = page.locator('#drawingEditorSurface .drawing-editor').first();
+      const editor = page
+        .locator('#drawingEditorSurface .drawing-editor')
+        .first();
       await expect(editor).toHaveAttribute('data-purpose', 'relief', {
         timeout: 60_000,
       });
-      const svg = page.locator('#drawingEditorSurface .svg-prep-result-pane svg');
+      const svg = page.locator(
+        '#drawingEditorSurface .svg-prep-result-pane svg'
+      );
       await expect(svg).toBeVisible();
       await expectS9Movement(page, size, {
         svg,
         // The hit paths are the only part of the picture a pointer can hit.
         shape: page
-          .locator('#drawingEditorSurface .svg-prep-result-pane .svg-prep-hit-path')
+          .locator(
+            '#drawingEditorSurface .svg-prep-result-pane .svg-prep-hit-path'
+          )
           .nth(1),
         empty: { x: 4, y: 4 },
       });
@@ -2571,11 +2644,15 @@ for (const size of S9_SIZES) {
         'Step 3 of 5: Class the shapes'
       );
       await page.locator('#tactileMapEditDrawing').click();
-      const editor = page.locator('#drawingEditorSurface .drawing-editor').first();
+      const editor = page
+        .locator('#drawingEditorSurface .drawing-editor')
+        .first();
       await expect(editor).toHaveAttribute('data-purpose', 'map', {
         timeout: 60_000,
       });
-      const svg = page.locator('#drawingEditorSurface .drawing-editor-canvas-svg');
+      const svg = page.locator(
+        '#drawingEditorSurface .drawing-editor-canvas-svg'
+      );
       await expect(svg).toBeVisible();
       await expectS9Movement(page, size, {
         svg,
@@ -2598,7 +2675,9 @@ function readMorePanel(panel) {
   const shown = (el) => !el.hidden && el.getClientRects().length > 0;
   const name = (el) => el.textContent.trim().slice(0, 24);
   const p = panel.getBoundingClientRect();
-  const items = [...panel.querySelectorAll('button, input, select, p')].filter(shown);
+  const items = [...panel.querySelectorAll('button, input, select, p')].filter(
+    shown
+  );
   const past = [];
   const squeezed = [];
   const under = [];
@@ -2615,14 +2694,17 @@ function readMorePanel(panel) {
       ).size;
       const w = words.getBoundingClientRect();
       if (lines > 1 || w.left < r.left - 0.5 || w.right > r.right + 0.5) {
-        squeezed.push(`${name(el)}: ${lines} lines, ${Math.round(w.width)} in ${Math.round(r.width)}`);
+        squeezed.push(
+          `${name(el)}: ${lines} lines, ${Math.round(w.width)} in ${Math.round(r.width)}`
+        );
       }
     }
     for (const other of items.slice(i + 1)) {
       const o = other.getBoundingClientRect();
       const across = Math.min(r.right, o.right) - Math.max(r.left, o.left);
       const down = Math.min(r.bottom, o.bottom) - Math.max(r.top, o.top);
-      if (across > 0.5 && down > 0.5) under.push(`${name(el)} / ${name(other)}`);
+      if (across > 0.5 && down > 0.5)
+        under.push(`${name(el)} / ${name(other)}`);
     }
   }
   const lowest = Math.max(
@@ -2669,19 +2751,29 @@ for (const size of [
           has: page.locator('#param-design_file'),
         })
       ).toContainText('two.svg', { timeout: 30_000 });
-      await page.evaluate(() => document.querySelector('#editorDoorBtn').click());
+      await page.evaluate(() =>
+        document.querySelector('#editorDoorBtn').click()
+      );
       await expect(
         page.locator('#drawingEditorSurface .drawing-editor').first()
       ).toHaveAttribute('data-purpose', 'relief', { timeout: 60_000 });
-      await page.locator('#drawingEditorSurface .drawing-editor-more-btn').click();
-      const panel = page.locator('#drawingEditorSurface .drawing-editor-more-panel');
+      await page
+        .locator('#drawingEditorSurface .drawing-editor-more-btn')
+        .click();
+      const panel = page.locator(
+        '#drawingEditorSurface .drawing-editor-more-panel'
+      );
       await expect(panel).toBeVisible();
       const more = await panel.evaluate(readMorePanel);
       expect.soft(more.past, "S8: nothing past the panel's edge").toEqual([]);
       expect.soft(more.squeezed, 'S8: a button keeps its words').toEqual([]);
       expect.soft(more.under, 'S8: nothing under another').toEqual([]);
-      expect.soft(more.sideways, 'S8: the panel does not scroll sideways').toBeLessThanOrEqual(0);
-      expect.soft(more.helpUnderButtons, 'S8: the help sentence has its own line').toBe(true);
+      expect
+        .soft(more.sideways, 'S8: the panel does not scroll sideways')
+        .toBeLessThanOrEqual(0);
+      expect
+        .soft(more.helpUnderButtons, 'S8: the help sentence has its own line')
+        .toBe(true);
     });
   });
 }
@@ -2782,7 +2874,8 @@ function readEditorSideways() {
     ),
     paneTop: Math.round(box(pane).top),
     paneBottom: Math.round(box(pane).bottom),
-    barTop: bar && bar.getClientRects().length ? Math.round(box(bar).top) : null,
+    barTop:
+      bar && bar.getClientRects().length ? Math.round(box(bar).top) : null,
     appHeaderShown:
       (document.querySelector('.app-header')?.getClientRects().length ?? 0) > 0,
     share: seen / total,
@@ -2804,7 +2897,10 @@ for (const size of [
       const m = await page.evaluate(readEditorSideways);
       expect.soft(m.short, 'the editor knows the screen is short').toBe('true');
       expect
-        .soft(m.header.includes('fit'), `S6: Fit on the header row (${m.header})`)
+        .soft(
+          m.header.includes('fit'),
+          `S6: Fit on the header row (${m.header})`
+        )
         .toBe(true);
       expect
         .soft(
@@ -2812,7 +2908,9 @@ for (const size of [
           `S6: Shapes, More and Close end the header row (${m.header})`
         )
         .toEqual(['panel-toggle', 'editor-more', 'editor-close']);
-      expect.soft(m.viewRowShown, 'S6: the working row is behind More').toBe(false);
+      expect
+        .soft(m.viewRowShown, 'S6: the working row is behind More')
+        .toBe(false);
       expect.soft(m.listOpen, 'S6: the shapes list starts shut').toBe('false');
       expect
         .soft(m.statusLive, 'the status line still speaks (aria-live)')
@@ -2821,15 +2919,24 @@ for (const size of [
         .soft(m.statusWidth, 'S6: the status line takes no room on screen')
         .toBeLessThanOrEqual(1);
       expect
-        .soft(m.paneTop >= 0 && m.paneBottom <= size.height, 'S6: the whole picture on screen')
+        .soft(
+          m.paneTop >= 0 && m.paneBottom <= size.height,
+          'S6: the whole picture on screen'
+        )
         .toBe(true);
       if (m.barTop !== null) {
         expect
-          .soft(m.paneBottom, `S6: the picture ends above the messages bar at y ${m.barTop}`)
+          .soft(
+            m.paneBottom,
+            `S6: the picture ends above the messages bar at y ${m.barTop}`
+          )
           .toBeLessThanOrEqual(m.barTop + 1);
       }
       expect
-        .soft(m.share, `S6: the picture's share of the screen (${m.share.toFixed(3)})`)
+        .soft(
+          m.share,
+          `S6: the picture's share of the screen (${m.share.toFixed(3)})`
+        )
         .toBeGreaterThanOrEqual(0.4);
       expect
         .soft(m.appHeaderShown, 'S6: the app header steps aside')
@@ -2844,6 +2951,95 @@ for (const size of [
       test.setTimeout(WASM_READY_TIMEOUT + 180_000);
       await openEditorSideways(page);
       await expectCombineLeavesPicture(page);
+    });
+
+    // The editor needs the width the column takes: it closes the column
+    // while it is open, as the app header steps aside, and Close opens it
+    // again, so the button that opened the editor is there to return to.
+    test('S6: the editor closes an open Customizer column for its width, and Close opens it again', async ({
+      page,
+    }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 180_000);
+      expectRule('S6');
+      await page.addInitScript(() => {
+        localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+        localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+        localStorage.setItem('openscad-forge-theme', 'dark');
+      });
+      await page.goto('/?example=q-charm', { timeout: 60_000 });
+      test.skip(
+        !(await page.evaluate((q) => matchMedia(q).matches, SIDEWAYS_QUERY)),
+        'this browser does not report a touch screen held sideways'
+      );
+      await page.waitForSelector('body[data-wasm-ready="true"]', {
+        state: 'attached',
+        timeout: WASM_READY_TIMEOUT,
+      });
+      const notNow = page.locator('#saveProjectNotNow');
+      if (
+        await notNow.waitFor({ state: 'visible', timeout: 3_000 }).then(
+          () => true,
+          () => false
+        )
+      ) {
+        await notNow.click();
+      }
+      const column = page.locator('#collapseParamPanelBtn');
+      test.skip(
+        !(await column.isVisible()),
+        'no Customizer column at this width'
+      );
+      if ((await column.getAttribute('aria-expanded')) !== 'true') {
+        await column.click();
+        await expect(column).toHaveAttribute('aria-expanded', 'true');
+      }
+      await page.setInputFiles('#param-design_file', EDITOR_LOGO);
+      const root = page
+        .locator('#drawingEditorSurface .drawing-editor')
+        .first();
+      await expect(root).toBeVisible({ timeout: 120_000 });
+      await page.waitForTimeout(1_000);
+      await expect
+        .soft(column, 'S6: the column closes while the editor is open')
+        .toHaveAttribute('aria-expanded', 'false');
+      const m = await page.evaluate(() => {
+        const root = document.querySelector(
+          '#drawingEditorSurface .drawing-editor'
+        );
+        const r = root.getBoundingClientRect();
+        const header = root.querySelector(
+          '.drawing-editor-toolbar-row--header'
+        );
+        const past = [...header.children]
+          .filter((c) => !c.hidden && c.getClientRects().length > 0)
+          .filter((c) => c.getBoundingClientRect().right > r.right + 0.5)
+          .map((c) => c.dataset.action || c.className.split(' ')[0]);
+        return { width: Math.round(r.width), past };
+      });
+      expect
+        .soft(
+          m.past,
+          `S6: the header row's buttons inside the editor (${m.width} px wide)`
+        )
+        .toEqual([]);
+      await page.locator('#drawingEditorSurface .drawing-editor-close').click();
+      await expect
+        .soft(column, 'S6: Close opens the column again')
+        .toHaveAttribute('aria-expanded', 'true');
+      // Opened from the header's button inside the column, the editor gives
+      // the focus back to that button, which the column shows again first.
+      const door = page.locator('#editorDoorBtn');
+      await door.click();
+      await expect(root).toBeVisible({ timeout: 60_000 });
+      await expect(column).toHaveAttribute('aria-expanded', 'false');
+      await page.locator('#drawingEditorSurface .drawing-editor-close').click();
+      await expect(column).toHaveAttribute('aria-expanded', 'true');
+      await expect
+        .soft(
+          door,
+          'S6: the focus returns to the button that opened the editor'
+        )
+        .toBeFocused();
     });
 
     // The ink settings under the picture keep their height, so the picture

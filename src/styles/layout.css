@@ -5358,3 +5358,28 @@ body[data-mobile-toolbar='relocated']
     border-top: 3px solid var(--color-border);
   }
 }
+
+/* A phone held sideways, from 768 px wide, with the Customizer column open
+   beside the preview: the Preview Settings row is too narrow for its menus
+   and its buttons together, so it wraps, the menus on the first line and
+   the buttons on a line of their own, and the closed drawer grows to hold
+   both lines, so no menu lies under a button. With the column closed, on a
+   phone upright, and in the Alt View (whose row is set on its own) the row
+   stays one line as before. */
+@media (orientation: landscape) and (max-height: 500px) and (min-width: 768px) {
+  :root:not([data-ui-variant='mono'])
+    body[data-menu-bar='settings-row']:has(#paramPanel:not(.collapsed))
+    .preview-drawer-header {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--drawer-header-height);
+  }
+
+  :root:not([data-ui-variant='mono'])
+    body[data-menu-bar='settings-row']:has(#paramPanel:not(.collapsed))
+    .preview-info-section.preview-drawer-collapsed {
+    height: auto;
+    max-height: none;
+    min-height: var(--drawer-header-height);
+  }
+}

@@ -79,6 +79,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On a phone held sideways with the Customizer column open, the drawing
+  editor's Shapes, More and Close were cut off at its edge, and the
+  preview's buttons lay over the Design, View, Window and Help menus. The
+  editor now closes the column while it is open and Close opens it again,
+  and the Preview Settings row wraps to two lines beside an open column.
 - The braille card's Business card preset sets Max rows per card to the
   four rows its card holds, instead of leaving eight and warning at once
   that only four fit.

@@ -879,6 +879,7 @@ export function createDrawingEditor({
       }
       delete root.dataset.short;
     }
+    if (!surfaceEl.hidden) shareWidth(short);
   }
   const shortMedia =
     typeof window.matchMedia === 'function'
@@ -1164,9 +1165,37 @@ export function createDrawingEditor({
     el.count.textContent = n === null || n === undefined ? '' : String(n);
   };
 
+  // ── The width beside the Customizer column ─────────────────────────────
+  // On a short screen the Customizer may stand open as a column at the
+  // left, and the editor in the rest of the width cannot hold its header
+  // row. The editor closes the column while it is open, as the app header
+  // steps aside, through the column's own button so its state stays one,
+  // and opens it again when it closes, so the button that opened the
+  // editor is there to return to. A column the person closed stays closed.
+  let columnClosedHere = false;
+  function focusWhenShown(el, tries = 20) {
+    el.focus();
+    if (document.activeElement === el || tries <= 0) return;
+    requestAnimationFrame(() => focusWhenShown(el, tries - 1));
+  }
+  function shareWidth(on) {
+    const toggle = document.getElementById('collapseParamPanelBtn');
+    if (!toggle || toggle.getClientRects().length === 0) return;
+    const open = toggle.getAttribute('aria-expanded') === 'true';
+    if (on) {
+      if (!open || columnClosedHere) return;
+      columnClosedHere = true;
+      toggle.click();
+    } else if (columnClosedHere) {
+      columnClosedHere = false;
+      if (!open) toggle.click();
+    }
+  }
+
   function show() {
     surfaceEl.hidden = false;
     surfaceEl.classList.remove('hidden');
+    if (shortScreen) shareWidth(true);
     requestAnimationFrame(() => {
       statusOnScreen = !surfaceEl.hidden;
       watchFoot();
@@ -1199,14 +1228,18 @@ export function createDrawingEditor({
       leaveCropView();
     }
     hide();
+    shareWidth(false);
     cropFirst = false;
     delete root.dataset.cropFirst;
     resetView();
     status.textContent = '';
     leaveEmpty();
     if (typeof onClose === 'function') onClose(surfaceEl);
-    if (fullscreen && previousFocus?.focus) previousFocus.focus();
+    // The opener may be inside the Customizer column that is opening again
+    // this moment, not yet shown: the focus waits a frame at a time for it.
+    const back = fullscreen && previousFocus?.focus ? previousFocus : null;
     previousFocus = null;
+    if (back) focusWhenShown(back);
   }
 
   /**
