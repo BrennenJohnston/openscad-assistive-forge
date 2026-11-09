@@ -203,22 +203,23 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     await axeClean(page, 'step 5');
     // A place map starts trimmed: the shapes at Ferry Place sit in a box well
     // inside the 480 x 360 face. Its band is 10 mm, wider at the sides whose
-    // numbers stand there (a 16 mm numeral and its wedge), and the sheet cuts
-    // into four plates. Off, the whole face in its band cuts into six.
+    // numbers stand there (at a side, a 16 mm numeral above its wedge), and
+    // the sheet cuts into four plates. Off, the whole face in its band cuts
+    // into six.
     const trim = page.locator('#tactileMapTrim');
     await expect(trim).toBeChecked();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 247.5 x 129.5 mm, A1 to B2. The key takes 7 plates.'
+      '4 plates of 222.5 x 129.5 mm, A1 to B2. The key takes 7 plates.'
     );
     // Untrimmed, the taller 199.5 mm plates hold the key's measured strips
     // in fewer plates than the trimmed map's 129.5 mm ones.
     await trim.uncheck();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '6 plates of 203.3 x 199.5 mm, A1 to B3. The key takes 5 plates.'
+      '6 plates of 186.7 x 199.5 mm, A1 to B3. The key takes 5 plates.'
     );
     await trim.check();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 247.5 x 129.5 mm, A1 to B2. The key takes 7 plates.'
+      '4 plates of 222.5 x 129.5 mm, A1 to B2. The key takes 7 plates.'
     );
     await expect(page.locator('#tactileMapKeyWords')).toHaveValue('braille');
     const key = await page.evaluate(() => {
@@ -264,7 +265,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     expect(names).not.toContain('tactile_map_B3.stl');
     const readme = await zip.file('README.txt').async('string');
     expect(readme).toContain(
-      'each 247.5 x 129.5 mm, trimmed to the shapes with a 10 mm margin, wider at the sides that hold numbers. Print one of each: A1, A2, B1, B2.'
+      'each 222.5 x 129.5 mm, trimmed to the shapes with a 10 mm margin, wider at the sides that hold numbers. Print one of each: A1, A2, B1, B2.'
     );
     expect(readme).toContain('\nKey\nSymbols: University of Oregon symbols.\n');
     expect(readme).toContain(
@@ -303,7 +304,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       }
       return hi - lo;
     });
-    expect(size[0]).toBeCloseTo(247.5, 1);
+    expect(size[0]).toBeCloseTo(222.5, 1);
     expect(size[1]).toBeCloseTo(129.5, 1);
     await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
       'All 11 plates are in tactile_map_plates.zip.'

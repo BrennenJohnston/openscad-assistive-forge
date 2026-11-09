@@ -88,6 +88,7 @@ import {
   KEY_ONLY_SENTENCE,
   LABEL_STYLES,
   bandPlan,
+  crossesSeam,
   moveMarks,
   numeralRows,
   plateMarks,
@@ -708,6 +709,24 @@ class MapPanel {
     );
   }
 
+  /** The seams between the plates a sheet cuts into, in the plan's frame. */
+  seamsOf(sheet) {
+    const { plates } = planPlates({
+      w: sheet.w,
+      h: sheet.h,
+      bed: this.bed(),
+      titleBandMm: sheet.titleBand?.h || 0,
+    });
+    const [dx, dy] = this.faceShift(sheet);
+    const once = (list) => [
+      ...new Set(list.map((v) => Math.round(v * 1000) / 1000)),
+    ];
+    return {
+      x: once(plates.filter((p) => p.col > 0).map((p) => p.x - dx)),
+      y: once(plates.filter((p) => p.row > 0).map((p) => p.y - dy)),
+    };
+  }
+
   /** The wedge's two dials as the model's controls hold them. */
   wedgeDials() {
     const parameters = stateManager.getState()?.parameters || {};
@@ -847,7 +866,23 @@ class MapPanel {
     const settings = this.levelSettings();
     const first = buildLevelRings(labeled.plan, settings);
     this.view = this.measureView(first, labeled.marks || []);
-    const band = this.placeBand(labeled);
+    // The numbers the things could not hold go to the band. One that would
+    // stand across a seam between plates moves off it, and the band is laid
+    // out again for the sheet that gives; the seams found are kept,
+    // so the passes settle.
+    const seams = { x: [], y: [] };
+    let band = this.placeBand(labeled, seams);
+    for (let pass = 0; pass < 3; pass += 1) {
+      this.bandNeeds = band.sides;
+      const found = this.seamsOf(this.sheetNow());
+      if (!band.marks.some((m) => crossesSeam(m.box, found))) break;
+      for (const k of ['x', 'y']) {
+        for (const v of found[k]) {
+          if (!seams[k].some((w) => Math.abs(w - v) < 1e-6)) seams[k].push(v);
+        }
+      }
+      band = this.placeBand(labeled, seams);
+    }
     this.bandNeeds = band.sides;
     const sheet = this.sheetNow();
     const [dx, dy] = this.faceShift(sheet);
@@ -907,7 +942,7 @@ class MapPanel {
    * the face with room (identifiers.js). The cue's place is read from the
    * sheet as the last pass left it; only its height matters here.
    */
-  placeBand(labeled) {
+  placeBand(labeled, seams = {}) {
     const marks = labeled.marks || [];
     const pending = [...(labeled.pending || [])];
     const [ox, oy] = this.view.offset;
@@ -939,7 +974,7 @@ class MapPanel {
     const stay = [];
     const byId = new Map(labeled.plan.features.map((f) => [f.id, f]));
     for (const m of marks) {
-      if (!hits(m.box)) {
+      if (!hits(m.box) && !crossesSeam(m.box, seams)) {
         stay.push(m);
         continue;
       }
@@ -957,6 +992,7 @@ class MapPanel {
         .symbolSizeMm,
       zones,
       marks: stay,
+      seams,
     });
     return {
       ...band,

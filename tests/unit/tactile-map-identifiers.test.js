@@ -14,6 +14,7 @@ import {
   anchorToward,
   BAND_EDGE_MM,
   bandPlan,
+  crossesSeam,
   identifierBox,
   KEY_ONLY_SENTENCE,
   LABEL_STYLES,
@@ -125,6 +126,28 @@ describe('the wedge and the numeral, measured as the model builds them', () => {
     expect(identifierBox(120, 'both').parts.map((p) => p.kind)).toEqual([
       'numeral',
     ]);
+  });
+
+  it('stacks Both in a side margin: the numeral above its wedge, 3 mm apart, both centered', () => {
+    const flat = identifierBox(12, 'both', undefined, { inBand: true });
+    const box = identifierBox(12, 'both', undefined, {
+      inBand: true,
+      stacked: true,
+    });
+    const [numeral, wedge] = box.parts;
+    expect(box.stacked).toBe(true);
+    expect(box.w).toBeCloseTo(Math.max(numeral.w, wedge.w), 2);
+    expect(box.w).toBeLessThan(flat.w - 20);
+    expect(box.h).toBeCloseTo(numeral.h + 3 + wedge.h, 2);
+    expect(numeral.lift).toBeCloseTo(wedge.h + 3, 2);
+    expect(wedge.lift).toBe(0);
+    expect(numeral.x0 + numeral.w / 2).toBeCloseTo(box.w / 2, 2);
+    expect(wedge.x0 + wedge.w / 2).toBeCloseTo(box.w / 2, 2);
+    // Only one part: nothing to stack.
+    expect(
+      identifierBox(12, 'braille', undefined, { inBand: true, stacked: true })
+        .stacked
+    ).toBe(false);
   });
 
   it('offers the three choices with Both as the start', () => {
@@ -354,6 +377,56 @@ describe('in the band', () => {
     const [mark] = band.marks;
     expect(mark.where).toBe('right');
     expect(mark.box.y0).toBeGreaterThanOrEqual(40);
+  });
+
+  it('stands a Both number stacked in a side margin, the margin as wide as the wider part, the lead to the wedge', () => {
+    const band = bandPlan({
+      pending: [{ f: area('t', 1, 70, 3, 72, 'T'), number: 12, name: 'T' }],
+      face: FACE,
+      style: 'both',
+    });
+    const [mark] = band.marks;
+    expect(mark.where).toBe('left');
+    expect(mark.stacked).toBe(true);
+    // The numeral's baseline 3 mm above the wedge's back.
+    expect(mark.wedge.y - mark.wedge.depth - mark.numeral.y).toBeCloseTo(3, 2);
+    const wide = mark.box.x1 - mark.box.x0;
+    expect(band.sides.left).toBe(Math.ceil(3 + wide + 9.525));
+    expect(band.sides.left).toBeLessThan(45);
+    // The lead runs into the wedge's side, at the wedge's middle.
+    const [, end] = mark.lead;
+    expect(end[0]).toBeCloseTo(mark.wedge.x + mark.wedge.w / 2 - 0.5, 2);
+    expect(end[1]).toBeCloseTo(mark.wedge.y - mark.wedge.depth / 2, 2);
+  });
+
+  it('keeps every number off the seams between plates', () => {
+    expect(
+      packAlong([{ ideal: 50, size: 10 }], 0, 100, { blocked: [50] })
+    ).toEqual([51]);
+    expect(
+      packAlong([{ ideal: 95, size: 10 }], 0, 100, { blocked: [92] })
+    ).toEqual([81]);
+    // Slid back before a seam, its start plus its size can land a rounding
+    // step past the seam's gap: still clear, and the slide ends.
+    expect(
+      packAlong([{ ideal: 120, size: 31.65 }], 0, 140, { blocked: [122.289] })
+    ).toEqual([89.639]);
+    const things = [60, 100, 140].map((x, i) => ({
+      f: area(`t${i}`, x - 1, 140, x + 1, 142, 'T'),
+      number: i + 1,
+      name: `T${i}`,
+    }));
+    const seams = { x: [100], y: [] };
+    const band = bandPlan({
+      pending: things,
+      face: FACE,
+      style: 'both',
+      seams,
+    });
+    expect(band.marks).toHaveLength(3);
+    for (const m of band.marks) expect(crossesSeam(m.box, seams)).toBe(false);
+    expect(crossesSeam({ x0: 90, y0: 0, x1: 110, y1: 10 }, seams)).toBe(true);
+    expect(crossesSeam({ x0: 101, y0: 0, x1: 110, y1: 10 }, seams)).toBe(false);
   });
 
   it('packs along an edge and refuses what does not fit', () => {

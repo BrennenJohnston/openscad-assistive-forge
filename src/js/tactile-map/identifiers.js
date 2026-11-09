@@ -29,7 +29,7 @@ import { strokePolyline } from './levels-svg.js';
  */
 export const BAND_EDGE_MM = 9.525;
 
-/** What a number on the map is made of, the default last (TM-Q133). */
+/** What a number on the map is made of, the default last. */
 export const LABEL_STYLES = Object.freeze([
   { key: 'braille', name: 'Braille (wedges and tape)' },
   { key: 'print', name: 'Raised letters' },
@@ -64,6 +64,9 @@ export const NUMERAL_IN_BAND_MM = 16;
 
 /** Between a numeral and its wedge, and between a number and its tape (mm). */
 export const PART_GAP_MM = 3;
+
+/** How far a number keeps from a seam between two plates (mm). */
+export const SEAM_GAP_MM = 1;
 
 /** A lead line's width, and the gap it leaves before a numeral (mm). */
 export const LEAD_WIDTH_MM = 1.2;
@@ -170,31 +173,66 @@ export function numeralSize(n, capMm) {
  * leaves the number nothing to be made of (a braille number past what a
  * wedge holds).
  *
+ * Stacked, in a side margin, the numeral stands above its wedge, 3 mm apart,
+ * both centered: the margin then needs the wider of the two, not both side
+ * by side. A part's `lift` is how far its own reading line stands
+ * above the box's bottom.
+ *
  * @param {number} n
  * @param {string} style - a LABEL_STYLES key
  * @param {{ footMm?: number, angleDeg?: number }} [dials]
- * @param {{ inBand?: boolean }} [options]
- * @returns {{ w: number, h: number, parts: Array<{kind: 'numeral'|'wedge', x0: number, w: number, h: number, capMm?: number}> } | null}
+ * @param {{ inBand?: boolean, stacked?: boolean }} [options]
+ * @returns {{ w: number, h: number, stacked: boolean, parts: Array<{kind: 'numeral'|'wedge', x0: number, w: number, h: number, lift: number, capMm?: number}> } | null}
  */
-export function identifierBox(n, style, dials, { inBand = false } = {}) {
-  const parts = [];
-  let x = 0;
+export function identifierBox(
+  n,
+  style,
+  dials,
+  { inBand = false, stacked = false } = {}
+) {
+  let numeral = null;
   if (style !== 'braille') {
     const capMm = inBand ? NUMERAL_IN_BAND_MM : NUMERAL_ON_THING_MM;
     const m = numeralSize(n, capMm);
-    parts.push({ kind: 'numeral', x0: 0, w: m.w, h: m.h, capMm });
-    x = m.w;
+    numeral = { kind: 'numeral', w: m.w, h: m.h, capMm };
   }
+  let wedge = null;
   if (style !== 'print' && n <= WEDGE_MAX_NUMBER) {
-    if (parts.length) x += PART_GAP_MM;
     const s = wedgeSize(n, dials);
-    parts.push({ kind: 'wedge', x0: x, w: s.w, h: s.depth });
-    x += s.w;
+    wedge = { kind: 'wedge', w: s.w, h: s.depth };
   }
-  if (!parts.length) return null;
+  if (!numeral && !wedge) return null;
+  if (numeral && wedge && stacked) {
+    const w = Math.max(numeral.w, wedge.w);
+    return {
+      w: round3(w),
+      h: round3(numeral.h + PART_GAP_MM + wedge.h),
+      stacked: true,
+      parts: [
+        {
+          ...numeral,
+          x0: round3((w - numeral.w) / 2),
+          lift: round3(wedge.h + PART_GAP_MM),
+        },
+        { ...wedge, x0: round3((w - wedge.w) / 2), lift: 0 },
+      ],
+    };
+  }
+  const parts = [];
+  let x = 0;
+  if (numeral) {
+    parts.push({ ...numeral, x0: 0, lift: 0 });
+    x = numeral.w;
+  }
+  if (wedge) {
+    if (parts.length) x += PART_GAP_MM;
+    parts.push({ ...wedge, x0: x, lift: 0 });
+    x += wedge.w;
+  }
   return {
     w: round3(x),
-    h: round3(Math.max(...parts.map((p) => p.h))),
+    h: round3(Math.max(...parts.map((q) => q.h))),
+    stacked: false,
     parts,
   };
 }
@@ -232,15 +270,17 @@ export function markAt({
       x1: round3(x0 + box.w),
       y1: round3(line),
     },
+    stacked: Boolean(box.stacked),
     numeral: null,
     wedge: null,
   };
   for (const p of box.parts) {
     const cx = round3(x0 + p.x0 + p.w / 2);
+    const y = round3(line - (p.lift || 0));
     if (p.kind === 'numeral') {
-      mark.numeral = { x: cx, y: round3(line), capMm: p.capMm, standsOn };
+      mark.numeral = { x: cx, y, capMm: p.capMm, standsOn };
     } else {
-      mark.wedge = { x: cx, y: round3(line), w: p.w, depth: p.h };
+      mark.wedge = { x: cx, y, w: p.w, depth: p.h };
     }
   }
   return mark;
@@ -252,6 +292,8 @@ function nearPart(mark, side) {
     Boolean
   );
   if (parts.length === 1) return parts[0];
+  // Stacked in a side margin: the wedge, reached from the side.
+  if (mark.stacked) return side === 'bottom' ? 'numeral' : 'wedge';
   // Both: the numeral stands at the left, the wedge at the right; from the
   // map above, the wedge.
   if (side === 'left') return 'wedge';
@@ -262,7 +304,7 @@ function nearPart(mark, side) {
 /**
  * Where a band number's lead ends: at the wedge's back (run a little into
  * it, so the two print as one), or 3 mm short of a numeral (BANA 2022
- * 3.4.3.6; TM-Q140).
+ * 3.4.3.6).
  */
 function leadEnd(mark, side) {
   const part = nearPart(mark, side);
@@ -335,13 +377,28 @@ export function anchorToward(points, side) {
  * can be, in the order of those places (or in the order given),
  * PART_GAP_MM apart, within [lo, hi]. Null when they do not fit.
  *
+ * An item keeps SEAM_GAP_MM from every `blocked` place (the seams between
+ * plates), moved past it the way it was going.
+ *
  * @param {Array<{ideal: number, size: number}>} items
  * @param {number} lo
  * @param {number} hi
- * @param {{ inOrder?: boolean }} [options] - keep the items' own order
+ * @param {{ inOrder?: boolean, blocked?: number[] }} [options] - keep the
+ *   items' own order; places no item may cover
  * @returns {number[]|null} each item's start, in the items' order
  */
-export function packAlong(items, lo, hi, { inOrder = false } = {}) {
+export function packAlong(
+  items,
+  lo,
+  hi,
+  { inOrder = false, blocked = [] } = {}
+) {
+  // A micrometer's tolerance: an item set just clear of a seam, by the sum
+  // of its start and size, is clear of it.
+  const hit = (s, size) =>
+    blocked.find(
+      (b) => s < b + SEAM_GAP_MM - 1e-6 && s + size > b - SEAM_GAP_MM + 1e-6
+    );
   const listed = items.map((it, i) => ({ ...it, i }));
   const order = inOrder
     ? listed
@@ -353,14 +410,30 @@ export function packAlong(items, lo, hi, { inOrder = false } = {}) {
   const start = [];
   let next = lo;
   for (const it of order) {
-    const s = Math.max(next, it.ideal - it.size / 2);
+    let s = Math.max(next, it.ideal - it.size / 2);
+    for (
+      let b = hit(s, it.size), n = 0;
+      b !== undefined && n <= blocked.length;
+      b = hit(s, it.size), n += 1
+    ) {
+      s = b + SEAM_GAP_MM;
+    }
     start.push(s);
     next = s + it.size + PART_GAP_MM;
   }
   // Pushed past the far end: slide back, keeping the gaps.
   let limit = hi;
   for (let k = order.length - 1; k >= 0; k -= 1) {
-    const s = Math.min(start[k], limit - order[k].size);
+    const size = order[k].size;
+    let s = Math.min(start[k], limit - size);
+    for (
+      let b = hit(s, size), n = 0;
+      b !== undefined && n <= blocked.length;
+      b = hit(s, size), n += 1
+    ) {
+      s = b - SEAM_GAP_MM - size;
+    }
+    if (hit(s, size) !== undefined) return null;
     start[k] = s;
     limit = s - PART_GAP_MM;
   }
@@ -412,6 +485,8 @@ function overBox(a, b, box) {
  * @param {Array<{x0: number, y0: number, x1: number, y1: number}>} [input.zones] - kept clear (the north cue), plan frame
  * @param {object[]} [input.marks] - the numbers standing on things, whose
  *   boxes a lead keeps off
+ * @param {{x?: number[], y?: number[]}} [input.seams] - the seams between
+ *   plates, plan frame: no number stands across one
  * @returns {{ marks: object[], leads: Array<[number[], number[]]>, rings: Array<Array<{x: number, y: number}>>, sides: {left: number, right: number, bottom: number}, keyOnly: Array<{featureId: string, number: number, name: string}> }}
  */
 export function bandPlan({
@@ -422,7 +497,14 @@ export function bandPlan({
   symbolSizeMm = 10,
   zones = [],
   marks: onThings = [],
+  seams = {},
 }) {
+  // A seam across the bottom margin runs up and down; across a side, along.
+  const blocked = {
+    bottom: seams.x || [],
+    left: seams.y || [],
+    right: seams.y || [],
+  };
   const span = {
     bottom: [face.x0, face.x1],
     left: [face.y0, face.y1],
@@ -440,11 +522,17 @@ export function bandPlan({
     packAlong(
       list.map((it) => ({ ideal: it.ideal, size: along(side, it.box) })),
       span[side][0],
-      span[side][1]
+      span[side][1],
+      { blocked: blocked[side] }
     );
+  // In a side margin, Both stacks its numeral above its wedge.
+  const boxFor = (number, side) =>
+    identifierBox(number, style, dials, {
+      inBand: true,
+      stacked: side !== 'bottom',
+    });
 
   for (const item of pending) {
-    const box = identifierBox(item.number, style, dials, { inBand: true });
     const outline = outlineOf(item.f, symbolSizeMm);
     const xs = outline.map((p) => p[0]);
     const ys = outline.map((p) => p[1]);
@@ -454,10 +542,9 @@ export function bandPlan({
       right: face.x1 - Math.max(...xs),
     };
     const sides = [...BAND_SIDES].sort((a, b) => away[a] - away[b]);
-    // Where the lead would end with the number at its ideal place.
     // Where the lead would end: at the number's ideal place, held inside the
     // edge's span (below the cue's clearance on a side).
-    const reach = (side, ideal) => {
+    const reach = (side, ideal, box) => {
       const half = along(side, box) / 2;
       const at = Math.min(
         span[side][1] - half,
@@ -469,14 +556,15 @@ export function bandPlan({
     };
     const others = onThings.filter((m) => m.featureId !== item.f.id);
     let placed = false;
-    if (box) {
+    if (boxFor(item.number, 'bottom')) {
       const open = [];
       for (const side of sides) {
+        const box = boxFor(item.number, side);
         const anchor = anchorToward(outline, side);
         const ideal = side === 'bottom' ? anchor[0] : anchor[1];
         const next = [...taken[side], { ...item, box, anchor, ideal }];
         if (!fits(side, next)) continue;
-        const end = reach(side, ideal);
+        const end = reach(side, ideal, box);
         open.push({
           side,
           next,
@@ -504,7 +592,7 @@ export function bandPlan({
       order.map((it) => ({ ideal: it.ideal, size: along(side, it.box) })),
       span[side][0],
       span[side][1],
-      { inOrder: true }
+      { inOrder: true, blocked: blocked[side] }
     );
     return order.map((it, k) => {
       let x0;
@@ -574,6 +662,21 @@ export function bandPlan({
     sides,
     keyOnly,
   };
+}
+
+/**
+ * Whether a box stands across a seam between plates, within SEAM_GAP_MM.
+ *
+ * @param {{x0: number, y0: number, x1: number, y1: number}} box
+ * @param {{x?: number[], y?: number[]}} seams
+ * @returns {boolean}
+ */
+export function crossesSeam(box, seams = {}) {
+  const across = (lo, hi, at) => lo < at + SEAM_GAP_MM && hi > at - SEAM_GAP_MM;
+  return (
+    (seams.x || []).some((x) => across(box.x0, box.x1, x)) ||
+    (seams.y || []).some((y) => across(box.y0, box.y1, y))
+  );
 }
 
 /** The sentence for a number with no room anywhere (A11Y). */

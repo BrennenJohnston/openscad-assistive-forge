@@ -1258,6 +1258,8 @@ test.describe('numbers on the map', () => {
             kind: parameters.plate_kind,
             file: parameters.map_file?.name || '',
             wedges: parameters.number_wedges,
+            w: parameters.map_width_mm,
+            h: parameters.map_height_mm,
             words: parameters.raised_words,
           });
           return new Uint8Array(84);
@@ -1276,6 +1278,23 @@ test.describe('numbers on the map', () => {
     const keys = sets.filter((x) => x.kind === 'Key');
     expect(maps.length).toBeGreaterThan(1);
     expect(maps.some((x) => WEDGE_ROW.test(x.wedges))).toBe(true);
+    // No wedge stands across a seam: each lies whole on its plate (a wedge
+    // is 15.5 mm wide for one digit, 22 for two, 10.1 mm deep at the start).
+    const whole = (x) =>
+      (x.wedges || '')
+        .split('|')
+        .filter(Boolean)
+        .every((row) => {
+          const [wx, wy, n] = row.split(':').map(Number);
+          const half = (n < 10 ? 15.5 : 22) / 2;
+          return (
+            wx / 10 - half >= 0 &&
+            wx / 10 + half <= x.w &&
+            wy / 10 >= 0 &&
+            wy / 10 + 10.1 <= x.h
+          );
+        });
+    expect(maps.every(whole)).toBe(true);
     expect(maps.some((x) => NUMERAL.test(x.words))).toBe(true);
     expect(keys.every((x) => x.wedges === '')).toBe(true);
 
