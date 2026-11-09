@@ -10,6 +10,11 @@
  * number, and the key names it. The lower numbers are placed first, so they
  * get the room.
  *
+ * With the Labels switch given (identifiers.js), each thing's number stands
+ * there too: the number over its tape, 3 mm between them, the two kept
+ * together as one piece; the number alone when the tape does not fit with
+ * it. A number with no room on its thing is handed on for the margin band.
+ *
  * No DOM here: a worker may import this file.
  *
  * @license GPL-3.0-or-later
@@ -17,7 +22,12 @@
 import { centroid } from '../ring-geometry.js';
 import { keyFor, labelCells, LABEL_CELLS } from './map-key.js';
 import { numberedName, numberedThings, numberNamed } from './map-numbers.js';
-import { buildLevelRings, DEFAULT_SETTINGS } from './levels-svg.js';
+import {
+  buildLevelRings,
+  DEFAULT_SETTINGS,
+  LEVELS_BY_CLASS,
+} from './levels-svg.js';
+import { identifierBox, markAt, PART_GAP_MM } from './identifiers.js';
 
 /** A braille labeler's cell pitch on tape (ADA 703.3.1: 6.1 to 7.6 mm). */
 export const LABEL_CELL_MM = 6.2;
@@ -67,7 +77,8 @@ function pointSegment(p, a, b) {
   return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
 }
 
-function segmentsCross(a, b, c, d) {
+/** Whether segments a-b and c-d cross at a point inside both. */
+export function segmentsCross(a, b, c, d) {
   const cross = (o, p, q) =>
     (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]);
   const d1 = cross(c, d, a);
@@ -129,7 +140,9 @@ function obstaclesOf(plan, s, textBoxes) {
         out.push({ seg: [f.points[i - 1], f.points[i]], half });
       }
     } else if (f.kind === 'area' && Array.isArray(f.ring)) {
-      out.push({ ring: f.ring, featureId: f.id });
+      const level =
+        f.level ?? cls.level ?? LEVELS_BY_CLASS[f.class]?.level ?? 1;
+      out.push({ ring: f.ring, featureId: f.id, level });
     } else if (f.kind === 'channel' && Array.isArray(f.at)) {
       const across = s.tapeWidthMm + s.channelClearanceMm;
       const half = f.vertical
@@ -215,8 +228,8 @@ function placesInside(ring, length, across, keep) {
 }
 
 /**
- * The places a channel `length` long may stand beside a symbol: right,
- * left, below, above, then the four corners.
+ * The places a piece `length` wide and `across` tall may stand beside a
+ * symbol: right, left, below, above, then the four corners.
  */
 function candidates([x, y], half, length, across, gap) {
   const sideX = half + gap + length / 2;
@@ -241,7 +254,10 @@ function candidates([x, y], half, length, across, gap) {
  * @param {object} [settings] - the levels builder's
  * @param {{ grade: string, measured: boolean, of: (text: string) => {cells: number, braille: string, measured: boolean, grade: string} }} [settings.tape] -
  *   the tape measure's view (tape-cells.js); without one the cells are estimated
- * @returns {{ plan: object, labels: Array<{featureId: string, number: number, text: string, cells: number, braille: string, measured: boolean, grade: string|null, name: string, inside: boolean}>, key: object, warnings: Array<{code: string, featureId: string, text: string}> }}
+ * @param {string} [settings.labels] - the Labels switch (identifiers.js
+ *   LABEL_STYLES); without it no number is placed and the names go on tape alone
+ * @param {{ footMm?: number, angleDeg?: number }} [settings.wedge] - the wedge's dials
+ * @returns {{ plan: object, labels: Array<{featureId: string, number: number, text: string, cells: number, braille: string, measured: boolean, grade: string|null, name: string, inside: boolean}>, key: object, warnings: Array<{code: string, featureId: string, text: string}>, marks: object[], pending: Array<{f: object, number: number, name: string}> }}
  */
 export function labelPlan(plan, settings = {}) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
@@ -257,43 +273,59 @@ export function labelPlan(plan, settings = {}) {
     r.x1 <= w - EDGE_MM &&
     r.y1 <= h - EDGE_MM;
 
-  const placeBeside = (f, cells) => {
-    const length = channelLengthMm(cells);
+  // A piece `bw` wide and `bh` tall: a channel, a number, or the two.
+  const placeBeside = (f, bw, bh) => {
     const half = (f.size ?? s.symbolSizeMm) / 2;
-    for (const [cx, cy] of candidates(f.at, half, length, across, keep + 0.2)) {
-      const r = rect(cx, cy, length / 2, across / 2);
+    for (const [cx, cy] of candidates(f.at, half, bw, bh, keep + 0.2)) {
+      const r = rect(cx, cy, bw / 2, bh / 2);
       if (!inBounds(r) || clearance(r, obstacles) < keep) continue;
       obstacles.push({ rect: r });
-      return { at: [round(cx), round(cy)], length };
+      return { at: [round(cx), round(cy)], standsOn: 0 };
     }
     return null;
   };
 
-  const placeInside = (f, cells) => {
-    const length = channelLengthMm(cells);
+  const placeInside = (f, bw, bh) => {
     const area =
       ringArea(f.ring) -
       (f.holes || []).reduce((sum, hole) => sum + ringArea(hole), 0);
-    if (length * across > LABEL_MAX_SHARE * area) return null;
-    // Its own ring and any area around it hold the channel; what else stands
-    // in the area, its holes among them, keeps the channel clear.
+    if (bw * bh > LABEL_MAX_SHARE * area) return null;
+    // Its own ring and any area around it hold the piece; what else stands
+    // in the area, its holes among them, keeps the piece clear.
     const within = (ring) => f.ring.every((p) => insideRing(p, ring));
+    const holding = obstacles.filter(
+      (o) => o.ring && (o.featureId === f.id || within(o.ring))
+    );
     const others = [
-      ...obstacles.filter(
-        (o) => !(o.ring && (o.featureId === f.id || within(o.ring)))
-      ),
+      ...obstacles.filter((o) => !holding.includes(o)),
       ...(f.holes || []).map((ring) => ({ ring })),
     ];
-    for (const [cx, cy] of placesInside(f.ring, length, across, keep)) {
-      const r = rect(cx, cy, length / 2, across / 2);
+    // A numeral stands on the highest of the areas that hold it.
+    const standsOn = Math.max(0, ...holding.map((o) => o.level || 0));
+    for (const [cx, cy] of placesInside(f.ring, bw, bh, keep)) {
+      const r = rect(cx, cy, bw / 2, bh / 2);
       if (!inBounds(r)) continue;
       if (!corners(r).every((p) => insideRing(p, f.ring))) continue;
       if (edgeClearance(r, f.ring) < keep) continue;
       if (clearance(r, others) < keep) continue;
       obstacles.push({ rect: r });
-      return { at: [round(cx), round(cy)], length };
+      return { at: [round(cx), round(cy)], standsOn };
     }
     return null;
+  };
+
+  // The number over its tape, or either alone.
+  const pieceOf = (idBox, length) => {
+    if (idBox && length) {
+      return {
+        w: Math.max(idBox.w, length),
+        h: idBox.h + PART_GAP_MM + across,
+        idBox,
+        length,
+      };
+    }
+    if (idBox) return { w: idBox.w, h: idBox.h, idBox, length: 0 };
+    return { w: length, h: across, idBox: null, length };
   };
 
   // The cells a text takes on tape: the braille translator's count when the
@@ -307,25 +339,61 @@ export function labelPlan(plan, settings = {}) {
         grade: null,
       });
 
-  const placed = [];
-  for (const f of numberedThings(plan)) {
-    const cells = measure(f.name).cells;
-    const spot =
-      f.kind === 'area'
-        ? placeInside(f, cells)
-        : cells <= LABEL_CELLS
-          ? placeBeside(f, cells)
-          : null;
-    if (spot) placed.push({ f, spot, cells });
-  }
-
+  const style = s.labels || null;
   const numbered = numberNamed(plan);
   const key = keyFor(plan, s);
   const numberOf = new Map(key.numbers.map((n) => [n.featureId, n]));
+
+  const placed = [];
+  const pending = [];
+  for (const f of numberedThings(plan)) {
+    const row = numberOf.get(f.id);
+    const cells = measure(f.name).cells;
+    // Raised letters put no tape on the map: the names are in the key.
+    const tape =
+      style !== 'print' && (f.kind === 'area' || cells <= LABEL_CELLS)
+        ? channelLengthMm(cells)
+        : 0;
+    const idBox = style ? identifierBox(row.number, style, s.wedge) : null;
+    const tries = [];
+    if (idBox && tape) tries.push(pieceOf(idBox, tape));
+    if (idBox) tries.push(pieceOf(idBox, 0));
+    if (tape) tries.push(pieceOf(null, tape));
+    let spot = null;
+    let piece = null;
+    for (const t of tries) {
+      spot =
+        f.kind === 'area' ? placeInside(f, t.w, t.h) : placeBeside(f, t.w, t.h);
+      if (spot) {
+        piece = t;
+        break;
+      }
+    }
+    if (spot) placed.push({ f, spot, cells, piece, row });
+    if (style && !piece?.idBox) {
+      pending.push({ f, number: row.number, name: row.name });
+    }
+  }
+
   const labels = [];
   const channels = [];
-  for (const { f, spot, cells } of placed) {
-    const row = numberOf.get(f.id);
+  const marks = [];
+  for (const { f, spot, cells, piece, row } of placed) {
+    const top = spot.at[1] - piece.h / 2;
+    if (piece.idBox) {
+      marks.push(
+        markAt({
+          featureId: f.id,
+          number: row.number,
+          box: piece.idBox,
+          x0: spot.at[0] - piece.idBox.w / 2,
+          y0: top,
+          where: 'thing',
+          standsOn: spot.standsOn,
+        })
+      );
+    }
+    if (!piece.length) continue;
     const m = measure(f.name);
     labels.push({
       featureId: f.id,
@@ -335,7 +403,7 @@ export function labelPlan(plan, settings = {}) {
       braille: m.braille,
       measured: m.measured,
       grade: m.grade,
-      lengthMm: spot.length,
+      lengthMm: piece.length,
       name: numberedName(row, row.name),
       inside: f.kind === 'area',
     });
@@ -343,8 +411,10 @@ export function labelPlan(plan, settings = {}) {
       id: `label-${f.id}`,
       class: 'channel',
       kind: 'channel',
-      at: spot.at,
-      length: spot.length,
+      at: piece.idBox
+        ? [spot.at[0], round(top + piece.idBox.h + PART_GAP_MM + across / 2)]
+        : spot.at,
+      length: piece.length,
       on: true,
     });
   }
@@ -353,6 +423,8 @@ export function labelPlan(plan, settings = {}) {
     labels,
     key: { ...key, labels },
     warnings: [],
+    marks,
+    pending,
   };
 }
 

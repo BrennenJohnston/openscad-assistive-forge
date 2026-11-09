@@ -144,6 +144,12 @@ describe('the Tactile Map tile', () => {
       /translate\(\[row\[0\], row\[1\], base_eff - _fuse\]\)\s*_label_wedge\(row\[2\]\);/
     );
     expect(src).toMatch(/number_wedges\(\);\s*leads\(\);/);
+    // Cut to the plate, so a wedge across a seam is whole when the plates
+    // are put together, and taller than any wedge the dials allow.
+    expect(src).toMatch(
+      /intersection\(\) \{\s*translate\(\[0, 0, base_eff - 2 \* _fuse\]\)\s*cube\(\[map_width_mm, map_height_mm, WEDGE_CLIP_MM\]\);/
+    );
+    expect(src).toMatch(/^WEDGE_CLIP_MM = 30;/m);
   });
 
   it('raises a # row as a bold centered numeral, 10 mm on a thing or at least 16 mm elsewhere, and any other word as before', () => {
@@ -223,7 +229,7 @@ describe('the Tactile Map tile', () => {
     expect(main).toMatch(/destination_cone\(\);[\s\S]*if \(plate_kind != "Key"\)/);
   });
 
-  it('raises words from raised_words rows of x:y:h:z:TEXT on map and key plates alike, clipped to the plate, and draws title_text itself only when there are none; the sheet figures ride along', () => {
+  it('raises words from raised_words rows of x:y:h:z:TEXT on map and key plates alike, clipped to the plate, and draws title_text itself only when there are none but numbers; the sheet figures ride along', () => {
     const src = source();
     const p = params();
     expect(p.raised_words, 'raised_words is not a parameter').toBeTruthy();
@@ -248,7 +254,11 @@ describe('the Tactile Map tile', () => {
     expect(words).toMatch(
       /intersection\(\)\s*\{\s*square\(\[map_width_mm,\s*map_height_mm\]\)/
     );
-    expect(src).toMatch(/len\(raised_words\)\s*==\s*0/);
+    // A row of a number ("#12") leaves the model's own title in place.
+    expect(src).toMatch(
+      /_word_rows = \[for \(r = _rows\(raised_words\)\) if \(!_is_numeral\(r\[4\]\)\) r\];/
+    );
+    expect(src).toMatch(/len\(_word_rows\)\s*==\s*0/);
     const main = src.slice(src.indexOf('module tactile_map()'));
     expect(main).toMatch(/raised_words\(\);/);
     expect(main).not.toMatch(/key_words\(\)/);

@@ -128,6 +128,9 @@ WEDGE_BACK_ANGLE_DEG = 60;
 WEDGE_TOP_MM = 1.5;
 WEDGE_FACE_MARGIN_X_MM = 2.5;
 WEDGE_FACE_MARGIN_TOP_MM = 2.0;
+// Taller than the tallest wedge the dials allow (a 12 mm foot, upright: 20.5 mm
+// and its dots), for the cut of every wedge to its plate.
+WEDGE_CLIP_MM = 30;
 DOT_BASE_MM = 1.5;
 DOT_DOME_MM = 1.0;
 DOT_BASE_HEIGHT_MM = 0.3;
@@ -321,9 +324,11 @@ module here_mark() {
 // to the face so a long title never runs off the plate or under the arrow.
 // A split map draws it on its top-left plate only.
 // The title drawn by the model itself, inside the face's top edge, only
-// while the panel writes no raised_words rows (the band's lines come as rows).
+// while the panel writes no raised_words rows but numbers (the band's lines
+// come as rows).
+_word_rows = [for (r = _rows(raised_words)) if (!_is_numeral(r[4])) r];
 module title() {
-    if (len(title_text) > 0 && plate_shows_title == "yes" && len(raised_words) == 0)
+    if (len(title_text) > 0 && plate_shows_title == "yes" && len(_word_rows) == 0)
         translate([0, 0, base_eff - _fuse])
             linear_extrude(height = title_raise_mm + _fuse)
                 intersection() {
@@ -546,14 +551,21 @@ function _xyn(r) =
 function _xyn_rows(s) = len(s) == 0 ? [] : [for (r = _split(s, "|")) if (len(r) > 0) _xyn(r)];
 
 // The numbers' wedges rise from the base's top through whatever stands at
-// their foot, so none floats on an area's level.
+// their foot, so none floats on an area's level. Each is cut to the plate, so
+// a wedge across a seam is whole when the plates are put together.
 module number_wedges() {
-    for (row = _xyn_rows(number_wedges)) {
-        assert(in_range(row[2], NUMBER_RANGE),
-               str("a wedge's number is ", row[2], "; a wedge holds 1 to 99."));
-        translate([row[0], row[1], base_eff - _fuse])
-            _label_wedge(row[2]);
-    }
+    rows = _xyn_rows(number_wedges);
+    if (len(rows) > 0)
+        intersection() {
+            translate([0, 0, base_eff - 2 * _fuse])
+                cube([map_width_mm, map_height_mm, WEDGE_CLIP_MM]);
+            for (row = rows) {
+                assert(in_range(row[2], NUMBER_RANGE),
+                       str("a wedge's number is ", row[2], "; a wedge holds 1 to 99."));
+                translate([row[0], row[1], base_eff - _fuse])
+                    _label_wedge(row[2]);
+            }
+        }
 }
 
 // The lead lines, from a thing to its number in the margin: on a level of

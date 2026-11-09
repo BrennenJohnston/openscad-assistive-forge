@@ -55,7 +55,9 @@ test.describe('the three map types end to end', () => {
     await chooseByKeyboard(page, 'A place map');
     await expect(page.locator('#tactileMapSteps-heading')).toBeFocused();
     await searchByKeyboard(page, '#tactileMapAddress', '3800 E Stevens Way NE');
-    const place = page.locator('#tactileMapResults input[type="radio"]').first();
+    const place = page
+      .locator('#tactileMapResults input[type="radio"]')
+      .first();
     await expect(place).toBeFocused({ timeout: 15000 });
     await page.keyboard.press('Space');
     await axeClean(page, 'place step 1');
@@ -65,9 +67,7 @@ test.describe('the three map types end to end', () => {
     await page.locator('#tactileMapScale-block').focus();
     await page.keyboard.press('ArrowUp');
     await expect(page.locator('#tactileMapScale-building')).toBeChecked();
-    await expect(
-      page.locator('#tactileMapScale-building-sentence')
-    ).toHaveText(
+    await expect(page.locator('#tactileMapScale-building-sentence')).toHaveText(
       '240 m across on this plate. A 10 mm symbol stands for 5 m. Every sidewalk, curb ramp and raised curb draws, and a crossing without markings is dashed.'
     );
     await axeClean(page, 'place step 2');
@@ -104,7 +104,7 @@ test.describe('the three map types end to end', () => {
 
     await nextStep(page, 5, 'Check and print');
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      /^\d+ plates? of \d+ x \d+ mm/
+      /^\d+ plates? of [\d.]+ x [\d.]+ mm/
     );
     const box = page.locator('#tactileMapWarningsBox');
     const summary = box.locator('summary');

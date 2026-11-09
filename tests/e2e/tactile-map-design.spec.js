@@ -135,11 +135,12 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
 
     // The first draft: the places are named, and most of the data starts off.
     // Every named area and point carries a number, and a place with no room
-    // for its name is no warning: its number carries it. The third warning is
-    // the symbol moved clear of the north arrow.
+    // for its name is no warning: its number carries it. The two warnings are
+    // symbols closer than the gap; the margin's numbers keep the north arrow
+    // beyond every symbol, so none moves for it.
     await makeTheMap(page);
     await expect(status).toHaveText(
-      'Draft map ready: 19 of 286 features on; 3 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
+      'Draft map ready: 19 of 286 features on; 2 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
     );
     const rows = await page
       .locator('#drawingEditorSurface .svg-prep-object-name')
@@ -191,32 +192,33 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
 
     await makeTheMap(page);
     // The ready sentence waits for the braille translator, so the count of
-    // warnings is taken with the labels measured in contracted UEB.
+    // warnings is taken with the labels measured in contracted UEB; no symbol
+    // moves for the north arrow beyond the numbers' margin.
     await expect(status).toHaveText(
-      'Draft map ready: 19 of 286 features on; 3 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
+      'Draft map ready: 19 of 286 features on; 2 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
     );
     await closeTheEditor(page);
 
     await nextStep(page, 5, 'Check and print');
     await axeClean(page, 'step 5');
-    // A place map starts trimmed: the shapes at Ferry Place sit in a
-    // 351 x 220 mm box of the 480 x 360 face, so the sheet in its 10 mm
-    // band is 371 x 240 and cuts into two plates. Off, the whole face in its
-    // band is a 500 x 380 sheet of four 250 x 190 plates.
+    // A place map starts trimmed: the shapes at Ferry Place sit in a box well
+    // inside the 480 x 360 face. Its band is 10 mm, wider at the sides whose
+    // numbers stand there (a 16 mm numeral and its wedge), and the sheet cuts
+    // into four plates. Off, the whole face in its band cuts into six.
     const trim = page.locator('#tactileMapTrim');
     await expect(trim).toBeChecked();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '2 plates of 185.5 x 240 mm, A1 to A2. The key takes 5 plates.'
+      '4 plates of 247.5 x 129.5 mm, A1 to B2. The key takes 7 plates.'
     );
-    // Untrimmed, the wider 250 mm plates hold the key's measured strips in
-    // fewer plates than the trimmed map's 185.5 mm ones.
+    // Untrimmed, the taller 199.5 mm plates hold the key's measured strips
+    // in fewer plates than the trimmed map's 129.5 mm ones.
     await trim.uncheck();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 250 x 190 mm, A1 to B2. The key takes 4 plates.'
+      '6 plates of 203.3 x 199.5 mm, A1 to B3. The key takes 5 plates.'
     );
     await trim.check();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '2 plates of 185.5 x 240 mm, A1 to A2. The key takes 5 plates.'
+      '4 plates of 247.5 x 129.5 mm, A1 to B2. The key takes 7 plates.'
     );
     await expect(page.locator('#tactileMapKeyWords')).toHaveValue('braille');
     const key = await page.evaluate(() => {
@@ -238,7 +240,15 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       'Walkway: a dashed line 1.2 mm wide, low',
       'Area: a raised area, low',
     ]);
-    expect(key.plates).toEqual(['key-1', 'key-2', 'key-3', 'key-4', 'key-5']);
+    expect(key.plates).toEqual([
+      'key-1',
+      'key-2',
+      'key-3',
+      'key-4',
+      'key-5',
+      'key-6',
+      'key-7',
+    ]);
 
     // The zip: the map's plates, the key's, and the README that goes with them.
     const downloadPromise = page.waitForEvent('download', { timeout: 420_000 });
@@ -247,14 +257,14 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     const download = await downloadPromise;
     const zip = await JSZip.loadAsync(readFileSync(await download.path()));
     const names = Object.keys(zip.files);
-    for (const id of ['A1', 'A2', ...key.plates]) {
+    for (const id of ['A1', 'A2', 'B1', 'B2', ...key.plates]) {
       expect(names).toContain(`tactile_map_${id}.stl`);
       expect(names).toContain(`levels_${id}.svg`);
     }
-    expect(names).not.toContain('tactile_map_B1.stl');
+    expect(names).not.toContain('tactile_map_B3.stl');
     const readme = await zip.file('README.txt').async('string');
     expect(readme).toContain(
-      'each 185.5 x 240 mm, trimmed to the shapes with a 10 mm margin. Print one of each: A1, A2.'
+      'each 247.5 x 129.5 mm, trimmed to the shapes with a 10 mm margin, wider at the sides that hold numbers. Print one of each: A1, A2, B1, B2.'
     );
     expect(readme).toContain('\nKey\nSymbols: University of Oregon symbols.\n');
     expect(readme).toContain(
@@ -293,10 +303,10 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       }
       return hi - lo;
     });
-    expect(size[0]).toBeCloseTo(185.5, 1);
-    expect(size[1]).toBeCloseTo(240, 1);
+    expect(size[0]).toBeCloseTo(247.5, 1);
+    expect(size[1]).toBeCloseTo(129.5, 1);
     await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
-      'All 7 plates are in tactile_map_plates.zip.'
+      'All 11 plates are in tactile_map_plates.zip.'
     );
   });
 

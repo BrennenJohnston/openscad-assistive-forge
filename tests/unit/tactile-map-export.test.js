@@ -448,6 +448,16 @@ describe('the README says what the map is', () => {
     expect(readmeText({ ...base, about: { type: 'drawing' } })).not.toContain(
       'trimmed'
     );
+    expect(
+      readmeText({
+        ...base,
+        about: { type: 'drawing' },
+        trimMm: 10,
+        numbersInMargin: true,
+      })
+    ).toContain(
+      'trimmed to the shapes with a 10 mm margin, wider at the sides that hold numbers. Print one of each'
+    );
   });
 
   it('says where the title plates go when the title has plates of its own', () => {

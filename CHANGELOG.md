@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trimmed to the shapes.
 - The Tactile Map model can raise a number's braille wedge with a face angle
   dial, bold raised numerals and lead lines on a level of their own.
+- Numbers on the map: each numbered place carries its number as a braille
+  wedge, a bold raised numeral or both (Labels in step 5, Both to start), on
+  the place when it fits, else in the margin at the end of a raised lead
+  line; the map paper and the PDF draw them.
 - Tape channels, a choice in step 5: a recess with a floor under the tape,
   as before, or cut right through the plate so the tape lies on the backing
   board; the key plates follow, the map paper and the PDF draw a cut-through

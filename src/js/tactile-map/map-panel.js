@@ -83,6 +83,17 @@ import {
   KEY_WORDS,
 } from './key-layout.js';
 import { channelLengthMm, labelPlan } from './map-labels.js';
+import {
+  DEFAULT_LABEL_STYLE,
+  KEY_ONLY_SENTENCE,
+  LABEL_STYLES,
+  bandPlan,
+  moveMarks,
+  numeralRows,
+  plateMarks,
+  wedgeDials,
+  wedgeRows,
+} from './identifiers.js';
 import { TAPE_GRADES, TapeMeasure } from './tape-cells.js';
 import {
   mapPaperSvg,
@@ -289,7 +300,7 @@ function isLevelsFile(svg) {
  * Mount the panel for a tile whose manifest declares `tactileMap`.
  *
  * @param {{ mapFileParam: string, widthParam: string, heightParam: string, plateIdParam?: string }} config
- * @param {{ plan?: object, setFile?: Function, bedKey?: string, idStyle?: string, keyWords?: string, getAutoPreviewController?: Function, render?: Function, download?: Function, getEditor?: Function }} [options]
+ * @param {{ plan?: object, setFile?: Function, bedKey?: string, idStyle?: string, keyWords?: string, labels?: string, getAutoPreviewController?: Function, render?: Function, download?: Function, getEditor?: Function }} [options]
  *   `render(parameters, { format, timeoutMs })` and `download(bytes, name,
  *   format)` stand in for the engine and the file save in a test;
  *   `getEditor()` resolves to the drawing editor the door opens.
@@ -355,6 +366,12 @@ class MapPanel {
     this.keyWords = KEY_WORDS.some((w) => w.key === options.keyWords)
       ? options.keyWords
       : KEY_WORDS[0].key;
+    // What a thing's number is made of on the map: the Labels switch.
+    this.labelStyle = LABEL_STYLES.some((w) => w.key === options.labels)
+      ? options.labels
+      : DEFAULT_LABEL_STYLE;
+    // Each side of the band no narrower than the numbers standing there.
+    this.bandNeeds = {};
     // The labels' tape: the grade (contracted first) and the translator's
     // measure of the texts, a stand-in translator in tests.
     this.tapeGrade = TAPE_GRADES[0].key;
@@ -515,6 +532,7 @@ class MapPanel {
     this.lastCue = this.northCue();
     this.lastTitle = this.titleKey();
     this.lastPrintStyle = this.printStyle();
+    this.lastWedge = this.wedgeKey();
     // Once a map has been generated, the file stays current: each change
     // re-generates when its preview has settled, so Download never hands over
     // a map that no longer matches the choices on screen.
@@ -533,16 +551,19 @@ class MapPanel {
       const cue = this.northCue();
       const title = this.titleKey();
       const printStyle = this.printStyle();
+      const wedge = this.wedgeKey();
       if (
         tape !== this.lastTape ||
         cue !== this.lastCue ||
         title !== this.lastTitle ||
-        printStyle !== this.lastPrintStyle
+        printStyle !== this.lastPrintStyle ||
+        wedge !== this.lastWedge
       ) {
         this.lastTape = tape;
         this.lastCue = cue;
         this.lastTitle = title;
         this.lastPrintStyle = printStyle;
+        this.lastWedge = wedge;
         this.schedule();
       }
       this.adoptPicture();
@@ -681,9 +702,33 @@ class MapPanel {
         title: this.titleText(),
         placement: this.config.titleParam ? this.titlePlacement : 'inside',
         letterMm: this.titleLetterMm(),
+        bandsMm: this.bandNeeds,
       },
       this.bed()
     );
+  }
+
+  /** The wedge's two dials as the model's controls hold them. */
+  wedgeDials() {
+    const parameters = stateManager.getState()?.parameters || {};
+    return wedgeDials({
+      footMm: parameters[this.config.wedgeFootParam],
+      angleDeg: parameters[this.config.wedgeAngleParam],
+    });
+  }
+
+  /** What the numbers' places depend on among the model's controls. */
+  wedgeKey() {
+    const { footMm, angleDeg } = this.wedgeDials();
+    return `${footMm}\n${angleDeg}`;
+  }
+
+  /** A level's top above the base (mm), as the model stacks them; 0 for none. */
+  levelTopMm(level) {
+    const { base, tops } = levelHeights(
+      stateManager.getState()?.parameters || {}
+    );
+    return tops[level - 1] === undefined ? 0 : tops[level - 1] - base;
   }
 
   /**
@@ -703,7 +748,7 @@ class MapPanel {
    * trim on, the box around what prints (the rings and the letters; the
    * tile's own title stands on the sheet's edge and does not count).
    */
-  measureView(built) {
+  measureView(built, marks = []) {
     const whole = {
       face: { w: this.plan.size.w, h: this.plan.size.h },
       offset: [0, 0],
@@ -714,7 +759,15 @@ class MapPanel {
       face: this.plan.size,
       printed: {
         rings: built.rings,
-        boxes: (built.textBoxes || []).filter((b) => !b.title),
+        boxes: [
+          ...(built.textBoxes || []).filter((b) => !b.title),
+          ...marks.map((m) => ({
+            x: m.box.x0,
+            y: m.box.y0,
+            width: m.box.x1 - m.box.x0,
+            height: m.box.y1 - m.box.y0,
+          })),
+        ],
       },
     });
   }
@@ -743,9 +796,11 @@ class MapPanel {
    * moved into the sheet's frame, the letters' boxes with them, and the
    * title's rows on the band.
    */
-  sheetParts(sheet, built) {
+  sheetParts(sheet, built, marks = []) {
     const [dx, dy] = this.faceShift(sheet);
+    const placed = moveMarks(marks, [dx, dy]);
     return {
+      marks: placed,
       rings: cutZones(
         shiftRings(built.rings, [dx, dy]),
         this.northZonesOn(sheet)
@@ -756,7 +811,10 @@ class MapPanel {
         x: b.x + dx,
         y: b.y + dy,
       })),
-      rows: sheet.titleBand ? titleRows(sheet, this.titleLetterMm()) : [],
+      rows: [
+        ...(sheet.titleBand ? titleRows(sheet, this.titleLetterMm()) : []),
+        ...numeralRows(placed, sheet.h, (level) => this.levelTopMm(level)),
+      ],
     };
   }
 
@@ -788,7 +846,9 @@ class MapPanel {
   clearedPlan(labeled) {
     const settings = this.levelSettings();
     const first = buildLevelRings(labeled.plan, settings);
-    this.view = this.measureView(first);
+    this.view = this.measureView(first, labeled.marks || []);
+    const band = this.placeBand(labeled);
+    this.bandNeeds = band.sides;
     const sheet = this.sheetNow();
     const [dx, dy] = this.faceShift(sheet);
     const toPlan = (z) => ({
@@ -809,11 +869,98 @@ class MapPanel {
       features === labeled.plan.features
         ? labeled.plan
         : { ...labeled.plan, features };
+    // A number beside a symbol the cue moved goes with it.
+    const before = new Map(labeled.plan.features.map((f) => [f.id, f.at]));
+    const marks = band.marks.map((m) => {
+      if (m.where !== 'thing') return m;
+      const now = features.find((f) => f.id === m.featureId)?.at;
+      const was = before.get(m.featureId);
+      if (!now || !was || (now[0] === was[0] && now[1] === was[1])) return m;
+      return moveMarks([m], [now[0] - was[0], now[1] - was[1]])[0];
+    });
+    const built =
+      plan === labeled.plan ? first : buildLevelRings(plan, settings);
     return {
-      labeled: { ...labeled, plan },
-      built: plan === labeled.plan ? first : buildLevelRings(plan, settings),
+      labeled: {
+        ...labeled,
+        plan,
+        marks,
+        keyOnly: band.keyOnly,
+        warnings: [
+          ...(labeled.warnings || []),
+          ...band.keyOnly.map((k) => ({
+            code: 'number-key-only',
+            featureId: k.featureId,
+            text: KEY_ONLY_SENTENCE(k.name, k.number),
+          })),
+        ],
+      },
+      built: { ...built, rings: { ...built.rings, leads: band.rings } },
       sheet,
       moved,
+    };
+  }
+
+  /**
+   * The numbers in the margin band: those their things could not hold, and
+   * any on a thing under the north cue's clearance, at the nearest edge of
+   * the face with room (identifiers.js). The cue's place is read from the
+   * sheet as the last pass left it; only its height matters here.
+   */
+  placeBand(labeled) {
+    const marks = labeled.marks || [];
+    const pending = [...(labeled.pending || [])];
+    const [ox, oy] = this.view.offset;
+    const face = {
+      x0: ox,
+      y0: oy,
+      x1: ox + this.view.face.w,
+      y1: oy + this.view.face.h,
+    };
+    const empty = {
+      marks,
+      rings: [],
+      sides: {},
+      keyOnly: [],
+    };
+    if (!marks.length && !pending.length) return empty;
+    const sheet = this.sheetNow();
+    const [dx, dy] = this.faceShift(sheet);
+    const zones = this.northZonesOn(sheet).map((z) => ({
+      x0: z.x0 - dx,
+      y0: z.y0 - dy,
+      x1: z.x1 - dx,
+      y1: z.y1 - dy,
+    }));
+    const hits = (b) =>
+      zones.some(
+        (z) => b.x1 > z.x0 && b.x0 < z.x1 && b.y1 > z.y0 && b.y0 < z.y1
+      );
+    const stay = [];
+    const byId = new Map(labeled.plan.features.map((f) => [f.id, f]));
+    for (const m of marks) {
+      if (!hits(m.box)) {
+        stay.push(m);
+        continue;
+      }
+      const f = byId.get(m.featureId);
+      const row = labeled.key?.numbers?.find((n) => n.featureId === f?.id);
+      if (f) pending.push({ f, number: m.number, name: row?.name || f.name });
+    }
+    pending.sort((a, b) => a.number - b.number);
+    const band = bandPlan({
+      pending,
+      face,
+      style: this.labelStyle,
+      dials: this.wedgeDials(),
+      symbolSizeMm: { ...DEFAULT_SETTINGS, ...this.levelSettings() }
+        .symbolSizeMm,
+      zones,
+      marks: stay,
+    });
+    return {
+      ...band,
+      marks: [...stay, ...band.marks].sort((a, b) => a.number - b.number),
     };
   }
 
@@ -1247,6 +1394,29 @@ class MapPanel {
     });
     add('bed', styleSelect);
     this.refs.idStyle = styleSelect;
+
+    // What a thing's number is made of on the map: a braille wedge, a
+    // raised numeral, or both. Raised letters put no tape on the map.
+    if (this.config.numberWedgesParam) {
+      const labelsLabel = el('label', 'braille-panel-label', 'Labels');
+      labelsLabel.htmlFor = 'tactileMapLabels';
+      add('bed', labelsLabel);
+      const labelsSelect = el('select', 'braille-panel-select');
+      labelsSelect.id = 'tactileMapLabels';
+      for (const choice of LABEL_STYLES) {
+        const option = document.createElement('option');
+        option.value = choice.key;
+        option.textContent = choice.name;
+        labelsSelect.appendChild(option);
+      }
+      labelsSelect.value = this.labelStyle;
+      labelsSelect.addEventListener('change', () => {
+        this.labelStyle = labelsSelect.value;
+        this.schedule(0);
+      });
+      add('bed', labelsSelect);
+      this.refs.labels = labelsSelect;
+    }
 
     // The braille on tape: the grade the translator measures the labels
     // in, and under it what the tape comes to.
@@ -2154,8 +2324,8 @@ class MapPanel {
     const format = state.outputFormat === '3mf' ? '3mf' : 'stl';
     const stem = projectStem(state.uploadedFile?.name || 'tactile_map');
     const parameters = state.parameters || {};
-    const { built, sheet } = this.clearedPlan(this.labeled());
-    const parts = this.sheetParts(sheet, built);
+    const { labeled, built, sheet } = this.clearedPlan(this.labeled());
+    const parts = this.sheetParts(sheet, built, labeled.marks);
     const mapParameters = this.mapKindParameters(parameters);
     const sets = [
       ...titlePlateSets({
@@ -2168,6 +2338,7 @@ class MapPanel {
       ...plateParameterSets({
         rings: parts.rings,
         cones: parts.cones,
+        marks: parts.marks,
         rows: parts.rows,
         sheetH: sheet.h,
         titleInside: sheet.placement === 'inside',
@@ -2224,6 +2395,7 @@ class MapPanel {
           rings: parts.rings,
           sheet,
           parameters,
+          marks: parts.marks,
         });
         this.download(bytes, fileName, 'zip');
         if (stop) {
@@ -2294,6 +2466,7 @@ class MapPanel {
     rings,
     sheet,
     parameters,
+    marks = [],
   }) {
     const bed = this.bed();
     const bedName =
@@ -2314,6 +2487,9 @@ class MapPanel {
       unspelled: pdf.unspelled,
       tape: this.tapeSummary(this.labeled()),
       trimMm: this.trim ? sheet.marginMm : 0,
+      numbersInMargin: Object.values(sheet.band).some(
+        (side) => side > sheet.marginMm
+      ),
       channelsThrough: this.channelCut === 'through',
       blankTitles: this.blankTitleIds(this.layout, sheet),
     });
@@ -2322,6 +2498,7 @@ class MapPanel {
       layout: this.layout,
       size: { w: sheet.w, h: sheet.h },
       bedName,
+      marks,
     });
     const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
@@ -2347,7 +2524,7 @@ class MapPanel {
    */
   buildPdf({ stem, parameters }) {
     const { labeled, built, sheet } = this.clearedPlan(this.labeled());
-    const parts = this.sheetParts(sheet, built);
+    const parts = this.sheetParts(sheet, built, labeled.marks);
     const inside = sheet.placement === 'inside';
     const faceAt = this.faceShift(sheet);
     const whole = this.paperDataFor({
@@ -2359,6 +2536,7 @@ class MapPanel {
       title: inside,
       words: rowsText(parts.rows),
       faceAt,
+      marks: parts.marks,
     });
     const blank = new Set(this.blankTitleIds(this.layout, sheet));
     const titles = (this.layout?.titlePlates || []).map((plate) => ({
@@ -2373,6 +2551,7 @@ class MapPanel {
         title: false,
         words: rowsText(plateRows(parts.rows, plate, sheet.h)),
         faceAt,
+        sheetMarks: parts.marks,
       }),
     }));
     const plates = (this.layout?.plates || []).map((plate) => {
@@ -2389,6 +2568,8 @@ class MapPanel {
           title: inside && roles.title,
           words: rowsText(plateRows(parts.rows, plate, sheet.h)),
           faceAt,
+          marks: plateMarks(parts.marks, plate),
+          sheetMarks: parts.marks,
         }),
       };
     });
@@ -2535,6 +2716,8 @@ class MapPanel {
         plan: numberNamed(this.plan),
         key: keyFor(this.plan, this.levelSettings()),
         warnings: [],
+        marks: [],
+        pending: [],
       };
     }
     return labelPlan(this.plan, this.levelSettings());
@@ -2549,6 +2732,8 @@ class MapPanel {
       tapeWidthMm: this.tapeWidth(),
       tape: this.tape.view(this.tapeGrade),
       channelsThrough: this.channelCut === 'through',
+      labels: this.config.numberWedgesParam ? this.labelStyle : null,
+      wedge: this.wedgeDials(),
       ...settingsForSet(activeSetKey()),
     };
   }
@@ -2728,6 +2913,7 @@ class MapPanel {
     const next = { ...parameters };
     if (this.config.plateKindParam) next[this.config.plateKindParam] = 'Map';
     if (this.config.raisedWordsParam) next[this.config.raisedWordsParam] = '';
+    if (this.config.numberWedgesParam) next[this.config.numberWedgesParam] = '';
     const sheet = this.sheet || this.sheetNow();
     if (this.config.marginParam) next[this.config.marginParam] = sheet.marginMm;
     if (this.config.titleBandParam)
@@ -2752,6 +2938,8 @@ class MapPanel {
         [this.config.plateKindParam]: 'Key',
         [this.config.raisedWordsParam]: page.print,
       };
+      if (this.config.numberWedgesParam)
+        next[this.config.numberWedgesParam] = '';
       if (this.config.coneMarksParam) {
         next[this.config.coneMarksParam] = coneRows(page.cones, {
           x: 0,
@@ -2865,8 +3053,10 @@ class MapPanel {
 
     // The sheet's frame: the face's rings, cones and letter boxes moved
     // inside the band, the title's rows on its band.
-    const parts = this.sheetParts(sheet, built);
+    const parts = this.sheetParts(sheet, built, labeled.marks);
     const inside = sheet.placement === 'inside';
+    let wedges = '';
+    let marks = [];
     let svg;
     let size;
     let fileName;
@@ -2884,6 +3074,8 @@ class MapPanel {
       size = sheetSize;
       fileName = 'levels_whole.svg';
       words = rowsText(parts.rows);
+      marks = parts.marks;
+      wedges = wedgeRows(marks, { x: 0, y: 0, w: sheet.w, h: sheet.h });
     } else if (isKeyId(this.plate)) {
       keyPage = this.keyPages.find((p) => p.id === this.plate);
       svg = keyPage.svg;
@@ -2917,6 +3109,8 @@ class MapPanel {
       showTitle = inside && roles.title ? 'yes' : 'no';
       showNorth = roles.north ? 'yes' : 'no';
       words = rowsText(plateRows(parts.rows, plate, sheet.h));
+      marks = plateMarks(parts.marks, plate);
+      wedges = wedgeRows(parts.marks, plate);
     }
     setParameterValue(this.config.widthParam, size.w);
     setParameterValue(this.config.heightParam, size.h);
@@ -2931,6 +3125,8 @@ class MapPanel {
     }
     if (this.config.raisedWordsParam)
       setParameterValue(this.config.raisedWordsParam, words);
+    if (this.config.numberWedgesParam)
+      setParameterValue(this.config.numberWedgesParam, wedges);
     if (this.config.marginParam)
       setParameterValue(this.config.marginParam, sheet.marginMm);
     if (this.config.titleBandParam)
@@ -2974,6 +3170,8 @@ class MapPanel {
         title: showTitle === 'yes',
         words,
         faceAt: this.faceShift(sheet),
+        marks,
+        sheetMarks: parts.marks,
       });
       this.syncPaper();
     }
@@ -2998,6 +3196,8 @@ class MapPanel {
     title,
     words: rows = '',
     faceAt = [0, 0],
+    marks = [],
+    sheetMarks = marks,
   }) {
     const parameters = stateManager.getState().parameters || {};
     const s = { ...DEFAULT_SETTINGS, ...this.levelSettings() };
@@ -3014,7 +3214,10 @@ class MapPanel {
     );
     const allTexts = spreadTexts(moveTexts(paperTexts(labeled.plan), faceAt), {
       size: this.sheet || size,
-      obstacles: channelBoxes(allChannels),
+      obstacles: [
+        ...channelBoxes(allChannels),
+        ...sheetMarks.map((m) => m.box),
+      ],
     });
     let texts = [];
     let channels = [];
@@ -3053,6 +3256,7 @@ class MapPanel {
       channelsThrough: this.channelCut === 'through',
       title: title ? String(parameters[this.config.titleParam] || '') : '',
       plateId,
+      marks: keyPage ? [] : marks,
     };
   }
 
