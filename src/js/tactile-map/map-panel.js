@@ -86,10 +86,12 @@ import { channelLengthMm, labelPlan } from './map-labels.js';
 import { TAPE_GRADES, TapeMeasure } from './tape-cells.js';
 import {
   mapPaperSvg,
+  channelBoxes,
   moveTexts,
   paperChannels,
   paperColors,
   paperTexts,
+  spreadTexts,
   paperWords,
   shiftTexts,
 } from './map-paper.js';
@@ -3004,12 +3006,16 @@ class MapPanel {
       (labeled.labels || []).map((l) => [`label-${l.featureId}`, l.text])
     );
     const textOf = (f) => labelText.get(f.id) || '';
-    // The names and the channels stand in the sheet's frame, inside the band.
-    const allTexts = moveTexts(paperTexts(labeled.plan), faceAt);
+    // The names and the channels stand in the sheet's frame, inside the
+    // band; the names spread so none prints over another or a channel.
     const allChannels = moveTexts(
       paperChannels(labeled.plan.features, across, textOf),
       faceAt
     );
+    const allTexts = spreadTexts(moveTexts(paperTexts(labeled.plan), faceAt), {
+      size: this.sheet || size,
+      obstacles: channelBoxes(allChannels),
+    });
     let texts = [];
     let channels = [];
     let words = [];

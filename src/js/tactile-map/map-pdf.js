@@ -14,7 +14,7 @@
  */
 
 import { PdfWriter, textWidthMm } from './pdf-writer.js';
-import { THROUGH_DASH_MM, THROUGH_GAP_MM } from './map-paper.js';
+import { THROUGH_DASH_MM, THROUGH_GAP_MM, leaderEnd } from './map-paper.js';
 import { LETTER_SPACING } from './key-layout.js';
 import { signRowWidthMm } from '../sign-letter-metrics.js';
 
@@ -57,6 +57,10 @@ function colorOf(value) {
  */
 function drawPlate(w, data, { x, y, scale, colors, seams }) {
   const s = scale;
+  // The names shrink with a drawing drawn small (the whole map on one
+  // page), to 5 pt at the least, so they keep the room they keep on the
+  // paper instead of running over one another.
+  const namePt = Math.max(5, NAME_PT * s);
   const px = (v) => x + v * s;
   const py = (v) => y + v * s;
   const map = (rings) =>
@@ -109,7 +113,7 @@ function drawPlate(w, data, { x, y, scale, colors, seams }) {
     }
     if (ch.text) {
       const room = Math.max(1, (ch.length - 2 * CHANNEL_END_MM) * s);
-      let pt = NAME_PT;
+      let pt = namePt;
       while (pt > 4 && textWidthMm(ch.text, pt) > room) pt -= 0.5;
       w.text(px(cx), py(cy) + (pt / PT_OF_MM) * 0.35, pt, ch.text, {
         align: 'center',
@@ -118,10 +122,18 @@ function drawPlate(w, data, { x, y, scale, colors, seams }) {
     }
   }
   for (const t of data.texts || []) {
+    if (Array.isArray(t.from)) {
+      // A name moved off its thing points back to it.
+      const [ex, ey] = leaderEnd(t);
+      w.line(px(t.from[0]), py(t.from[1]), px(ex), py(ey), {
+        stroke: FAINT,
+        widthMm: 0.3,
+      });
+    }
     w.text(
       px(t.at[0]),
-      py(t.at[1]) + (NAME_PT / PT_OF_MM) * 0.35,
-      NAME_PT,
+      py(t.at[1]) + (namePt / PT_OF_MM) * 0.35,
+      namePt,
       t.text,
       {
         align: 'center',

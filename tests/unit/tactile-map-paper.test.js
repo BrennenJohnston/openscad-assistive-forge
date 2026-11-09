@@ -19,6 +19,7 @@ import {
   paperColors,
   paperTexts,
   paperWords,
+  spreadTexts,
   shiftTexts,
 } from '../../src/js/tactile-map/map-paper.js';
 
@@ -100,6 +101,57 @@ describe('the names', () => {
     expect(byId.get(edge.id).text).toMatch(/^the platform edge/);
   });
 
+  it('keep apart: two names at one place stand on lines of their own, one at the edge moves inside, one over a channel moves off it, and a moved name remembers its place', () => {
+    const size = { w: 200, h: 100 };
+    const at = (text, x, y) => ({
+      featureId: text,
+      text,
+      at: [x, y],
+      kind: 'point',
+    });
+    const spread = spreadTexts(
+      [at('1 Clinic', 100, 50), at('2 Cafe', 100, 50), at('3 Shop', 100, 51)],
+      { size }
+    );
+    const ys = spread.map((t) => t.at[1]);
+    expect(new Set(ys).size).toBe(3);
+    for (let i = 0; i < 3; i += 1) {
+      for (let j = i + 1; j < 3; j += 1) {
+        expect(Math.abs(ys[i] - ys[j])).toBeGreaterThanOrEqual(
+          PAPER_LETTER_MM * 1.3
+        );
+      }
+    }
+    // The first keeps its place; the others say where they came from.
+    expect(spread[0].at).toEqual([100, 50]);
+    expect(spread[0].from).toBeUndefined();
+    expect(spread[1].from).toEqual([100, 50]);
+    expect(spread[2].from).toEqual([100, 51]);
+    // Half the width of 'Parking: South Campus Garage' would hang past
+    // the left edge; the name moves right until it is inside.
+    const [edge] = spreadTexts([at('14 Parking: South Campus Garage', 4, 50)], {
+      size,
+    });
+    const half = (edge.text.length * 0.6 * PAPER_LETTER_MM) / 0.72 / 2;
+    expect(edge.at[0] - half).toBeGreaterThanOrEqual(0);
+    expect(edge.at[1]).toBe(50);
+    // A name over a channel's box moves off it.
+    const [clear] = spreadTexts([at('13 Stetho', 100, 50)], {
+      size,
+      obstacles: [{ x0: 80, y0: 45, x1: 140, y1: 55 }],
+    });
+    expect(
+      clear.at[1] + PAPER_LETTER_MM / 2 <= 45 ||
+        clear.at[1] - PAPER_LETTER_MM / 2 >= 55
+    ).toBe(true);
+    expect(clear.from).toEqual([100, 50]);
+    // Nothing to do: the list comes back as it was.
+    expect(spreadTexts([at('A', 50, 20), at('B', 150, 80)], { size })).toEqual([
+      at('A', 50, 20),
+      at('B', 150, 80),
+    ]);
+  });
+
   it('move with a plate and stay only where they fall inside it', () => {
     const texts = [
       { featureId: 'a', text: 'A', at: [10, 20], kind: 'point' },
@@ -108,6 +160,29 @@ describe('the names', () => {
     const moved = shiftTexts(texts, { x: 240, y: 0, w: 240, h: 180 });
     expect(moved).toEqual([
       { featureId: 'b', text: 'B', at: [60, 20], kind: 'point' },
+    ]);
+    // A moved name's place of origin moves with it.
+    expect(
+      shiftTexts(
+        [
+          {
+            featureId: 'c',
+            text: 'C',
+            at: [300, 40],
+            from: [290, 30],
+            kind: 'point',
+          },
+        ],
+        { x: 240, y: 0, w: 240, h: 180 }
+      )
+    ).toEqual([
+      {
+        featureId: 'c',
+        text: 'C',
+        at: [60, 40],
+        from: [50, 30],
+        kind: 'point',
+      },
     ]);
   });
 });
@@ -140,6 +215,28 @@ describe('the paper of a plate', () => {
     expect(channelRects.match(/>Pine<\/text>/g)).toHaveLength(2);
     expect(svg).toMatch(new RegExp(`font-size="${PAPER_LETTER_MM / 0.72}"`));
     expect(channelRects).not.toContain('stroke-dasharray');
+  });
+
+  it('draws a leader from a moved name to its place, and none for a name where it stands', () => {
+    const svg = mapPaperSvg({
+      rings,
+      size: plan.size,
+      texts: [
+        { featureId: 'a', text: 'A', at: [50, 50], kind: 'point' },
+        {
+          featureId: 'b',
+          text: 'B',
+          at: [50, 60],
+          from: [50, 50],
+          kind: 'point',
+        },
+      ],
+      colors,
+    });
+    const leaders = svg.match(/<g id="paper-leaders"[^>]*>[^]*?<\/g>/)[0];
+    expect(leaders.match(/<line /g)).toHaveLength(1);
+    expect(leaders).toMatch(/<line x1="50" y1="50" x2="50" y2="[\d.]+"/);
+    expect(leaders).toMatch(/stroke="#9aa4ae"/);
   });
 
   it('draws a channel cut through the plate with a dashed edge', () => {
