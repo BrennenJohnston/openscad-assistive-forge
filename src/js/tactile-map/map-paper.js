@@ -458,7 +458,7 @@ export function mapPaperSvg({
         .filter((m) => m.wedge)
         .map((m) => {
           const { x, y, w: ww, depth } = m.wedge;
-          const dots = wedgeDots(m.wedge, m.number)
+          const dots = wedgeDots(m.wedge)
             .map(
               ([dx, dy]) =>
                 `<circle cx="${say(dx)}" cy="${say(dy)}" r="0.6" fill="${c.ink}" stroke="none"/>`

@@ -24,19 +24,22 @@ import { labelCells } from './map-key.js';
 /** A blank braille cell, the space on tape. */
 export const BLANK_CELL = '⠀';
 
-/** The grades offered, contracted first (TM-Q130), each with its table. */
+/**
+ * The grades offered, each with its table. Uncontracted first: most hand-press
+ * braille labelers write letter by letter and cannot contract.
+ */
 export const TAPE_GRADES = Object.freeze([
-  {
-    key: 'g2',
-    name: 'Contracted (UEB Grade 2)',
-    table: 'en-ueb-g2.ctb',
-    said: 'contracted braille (UEB Grade 2)',
-  },
   {
     key: 'g1',
     name: 'Uncontracted (Grade 1)',
     table: 'en-ueb-g1.ctb',
     said: 'uncontracted braille (Grade 1)',
+  },
+  {
+    key: 'g2',
+    name: 'Contracted (UEB Grade 2)',
+    table: 'en-ueb-g2.ctb',
+    said: 'contracted braille (UEB Grade 2)',
   },
 ]);
 

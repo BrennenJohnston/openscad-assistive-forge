@@ -249,26 +249,21 @@ test.describe('Tactile Map tile', () => {
       timeout: WASM_READY_TIMEOUT,
     });
     await goToStep(page, 5);
+    // The tape's choices stand while label tape is chosen.
     const cut = page.locator('#tactileMapChannelCut');
+    await expect(cut).toBeHidden();
+    await page.locator('#tactileMapLabels').selectOption('tape');
+    await expect(cut).toBeVisible();
     await expect(cut).toHaveValue('recess');
     await expect(page.locator('label[for="tactileMapChannelCut"]')).toHaveText(
       'Tape channels'
     );
-    // The empty note takes no room: the next control stands as far under this
-    // select as any other control does under its own.
-    const gapUnder = (select, label) =>
-      page.evaluate(
-        ([s, l]) =>
-          document.querySelector(l).getBoundingClientRect().top -
-          document.querySelector(s).getBoundingClientRect().bottom,
-        [select, label]
-      );
+    // The empty note takes no room.
     expect(
-      await gapUnder('#tactileMapChannelCut', 'label[for="tactileMapKeyWords"]')
-    ).toBeCloseTo(
-      await gapUnder('#tactileMapIdStyle', 'label[for="tactileMapLabels"]'),
-      1
-    );
+      await page
+        .locator('#tactileMapChannelNote')
+        .evaluate((n) => n.getBoundingClientRect().height)
+    ).toBe(0);
     const levels = () =>
       page.evaluate(() => {
         const d = window.stateManager.getState().parameters.map_file?.data;
@@ -1069,7 +1064,7 @@ test.describe('the draft map', () => {
     ).toEqual([]);
   });
 
-  test('the key and the labels at 3600 Ferry Pl NE: channels beside the named places, the key listed after the plates, its braille on tape in channels, previewed in the tile Key mode', async ({
+  test("the key and the labels at 3600 Ferry Pl NE on label tape: a channel for each place's braille number on the map, the key a row a piece, the number then the name on tape, previewed in the tile Key mode", async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -1077,8 +1072,25 @@ test.describe('the draft map', () => {
     await expect(page.locator('#tactileMapSummary')).toContainText(
       'The key takes'
     );
-    // The named places get channels for their braille labels; one with no
-    // room carries its number, and the key names it.
+    await page.locator('#tactileMapLabels').selectOption('tape');
+    // Each numbered place gets a channel for its braille number; the names
+    // are in the key.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            document.getElementById('tactileMapPanel').__forgeMapPanel.labeled()
+              .labels.length
+        )
+      )
+      .toBeGreaterThan(0);
+    const mapLabels = await page.evaluate(() =>
+      document
+        .getElementById('tactileMapPanel')
+        .__forgeMapPanel.labeled()
+        .labels.map((l) => l.text)
+    );
+    expect(mapLabels.every((t) => /^#\d+$/.test(t))).toBe(true);
     const levels = await page.evaluate(() => {
       const d = window.stateManager.getState().parameters.map_file?.data || '';
       const body = d.split(',')[1] || '';
@@ -1093,48 +1105,43 @@ test.describe('the draft map', () => {
       (await status.textContent()).match(/; (\d+) warnings?\./)?.[1] ?? 0
     );
     expect(said).toBe(await page.locator('#tactileMapWarnings li').count());
-    // The key's braille goes on label tape: each row's text is listed for
-    // its channel, the cafe's among them.
-    const tape = await page.evaluate(() =>
+    // The key, a row a piece: each place's piece holds its number's channel,
+    // then its name on tape, the cafe's among them.
+    const pieces = await page.evaluate(() =>
       document
         .getElementById('tactileMapPanel')
-        .__forgeMapPanel.keyPages.flatMap((p) => p.tape)
+        .__forgeMapPanel.keyPages.map((p) => p.tape)
     );
-    // The key plates are the map's plate size; on the trimmed map's 189 mm
-    // plates a long row wraps onto two strips, so the pieces are joined.
-    expect(tape.join(' ')).toMatch(/\b\d+ restaurant: plaza cafe\b/);
-    expect(tape.join(' ')).toMatch(/\b\d+ parking: south campus garage\b/);
+    const cafe = pieces.find((t) => t.join(' ').includes('plaza cafe'));
+    expect(cafe[0]).toMatch(/^#\d+$/);
+    expect(cafe.slice(1).join(' ')).toBe('restaurant: plaza cafe');
+    const tape = pieces.flat();
     // The labels' tape, measured by the braille translator in the grade
-    // chosen: contracted UEB to start, uncontracted on a switch, the note
-    // saying each and what the other would need.
+    // chosen: uncontracted to start, as a hand-press labeler writes,
+    // contracted on a switch, the note saying each and what the other would
+    // need.
     const grade = page.locator('#tactileMapTapeGrade');
-    await expect(grade).toHaveValue('g2');
+    await expect(grade).toHaveValue('g1');
     const tapeNote = page.locator('#tactileMapTapeNote');
     await expect(tapeNote).toHaveText(
-      /^Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; uncontracted would take \d+ labels?, about \d+ mm\.$/,
+      /^Label tape: uncontracted braille \(Grade 1\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; contracted would take \d+ labels?, about \d+ mm\.$/,
       { timeout: 30000 }
     );
-    const contracted = (await tapeNote.textContent()).match(
-      /about (\d+) mm of/
-    )[1];
-    // What the sentence promises for the other grade is what a switch gives:
-    // fewer names keep within six cells uncontracted, so the labels themselves
-    // change with the grade, and the figure is theirs.
+    // What the sentence promises for the other grade is what a switch gives.
     const promised = (await tapeNote.textContent()).match(
       /would take (\d+) labels?, about (\d+) mm/
     );
-    expect(Number(contracted)).toBeGreaterThan(0);
-    await grade.selectOption('g1');
+    await grade.selectOption('g2');
     await expect(tapeNote).toHaveText(
-      /^Label tape: uncontracted braille \(Grade 1\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; contracted would take \d+ labels?, about \d+ mm\.$/,
+      /^Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; uncontracted would take \d+ labels?, about \d+ mm\.$/,
       { timeout: 30000 }
     );
     const got = (await tapeNote.textContent()).match(
       /(\d+) labels?, \d+ cells, about (\d+) mm of/
     );
     expect([got[1], got[2]]).toEqual([promised[1], promised[2]]);
-    await grade.selectOption('g2');
-    await expect(tapeNote).toHaveText(/^Label tape: contracted braille/, {
+    await grade.selectOption('g1');
+    await expect(tapeNote).toHaveText(/^Label tape: uncontracted braille/, {
       timeout: 30000,
     });
     // The typed address is the destination, the first row after the key's
@@ -1145,7 +1152,9 @@ test.describe('the draft map', () => {
       t.startsWith('destination, 3600')
     );
     expect(destinationRow).toBeGreaterThan(-1);
-    expect(destinationRow).toBeLessThan(tape.findIndex((t) => /^\d+ /.test(t)));
+    expect(destinationRow).toBeLessThan(
+      tape.findIndex((t) => /^#\d+$/.test(t))
+    );
     const keyRadio = page.locator(
       'input[name="tactileMapPlate"][value^="key"]'
     );
@@ -1188,10 +1197,12 @@ test.describe('the draft map', () => {
       'fits a 256 x 256 mm bed in 1 plate.',
       { timeout: PREVIEW_TIMEOUT }
     );
-    // Key words: braille only to start; Print and braille raises the words.
-    const keyWords = page.locator('#tactileMapKeyWords');
-    await expect(keyWords).toHaveValue('braille');
-    await keyWords.selectOption('both');
+    // Raised numbers and letters raise the key's words.
+    await page.locator('#tactileMapLabels').selectOption('raised');
+    await page
+      .locator('input[name="tactileMapPlate"][value^="key"]')
+      .first()
+      .check();
     await expect
       .poll(
         () =>
@@ -1219,35 +1230,25 @@ test.describe('the draft map', () => {
 });
 
 test.describe('numbers on the map', () => {
-  test('the Labels switch at 3600 Ferry Pl NE: Both raises wedges and numerals, Braille wedges and tape, Raised letters numerals and no tape, on the plate, every plate of the zip and the paper', async ({
+  test('the Labels switch at 3600 Ferry Pl NE: one kind at a time on the map and in the key, braille wedges to start, then label tape, then raised numbers and letters', async ({
     page,
   }) => {
     test.setTimeout(300_000);
     await makeFerryDraft(page);
     const labels = page.locator('#tactileMapLabels');
-    await expect(labels).toHaveValue('both');
+    await expect(labels).toHaveValue('wedge');
     await expect(labels.locator('option')).toHaveText([
-      'Braille (wedges and tape)',
-      'Raised letters',
-      'Both',
+      'Braille wedges',
+      'Braille label tape',
+      'Raised numbers and letters',
     ]);
     const WEDGE_ROW = /^\d+:\d+:\d+(\|\d+:\d+:\d+)*$/;
     const NUMERAL = /:#\d+(\||$)/;
     const CHANNELS = /<g id="channels"><path d="[^"]+"\/><\/g>/;
+    const NO_CHANNELS = /<g id="channels"><\/g>/;
+    const grade = page.locator('#tactileMapTapeGrade');
 
-    // Both: the whole map's wedges and numerals, the tape, the paper's
-    // wedges with their dots.
-    await expect
-      .poll(async () => (await shownPlate(page)).wedges)
-      .toMatch(WEDGE_ROW);
-    let shown = await shownPlate(page);
-    expect(shown.words).toMatch(NUMERAL);
-    expect(shown.levels).toMatch(CHANNELS);
-    expect(shown.paper).toMatch(/<g id="paper-wedges"[^>]*><rect /);
-    expect(shown.paper).toMatch(/font-weight="700" text-anchor="middle">\d+</);
-
-    // Every map plate the button renders carries the wedges that reach it;
-    // a key plate and a title plate carry none.
+    // Every plate the button renders, with what it hands the model.
     const renderAll = async () => {
       await page.evaluate(() => {
         const panel =
@@ -1258,9 +1259,10 @@ test.describe('numbers on the map', () => {
             kind: parameters.plate_kind,
             file: parameters.map_file?.name || '',
             wedges: parameters.number_wedges,
+            braille: parameters.braille_wedges,
+            words: parameters.raised_words,
             w: parameters.map_width_mm,
             h: parameters.map_height_mm,
-            words: parameters.raised_words,
           });
           return new Uint8Array(84);
         };
@@ -1273,13 +1275,7 @@ test.describe('numbers on the map', () => {
       );
       return page.evaluate(() => window.__sets);
     };
-    let sets = await renderAll();
-    const maps = sets.filter((x) => x.kind === 'Map' && !/title/.test(x.file));
-    const keys = sets.filter((x) => x.kind === 'Key');
-    expect(maps.length).toBeGreaterThan(1);
-    expect(maps.some((x) => WEDGE_ROW.test(x.wedges))).toBe(true);
-    // No wedge stands across a seam: each lies whole on its plate (a wedge
-    // is 15.5 mm wide for one digit, 22 for two, 10.1 mm deep at the start).
+    // No wedge stands across a seam: each lies whole on its plate.
     const whole = (x) =>
       (x.wedges || '')
         .split('|')
@@ -1294,40 +1290,72 @@ test.describe('numbers on the map', () => {
             wy / 10 + 10.1 <= x.h
           );
         });
-    expect(maps.every(whole)).toBe(true);
-    expect(maps.some((x) => NUMERAL.test(x.words))).toBe(true);
-    expect(keys.every((x) => x.wedges === '')).toBe(true);
 
-    // Raised letters: numerals alone, no wedge, no tape on the map.
-    await labels.selectOption('print');
-    await expect.poll(async () => (await shownPlate(page)).wedges).toBe('');
-    // The levels file reaches the control a moment after the rows.
-    await expect
-      .poll(async () => (await shownPlate(page)).levels)
-      .toMatch(/<g id="channels"><\/g>/);
-    shown = await shownPlate(page);
-    expect(shown.words).toMatch(NUMERAL);
-    expect(shown.levels).toMatch(/<g id="channels"><\/g>/);
-    expect(shown.paper).not.toMatch(/<g id="paper-wedges"[^>]*><rect /);
-    sets = await renderAll();
-    expect(sets.every((x) => x.wedges === '')).toBe(true);
-
-    // Braille: wedges and tape, no raised numeral.
-    await labels.selectOption('braille');
+    // Braille wedges: wedges on the map, no tape, no numeral; each key row a
+    // piece, a place's number on a wedge and its name on wedges.
     await expect
       .poll(async () => (await shownPlate(page)).wedges)
       .toMatch(WEDGE_ROW);
+    let shown = await shownPlate(page);
+    expect(shown.words).not.toMatch(NUMERAL);
+    expect(shown.levels).toMatch(NO_CHANNELS);
+    expect(shown.paper).toMatch(/<g id="paper-wedges"[^>]*><rect /);
+    await expect(grade).toBeHidden();
+    let sets = await renderAll();
+    let maps = sets.filter((x) => x.kind === 'Map');
+    let keys = sets.filter((x) => x.kind === 'Key');
+    expect(maps.some((x) => WEDGE_ROW.test(x.wedges))).toBe(true);
+    expect(maps.every(whole)).toBe(true);
+    expect(keys.length).toBeGreaterThan(5);
+    const places = keys.filter((x) => x.wedges);
+    expect(places.length).toBeGreaterThan(0);
+    expect(places.every((x) => /^\d+:\d+:[\d.]+/.test(x.braille))).toBe(true);
+    expect(keys.every((x) => x.h < 75)).toBe(true);
+
+    // Braille label tape: a channel for each number on the map, no wedge.
+    await labels.selectOption('tape');
+    await expect(grade).toBeVisible();
+    await expect(grade).toHaveValue('g1');
+    await expect.poll(async () => (await shownPlate(page)).wedges).toBe('');
     await expect
       .poll(async () => (await shownPlate(page)).levels)
       .toMatch(CHANNELS);
     shown = await shownPlate(page);
     expect(shown.words).not.toMatch(NUMERAL);
-    expect(shown.levels).toMatch(CHANNELS);
+    // One label and one channel a place, wherever its number stands.
+    const tape = await page.evaluate(() => {
+      const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+      const { labeled } = panel.clearedPlan(panel.labeled());
+      return {
+        numbered: labeled.key.numbers.length,
+        keyOnly: labeled.keyOnly.length,
+        labels: labeled.labels.map((l) => l.featureId),
+        channels: labeled.plan.features
+          .filter((f) => f.kind === 'channel')
+          .map((f) => f.id),
+      };
+    });
+    expect(tape.labels).toHaveLength(tape.numbered - tape.keyOnly);
+    expect(new Set(tape.labels).size).toBe(tape.labels.length);
+    expect(new Set(tape.channels).size).toBe(tape.channels.length);
     sets = await renderAll();
-    expect(sets.some((x) => NUMERAL.test(x.words))).toBe(false);
-    expect(
-      sets.filter((x) => x.kind === 'Map').some((x) => WEDGE_ROW.test(x.wedges))
-    ).toBe(true);
+    expect(sets.every((x) => !x.wedges && !x.braille)).toBe(true);
+
+    // Raised numbers and letters: numerals on the map; the key's words raised.
+    await labels.selectOption('raised');
+    await expect(grade).toBeHidden();
+    await expect
+      .poll(async () => (await shownPlate(page)).levels)
+      .toMatch(NO_CHANNELS);
+    shown = await shownPlate(page);
+    expect(shown.words).toMatch(NUMERAL);
+    expect(shown.wedges).toBe('');
+    sets = await renderAll();
+    maps = sets.filter((x) => x.kind === 'Map');
+    keys = sets.filter((x) => x.kind === 'Key');
+    expect(maps.some((x) => NUMERAL.test(x.words))).toBe(true);
+    expect(keys.filter((x) => NUMERAL.test(x.words)).length).toBeGreaterThan(0);
+    expect(sets.every((x) => !x.wedges && !x.braille)).toBe(true);
   });
 });
 

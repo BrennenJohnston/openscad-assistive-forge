@@ -10,10 +10,10 @@
  * number, and the key names it. The lower numbers are placed first, so they
  * get the room.
  *
- * With the Labels switch given (identifiers.js), each thing's number stands
- * there too: the number over its tape, 3 mm between them, the two kept
- * together as one piece; the number alone when the tape does not fit with
- * it. A number with no room on its thing is handed on for the margin band.
+ * With the Labels switch given (identifiers.js), a thing carries only its
+ * number: a braille wedge, a channel for its braille number on tape, or a
+ * raised numeral, and its name is in the key. A number with no room on its
+ * thing is handed on for the margin band.
  *
  * No DOM here: a worker may import this file.
  *
@@ -27,15 +27,18 @@ import {
   DEFAULT_SETTINGS,
   LEVELS_BY_CLASS,
 } from './levels-svg.js';
-import { identifierBox, markAt, PART_GAP_MM } from './identifiers.js';
+import {
+  channelLengthMm,
+  identifierBox,
+  LABEL_CELL_MM,
+  LABEL_END_MM,
+  markAt,
+  numberBraille,
+  PART_GAP_MM,
+  wedgeCells,
+} from './identifiers.js';
 
-/** A braille labeler's cell pitch on tape (ADA 703.3.1: 6.1 to 7.6 mm). */
-export const LABEL_CELL_MM = 6.2;
-/** Tape beyond the cells at each end of a label. */
-export const LABEL_END_MM = 4;
-/** A channel's length for a label of `cells` cells. */
-export const channelLengthMm = (cells) =>
-  Math.round((cells * LABEL_CELL_MM + 2 * LABEL_END_MM) * 10) / 10;
+export { LABEL_CELL_MM, LABEL_END_MM, channelLengthMm };
 
 /** A channel keeps this far inside the plate's edge. */
 const EDGE_MM = 2;
@@ -349,12 +352,14 @@ export function labelPlan(plan, settings = {}) {
   for (const f of numberedThings(plan)) {
     const row = numberOf.get(f.id);
     const cells = measure(f.name).cells;
-    // Raised letters put no tape on the map: the names are in the key.
+    // With the switch the name is in the key: the map carries the number.
     const tape =
-      style !== 'print' && (f.kind === 'area' || cells <= LABEL_CELLS)
+      !style && (f.kind === 'area' || cells <= LABEL_CELLS)
         ? channelLengthMm(cells)
         : 0;
-    const idBox = style ? identifierBox(row.number, style, s.wedge) : null;
+    const idBox = style
+      ? identifierBox(row.number, style, s.wedge, { acrossMm: across })
+      : null;
     const tries = [];
     if (idBox && tape) tries.push(pieceOf(idBox, tape));
     if (idBox) tries.push(pieceOf(idBox, 0));
@@ -381,17 +386,21 @@ export function labelPlan(plan, settings = {}) {
   for (const { f, spot, cells, piece, row } of placed) {
     const top = spot.at[1] - piece.h / 2;
     if (piece.idBox) {
-      marks.push(
-        markAt({
-          featureId: f.id,
-          number: row.number,
-          box: piece.idBox,
-          x0: spot.at[0] - piece.idBox.w / 2,
-          y0: top,
-          where: 'thing',
-          standsOn: spot.standsOn,
-        })
-      );
+      const mark = markAt({
+        featureId: f.id,
+        number: row.number,
+        box: piece.idBox,
+        x0: spot.at[0] - piece.idBox.w / 2,
+        y0: top,
+        where: 'thing',
+        standsOn: spot.standsOn,
+      });
+      marks.push(mark);
+      // A number on tape: its channel, and the label to write for it.
+      if (mark.channel) {
+        labels.push(numberLabel(f, row, mark.channel.length));
+        channels.push(numberChannel(f, mark.channel));
+      }
     }
     if (!piece.length) continue;
     const m = measure(f.name);
@@ -430,4 +439,39 @@ export function labelPlan(plan, settings = {}) {
 
 function round(v) {
   return Math.round(v * 1000) / 1000;
+}
+
+/**
+ * The label a number on tape takes: its braille number, the number sign
+ * and the digits, the same in either grade.
+ *
+ * @param {object} f - the thing
+ * @param {{number: number, name: string}} row - its key row
+ * @param {number} lengthMm - its channel's length
+ */
+export function numberLabel(f, row, lengthMm) {
+  return {
+    featureId: f.id,
+    number: row.number,
+    text: `#${row.number}`,
+    cells: wedgeCells(row.number).length,
+    braille: numberBraille(row.number),
+    measured: true,
+    grade: null,
+    lengthMm,
+    name: numberedName(row, row.name),
+    inside: f.kind === 'area',
+  };
+}
+
+/** The channel feature for a number on tape, from its mark's channel. */
+export function numberChannel(f, channel) {
+  return {
+    id: `label-${f.id}`,
+    class: 'channel',
+    kind: 'channel',
+    at: [round(channel.x), round(channel.y)],
+    length: channel.length,
+    on: true,
+  };
 }

@@ -39,9 +39,9 @@ map_file = "sample_station.svg"; // [file:svg]
 // What the map file holds. The Tactile Map Designer panel sets it: levels for a levels file, drawing for a drawing whose shapes are not classed yet, shown raised whole on the first level until they are.
 map_file_kind = "levels"; // [levels, drawing]
 // Width of the whole map (mm). About two hand spans: 480 is the default.
-map_width_mm = 480; // [100:1:600]
+map_width_mm = 480; // [20:1:600]
 // Height of the whole map (mm). About one hand span: 360 is the default.
-map_height_mm = 360; // [75:1:450]
+map_height_mm = 360; // [20:1:450]
 
 /* [Print style] */
 // Thin plates for a backing board prints a 0.4 mm base to glue onto corrugated plastic. All printed uses a 1.2 mm base and needs no board.
@@ -108,6 +108,8 @@ wedge_foot_mm = 2; // [2:1:12]
 numeral_raise_mm = 1.0; // [0.8:0.05:2]
 // Where the numbers' braille wedges stand, written by the panel: rows of x:y:n, x and y in tenths of a millimeter from the plate's bottom left to the middle of the wedge's front foot, n the number; rows split by |.
 number_wedges = "";
+// A key piece's braille wedges for words, written by the panel: rows of x:y:cells, x and y in tenths of a millimeter from the plate's bottom left to the middle of the wedge's front foot, then the cells split by "." (each 0 to 63, dot 1 the 1 up to dot 6 the 32; 0 a space); rows split by |.
+braille_wedges = "";
 
 /* [Hidden] */
 $fn = 32;
@@ -188,6 +190,7 @@ TAPE_WIDTHS_MM = [9.5, 12.7];          // 3/8 in and 1/2 in label tape
 CHANNEL_DEPTH_RANGE_MM = [0.2, 0.5];   // my printed maps (0.3)
 MAP_WIDTH_RANGE_MM = [100, 600];       // a plate of a split map at the least; about two hand spans at most
 MAP_HEIGHT_RANGE_MM = [75, 450];       // a plate at the least; about one hand span at most
+KEY_PIECE_MIN_MM = 20;                 // a key row's piece at the least, either way
 KEY_LETTER_RANGE_MM = [16, 50.8];      // ADA 703.2.5, 5/8 to 2 in, as the title
 WEDGE_ANGLE_RANGE_DEG = [45, 90];      // a lean a finger can read, up to upright
 WEDGE_FOOT_RANGE_MM = [2, 12];         // the least that clears the plate, up to my assembly map's 12
@@ -220,10 +223,19 @@ assert(in_range(label_channel_depth_mm, CHANNEL_DEPTH_RANGE_MM),
        str("label_channel_depth_mm is ", label_channel_depth_mm, " mm, outside 0.2 to 0.5 mm."));
 assert(label_tape_width_mm == TAPE_WIDTHS_MM[0] || label_tape_width_mm == TAPE_WIDTHS_MM[1],
        "label_tape_width_mm must be 9.5 or 12.7 mm.");
-assert(in_range(map_width_mm, MAP_WIDTH_RANGE_MM),
-       str("map_width_mm is ", map_width_mm, " mm, outside 100 to 600 mm."));
-assert(in_range(map_height_mm, MAP_HEIGHT_RANGE_MM),
-       str("map_height_mm is ", map_height_mm, " mm, outside 75 to 450 mm."));
+// A map plate keeps the plate's floor; a key piece, a row of the key, may be
+// as small as its row.
+if (plate_kind == "Key") {
+    assert(in_range(map_width_mm, [KEY_PIECE_MIN_MM, MAP_WIDTH_RANGE_MM[1]]),
+           str("A key piece is ", map_width_mm, " mm wide, outside 20 to 600 mm."));
+    assert(in_range(map_height_mm, [KEY_PIECE_MIN_MM, MAP_HEIGHT_RANGE_MM[1]]),
+           str("A key piece is ", map_height_mm, " mm tall, outside 20 to 450 mm."));
+} else {
+    assert(in_range(map_width_mm, MAP_WIDTH_RANGE_MM),
+           str("map_width_mm is ", map_width_mm, " mm, outside 100 to 600 mm."));
+    assert(in_range(map_height_mm, MAP_HEIGHT_RANGE_MM),
+           str("map_height_mm is ", map_height_mm, " mm, outside 75 to 450 mm."));
+}
 assert(map_file_kind == "levels" || map_file_kind == "drawing",
        "map_file_kind must be levels or drawing.");
 assert(plate_kind == "Map" || plate_kind == "Key", "plate_kind must be Map or Key.");
@@ -506,7 +518,9 @@ _face_h = wedge_foot_mm + _cell_h + WEDGE_FACE_MARGIN_TOP_MM;
 _wedge_h = _face_h * sin(wedge_face_angle_deg);
 _face_run = _face_h * cos(wedge_face_angle_deg);
 _wedge_depth = _face_run + WEDGE_TOP_MM + _wedge_h / tan(WEDGE_BACK_ANGLE_DEG);
-function _wedge_w(n) = (len(_cells(n)) - 1) * CELL_PITCH_MM + _cell_w + 2 * WEDGE_FACE_MARGIN_X_MM;
+// A wedge's width for k cells: the cells at their pitch and the face's margins.
+function _cells_wedge_w(k) = (k - 1) * CELL_PITCH_MM + _cell_w + 2 * WEDGE_FACE_MARGIN_X_MM;
+function _wedge_w(n) = _cells_wedge_w(len(_cells(n)));
 
 // One dot, base at z = 0: a frustum under a spherical cap of radius
 // (r^2 + h^2) / 2h, smooth under a finger.
@@ -530,18 +544,24 @@ module _braille_cells(cs) {
             _braille_dot();
 }
 
-// The wedge for number n, its front foot along y = 0 and centered on x = 0,
-// the face toward the plate's bottom edge, the reader's: the body, then the
-// cells turned onto its sloped face. It stands on z = 0.
-module _label_wedge(n) {
-    w = _wedge_w(n);
+// A wedge for braille cells (each a list of dot numbers), its front foot
+// along y = 0 and centered on x = 0, the face toward the plate's bottom edge,
+// the reader's: the body, then the cells turned onto its sloped face. It
+// stands on z = 0.
+module _cells_wedge(cs) {
+    w = _cells_wedge_w(len(cs));
     up = wedge_foot_mm + _cell_h / 2;
     translate([-w / 2, 0, 0]) rotate([90, 0, 90])
         linear_extrude(height = w)
             polygon([[0, -_fuse], [_face_run, _wedge_h], [_face_run + WEDGE_TOP_MM, _wedge_h], [_wedge_depth, -_fuse]]);
     translate([0, up * cos(wedge_face_angle_deg), up * sin(wedge_face_angle_deg)])
         rotate([wedge_face_angle_deg, 0, 0])
-            _braille_cells(_cells(n));
+            _braille_cells(cs);
+}
+
+// The wedge for number n: the number sign, then a cell a digit.
+module _label_wedge(n) {
+    _cells_wedge(_cells(n));
 }
 
 // Rows of "x:y:n" split by "|", x and y in tenths of a millimeter.
@@ -568,6 +588,30 @@ module number_wedges() {
         }
 }
 
+// A key piece's words on braille wedges: rows of x:y:cells, a cell's dots
+// as the bits of a number (dot 1 the 1, up to dot 6 the 32).
+function _bits_dots(b) = [for (d = [0 : 5]) if (floor(b / pow(2, d)) % 2 == 1) d + 1];
+function _xyc(r) =
+    let(a = _at(r, ":"), rest = _sub(r, a + 1, len(r)), b = _at(rest, ":"))
+    [_int(_sub(r, 0, a)) / 10, _int(_sub(rest, 0, b)) / 10,
+     [for (c = _split(_sub(rest, b + 1, len(rest)), ".")) _uint(c)]];
+function _xyc_rows(s) = len(s) == 0 ? [] : [for (r = _split(s, "|")) if (len(r) > 0) _xyc(r)];
+
+module braille_wedges() {
+    rows = _xyc_rows(braille_wedges);
+    if (len(rows) > 0)
+        intersection() {
+            translate([0, 0, base_eff - 2 * _fuse])
+                cube([map_width_mm, map_height_mm, WEDGE_CLIP_MM]);
+            for (row = rows) {
+                assert(len(row[2]) > 0 && max(row[2]) <= 63 && min(row[2]) >= 0,
+                       "a braille wedge's cells are numbers from 0 to 63.");
+                translate([row[0], row[1], base_eff - _fuse])
+                    _cells_wedge([for (b = row[2]) _bits_dots(b)]);
+            }
+        }
+}
+
 // The lead lines, from a thing to its number in the margin: on a level of
 // their own, one step above the top level the map uses, so nothing else on the
 // map stands at their height.
@@ -587,6 +631,7 @@ module tactile_map() {
             destination_cone();
             raised_words();
             number_wedges();
+            braille_wedges();
             leads();
             if (plate_kind != "Key") {
                 title();

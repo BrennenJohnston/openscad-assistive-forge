@@ -54,13 +54,13 @@ afterAll(() => resetLiblouis());
 const engine = async (text, table) => translate(mod, table, text).braille;
 
 describe('the grades and the cells', () => {
-  it('offers contracted UEB first, each grade with its liblouis table', () => {
+  it('offers uncontracted first, as a hand-press labeler writes, each grade with its liblouis table', () => {
     expect(TAPE_GRADES.map((g) => [g.key, g.name, g.table])).toEqual([
-      ['g2', 'Contracted (UEB Grade 2)', 'en-ueb-g2.ctb'],
       ['g1', 'Uncontracted (Grade 1)', 'en-ueb-g1.ctb'],
+      ['g2', 'Contracted (UEB Grade 2)', 'en-ueb-g2.ctb'],
     ]);
-    expect(tableFor('g1')).toBe('en-ueb-g1.ctb');
-    expect(tableFor('nonsense')).toBe('en-ueb-g2.ctb');
+    expect(tableFor('g2')).toBe('en-ueb-g2.ctb');
+    expect(tableFor('nonsense')).toBe('en-ueb-g1.ctb');
   });
 
   it('counts every character of a braille string as a cell, a blank cell too', () => {

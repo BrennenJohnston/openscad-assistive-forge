@@ -102,10 +102,16 @@ describe('the Tactile Map tile', () => {
     expect(p.plate_shows_north.default).toBe('yes');
     // The floor was set for a whole map; a plate of a split map may be a
     // quarter of that.
-    expect(p.map_width_mm.minimum).toBe(100);
-    expect(p.map_height_mm.minimum).toBe(75);
+    // A key piece, a row of the key, may be as small as 20 mm; a map plate
+    // keeps 100 by 75.
+    expect(p.map_width_mm.minimum).toBe(20);
+    expect(p.map_height_mm.minimum).toBe(20);
     expect(src).toMatch(/outside 100 to 600 mm/);
     expect(src).toMatch(/outside 75 to 450 mm/);
+    expect(src).toMatch(/KEY_PIECE_MIN_MM = 20;/);
+    expect(src).toMatch(
+      /if \(plate_kind == "Key"\) \{\s*assert\(in_range\(map_width_mm, \[KEY_PIECE_MIN_MM/
+    );
   });
 
   it("raises a number's braille wedge from the embosser's form, the dial ranges enforced and the dots held to the sign's ranges", () => {
@@ -135,7 +141,9 @@ describe('the Tactile Map tile', () => {
       /assert\(in_range\(DOT_BASE_HEIGHT_MM \+ DOT_DOME_HEIGHT_MM, DOT_HEIGHT_RANGE_MM\)/
     );
     expect(src).toMatch(/assert\(in_range\(DOT_PITCH_MM, DOT_PITCH_RANGE_MM\)/);
-    expect(src).toMatch(/assert\(in_range\(CELL_PITCH_MM, CELL_PITCH_RANGE_MM\)/);
+    expect(src).toMatch(
+      /assert\(in_range\(CELL_PITCH_MM, CELL_PITCH_RANGE_MM\)/
+    );
     // The number sign, then a digit a cell; a wedge holds 1 to 99.
     expect(src).toMatch(/NUMBER_SIGN = \[3, 4, 5, 6\];/);
     expect(src).toMatch(/assert\(in_range\(row\[2\], NUMBER_RANGE\)/);
@@ -143,7 +151,15 @@ describe('the Tactile Map tile', () => {
     expect(src).toMatch(
       /translate\(\[row\[0\], row\[1\], base_eff - _fuse\]\)\s*_label_wedge\(row\[2\]\);/
     );
-    expect(src).toMatch(/number_wedges\(\);\s*leads\(\);/);
+    expect(src).toMatch(
+      /number_wedges\(\);\s*braille_wedges\(\);\s*leads\(\);/
+    );
+    // A key piece's words on wedges: cells as dot bits, cut to the piece.
+    expect(p.braille_wedges.default).toBe('');
+    expect(manifest().tactileMap.brailleWedgesParam).toBe('braille_wedges');
+    expect(src).toMatch(
+      /function _bits_dots\(b\) = \[for \(d = \[0 : 5\]\) if \(floor\(b \/ pow\(2, d\)\) % 2 == 1\) d \+ 1\];/
+    );
     // Cut to the plate, so a wedge across a seam is whole when the plates
     // are put together, and taller than any wedge the dials allow.
     expect(src).toMatch(
@@ -154,12 +170,16 @@ describe('the Tactile Map tile', () => {
 
   it('raises a # row as a bold centered numeral, 10 mm on a thing or at least 16 mm elsewhere, and any other word as before', () => {
     const src = source();
-    expect(src).toMatch(/function _is_numeral\(s\) = len\(s\) > 1 && s\[0\] == "#";/);
+    expect(src).toMatch(
+      /function _is_numeral\(s\) = len\(s\) > 1 && s\[0\] == "#";/
+    );
     expect(src).toMatch(/NUMERAL_ON_THING_MM = 10;/);
     expect(src).toMatch(
       /in_range\(row\[2\], TITLE_CAP_RANGE_MM\) \|\| \(numeral && row\[2\] == NUMERAL_ON_THING_MM\)/
     );
-    expect(src).toMatch(/font = "Liberation Sans:style=Bold",\s*halign = "center"/);
+    expect(src).toMatch(
+      /font = "Liberation Sans:style=Bold",\s*halign = "center"/
+    );
     expect(src).toMatch(/numeral \? numeral_raise_mm : title_raise_mm/);
   });
 
@@ -226,7 +246,9 @@ describe('the Tactile Map tile', () => {
     // The cone rises from under the plate through whatever stands at its
     // foot, on a map plate and on the key plate that shows it as a sample.
     const main = src.slice(src.indexOf('module tactile_map()'));
-    expect(main).toMatch(/destination_cone\(\);[\s\S]*if \(plate_kind != "Key"\)/);
+    expect(main).toMatch(
+      /destination_cone\(\);[\s\S]*if \(plate_kind != "Key"\)/
+    );
   });
 
   it('raises words from raised_words rows of x:y:h:z:TEXT on map and key plates alike, clipped to the plate, and draws title_text itself only when there are none but numbers; the sheet figures ride along', () => {
@@ -238,7 +260,11 @@ describe('the Tactile Map tile', () => {
     expect(manifest().tactileMap.raisedWordsParam).toBe('raised_words');
     expect(manifest().tactileMap.keyPrintParam).toBeUndefined();
     // The band and the title band, for a saved file's record.
-    expect([p.margin_mm.default, p.margin_mm.minimum, p.margin_mm.maximum]).toEqual([10, 10, 40]);
+    expect([
+      p.margin_mm.default,
+      p.margin_mm.minimum,
+      p.margin_mm.maximum,
+    ]).toEqual([10, 10, 40]);
     expect(manifest().tactileMap.marginParam).toBe('margin_mm');
     expect(p.title_band_mm.default).toBe(0);
     expect(manifest().tactileMap.titleBandParam).toBe('title_band_mm');
@@ -246,7 +272,9 @@ describe('the Tactile Map tile', () => {
     expect(src).not.toMatch(/module\s+key_words\s*\(/);
     // Every row's capital inside the ADA range and its stand inside the
     // plate's levels: a bad row fails the build.
-    expect(src).toMatch(/assert\s*\(in_range\(row\[2\],\s*TITLE_CAP_RANGE_MM\)/);
+    expect(src).toMatch(
+      /assert\s*\(in_range\(row\[2\],\s*TITLE_CAP_RANGE_MM\)/
+    );
     expect(src).toMatch(/assert\s*\(row\[3\]\s*>=\s*0/);
     // Clipped to the plate: a title line crossing a seam continues on the
     // next plate instead of running off this one.

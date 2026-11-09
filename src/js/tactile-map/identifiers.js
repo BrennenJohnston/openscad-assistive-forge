@@ -1,18 +1,20 @@
 /**
  * The number a named thing carries on the map, and where it stands.
  *
- * The Labels switch says what a number is made of: a braille wedge (the
- * embosser's assembly map's form: the number sign and the digits on a face
- * that leans back toward the reader), a raised bold numeral, or both side by
- * side, the numeral at the left. A thing carries its number on itself when
- * the number fits there and covers at most half of it (map-labels.js places
- * those); otherwise the number stands in the margin band beside the map, at
- * the end of a raised lead line from the thing (BANA 2022 5.10.2), on the
- * nearest edge with room; with no room left anywhere it is in the key only.
+ * The Labels switch says what a number is made of, one of three: a braille
+ * wedge (the embosser's assembly map's form: the number sign and the digits
+ * on a face that leans back toward the reader), a channel for braille label
+ * tape that holds the braille number, or a raised bold numeral. The key
+ * repeats the number in the same form beside the place's name (key-layout.js).
+ * A thing carries its number on itself when the number fits there and covers
+ * at most half of it (map-labels.js places those); otherwise the number
+ * stands in the margin band beside the map, at the end of a raised lead line
+ * from the thing (BANA 2022 5.10.2), on the nearest edge with room; with no
+ * room left anywhere it is in the key only.
  *
  * Geometry here is the plan's: millimeters, y down. Every number faces the
  * sheet's bottom edge, the reader's. A box's bottom is its reading line: the
- * wedge's front foot and the numeral's baseline stand on it.
+ * wedge's front foot, the numeral's baseline, the channel's lower edge.
  *
  * No DOM here: a worker may import this file.
  *
@@ -29,13 +31,21 @@ import { strokePolyline } from './levels-svg.js';
  */
 export const BAND_EDGE_MM = 9.525;
 
-/** What a number on the map is made of, the default last. */
+/** What a number on the map and in the key is made of; wedges to start. */
 export const LABEL_STYLES = Object.freeze([
-  { key: 'braille', name: 'Braille (wedges and tape)' },
-  { key: 'print', name: 'Raised letters' },
-  { key: 'both', name: 'Both' },
+  { key: 'wedge', name: 'Braille wedges' },
+  { key: 'tape', name: 'Braille label tape' },
+  { key: 'raised', name: 'Raised numbers and letters' },
 ]);
-export const DEFAULT_LABEL_STYLE = 'both';
+export const DEFAULT_LABEL_STYLE = 'wedge';
+
+/** A braille labeler's cell pitch on tape (ADA 703.3.1: 6.1 to 7.6 mm). */
+export const LABEL_CELL_MM = 6.2;
+/** Tape beyond the cells at each end of a label. */
+export const LABEL_END_MM = 4;
+/** A channel's length for a label of `cells` cells. */
+export const channelLengthMm = (cells) =>
+  Math.round((cells * LABEL_CELL_MM + 2 * LABEL_END_MM) * 10) / 10;
 
 /**
  * The wedge's constants, the model's (tactile_map.scad, from the embosser's
@@ -62,13 +72,13 @@ export const WEDGE_MAX_NUMBER = 99;
 export const NUMERAL_ON_THING_MM = 10;
 export const NUMERAL_IN_BAND_MM = 16;
 
-/** Between a numeral and its wedge, and between a number and its tape (mm). */
+/** Between a number and what goes with it (mm). */
 export const PART_GAP_MM = 3;
 
 /** How far a number keeps from a seam between two plates (mm). */
 export const SEAM_GAP_MM = 1;
 
-/** A lead line's width, and the gap it leaves before a numeral (mm). */
+/** A lead line's width, and the gap it leaves before a numeral or a channel (mm). */
 export const LEAD_WIDTH_MM = 1.2;
 export const LEAD_GAP_MM = 3;
 /** How far a lead runs into a wedge's back, so the two are one solid. */
@@ -76,6 +86,9 @@ const LEAD_INTO_MM = 0.5;
 
 /** The edges a band number may stand at: the top holds the title and the cue. */
 export const BAND_SIDES = Object.freeze(['bottom', 'left', 'right']);
+
+/** A channel's width beside the tape in it: 12.7 mm tape and 0.4 mm. */
+const ACROSS_MM = 13.1;
 
 const NUMBER_SIGN = [3, 4, 5, 6];
 const DIGIT_DOTS = [
@@ -132,13 +145,46 @@ export function wedgeCells(n) {
 }
 
 /**
- * A wedge's footprint and height for a number, as the model builds it.
+ * Braille text (Unicode braille, as the translator writes it) as cells of
+ * dot numbers; a space, written either way, is a cell with no dots.
  *
- * @param {number} n
+ * @param {string} braille
+ * @returns {number[][]}
+ */
+export function brailleCells(braille) {
+  return [...String(braille || '')].map((ch) => {
+    const code = ch.codePointAt(0);
+    if (code < 0x2800 || code > 0x28ff) return [];
+    const bits = (code - 0x2800) & 0x3f;
+    const dots = [];
+    for (let d = 0; d < 6; d += 1) if (bits & (1 << d)) dots.push(d + 1);
+    return dots;
+  });
+}
+
+/** Cells of dot numbers as Unicode braille. */
+export function cellsBraille(cells) {
+  return cells
+    .map((dots) =>
+      String.fromCodePoint(
+        0x2800 + dots.reduce((bits, d) => bits | (1 << (d - 1)), 0)
+      )
+    )
+    .join('');
+}
+
+/** A number's braille, the number sign then its digits, as Unicode. */
+export const numberBraille = (n) => cellsBraille(wedgeCells(n));
+
+/**
+ * A wedge's footprint and height for `cells` braille cells (or a number's),
+ * as the model builds it.
+ *
+ * @param {number|number[][]} what - a number, or its cells
  * @param {{ footMm?: number, angleDeg?: number }} [dials]
  * @returns {{ w: number, depth: number, h: number }}
  */
-export function wedgeSize(n, dials) {
+export function wedgeSize(what, dials) {
   const { footMm, angleDeg } = wedgeDials(dials);
   const rad = (d) => (d * Math.PI) / 180;
   const cellW = WEDGE.dotPitchMm + WEDGE.dotBaseMm;
@@ -147,9 +193,18 @@ export function wedgeSize(n, dials) {
   const h = faceH * Math.sin(rad(angleDeg));
   const run = faceH * Math.cos(rad(angleDeg));
   const depth = run + WEDGE.topMm + h / Math.tan(rad(WEDGE.backAngleDeg));
-  const cells = wedgeCells(n).length;
+  const cells = Array.isArray(what) ? what.length : wedgeCells(what).length;
   const w = (cells - 1) * WEDGE.cellPitchMm + cellW + 2 * WEDGE.marginXMm;
   return { w: round3(w), depth: round3(depth), h: round3(h) };
+}
+
+/** How many braille cells fit on a wedge no wider than `widthMm`. */
+export function wedgeCellsFor(widthMm) {
+  const cellW = WEDGE.dotPitchMm + WEDGE.dotBaseMm;
+  return Math.max(
+    1,
+    Math.floor((widthMm - cellW - 2 * WEDGE.marginXMm) / WEDGE.cellPitchMm) + 1
+  );
 }
 
 /**
@@ -168,78 +223,48 @@ export function numeralSize(n, capMm) {
 }
 
 /**
- * The box a number takes by the switch: its parts left to right along the
- * reading line, each standing on the box's bottom. Null when the switch
- * leaves the number nothing to be made of (a braille number past what a
- * wedge holds).
- *
- * Stacked, in a side margin, the numeral stands above its wedge, 3 mm apart,
- * both centered: the margin then needs the wider of the two, not both side
- * by side. A part's `lift` is how far its own reading line stands
- * above the box's bottom.
+ * The box a number takes by the switch: one part, a wedge, a channel for
+ * its braille on tape, or a numeral, standing on the box's bottom. Null when
+ * the switch leaves the number nothing to be made of (a wedge past what it
+ * holds).
  *
  * @param {number} n
  * @param {string} style - a LABEL_STYLES key
  * @param {{ footMm?: number, angleDeg?: number }} [dials]
- * @param {{ inBand?: boolean, stacked?: boolean }} [options]
- * @returns {{ w: number, h: number, stacked: boolean, parts: Array<{kind: 'numeral'|'wedge', x0: number, w: number, h: number, lift: number, capMm?: number}> } | null}
+ * @param {{ inBand?: boolean, acrossMm?: number }} [options] - acrossMm: a
+ *   channel's width, the tape's and its clearance
+ * @returns {{ w: number, h: number, parts: Array<{kind: 'numeral'|'wedge'|'channel', x0: number, w: number, h: number, capMm?: number}> } | null}
  */
 export function identifierBox(
   n,
   style,
   dials,
-  { inBand = false, stacked = false } = {}
+  { inBand = false, acrossMm = ACROSS_MM } = {}
 ) {
-  let numeral = null;
-  if (style !== 'braille') {
+  let part = null;
+  if (style === 'raised') {
     const capMm = inBand ? NUMERAL_IN_BAND_MM : NUMERAL_ON_THING_MM;
     const m = numeralSize(n, capMm);
-    numeral = { kind: 'numeral', w: m.w, h: m.h, capMm };
-  }
-  let wedge = null;
-  if (style !== 'print' && n <= WEDGE_MAX_NUMBER) {
+    part = { kind: 'numeral', w: m.w, h: m.h, capMm };
+  } else if (style === 'tape') {
+    const length = channelLengthMm(wedgeCells(n).length);
+    part = { kind: 'channel', w: length, h: acrossMm };
+  } else if (style === 'wedge' && n <= WEDGE_MAX_NUMBER) {
     const s = wedgeSize(n, dials);
-    wedge = { kind: 'wedge', w: s.w, h: s.depth };
+    part = { kind: 'wedge', w: s.w, h: s.depth };
   }
-  if (!numeral && !wedge) return null;
-  if (numeral && wedge && stacked) {
-    const w = Math.max(numeral.w, wedge.w);
-    return {
-      w: round3(w),
-      h: round3(numeral.h + PART_GAP_MM + wedge.h),
-      stacked: true,
-      parts: [
-        {
-          ...numeral,
-          x0: round3((w - numeral.w) / 2),
-          lift: round3(wedge.h + PART_GAP_MM),
-        },
-        { ...wedge, x0: round3((w - wedge.w) / 2), lift: 0 },
-      ],
-    };
-  }
-  const parts = [];
-  let x = 0;
-  if (numeral) {
-    parts.push({ ...numeral, x0: 0, lift: 0 });
-    x = numeral.w;
-  }
-  if (wedge) {
-    if (parts.length) x += PART_GAP_MM;
-    parts.push({ ...wedge, x0: x, lift: 0 });
-    x += wedge.w;
-  }
+  if (!part) return null;
   return {
-    w: round3(x),
-    h: round3(Math.max(...parts.map((q) => q.h))),
-    stacked: false,
-    parts,
+    w: round3(part.w),
+    h: round3(part.h),
+    parts: [{ ...part, x0: 0 }],
   };
 }
 
 /**
- * A number set down with its box's top left at (x0, y0): the box, the
- * numeral's center and baseline, the wedge's front foot.
+ * A number set down with its box's top left at (x0, y0): the box, and the
+ * numeral's center and baseline, the wedge's front foot with its cells, or
+ * the channel's center and length.
  *
  * @param {object} input
  * @param {string} input.featureId
@@ -270,57 +295,67 @@ export function markAt({
       x1: round3(x0 + box.w),
       y1: round3(line),
     },
-    stacked: Boolean(box.stacked),
     numeral: null,
     wedge: null,
+    channel: null,
   };
   for (const p of box.parts) {
     const cx = round3(x0 + p.x0 + p.w / 2);
-    const y = round3(line - (p.lift || 0));
     if (p.kind === 'numeral') {
-      mark.numeral = { x: cx, y, capMm: p.capMm, standsOn };
+      mark.numeral = { x: cx, y: round3(line), capMm: p.capMm, standsOn };
+    } else if (p.kind === 'channel') {
+      mark.channel = {
+        x: cx,
+        y: round3(line - p.h / 2),
+        length: p.w,
+        across: p.h,
+      };
     } else {
-      mark.wedge = { x: cx, y, w: p.w, depth: p.h };
+      mark.wedge = {
+        x: cx,
+        y: round3(line),
+        w: p.w,
+        depth: p.h,
+        cells: wedgeCells(number),
+      };
     }
   }
   return mark;
 }
 
-/** The part of a mark a lead from `side` reaches. */
-function nearPart(mark, side) {
-  const parts = [mark.numeral && 'numeral', mark.wedge && 'wedge'].filter(
-    Boolean
-  );
-  if (parts.length === 1) return parts[0];
-  // Stacked in a side margin: the wedge, reached from the side.
-  if (mark.stacked) return side === 'bottom' ? 'numeral' : 'wedge';
-  // Both: the numeral stands at the left, the wedge at the right; from the
-  // map above, the wedge.
-  if (side === 'left') return 'wedge';
-  if (side === 'right') return 'numeral';
-  return 'wedge';
-}
-
 /**
  * Where a band number's lead ends: at the wedge's back (run a little into
- * it, so the two print as one), or 3 mm short of a numeral (BANA 2022
- * 3.4.3.6).
+ * it, so the two print as one), or 3 mm short of a channel or a numeral
+ * (BANA 2022 3.4.3.6).
  */
 function leadEnd(mark, side) {
-  const part = nearPart(mark, side);
-  if (part === 'wedge') {
+  if (mark.wedge) {
     const { x, y, w, depth } = mark.wedge;
     if (side === 'bottom') return [x, y - depth + LEAD_INTO_MM];
     if (side === 'left') return [x + w / 2 - LEAD_INTO_MM, y - depth / 2];
     return [x - w / 2 + LEAD_INTO_MM, y - depth / 2];
   }
-  const { x, y, capMm } = mark.numeral;
-  const { w, h } = numeralSize(mark.number, capMm);
-  const top = y - h;
+  let x;
+  let top;
+  let bottom;
+  let half;
+  if (mark.channel) {
+    ({ x } = mark.channel);
+    top = mark.channel.y - mark.channel.across / 2;
+    bottom = mark.channel.y + mark.channel.across / 2;
+    half = mark.channel.length / 2;
+  } else {
+    const { capMm } = mark.numeral;
+    const { w, h } = numeralSize(mark.number, capMm);
+    ({ x } = mark.numeral);
+    bottom = mark.numeral.y;
+    top = bottom - h;
+    half = w / 2;
+  }
   if (side === 'bottom') return [x, top - LEAD_GAP_MM];
-  const mid = (top + y) / 2;
-  if (side === 'left') return [x + w / 2 + LEAD_GAP_MM, mid];
-  return [x - w / 2 - LEAD_GAP_MM, mid];
+  const mid = (top + bottom) / 2;
+  if (side === 'left') return [x + half + LEAD_GAP_MM, mid];
+  return [x - half - LEAD_GAP_MM, mid];
 }
 
 /** A thing's outline points: an area's ring, a point's symbol square. */
@@ -487,6 +522,7 @@ function overBox(a, b, box) {
  *   boxes a lead keeps off
  * @param {{x?: number[], y?: number[]}} [input.seams] - the seams between
  *   plates, plan frame: no number stands across one
+ * @param {number} [input.acrossMm] - a channel's width, for numbers on tape
  * @returns {{ marks: object[], leads: Array<[number[], number[]]>, rings: Array<Array<{x: number, y: number}>>, sides: {left: number, right: number, bottom: number}, keyOnly: Array<{featureId: string, number: number, name: string}> }}
  */
 export function bandPlan({
@@ -498,6 +534,7 @@ export function bandPlan({
   zones = [],
   marks: onThings = [],
   seams = {},
+  acrossMm = ACROSS_MM,
 }) {
   // A seam across the bottom margin runs up and down; across a side, along.
   const blocked = {
@@ -525,12 +562,8 @@ export function bandPlan({
       span[side][1],
       { blocked: blocked[side] }
     );
-  // In a side margin, Both stacks its numeral above its wedge.
-  const boxFor = (number, side) =>
-    identifierBox(number, style, dials, {
-      inBand: true,
-      stacked: side !== 'bottom',
-    });
+  const boxFor = (number) =>
+    identifierBox(number, style, dials, { inBand: true, acrossMm });
 
   for (const item of pending) {
     const outline = outlineOf(item.f, symbolSizeMm);
@@ -556,10 +589,10 @@ export function bandPlan({
     };
     const others = onThings.filter((m) => m.featureId !== item.f.id);
     let placed = false;
-    if (boxFor(item.number, 'bottom')) {
+    if (boxFor(item.number)) {
       const open = [];
       for (const side of sides) {
-        const box = boxFor(item.number, side);
+        const box = boxFor(item.number);
         const anchor = anchorToward(outline, side);
         const ideal = side === 'bottom' ? anchor[0] : anchor[1];
         const next = [...taken[side], { ...item, box, anchor, ideal }];
@@ -798,15 +831,15 @@ export function plateMarks(marks, plate) {
 /**
  * The braille on a wedge as dots seen on a flat page: the face laid down on
  * the wedge's footprint, read left to right, its first row of dots toward
- * the back. For the paper and the PDF, so a sighted helper reads the number
- * where it stands. Each dot's center, in the mark's frame.
+ * the back. For the paper and the PDF, so a sighted helper reads it where it
+ * stands. Each dot's center, in the mark's frame.
  *
- * @param {{ x: number, y: number, depth: number }} wedge
- * @param {number} n
+ * @param {{ x: number, y: number, depth: number, cells?: number[][] }} wedge
+ * @param {number|number[][]} [what] - a number or cells; else the wedge's own
  * @returns {Array<[number, number]>}
  */
-export function wedgeDots(wedge, n) {
-  const cells = wedgeCells(n);
+export function wedgeDots(wedge, what = wedge.cells) {
+  const cells = Array.isArray(what) ? what : wedgeCells(what);
   const p = WEDGE.dotPitchMm;
   const x0 = wedge.x - ((cells.length - 1) * WEDGE.cellPitchMm) / 2;
   const middle = wedge.y - wedge.depth / 2;

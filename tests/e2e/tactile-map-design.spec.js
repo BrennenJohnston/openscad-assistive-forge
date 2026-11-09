@@ -203,25 +203,24 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     await axeClean(page, 'step 5');
     // A place map starts trimmed: the shapes at Ferry Place sit in a box well
     // inside the 480 x 360 face. Its band is 10 mm, wider at the sides whose
-    // numbers stand there (at a side, a 16 mm numeral above its wedge), and
-    // the sheet cuts into four plates. Off, the whole face in its band cuts
-    // into six.
+    // numbers stand there (braille wedges to start), and the sheet cuts into
+    // four plates. Off, the whole face in its band cuts into six. The key is
+    // a piece a row: its title, its five kinds and the fifteen places.
     const trim = page.locator('#tactileMapTrim');
     await expect(trim).toBeChecked();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 222.5 x 129.5 mm, A1 to B2. The key takes 7 plates.'
+      '4 plates of 202.5 x 126.5 mm, A1 to B2. The key takes 21 plates.'
     );
-    // Untrimmed, the taller 199.5 mm plates hold the key's measured strips
-    // in fewer plates than the trimmed map's 129.5 mm ones.
     await trim.uncheck();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '6 plates of 186.7 x 199.5 mm, A1 to B3. The key takes 5 plates.'
+      '6 plates of 181.3 x 196.5 mm, A1 to B3. The key takes 21 plates.'
     );
     await trim.check();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 222.5 x 129.5 mm, A1 to B2. The key takes 7 plates.'
+      '4 plates of 202.5 x 126.5 mm, A1 to B2. The key takes 21 plates.'
     );
-    await expect(page.locator('#tactileMapKeyWords')).toHaveValue('braille');
+    // The key follows Labels, braille wedges to start.
+    await expect(page.locator('#tactileMapLabels')).toHaveValue('wedge');
     const key = await page.evaluate(() => {
       const p = document.getElementById('tactileMapPanel').__forgeMapPanel;
       const k = p.labeled().key;
@@ -229,6 +228,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
         set: k.set.name,
         entries: k.entries.map((e) => `${e.name}: ${e.shape}`),
         plates: p.keyPages.map((plate) => plate.id),
+        first: p.keyPages[0].size,
       };
     });
     expect(key.set).toBe('University of Oregon symbols');
@@ -241,17 +241,11 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       'Walkway: a dashed line 1.2 mm wide, low',
       'Area: a raised area, low',
     ]);
-    expect(key.plates).toEqual([
-      'key-1',
-      'key-2',
-      'key-3',
-      'key-4',
-      'key-5',
-      'key-6',
-      'key-7',
-    ]);
+    expect(key.plates).toEqual(
+      Array.from({ length: 21 }, (_, i) => `key-${i + 1}`)
+    );
 
-    // The zip: the map's plates, the key's, and the README that goes with them.
+    // The zip: the map's plates, the key's pieces, and the README.
     const downloadPromise = page.waitForEvent('download', { timeout: 420_000 });
     await tabTo(page, '#tactileMapRenderAll', 80);
     await page.keyboard.press('Enter');
@@ -265,33 +259,22 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     expect(names).not.toContain('tactile_map_B3.stl');
     const readme = await zip.file('README.txt').async('string');
     expect(readme).toContain(
-      'each 222.5 x 129.5 mm, trimmed to the shapes with a 10 mm margin, wider at the sides that hold numbers. Print one of each: A1, A2, B1, B2.'
+      'each 202.5 x 126.5 mm, trimmed to the shapes with a 10 mm margin, wider at the sides that hold numbers. Print one of each: A1, A2, B1, B2.'
     );
     expect(readme).toContain('\nKey\nSymbols: University of Oregon symbols.\n');
     expect(readme).toContain(
       'Symbols: Lobben and Lawrence 2012, University of Oregon, GPL-3'
     );
-    expect(readme).toContain('Key 1 plate, label tape top to bottom:');
-    // The labels' tape measured by the translator, contracted to start.
-    expect(readme).toMatch(
-      /Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; uncontracted would take (no labels|\d+ labels?, about \d+ mm)\./
-    );
-    expect(readme).not.toContain('sized by an estimate');
-    // Each label with its braille and its channel's length.
-    expect(readme).toMatch(
-      /- Stetho \([⠀-⣿]+, \d+ cells, [\d.]+ mm\): beside \d+ Information: Stetho/
-    );
-    // The key plates are the map's plate size: on the trimmed map's 185.5 mm
-    // plates a long row wraps onto two strips of tape, listed one under the
-    // other, so the list is read with its pieces joined.
-    expect(readme.replace(/\n- /g, ' ')).toMatch(
-      /\b\d+ restaurant: plaza cafe\b/
-    );
+    // Wedges carry the braille: no tape to write.
+    expect(readme).not.toContain('Label tape:');
+    expect(readme).not.toContain('label tape top to bottom');
+    expect(readme).toContain('10 Restaurant: Plaza Cafe');
     expect(readme).not.toMatch(/Abbreviations/);
 
-    // A key plate is the map's plate size, with channels cut for its tape.
+    // A key piece is the size of its row, with no channels: its words stand
+    // on wedges.
     const levels = await zip.file('levels_key-1.svg').async('string');
-    expect(levels).toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
+    expect(levels).toMatch(/<g id="channels"><\/g>/);
     const { triangles } = parseSTL(
       await zip.file('tactile_map_key-1.stl').async('uint8array')
     );
@@ -304,10 +287,11 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       }
       return hi - lo;
     });
-    expect(size[0]).toBeCloseTo(222.5, 1);
-    expect(size[1]).toBeCloseTo(129.5, 1);
+    expect(size[0]).toBeCloseTo(key.first.w, 1);
+    expect(size[1]).toBeCloseTo(key.first.h, 1);
+    expect(key.first.h).toBeLessThan(75);
     await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
-      'All 11 plates are in tactile_map_plates.zip.'
+      'All 25 plates are in tactile_map_plates.zip.'
     );
   });
 

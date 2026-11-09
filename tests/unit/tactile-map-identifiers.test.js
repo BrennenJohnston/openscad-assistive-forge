@@ -14,8 +14,11 @@ import {
   anchorToward,
   BAND_EDGE_MM,
   bandPlan,
+  brailleCells,
+  cellsBraille,
   crossesSeam,
   identifierBox,
+  numberBraille,
   KEY_ONLY_SENTENCE,
   LABEL_STYLES,
   DEFAULT_LABEL_STYLE,
@@ -117,53 +120,42 @@ describe('the wedge and the numeral, measured as the model builds them', () => {
     expect(wedgeDots({ x: 0, y: 10, depth: 10 }, 1)).toHaveLength(5);
   });
 
-  it('lays out Both as the numeral, 3 mm, then the wedge, and Braille past 99 as nothing', () => {
-    const both = identifierBox(12, 'both', { footMm: 2, angleDeg: 75 });
-    expect(both.parts.map((p) => p.kind)).toEqual(['numeral', 'wedge']);
-    expect(both.parts[1].x0).toBeCloseTo(both.parts[0].w + 3, 6);
-    expect(both.w).toBeCloseTo(both.parts[0].w + 3 + 22, 6);
-    expect(identifierBox(120, 'braille')).toBeNull();
-    expect(identifierBox(120, 'both').parts.map((p) => p.kind)).toEqual([
-      'numeral',
-    ]);
+  it('makes a number of one thing: a wedge, a channel for its braille on tape, or a numeral; a wedge past 99 nothing', () => {
+    const kinds = (style) =>
+      identifierBox(12, style, { footMm: 2, angleDeg: 75 }).parts.map(
+        (p) => p.kind
+      );
+    expect(kinds('wedge')).toEqual(['wedge']);
+    expect(kinds('tape')).toEqual(['channel']);
+    expect(kinds('raised')).toEqual(['numeral']);
+    // On tape, #12 is three cells: 3 x 6.2 mm and 4 mm at each end, the tape
+    // 12.7 mm in a channel 0.4 mm wider.
+    const tape = identifierBox(12, 'tape');
+    expect(tape.w).toBeCloseTo(26.6, 6);
+    expect(tape.h).toBeCloseTo(13.1, 6);
+    expect(identifierBox(120, 'wedge')).toBeNull();
   });
 
-  it('stacks Both in a side margin: the numeral above its wedge, 3 mm apart, both centered', () => {
-    const flat = identifierBox(12, 'both', undefined, { inBand: true });
-    const box = identifierBox(12, 'both', undefined, {
-      inBand: true,
-      stacked: true,
-    });
-    const [numeral, wedge] = box.parts;
-    expect(box.stacked).toBe(true);
-    expect(box.w).toBeCloseTo(Math.max(numeral.w, wedge.w), 2);
-    expect(box.w).toBeLessThan(flat.w - 20);
-    expect(box.h).toBeCloseTo(numeral.h + 3 + wedge.h, 2);
-    expect(numeral.lift).toBeCloseTo(wedge.h + 3, 2);
-    expect(wedge.lift).toBe(0);
-    expect(numeral.x0 + numeral.w / 2).toBeCloseTo(box.w / 2, 2);
-    expect(wedge.x0 + wedge.w / 2).toBeCloseTo(box.w / 2, 2);
-    // Only one part: nothing to stack.
-    expect(
-      identifierBox(12, 'braille', undefined, { inBand: true, stacked: true })
-        .stacked
-    ).toBe(false);
+  it('reads and writes braille as dots, a blank cell a space', () => {
+    expect(numberBraille(12)).toBe(cellsBraille(wedgeCells(12)));
+    expect(brailleCells(numberBraille(12))).toEqual(wedgeCells(12));
+    expect(brailleCells('\u2801 \u2800\u2803')).toEqual([[1], [], [], [1, 2]]);
   });
 
-  it('offers the three choices with Both as the start', () => {
+  it('offers the three, one at a time, braille wedges to start', () => {
     expect(LABEL_STYLES.map((s) => s.name)).toEqual([
-      'Braille (wedges and tape)',
-      'Raised letters',
-      'Both',
+      'Braille wedges',
+      'Braille label tape',
+      'Raised numbers and letters',
     ]);
-    expect(DEFAULT_LABEL_STYLE).toBe('both');
+    expect(DEFAULT_LABEL_STYLE).toBe('wedge');
   });
 });
 
 describe('on the thing', () => {
   it("stands a 22 x 10 wedge at a 60 x 40 building's centroid, 9 percent of it", () => {
     const { marks, pending } = labelPlan(twoBuildings(), {
-      labels: 'braille',
+      labels: 'wedge',
     });
     const wide = marks.find((m) => m.featureId === 'wide');
     expect(wide.number).toBe(10);
@@ -177,25 +169,41 @@ describe('on the thing', () => {
     expect(pending.map((p) => p.f.id)).toContain('small');
   });
 
-  it('keeps a name that fits on tape under its number, 3 mm below, as one piece', () => {
+  it('gives a place on tape a channel for its braille number, #1, and never its name, which is in the key', () => {
     const plan = emptyPlan(200, 150);
     plan.features.push(area('hall', 40, 30, 160, 120, 'Hall'));
-    const { marks, plan: out } = labelPlan(plan, { labels: 'both' });
+    const { marks, labels, plan: out } = labelPlan(plan, { labels: 'tape' });
     const mark = marks.find((m) => m.featureId === 'hall');
     const channel = out.features.find((f) => f.id === 'label-hall');
-    expect(mark.numeral.capMm).toBe(10);
-    expect(mark.wedge).not.toBeNull();
-    const channelTop = channel.at[1] - 13.1 / 2;
-    expect(channelTop - mark.box.y1).toBeCloseTo(3, 6);
-    expect(channel.at[0]).toBeCloseTo((mark.box.x0 + mark.box.x1) / 2, 6);
-    // A numeral inside a building stands on the building's level.
-    expect(mark.numeral.standsOn).toBeGreaterThan(0);
+    expect(mark.channel.length).toBeCloseTo(20.4, 6);
+    expect(channel.length).toBeCloseTo(20.4, 6);
+    expect(channel.at).toEqual([mark.channel.x, mark.channel.y]);
+    expect(labels).toHaveLength(1);
+    expect(labels[0]).toMatchObject({
+      featureId: 'hall',
+      number: 1,
+      text: '#1',
+      cells: 2,
+      braille: numberBraille(1),
+    });
+    expect(out.features.filter((f) => f.kind === 'channel')).toHaveLength(1);
   });
 
-  it('puts no tape on the map with Raised letters, and numbers nothing without the switch', () => {
+  it('stands a numeral on the level of the building it is in', () => {
     const plan = emptyPlan(200, 150);
     plan.features.push(area('hall', 40, 30, 160, 120, 'Hall'));
-    const print = labelPlan(plan, { labels: 'print' });
+    const { marks } = labelPlan(plan, { labels: 'raised' });
+    expect(marks[0].numeral.capMm).toBe(10);
+    expect(marks[0].numeral.standsOn).toBeGreaterThan(0);
+  });
+
+  it('puts no tape on the map with wedges or raised numbers, and numbers nothing without the switch', () => {
+    const plan = emptyPlan(200, 150);
+    plan.features.push(area('hall', 40, 30, 160, 120, 'Hall'));
+    const wedge = labelPlan(plan, { labels: 'wedge' });
+    expect(wedge.labels).toEqual([]);
+    expect(wedge.marks[0].wedge).not.toBeNull();
+    const print = labelPlan(plan, { labels: 'raised' });
     expect(print.labels).toEqual([]);
     expect(print.marks[0].wedge).toBeNull();
     expect(print.marks[0].numeral).not.toBeNull();
@@ -211,11 +219,11 @@ describe('in the band', () => {
 
   it('sends a 20 x 20 building (55 percent) to the nearest edge, its lead from the building to the wedge', () => {
     const plan = twoBuildings();
-    const { pending } = labelPlan(plan, { labels: 'braille' });
+    const { pending } = labelPlan(plan, { labels: 'wedge' });
     const small = pending.filter((p) => p.f.id === 'small');
     expect(small[0].number).toBe(11);
     expect((22 * 10.073) / (20 * 20)).toBeGreaterThan(0.5);
-    const band = bandPlan({ pending: small, face: FACE, style: 'braille' });
+    const band = bandPlan({ pending: small, face: FACE, style: 'wedge' });
     expect(band.keyOnly).toEqual([]);
     const [mark] = band.marks;
     expect(mark.where).toBe('bottom');
@@ -236,7 +244,7 @@ describe('in the band', () => {
       number: i + 1,
       name: `T${i}`,
     }));
-    const band = bandPlan({ pending: things, face: FACE, style: 'both' });
+    const band = bandPlan({ pending: things, face: FACE, style: 'raised' });
     expect(band.marks.every((m) => m.where === 'bottom')).toBe(true);
     const xs = band.marks.map((m) => m.box.x0);
     expect(xs).toEqual([...xs].sort((a, b) => a - b));
@@ -270,7 +278,7 @@ describe('in the band', () => {
         near('q', 64, 4),
       ],
       face: { x0: 0, y0: 0, x1: 400, y1: 300 },
-      style: 'print',
+      style: 'raised',
     });
     expect(band.marks.every((m) => m.where === 'left')).toBe(true);
     for (let i = 0; i < band.leads.length; i += 1) {
@@ -291,7 +299,7 @@ describe('in the band', () => {
     const band = bandPlan({
       pending: [{ f: area('t', 98, 128, 102, 132, 'T'), number: 2, name: 'T' }],
       face: FACE,
-      style: 'braille',
+      style: 'wedge',
       marks: [onThing],
     });
     const [mark] = band.marks;
@@ -318,7 +326,7 @@ describe('in the band', () => {
     const band = bandPlan({
       pending: [{ f: area('t', 149, 9, 151, 11, 'T'), number: 2, name: 'T' }],
       face: FACE,
-      style: 'braille',
+      style: 'wedge',
       zones: [{ x0: 170, y0: -40, x1: 230, y1: 80 }],
       marks: [onThing],
     });
@@ -337,11 +345,23 @@ describe('in the band', () => {
     });
   });
 
+  it('stops a lead 3 mm short of a channel on tape', () => {
+    const band = bandPlan({
+      pending: [{ f: area('t', 99, 140, 101, 142, 'T'), number: 7, name: 'T' }],
+      face: FACE,
+      style: 'tape',
+    });
+    const [mark] = band.marks;
+    expect(mark.channel.length).toBeCloseTo(20.4, 6);
+    const top = mark.channel.y - mark.channel.across / 2;
+    expect(top - mark.lead[1][1]).toBeCloseTo(3, 6);
+  });
+
   it('stops a lead 3 mm short of a numeral', () => {
     const band = bandPlan({
       pending: [{ f: area('t', 99, 140, 101, 142, 'T'), number: 7, name: 'T' }],
       face: FACE,
-      style: 'print',
+      style: 'raised',
     });
     const [mark] = band.marks;
     expect(mark.numeral.capMm).toBe(16);
@@ -357,7 +377,7 @@ describe('in the band', () => {
     const band = bandPlan({
       pending: many,
       face: { x0: 0, y0: 0, x1: 100, y1: 75 },
-      style: 'both',
+      style: 'raised',
     });
     expect(band.keyOnly.length).toBeGreaterThan(0);
     expect(band.marks.length + band.keyOnly.length).toBe(40);
@@ -371,32 +391,12 @@ describe('in the band', () => {
     const band = bandPlan({
       pending: [{ f: area('t', 196, 2, 198, 4, 'T'), number: 1, name: 'T' }],
       face: FACE,
-      style: 'braille',
+      style: 'wedge',
       zones: [{ x0: 170, y0: -40, x1: 230, y1: 40 }],
     });
     const [mark] = band.marks;
     expect(mark.where).toBe('right');
     expect(mark.box.y0).toBeGreaterThanOrEqual(40);
-  });
-
-  it('stands a Both number stacked in a side margin, the margin as wide as the wider part, the lead to the wedge', () => {
-    const band = bandPlan({
-      pending: [{ f: area('t', 1, 70, 3, 72, 'T'), number: 12, name: 'T' }],
-      face: FACE,
-      style: 'both',
-    });
-    const [mark] = band.marks;
-    expect(mark.where).toBe('left');
-    expect(mark.stacked).toBe(true);
-    // The numeral's baseline 3 mm above the wedge's back.
-    expect(mark.wedge.y - mark.wedge.depth - mark.numeral.y).toBeCloseTo(3, 2);
-    const wide = mark.box.x1 - mark.box.x0;
-    expect(band.sides.left).toBe(Math.ceil(3 + wide + 9.525));
-    expect(band.sides.left).toBeLessThan(45);
-    // The lead runs into the wedge's side, at the wedge's middle.
-    const [, end] = mark.lead;
-    expect(end[0]).toBeCloseTo(mark.wedge.x + mark.wedge.w / 2 - 0.5, 2);
-    expect(end[1]).toBeCloseTo(mark.wedge.y - mark.wedge.depth / 2, 2);
   });
 
   it('keeps every number off the seams between plates', () => {
@@ -420,7 +420,7 @@ describe('in the band', () => {
     const band = bandPlan({
       pending: things,
       face: FACE,
-      style: 'both',
+      style: 'raised',
       seams,
     });
     expect(band.marks).toHaveLength(3);
@@ -553,7 +553,7 @@ describe('at 3600 Ferry Pl NE, Every building', () => {
       mmPerM: plan.meta.geo.mmPerM,
     });
     const p = { ...plan, features: applied.features };
-    for (const style of ['braille', 'print', 'both']) {
+    for (const style of ['wedge', 'tape', 'raised']) {
       const labeled = labelPlan(p, { labels: style });
       const band = bandPlan({
         pending: labeled.pending,

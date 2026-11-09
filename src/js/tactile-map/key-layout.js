@@ -1,28 +1,15 @@
 /**
- * The key plate's layout: the key (map-key.js) laid out as rows on plates of
- * the map's plate size, for the Tactile Map tile's Key mode.
+ * The key's layout: the key (map-key.js) as pieces, a row each, for the
+ * Tactile Map tile's Key mode, so a row prints on its own and can be kept
+ * for another map.
  *
- * Each row: at the left, the symbol, a piece of the line or a patch of the
- * area at its printed size and height, so a finger learns it as it is on
- * the map (ISO 19028 6.4.3); then the words in raised capitals, built as
- * the Braille Sign builds its letters (ADA 703.2: the capital I 16 mm,
- * 1.21 spacing, a 135 % line pitch); under the words a channel for the
- * braille on label tape, as the map's own labels are, because tape reads
- * better than dots printed flat. Words, channels and samples keep the
- * sign's 9.525 mm (3/8 in) from each other and from the raised frame
- * (ADA 703.2.7, 703.3.2). The title row comes first, then You are here
- * and the rest in the key's order, then the numbered places. Rows continue
- * on a second key plate when the first is full; a 1 mm raised line frames
- * each plate (Wabinski and others 2022: a key framed by a line when it is
- * its own sheet).
- *
- * The samples, the channels and the frame become the plate's levels file
- * through the map's own levels builder, so a line or a symbol reads
- * exactly as it does on the map and a channel is cut as the map's are.
- * The words are rows the model raises itself: "x:y:WORDS", x and y the
- * start of the baseline in tenths of a millimeter from the plate's bottom
- * left, rows split by "|". The texts to write on the tape go into the
- * README in the channels' order.
+ * Each piece: at the left, the place's number in the form the Labels switch
+ * chose (a braille wedge, a channel for its braille on label tape, or a
+ * raised numeral), or the kind's symbol, line or area at its printed size so
+ * a finger learns it as it is on the map (ISO 19028 6.4.3); then the name in
+ * the same form. The samples and the channels become the piece's levels
+ * file through the map's own levels builder; the model raises the words,
+ * the numerals and the wedges from rows the piece writes.
  *
  * No DOM here: a worker may import this file.
  *
@@ -40,7 +27,18 @@ import {
   levelsSvgFromRings,
 } from './levels-svg.js';
 import { labelCells } from './map-key.js';
-import { channelLengthMm, LABEL_CELL_MM, LABEL_END_MM } from './map-labels.js';
+import {
+  brailleCells,
+  cellsBraille,
+  channelLengthMm,
+  DEFAULT_LABEL_STYLE,
+  identifierBox,
+  LABEL_CELL_MM,
+  LABEL_END_MM,
+  wedgeCells,
+  wedgeCellsFor,
+  wedgeSize,
+} from './identifiers.js';
 import { emptyPlan } from './plan.js';
 
 /**
@@ -66,44 +64,17 @@ export const PRINT_PITCH = 1.35;
 const CHANNEL_GAP_MM = 3;
 
 const tenths = (v) => Math.round(v * 10);
+const round3 = (v) => Math.round(v * 1000) / 1000;
 const clean = (s) => String(s || '').replace(/\|/g, '/');
 
 /** A key plate's name in the plate list: Key, or Key 1, Key 2 and on. */
 export const keyLabel = (id) => (id === 'key' ? 'Key' : `Key ${id.slice(4)}`);
-
-/**
- * What a key row carries beside its sample: a tape channel, raised words
- * and the channel, or the words alone. Braille first: the words are in the
- * README, and 16 mm capitals take a plate for a few rows.
- */
-export const KEY_WORDS = [
-  { key: 'braille', name: 'Braille only' },
-  { key: 'both', name: 'Print and braille' },
-  { key: 'print', name: 'Print only' },
-];
 
 /** How tall a sample stands, for a row of its own. */
 function sampleTallMm(entry) {
   if (entry.kind === 'point') return Number(entry.sizeMm) || 0;
   if (entry.kind === 'line') return Number(entry.widthMm) || 0;
   return 9;
-}
-
-export function keyRows(key, title) {
-  const head = title ? `Key: ${title}` : 'Key';
-  return [
-    { print: head, say: head.toLowerCase(), sample: null },
-    ...key.entries.map((e) => ({
-      print: e.name,
-      say: e.name.toLowerCase(),
-      sample: e,
-    })),
-    ...key.numbers.map((n) => ({
-      print: `${n.number} ${n.name}`,
-      say: `${n.number} ${n.name}`.toLowerCase(),
-      sample: null,
-    })),
-  ];
 }
 
 /** How far below its baseline a row's ink reaches (the sign's metrics). */
@@ -228,179 +199,344 @@ function sampleOf(entry, id, [cx, cy]) {
 }
 
 /**
- * The key plates.
+ * The key's rows as the model reads them, one piece each: the title, then
+ * You are here and the rest of the kinds in the key's order, then the
+ * numbered places. A numbered row's words are the place's name; its number
+ * stands in its own form at the row's left.
+ *
+ * @param {{ entries: Array<object>, numbers: Array<object> }} key
+ * @param {string} [title]
+ */
+export function keyRows(key, title) {
+  const head = title ? `Key: ${title}` : 'Key';
+  return [
+    { print: head, say: head.toLowerCase(), sample: null, number: null },
+    ...key.entries.map((e) => ({
+      print: e.name,
+      say: e.name.toLowerCase(),
+      sample: e,
+      number: null,
+    })),
+    ...key.numbers.map((n) => ({
+      print: n.name,
+      say: n.name.toLowerCase(),
+      sample: null,
+      number: n.number,
+    })),
+  ];
+}
+
+/** Uncontracted letters a to z as dots, for a wedge before the translator answers. */
+const A_TO_J = [
+  [1],
+  [1, 2],
+  [1, 4],
+  [1, 4, 5],
+  [1, 5],
+  [1, 2, 4],
+  [1, 2, 4, 5],
+  [1, 2, 5],
+  [2, 4],
+  [2, 4, 5],
+];
+const LETTER_DOTS = [
+  ...A_TO_J,
+  ...A_TO_J.map((d) => [...d, 3]),
+  ...A_TO_J.slice(0, 2).map((d) => [...d, 3, 6]),
+  [2, 4, 5, 6],
+  ...A_TO_J.slice(2, 5).map((d) => [...d, 3, 6]),
+];
+
+/**
+ * Words as uncontracted braille, letter by letter, with the number sign
+ * before a run of digits: the estimate a wedge takes until the braille
+ * translator has measured the words.
+ *
+ * @param {string} text
+ * @returns {string} Unicode braille
+ */
+export function estimateBraille(text) {
+  const cells = [];
+  let digits = false;
+  for (const ch of String(text || '').toLowerCase()) {
+    if (ch >= 'a' && ch <= 'z') {
+      cells.push(LETTER_DOTS[ch.charCodeAt(0) - 97]);
+      digits = false;
+    } else if (ch >= '0' && ch <= '9') {
+      if (!digits) cells.push([3, 4, 5, 6]);
+      cells.push(A_TO_J[(ch.charCodeAt(0) - 48 + 9) % 10]);
+      digits = true;
+    } else if (/\s/.test(ch)) {
+      cells.push([]);
+      digits = false;
+    }
+  }
+  return cellsBraille(cells);
+}
+
+/** Braille cells broken at their spaces into lines of at most `max` cells. */
+function wrapCells(cells, max) {
+  const words = [];
+  let word = [];
+  for (const c of cells) {
+    if (c.length === 0) {
+      if (word.length) words.push(word);
+      word = [];
+    } else {
+      word.push(c);
+    }
+  }
+  if (word.length) words.push(word);
+  const lines = [];
+  let line = [];
+  for (const w of words) {
+    const next = line.length ? [...line, [], ...w] : w;
+    if (next.length <= max) {
+      line = next;
+      continue;
+    }
+    if (line.length) lines.push(line);
+    let rest = w;
+    while (rest.length > max) {
+      lines.push(rest.slice(0, max));
+      rest = rest.slice(max);
+    }
+    line = rest;
+  }
+  if (line.length) lines.push(line);
+  return lines;
+}
+
+/** A cell's dots as the model's number: dot 1 the 1, up to dot 6 the 32. */
+const bitsOf = (dots) => dots.reduce((b, d) => b | (1 << (d - 1)), 0);
+
+/**
+ * The key, a piece for each row, so each prints on its own and a row (a
+ * kind's symbol, a place) can be kept and used again with another map. A
+ * row reads left to right: the number in the switch's form, or the kind's
+ * sample at its printed size (ISO 19028 6.4.3), then the name in the same
+ * form. Braille label tape: a channel for the braille number, then channels
+ * for the name, cut for the tape grade chosen. Braille wedges: the number's
+ * wedge, then the name on wedges in contracted braille (UEB Grade 2), the
+ * translator's. Raised numbers and letters: the bold numeral, then the name
+ * in raised capitals built as the Braille Sign builds its letters (ADA
+ * 703.2). A name too long for the piece goes on in lines below, the first
+ * line farthest from the reader as on a page; every part keeps the sign's
+ * 9.525 mm from the next and from the piece's edge (ADA 703.2.7, 703.3.2).
  *
  * @param {{ entries: Array<object>, numbers: Array<object> }} key
  * @param {object} options
- * @param {number} options.plateW - mm
- * @param {number} options.plateH - mm
  * @param {string} [options.title]
- * @param {string} [options.words] - a KEY_WORDS key: 'braille', 'both' or
- *   'print'
- * @param {number} [options.letterHeightMm] - the capital's height
- * @param {object} [options.settings] - the levels builder's, the tape's
- *   width among them
- * @returns {Array<{id: string, size: {w: number, h: number}, plan: object, svg: string, print: string, tape: string[]}>}
+ * @param {string} [options.style] - a LABEL_STYLES key (identifiers.js)
+ * @param {number} [options.letterHeightMm] - the raised capital's height
+ * @param {number} [options.maxWidthMm] - the widest a piece may be (the bed)
+ * @param {object} [options.settings] - the levels builder's: the tape's width,
+ *   the tape measure (`tape`), the wedge's dials (`wedge`)
+ * @param {(text: string) => string} [options.braille] - a text's contracted
+ *   braille (Unicode), for the wedges
+ * @returns {Array<{id: string, name: string, size: {w: number, h: number}, plan: object, svg: string, print: string, wedges: string, brailleWedges: string, marks: object[], tape: string[], cones: Array<[number, number]>}>}
  */
-export function keyPlates(
+export function keyPieces(
   key,
   {
-    plateW,
-    plateH,
     title = '',
-    words = KEY_WORDS[0].key,
+    style = DEFAULT_LABEL_STYLE,
     letterHeightMm = KEY_LETTER_MM,
+    maxWidthMm = 250,
     settings = {},
-  }
+    braille = null,
+  } = {}
 ) {
-  const withPrint = words !== 'braille';
-  const withTape = words !== 'print';
   const s = { ...DEFAULT_SETTINGS, ...settings };
   const across = s.tapeWidthMm + s.channelClearanceMm;
-  // The cells a strip of tape takes: the translator's count through the
-  // tape measure the settings carry, or the estimate.
   const cellsOf = s.tape?.of ? (text) => s.tape.of(text).cells : labelCells;
-  const sampleW = Math.max(
-    SAMPLE_MM,
-    ...key.entries.map((e) => Number(e.sizeMm) || 0)
-  );
-  const textX = KEY_MARGIN_MM + sampleW + KEY_CLEARANCE_MM;
-  const textW = plateW - KEY_MARGIN_MM - textX;
-  const maxCells = Math.max(
-    1,
-    Math.floor((textW - 2 * LABEL_END_MM) / LABEL_CELL_MM)
-  );
+  const brailleOf = (text) =>
+    (braille && braille(text)) || estimateBraille(text);
+  const M = KEY_CLEARANCE_MM;
+  const rows = keyRows(key, title);
   const pitch = letterHeightMm * PRINT_PITCH;
-  const bottomLimit = plateH - KEY_MARGIN_MM;
-  const pages = [];
-  let page = null;
 
-  const newPage = () => {
-    page = { samples: [], print: [], channels: [], tape: [], y: KEY_MARGIN_MM };
-    pages.push(page);
-  };
-  const used = () => page.print.length + page.channels.length > 0;
-  newPage();
+  return rows.map((row, i) => {
+    // The row's left: its number in the switch's form (a raised numeral when
+    // a wedge cannot hold the number), or its kind's sample.
+    let left = null;
+    if (row.number) {
+      const box =
+        identifierBox(row.number, style, s.wedge, {
+          inBand: true,
+          acrossMm: across,
+        }) || identifierBox(row.number, 'raised', s.wedge, { inBand: true });
+      left = { kind: 'number', w: box.w, h: box.h, part: box.parts[0] };
+    } else if (row.sample) {
+      left = {
+        kind: 'sample',
+        w: Math.max(SAMPLE_MM, Number(row.sample.sizeMm) || 0),
+        h: sampleTallMm(row.sample),
+      };
+    }
+    const room = maxWidthMm - 2 * M - (left ? left.w + KEY_CLEARANCE_MM : 0);
 
-  keyRows(key, title).forEach((row, i) => {
-    const printLines = withPrint
-      ? wrapPrint(clean(row.print).toUpperCase(), textW, letterHeightMm)
-      : [];
-    const tapeLines = withTape
-      ? wrapTape(clean(row.say), maxCells, cellsOf)
-      : [];
-    const sampleTall = row.sample ? sampleTallMm(row.sample) : 0;
-    // Each line's height and the lead before it: the letters and the ink
-    // under their baseline at the sign's pitch; a channel the tape's width,
-    // the clearance under the words, 3 mm under another channel.
-    const lines = [
-      ...printLines.map((text, k) => ({
+    // The name's lines, each with its height, its width and the gap above.
+    let lines;
+    if (style === 'tape') {
+      const maxCells = Math.max(
+        1,
+        Math.floor((room - 2 * LABEL_END_MM) / LABEL_CELL_MM)
+      );
+      lines = wrapTape(clean(row.say), maxCells, cellsOf).map((text, k) => ({
+        kind: 'tape',
         text,
-        k,
-        tape: false,
-        tall: letterHeightMm + descentMm(text, letterHeightMm),
-        lead:
-          k === 0
-            ? 0
-            : pitch -
-              letterHeightMm -
-              descentMm(printLines[k - 1], letterHeightMm),
-      })),
-      ...tapeLines.map((text, k) => ({
+        w: channelLengthMm(cellsOf(text)),
+        h: across,
+        gap: k ? CHANNEL_GAP_MM : 0,
+        read: across,
+      }));
+    } else if (style === 'raised') {
+      const texts = wrapPrint(
+        clean(row.print).toUpperCase(),
+        room,
+        letterHeightMm
+      );
+      lines = texts.map((text, k) => ({
+        kind: 'words',
         text,
-        k,
-        tape: true,
-        tall: across,
-        lead: k > 0 ? CHANNEL_GAP_MM : printLines.length ? KEY_CLEARANCE_MM : 0,
-      })),
-    ];
-    const rowHeight = Math.max(
-      lines.reduce((h, l) => h + l.lead + l.tall, 0),
-      sampleTall
-    );
-    if (used() && page.y + rowHeight > bottomLimit) newPage();
-    // Line by line, so a row taller than a plate goes on on the next one and
-    // nothing is set past the margin.
-    let first = { page, top: page.y };
-    let bottom = page.y;
-    let previous = null;
-    for (const line of lines) {
-      let top = previous === null ? page.y : bottom + line.lead;
-      if (top + line.tall > bottomLimit && (used() || previous)) {
-        newPage();
-        if (previous === null) first = { page, top: page.y };
-        top = page.y;
-      }
+        w: signRowWidthMm(text, {
+          charHeightMm: letterHeightMm,
+          letterSpacing: LETTER_SPACING,
+        }),
+        h: letterHeightMm + descentMm(text, letterHeightMm),
+        gap: k
+          ? pitch - letterHeightMm - descentMm(texts[k - 1], letterHeightMm)
+          : 0,
+        read: letterHeightMm,
+      }));
+    } else {
+      const cells = brailleCells(brailleOf(clean(row.say)));
+      lines = wrapCells(cells, wedgeCellsFor(room)).map((c, k) => {
+        const size = wedgeSize(c, s.wedge);
+        return {
+          kind: 'wedge',
+          cells: c,
+          w: size.w,
+          h: size.depth,
+          gap: k ? KEY_CLEARANCE_MM : 0,
+          read: size.depth,
+        };
+      });
+    }
+
+    // The first line's reading line and the left's bottom are one line.
+    const firstRead = lines.length ? lines[0].read : 0;
+    const reading = M + Math.max(firstRead, left ? left.h : 0);
+    const x0 = M + (left ? left.w + KEY_CLEARANCE_MM : 0);
+    let bottom = reading;
+    let y = reading - firstRead;
+    const placed = lines.map((line, k) => {
+      if (k > 0) y = bottom + line.gap;
+      let top = y;
       // The model reads a baseline in tenths of a millimeter: the words
-      // settle down onto the next tenth, never up into the clearance above.
-      if (!line.tape) {
-        const base = Math.ceil((top + letterHeightMm) * 10 - 1e-9) / 10;
-        top = base - letterHeightMm;
+      // settle down onto the next tenth, never up into the clearance.
+      if (line.kind === 'words') {
+        top =
+          Math.ceil((top + letterHeightMm) * 10 - 1e-9) / 10 - letterHeightMm;
       }
-      if (line.tape) {
-        const length = channelLengthMm(cellsOf(line.text));
-        page.channels.push({
-          id: `key-tape-${i}-${line.k}`,
-          class: 'channel',
-          kind: 'channel',
-          at: [textX + length / 2, top + line.tall / 2],
-          length,
-          on: true,
-        });
-        page.tape.push(line.text);
-      } else {
-        // A row as the model reads it: the baseline's start, the capital's
-        // height, standing on the base (0 above it), then the words.
-        page.print.push(
-          `${tenths(textX)}:${tenths(plateH - (top + letterHeightMm))}:${tenths(letterHeightMm)}:0:${line.text}`
-        );
-      }
-      bottom = top + line.tall;
-      previous = line;
-    }
-    // The sample stands beside the row, on the row's first plate; a sample
-    // taller than the row's lines makes the row its own height.
-    if (first.page === page) {
-      bottom = Math.min(bottomLimit, Math.max(bottom, first.top + sampleTall));
-    }
-    const sampleBottom = first.page === page ? bottom : bottomLimit;
-    if (row.sample) {
-      first.page.samples.push(
+      bottom = top + line.h;
+      return { ...line, top };
+    });
+    const w = Math.max(
+      20,
+      Math.ceil(x0 + Math.max(0, ...placed.map((l) => l.w)) + M - 1e-9)
+    );
+    const h = Math.max(20, Math.ceil(Math.max(bottom, reading) + M - 1e-9));
+
+    const plan = emptyPlan(w, h);
+    const print = [];
+    const wedges = [];
+    const brailleWedges = [];
+    const marks = [];
+    const tape = [];
+    if (left?.kind === 'sample') {
+      plan.features.push(
         sampleOf(row.sample, `key-sample-${i}`, [
-          KEY_MARGIN_MM + sampleW / 2,
-          (first.top + sampleBottom) / 2,
+          M + left.w / 2,
+          reading - left.h / 2,
         ])
       );
+    } else if (left) {
+      const cx = M + left.w / 2;
+      const part = left.part;
+      if (part.kind === 'channel') {
+        plan.features.push({
+          id: `key-number-${i}`,
+          class: 'channel',
+          kind: 'channel',
+          at: [round3(cx), round3(reading - part.h / 2)],
+          length: part.w,
+          on: true,
+        });
+        tape.push(`#${row.number}`);
+      } else if (part.kind === 'numeral') {
+        print.push(
+          `${tenths(cx)}:${tenths(h - reading)}:${tenths(part.capMm)}:0:#${row.number}`
+        );
+      } else {
+        wedges.push(`${tenths(cx)}:${tenths(h - reading)}:${row.number}`);
+        marks.push({
+          number: row.number,
+          wedge: {
+            x: round3(cx),
+            y: round3(reading),
+            w: part.w,
+            depth: part.h,
+            cells: wedgeCells(row.number),
+          },
+        });
+      }
     }
-    page.y = bottom + KEY_CLEARANCE_MM;
-  });
-
-  return pages.map((p, n) => {
-    const plan = emptyPlan(plateW, plateH);
-    const inset = KEY_FRAME_INSET_MM;
-    plan.features.push({
-      id: 'key-frame',
-      class: 'curb',
-      kind: 'line',
-      points: [
-        [inset, inset],
-        [plateW - inset, inset],
-        [plateW - inset, plateH - inset],
-        [inset, plateH - inset],
-        [inset, inset],
-      ],
-      width: KEY_FRAME_WIDTH_MM,
-      on: true,
+    placed.forEach((line, k) => {
+      if (line.kind === 'tape') {
+        plan.features.push({
+          id: `key-tape-${i}-${k}`,
+          class: 'channel',
+          kind: 'channel',
+          at: [round3(x0 + line.w / 2), round3(line.top + line.h / 2)],
+          length: line.w,
+          on: true,
+        });
+        tape.push(line.text);
+      } else if (line.kind === 'words') {
+        print.push(
+          `${tenths(x0)}:${tenths(h - (line.top + letterHeightMm))}:${tenths(letterHeightMm)}:0:${line.text}`
+        );
+      } else {
+        const foot = line.top + line.h;
+        brailleWedges.push(
+          `${tenths(x0 + line.w / 2)}:${tenths(h - foot)}:${line.cells.map(bitsOf).join('.')}`
+        );
+        marks.push({
+          number: null,
+          wedge: {
+            x: round3(x0 + line.w / 2),
+            y: round3(foot),
+            w: line.w,
+            depth: line.h,
+            cells: line.cells,
+          },
+        });
+      }
     });
-    plan.features.push(...p.samples, ...p.channels);
     const { rings, cones } = buildLevelRings(plan, settings);
     return {
-      id: pages.length === 1 ? 'key' : `key-${n + 1}`,
-      size: { w: plateW, h: plateH },
+      id: rows.length === 1 ? 'key' : `key-${i + 1}`,
+      name: row.number ? `${row.number} ${row.print}` : row.print,
+      size: { w, h },
       plan,
       svg: levelsSvgFromRings(rings, plan.size),
-      print: p.print.join('|'),
-      tape: p.tape,
+      print: print.join('|'),
+      wedges: wedges.join('|'),
+      brailleWedges: brailleWedges.join('|'),
+      marks,
+      tape,
       cones,
     };
   });

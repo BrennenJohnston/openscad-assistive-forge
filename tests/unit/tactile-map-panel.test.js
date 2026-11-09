@@ -790,14 +790,14 @@ describe('the map panel', () => {
     return p;
   };
 
-  it('offers Braille on tape with contracted UEB first, measures the labels through the translator in both grades, and says the tape in the note', async () => {
+  it('offers Braille on tape with uncontracted first, as a hand-press labeler writes, measures the labels through the translator in both grades, and says the tape in the note', async () => {
     const p = draft();
     const select = document.getElementById('tactileMapTapeGrade');
     expect([...select.options].map((o) => [o.value, o.textContent])).toEqual([
-      ['g2', 'Contracted (UEB Grade 2)'],
       ['g1', 'Uncontracted (Grade 1)'],
+      ['g2', 'Contracted (UEB Grade 2)'],
     ]);
-    expect(select.value).toBe('g2');
+    expect(select.value).toBe('g1');
     // A live region only: as the select's description too, NVDA said it twice.
     expect(select.hasAttribute('aria-describedby')).toBe(false);
     const note = document.getElementById('tactileMapTapeNote');
@@ -806,37 +806,37 @@ describe('the map panel', () => {
     await vi.waitFor(
       () =>
         expect(note.textContent).toMatch(
-          /^Label tape: contracted braille \(UEB Grade 2\)\. /
+          /^Label tape: uncontracted braille \(Grade 1\)\. /
         ),
       SETTLE
     );
-    // Both tables were asked, the contracted one first.
+    // Both tables were asked, the uncontracted one first.
     const tables = [...new Set(letterBraille.mock.calls.map((c) => c[1]))];
-    expect(tables).toEqual(['en-ueb-g2.ctb', 'en-ueb-g1.ctb']);
+    expect(tables).toEqual(['en-ueb-g1.ctb', 'en-ueb-g2.ctb']);
     expect(note.textContent, note.textContent).toMatch(
-      /^Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels?, \d+ cells?, about \d+ mm of 12\.7 mm tape; uncontracted would take (no labels|\d+ labels?, about \d+ mm)\.$/
+      /^Label tape: uncontracted braille \(Grade 1\)\. \d+ labels?, \d+ cells?, about \d+ mm of 12\.7 mm tape; contracted would take (no labels|\d+ labels?, about \d+ mm)\.$/
     );
     // The labels carry the measure; a stand-in cell per letter.
     const labels = p.labeled().labels;
     expect(labels.length).toBeGreaterThan(0);
     for (const l of labels) {
       expect(l.measured).toBe(true);
-      expect(l.grade).toBe('g2');
+      expect(l.grade).toBe('g1');
       expect(l.braille).toBe('⠁'.repeat(l.text.replace(/\s+/g, '').length));
     }
     // The other grade: the same sentence the other way round, no new pass.
     const calls = letterBraille.mock.calls.length;
-    select.value = 'g1';
+    select.value = 'g2';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     await vi.waitFor(
       () =>
         expect(note.textContent).toMatch(
-          /^Label tape: uncontracted braille \(Grade 1\)\. /
+          /^Label tape: contracted braille \(UEB Grade 2\)\. /
         ),
       SETTLE
     );
     expect(note.textContent).toMatch(
-      /; contracted would take (no labels|\d+ labels?, about \d+ mm)\.$/
+      /; uncontracted would take (no labels|\d+ labels?, about \d+ mm)\.$/
     );
     expect(letterBraille.mock.calls.length).toBe(calls);
   });
@@ -877,7 +877,7 @@ describe('the map panel', () => {
       w.startsWith('Label tape: ')
     );
     expect(sentences).toHaveLength(1);
-    expect(sentences[0]).toMatch(/^Label tape: contracted braille/);
+    expect(sentences[0]).toMatch(/^Label tape: uncontracted braille/);
   });
 
   it('keeps the estimate, says the engine did not load, and asks it no more until the grade changes', async () => {
@@ -889,7 +889,7 @@ describe('the map panel', () => {
     await vi.waitFor(
       () =>
         expect(note.textContent).toMatch(
-          /^Label tape: contracted braille \(UEB Grade 2\), sized by an estimate\. .* The braille engine did not load; the channels are sized by an estimate\.$/
+          /^Label tape: uncontracted braille \(Grade 1\), sized by an estimate\. .* The braille engine did not load; the channels are sized by an estimate\.$/
         ),
       SETTLE
     );
@@ -908,7 +908,7 @@ describe('the map panel', () => {
     expect(broken.mock.calls.length).toBe(asked);
     // The grade changed: one more try.
     const select = document.getElementById('tactileMapTapeGrade');
-    select.value = 'g1';
+    select.value = 'g2';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     await vi.waitFor(
       () => expect(broken.mock.calls.length).toBeGreaterThan(asked),
@@ -991,7 +991,7 @@ describe('the map panel', () => {
     expect(files[files.length - 1].svg).toMatch(/<g id="cutouts"><\/g>/);
   });
 
-  it('offers Key words with Braille only first when the model has a Key mode: a key plate starts with channels and no raised words, and Print and braille raises them', async () => {
+  it('lays the key out a row a piece, in the form Labels chooses: tape without the switch, raised numbers and letters with it, and the tape choices only for tape', async () => {
     expect(document.getElementById('tactileMapKeyWords')).toBeNull();
     mount({
       config: {
@@ -1001,26 +1001,64 @@ describe('the map panel', () => {
       },
     });
     await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
-    const words = document.getElementById('tactileMapKeyWords');
-    expect(words.value).toBe('braille');
-    expect([...words.options].map((o) => o.textContent)).toEqual([
-      'Braille only',
-      'Print and braille',
-      'Print only',
-    ]);
+    expect(document.getElementById('tactileMapKeyWords')).toBeNull();
+    const p = document.getElementById('tactileMapPanel').__forgeMapPanel;
+    const rows = p.keyPages.length;
+    expect(rows).toBeGreaterThan(1);
     expect(
-      document.querySelector('label[for="tactileMapKeyWords"]').textContent
-    ).toBe('Key words');
+      document.querySelectorAll('#tactileMapPlates input[value^="key"]')
+    ).toHaveLength(rows);
     const key = document.querySelector('#tactileMapPlates input[value^="key"]');
     key.checked = true;
     key.dispatchEvent(new Event('change', { bubbles: true }));
     await vi.waitFor(() => expect(params().plate_kind).toBe('Key'), SETTLE);
+    // The title's row: its words on tape, nothing raised.
     expect(params().raised_words).toBe('');
     expect(files[files.length - 1].svg).toMatch(
       /<g id="channels"><path d="[^"]+"\/><\/g>/
     );
-    words.value = 'both';
-    words.dispatchEvent(new Event('change', { bubbles: true }));
+    // A row is its own piece, the size of its row.
+    expect(params().map_height_mm).toBeLessThan(75);
+
+    mount({
+      config: {
+        plateKindParam: 'plate_kind',
+        raisedWordsParam: 'raised_words',
+        keyLetterParam: 'key_letter_height_mm',
+        numberWedgesParam: 'number_wedges',
+        brailleWedgesParam: 'braille_wedges',
+      },
+    });
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const labels = document.getElementById('tactileMapLabels');
+    expect(labels.value).toBe('wedge');
+    expect([...labels.options].map((o) => o.textContent)).toEqual([
+      'Braille wedges',
+      'Braille label tape',
+      'Raised numbers and letters',
+    ]);
+    // The tape's choices stand only while tape is chosen.
+    const grade = document.getElementById('tactileMapTapeGrade');
+    expect(grade.hidden).toBe(true);
+    labels.value = 'tape';
+    labels.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(grade.hidden).toBe(false);
+    labels.value = 'raised';
+    labels.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(grade.hidden).toBe(true);
+    // The pieces are laid out again in the new form.
+    await vi.waitFor(
+      () =>
+        expect(
+          document.querySelector('#tactileMapPlates input[value^="key"]')
+        ).not.toBeNull(),
+      SETTLE
+    );
+    const first = document.querySelector(
+      '#tactileMapPlates input[value^="key"]'
+    );
+    first.checked = true;
+    first.dispatchEvent(new Event('change', { bubbles: true }));
     // Rows of x:y:h:z:TEXT: the capital 16 mm, standing on the base.
     await vi.waitFor(
       () => expect(params().raised_words).toMatch(/^\d+:\d+:160:0:KEY/),
@@ -1056,7 +1094,7 @@ describe('the map panel', () => {
     );
     const pick = (value) => {
       const radio = document.querySelector(
-        `#tactileMapPlates input[value${value === 'key' ? '^' : ''}="${value}"]`
+        `#tactileMapPlates input[value="${value}"]`
       );
       radio.checked = true;
       radio.dispatchEvent(new Event('change', { bubbles: true }));
@@ -1068,7 +1106,10 @@ describe('the map panel', () => {
     );
     pick('B2');
     await vi.waitFor(() => expect(params().cone_marks).toBe(''), SETTLE);
-    pick('key');
+    // The destination's row, after the title's, holds its cone's sample.
+    const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+    const row = panel.keyPages.find((page) => page.cones.length);
+    pick(row.id);
     await vi.waitFor(() => expect(params().plate_kind).toBe('Key'), SETTLE);
     await vi.waitFor(
       () => expect(params().cone_marks).toMatch(/^\d+:\d+$/),
@@ -1437,7 +1478,7 @@ describe('render every plate and download', () => {
         'Lay them out as the grid reads, row A at the top, column 1 at the left, and glue them edge to edge onto a backing board of 500 x 380 mm. ' +
         'Levels, measured from the underside: base 0.4 mm, then 1.0, 1.8, 2.4 mm. ' +
         'Label channels take 12.7 mm tape, a recess with a floor under the tape so it sits nearly flush. ' +
-        'Label tape: contracted braille (UEB Grade 2). No labels on the map. ' +
+        'Label tape: uncontracted braille (Grade 1). No labels on the map. ' +
         'The picture plate_grid.svg shows the layout.\n'
     );
     expect(await zip.file('plate_grid.svg').async('string')).toContain(

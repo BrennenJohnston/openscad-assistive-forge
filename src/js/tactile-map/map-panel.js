@@ -75,14 +75,13 @@ import {
 } from './levels-svg.js';
 import { keyFor, keySentence, keyText } from './map-key.js';
 import { numberNamed } from './map-numbers.js';
+import { keyLabel, keyPieces, keyRows, KEY_LETTER_MM } from './key-layout.js';
 import {
-  keyLabel,
-  keyPlates,
-  keyRows,
-  KEY_LETTER_MM,
-  KEY_WORDS,
-} from './key-layout.js';
-import { channelLengthMm, labelPlan } from './map-labels.js';
+  channelLengthMm,
+  labelPlan,
+  numberChannel,
+  numberLabel,
+} from './map-labels.js';
 import {
   DEFAULT_LABEL_STYLE,
   KEY_ONLY_SENTENCE,
@@ -301,7 +300,7 @@ function isLevelsFile(svg) {
  * Mount the panel for a tile whose manifest declares `tactileMap`.
  *
  * @param {{ mapFileParam: string, widthParam: string, heightParam: string, plateIdParam?: string }} config
- * @param {{ plan?: object, setFile?: Function, bedKey?: string, idStyle?: string, keyWords?: string, labels?: string, getAutoPreviewController?: Function, render?: Function, download?: Function, getEditor?: Function }} [options]
+ * @param {{ plan?: object, setFile?: Function, bedKey?: string, idStyle?: string, labels?: string, getAutoPreviewController?: Function, render?: Function, download?: Function, getEditor?: Function }} [options]
  *   `render(parameters, { format, timeoutMs })` and `download(bytes, name,
  *   format)` stand in for the engine and the file save in a test;
  *   `getEditor()` resolves to the drawing editor the door opens.
@@ -364,16 +363,14 @@ class MapPanel {
     this.idStyle = ID_STYLES.some((s) => s.key === options.idStyle)
       ? options.idStyle
       : ID_STYLES[0].key;
-    this.keyWords = KEY_WORDS.some((w) => w.key === options.keyWords)
-      ? options.keyWords
-      : KEY_WORDS[0].key;
-    // What a thing's number is made of on the map: the Labels switch.
+    // What a place's number is made of, on the map and in the key: the
+    // Labels switch.
     this.labelStyle = LABEL_STYLES.some((w) => w.key === options.labels)
       ? options.labels
       : DEFAULT_LABEL_STYLE;
     // Each side of the band no narrower than the numbers standing there.
     this.bandNeeds = {};
-    // The labels' tape: the grade (contracted first) and the translator's
+    // The labels' tape: the grade (uncontracted first) and the translator's
     // measure of the texts, a stand-in translator in tests.
     this.tapeGrade = TAPE_GRADES[0].key;
     this.tape = new TapeMeasure(options.translate);
@@ -727,6 +724,18 @@ class MapPanel {
     };
   }
 
+  /** Whether the map and the key carry label tape. */
+  usesTape() {
+    return !this.config.numberWedgesParam || this.labelStyle === 'tape';
+  }
+
+  /** The tape's grade, its note and its cut show only while tape is used. */
+  syncTapeParts() {
+    for (const part of this.refs.tapeParts || []) {
+      part.hidden = !this.usesTape();
+    }
+  }
+
   /** The wedge's two dials as the model's controls hold them. */
   wedgeDials() {
     const parameters = stateManager.getState()?.parameters || {};
@@ -893,19 +902,32 @@ class MapPanel {
       y1: z.y1 - dy,
     });
     const s = { ...DEFAULT_SETTINGS, ...settings };
-    const { features, moved } = keepClear(labeled.plan.features, {
+    // A number the band took from its thing (clear of the cue or of a seam)
+    // leaves no channel and no label there.
+    const banded = new Set(
+      band.marks
+        .filter((m) => m.where !== 'thing')
+        .map((m) => `label-${m.featureId}`)
+    );
+    const base = labeled.plan.features.some((f) => banded.has(f.id))
+      ? {
+          ...labeled.plan,
+          features: labeled.plan.features.filter((f) => !banded.has(f.id)),
+        }
+      : labeled.plan;
+    const keptLabels = (labeled.labels || []).filter(
+      (l) => !banded.has(`label-${l.featureId}`)
+    );
+    const { features, moved } = keepClear(base.features, {
       zones: this.northZonesOn(sheet).map(toPlan),
       symbolSizeMm: s.symbolSizeMm,
       gapMm: s.minGapMm,
       channelAcrossMm: s.tapeWidthMm + s.channelClearanceMm,
       bounds: toPlan({ x0: 0, y0: 0, x1: sheet.w, y1: sheet.h }),
     });
-    const plan =
-      features === labeled.plan.features
-        ? labeled.plan
-        : { ...labeled.plan, features };
+    const plan = features === base.features ? base : { ...base, features };
     // A number beside a symbol the cue moved goes with it.
-    const before = new Map(labeled.plan.features.map((f) => [f.id, f.at]));
+    const before = new Map(base.features.map((f) => [f.id, f.at]));
     const marks = band.marks.map((m) => {
       if (m.where !== 'thing') return m;
       const now = features.find((f) => f.id === m.featureId)?.at;
@@ -915,10 +937,42 @@ class MapPanel {
     });
     const built =
       plan === labeled.plan ? first : buildLevelRings(plan, settings);
+    // A number on tape in the margin: its channel, cut as the map's are, and
+    // the label to write for it.
+    const byId = new Map(plan.features.map((f) => [f.id, f]));
+    const rowOf = new Map(
+      (labeled.key?.numbers || []).map((n) => [n.featureId, n])
+    );
+    const bandTape = marks.filter((m) => m.channel && m.where !== 'thing');
+    const tapeFeatures = bandTape.map((m) =>
+      numberChannel(byId.get(m.featureId), m.channel)
+    );
+    const tapeLabels = bandTape.map((m) =>
+      numberLabel(
+        byId.get(m.featureId),
+        rowOf.get(m.featureId),
+        m.channel.length
+      )
+    );
+    const cut = settings.channelsThrough ? 'cutouts' : 'channels';
+    const tapeRings = bandTape.map((m) => {
+      const { x, y, length, across } = m.channel;
+      return [
+        { x: x - length / 2, y: y - across / 2 },
+        { x: x + length / 2, y: y - across / 2 },
+        { x: x + length / 2, y: y + across / 2 },
+        { x: x - length / 2, y: y + across / 2 },
+      ];
+    });
+    const labels = [...keptLabels, ...tapeLabels];
     return {
       labeled: {
         ...labeled,
-        plan,
+        plan: tapeFeatures.length
+          ? { ...plan, features: [...plan.features, ...tapeFeatures] }
+          : plan,
+        labels,
+        key: labeled.key ? { ...labeled.key, labels } : labeled.key,
         marks,
         keyOnly: band.keyOnly,
         warnings: [
@@ -930,7 +984,14 @@ class MapPanel {
           })),
         ],
       },
-      built: { ...built, rings: { ...built.rings, leads: band.rings } },
+      built: {
+        ...built,
+        rings: {
+          ...built.rings,
+          leads: band.rings,
+          [cut]: [...(built.rings[cut] || []), ...tapeRings],
+        },
+      },
       sheet,
       moved,
     };
@@ -993,6 +1054,7 @@ class MapPanel {
       zones,
       marks: stay,
       seams,
+      acrossMm: this.tapeWidth() + DEFAULT_SETTINGS.channelClearanceMm,
     });
     return {
       ...band,
@@ -1431,8 +1493,9 @@ class MapPanel {
     add('bed', styleSelect);
     this.refs.idStyle = styleSelect;
 
-    // What a thing's number is made of on the map: a braille wedge, a
-    // raised numeral, or both. Raised letters put no tape on the map.
+    // What a place's number and the key's words are made of: braille
+    // wedges, braille label tape, or raised numbers and letters. The tape's
+    // grade and cut show only for tape.
     if (this.config.numberWedgesParam) {
       const labelsLabel = el('label', 'braille-panel-label', 'Labels');
       labelsLabel.htmlFor = 'tactileMapLabels';
@@ -1448,6 +1511,7 @@ class MapPanel {
       labelsSelect.value = this.labelStyle;
       labelsSelect.addEventListener('change', () => {
         this.labelStyle = labelsSelect.value;
+        this.syncTapeParts();
         this.schedule(0);
       });
       add('bed', labelsSelect);
@@ -1510,27 +1574,15 @@ class MapPanel {
     channelNote.setAttribute('aria-live', 'polite');
     add('bed', channelNote);
     this.refs.channelNote = channelNote;
-
-    if (this.config.plateKindParam) {
-      const wordsLabel = el('label', 'braille-panel-label', 'Key words');
-      wordsLabel.htmlFor = 'tactileMapKeyWords';
-      add('bed', wordsLabel);
-      const wordsSelect = el('select', 'braille-panel-select');
-      wordsSelect.id = 'tactileMapKeyWords';
-      for (const choice of KEY_WORDS) {
-        const option = document.createElement('option');
-        option.value = choice.key;
-        option.textContent = choice.name;
-        wordsSelect.appendChild(option);
-      }
-      wordsSelect.value = this.keyWords;
-      wordsSelect.addEventListener('change', () => {
-        this.keyWords = wordsSelect.value;
-        this.schedule(0);
-      });
-      add('bed', wordsSelect);
-      this.refs.keyWords = wordsSelect;
-    }
+    this.refs.tapeParts = [
+      gradeLabel,
+      gradeSelect,
+      tapeNote,
+      cutLabel,
+      cutSelect,
+      channelNote,
+    ];
+    this.syncTapeParts();
 
     // The plan's warnings, folded: a draft of a whole block can carry fifty,
     // and the plates and the render button stand after them.
@@ -2508,6 +2560,8 @@ class MapPanel {
     const bedName =
       this.bedKey === 'custom' ? `custom ${bed.w} x ${bed.d} mm` : bed.name;
     const pdf = this.buildPdf({ stem, parameters });
+    // The plan as it prints: the margin's numbers on tape among the labels.
+    const cleared = this.clearedPlan(this.labeled()).labeled;
     const readme = readmeText({
       mapName: this.mapName(parameters, stem),
       bedName,
@@ -2517,11 +2571,11 @@ class MapPanel {
       tapeWidthMm: this.tapeWidth(),
       about: this.mapAbout(),
       keyIds: this.keyPages.map((p) => p.id),
-      keyText: this.keyPages.length ? keyText(this.labeled().key) : '',
+      keyText: this.keyPages.length ? keyText(cleared.key) : '',
       keyTape: this.keyPages.map((p) => ({ id: p.id, texts: p.tape })),
       pdfName: PDF_NAME,
       unspelled: pdf.unspelled,
-      tape: this.tapeSummary(this.labeled()),
+      tape: this.usesTape() ? this.tapeSummary(cleared) : null,
       trimMm: this.trim ? sheet.marginMm : 0,
       numbersInMargin: Object.values(sheet.band).some(
         (side) => side > sheet.marginMm
@@ -2785,7 +2839,9 @@ class MapPanel {
    */
   channelWarnings() {
     const bare =
-      this.channelCut === 'through' && this.printStyle() === 'All printed';
+      this.usesTape() &&
+      this.channelCut === 'through' &&
+      this.printStyle() === 'All printed';
     return bare
       ? [
           {
@@ -2863,27 +2919,50 @@ class MapPanel {
   tapeSummary(labeled) {
     const grade = this.tapeGrade;
     const other = TAPE_GRADES.find((g) => g.key !== grade).key;
-    const labels = labeled.labels || [];
+    // Every strip to write: the map's labels (with the switch, the places'
+    // numbers) and the key's, laid out in a grade.
+    const strips = (g) => {
+      const view = this.tape.view(g);
+      // With the switch the map's labels are the places' numbers, the same
+      // in either grade, margin and all; without it, names laid out anew.
+      const map = (
+        g === grade || this.config.numberWedgesParam
+          ? labeled.labels || []
+          : labelPlan(this.plan, { ...this.levelSettings(), tape: view })
+              .labels || []
+      ).map((l) => ({ cells: l.cells, measured: l.measured }));
+      const pieces =
+        this.config.plateKindParam && this.layout
+          ? g === grade
+            ? this.keyPages
+            : this.buildKeyPages(this.layout, view)
+          : [];
+      const key = pieces
+        .flatMap((p) => p.tape)
+        .map((text) =>
+          /^#\d+$/.test(text)
+            ? { cells: text.length, measured: true }
+            : view.of(text)
+        );
+      return [...map, ...key];
+    };
+    const here = strips(grade);
     const measuredThere =
-      labels.length > 0 &&
+      here.length > 0 &&
       this.tape.missing(this.tapeTexts(labeled), other).length === 0;
-    const others = measuredThere
-      ? labelPlan(this.plan, {
-          ...this.levelSettings(),
-          tape: this.tape.view(other),
-        }).labels || []
-      : null;
+    const there = measuredThere ? strips(other) : null;
+    const sum = (list) => list.reduce((n, l) => n + l.cells, 0);
+    const length = (list) =>
+      list.reduce((n, l) => n + channelLengthMm(l.cells), 0);
     return {
       grade,
-      labels: labels.length,
-      cells: labels.reduce((n, l) => n + l.cells, 0),
-      lengthMm: labels.reduce((n, l) => n + channelLengthMm(l.cells), 0),
-      measured: labels.every((l) => l.measured),
+      labels: here.length,
+      cells: sum(here),
+      lengthMm: length(here),
+      measured: here.every((l) => l.measured),
       tapeWidthMm: this.tapeWidth(),
-      otherLabels: others ? others.length : null,
-      otherLengthMm: others
-        ? others.reduce((n, l) => n + channelLengthMm(l.cells), 0)
-        : null,
+      otherLabels: there ? there.length : null,
+      otherLengthMm: there ? length(there) : null,
       failed: this.tape.failed,
     };
   }
@@ -2927,20 +3006,24 @@ class MapPanel {
   }
 
   /**
-   * The key's plates at the map's plate size, their channels cut for the
-   * tape the map's labels use.
+   * The key's pieces, a row each, in the Labels switch's form, no wider than
+   * the bed; their channels cut for the tape in use, their wedges' words in
+   * contracted braille from the translator.
    */
-  buildKeyPages(layout) {
+  buildKeyPages(layout, tapeView = null) {
     if (!this.config.plateKindParam) return [];
     const parameters = stateManager.getState().parameters || {};
-    return keyPlates(this.labeled().key, {
-      plateW: layout.plateW,
-      plateH: layout.plateH,
+    const settings = this.levelSettings();
+    if (tapeView) settings.tape = tapeView;
+    const contracted = this.tape.view('g2');
+    return keyPieces(this.labeled().key, {
       title: this.keyTitle(),
-      words: this.keyWords,
+      style: this.config.numberWedgesParam ? this.labelStyle : 'tape',
       letterHeightMm:
         Number(parameters[this.config.keyLetterParam]) || KEY_LETTER_MM,
-      settings: this.levelSettings(),
+      maxWidthMm: Math.max(60, this.bed().w - 4),
+      settings,
+      braille: (text) => contracted.of(text).braille,
     });
   }
 
@@ -2950,6 +3033,8 @@ class MapPanel {
     if (this.config.plateKindParam) next[this.config.plateKindParam] = 'Map';
     if (this.config.raisedWordsParam) next[this.config.raisedWordsParam] = '';
     if (this.config.numberWedgesParam) next[this.config.numberWedgesParam] = '';
+    if (this.config.brailleWedgesParam)
+      next[this.config.brailleWedgesParam] = '';
     const sheet = this.sheet || this.sheetNow();
     if (this.config.marginParam) next[this.config.marginParam] = sheet.marginMm;
     if (this.config.titleBandParam)
@@ -2975,7 +3060,9 @@ class MapPanel {
         [this.config.raisedWordsParam]: page.print,
       };
       if (this.config.numberWedgesParam)
-        next[this.config.numberWedgesParam] = '';
+        next[this.config.numberWedgesParam] = page.wedges;
+      if (this.config.brailleWedgesParam)
+        next[this.config.brailleWedgesParam] = page.brailleWedges;
       if (this.config.coneMarksParam) {
         next[this.config.coneMarksParam] = coneRows(page.cones, {
           x: 0,
@@ -3092,6 +3179,7 @@ class MapPanel {
     const parts = this.sheetParts(sheet, built, labeled.marks);
     const inside = sheet.placement === 'inside';
     let wedges = '';
+    let brailleWedges = '';
     let marks = [];
     let svg;
     let size;
@@ -3120,6 +3208,9 @@ class MapPanel {
       showTitle = 'no';
       showNorth = 'no';
       words = keyPage.print;
+      wedges = keyPage.wedges;
+      brailleWedges = keyPage.brailleWedges;
+      marks = keyPage.marks;
       cones = keyPage.cones;
     } else if (isTitleId(this.plate)) {
       // The title band on a plate of its own: the title's lines, nothing
@@ -3163,6 +3254,8 @@ class MapPanel {
       setParameterValue(this.config.raisedWordsParam, words);
     if (this.config.numberWedgesParam)
       setParameterValue(this.config.numberWedgesParam, wedges);
+    if (this.config.brailleWedgesParam)
+      setParameterValue(this.config.brailleWedgesParam, brailleWedges);
     if (this.config.marginParam)
       setParameterValue(this.config.marginParam, sheet.marginMm);
     if (this.config.titleBandParam)
@@ -3292,7 +3385,7 @@ class MapPanel {
       channelsThrough: this.channelCut === 'through',
       title: title ? String(parameters[this.config.titleParam] || '') : '',
       plateId,
-      marks: keyPage ? [] : marks,
+      marks: keyPage ? keyPage.marks : marks,
     };
   }
 

@@ -36,10 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trimmed to the shapes.
 - The Tactile Map model can raise a number's braille wedge with a face angle
   dial, bold raised numerals and lead lines on a level of their own.
-- Numbers on the map: each numbered place carries its number as a braille
-  wedge, a bold raised numeral or both (Labels in step 5, Both to start), on
-  the place when it fits, else in the margin at the end of a raised lead
-  line; the map paper and the PDF draw them.
+- Numbers on the map, one kind at a time (Labels in step 5): a braille
+  wedge, to start; a channel for the braille number on label tape; or a bold
+  raised numeral. A number stands on its place when it fits, else in the
+  margin at the end of a raised lead line, and the key repeats it in the
+  same form beside the place's name; the map paper and the PDF draw them.
 - Tape channels, a choice in step 5: a recess with a floor under the tape,
   as before, or cut right through the plate so the tape lies on the backing
   board; the key plates follow, the map paper and the PDF draw a cut-through
@@ -55,12 +56,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Tactile Map key prints a row a piece, each as small as its row, so a
+  row can be kept for another map; it follows Labels in place of Key words.
 - Numbers replace the two-letter codes on a tactile map: the key lists every
   named thing as "3 Building: Haring Center", counted out from the address,
-  or in walking order on a route, and a name that fits goes on tape at the
-  thing, inside a building when it covers at most half of it.
-- Label tape channels are sized by the app's braille translator, contracted
-  UEB (Grade 2) to start or uncontracted on a switch in step 5, instead of
+  or in walking order on a route.
+- Label tape channels are sized by the app's braille translator, uncontracted
+  (Grade 1) to start or contracted UEB on a switch in step 5, instead of
   an estimate; the note under the switch, the README and the PDF say what
   the tape comes to, and the PDF draws each label's braille as dots.
 - The plates are cut from the sheet, the map in its band: the sample's

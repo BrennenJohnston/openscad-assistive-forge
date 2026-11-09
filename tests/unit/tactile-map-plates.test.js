@@ -66,14 +66,21 @@ describe('the bed presets', () => {
 
   it("keep the plate floor equal to the tile's smallest map", () => {
     const scad = readFileSync(
-      join(process.cwd(), 'public', 'examples', 'tactile-map', 'tactile_map.scad'),
+      join(
+        process.cwd(),
+        'public',
+        'examples',
+        'tactile-map',
+        'tactile_map.scad'
+      ),
       'utf8'
     );
+    // The model's floor for a map plate; a key piece may be smaller.
     const minimum = (name) =>
-      Number(new RegExp(`${name} = \\d+; // \\[(\\d+):`).exec(scad)[1]);
+      Number(new RegExp(`^${name} = \\[(\\d+),`, 'm').exec(scad)[1]);
     expect(PLATE_MIN_MM).toEqual({
-      w: minimum('map_width_mm'),
-      h: minimum('map_height_mm'),
+      w: minimum('MAP_WIDTH_RANGE_MM'),
+      h: minimum('MAP_HEIGHT_RANGE_MM'),
     });
     expect(PLATE_MIN_MM).toEqual({ w: 100, h: 75 });
   });

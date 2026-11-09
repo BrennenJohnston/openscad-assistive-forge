@@ -152,7 +152,7 @@ function drawPlate(w, data, { x, y, scale, colors, seams }) {
       fill: [1, 1, 1],
       widthMm: 0.3,
     });
-    for (const [dx, dy] of wedgeDots(m.wedge, m.number)) {
+    for (const [dx, dy] of wedgeDots(m.wedge)) {
       w.circle(px(dx), py(dy), 0.6 * s);
     }
   }
