@@ -656,9 +656,7 @@ describe('braille panel card mode — grid_rows sync and clamp', () => {
     await vi.waitFor(() => {
       expect(document.getElementById('brailleMarginInput').value).toBe('4');
     }, SETTLE);
-    expect(document.getElementById('brailleMarginPreset').value).toBe(
-      'custom'
-    );
+    expect(document.getElementById('brailleMarginPreset').value).toBe('custom');
   });
 
   it('a direct rows_per_card edit sets "Max rows per card" and the next layout', async () => {
@@ -716,15 +714,26 @@ describe('braille panel card mode — grid_rows sync and clamp', () => {
     expect(params().cell_spacing).toBe('6.2');
     expect(params().auto_size_margin_mm).toBe('5');
     expect(document.getElementById('brailleMarginInput').value).toBe('5');
-    expect(document.getElementById('brailleMarginPreset').value).toBe(
-      'custom'
-    );
+    expect(document.getElementById('brailleMarginPreset').value).toBe('custom');
     // 89 - 10 - 4.1 = 74.9 mm holds 12 pitches of 6.2: 13 cells; 51 - 10
     // - 6.6 = 34.4 mm holds 3 pitches of 10: 4 rows.
     await vi.waitFor(() => {
       expect(params().grid_columns).toBe('13');
     }, SETTLE);
     expect(params().grid_rows).toBe('4');
+    // The preset asks for the rows its card holds, so nothing is clamped
+    // and no warning stands the moment it is chosen.
+    expect(document.getElementById('brailleMaxRows').value).toBe('4');
+    expect(params().rows_per_card).toBe('4');
+    expect(
+      [
+        ...document.querySelectorAll(
+          '#braillePanel [role="status"], #braillePanel [role="alert"]'
+        ),
+      ]
+        .map((el) => el.textContent)
+        .join(' ')
+    ).not.toMatch(/Max rows per card/);
     // The default card keeps 7 mm cells and the margin it had.
     select.value = 'default';
     select.dispatchEvent(new Event('change'));

@@ -84,6 +84,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preview's buttons lay over the Design, View, Window and Help menus. The
   editor now closes the column while it is open and Close opens it again,
   and the Preview Settings row wraps to two lines beside an open column.
+- The braille card's Business card preset sets Max rows per card to the
+  four rows its card holds, instead of leaving eight and warning at once
+  that only four fit.
 - One form for a crossing: a crossing mapped as a point draws as a short
   ticked line across its road, as one mapped as a way does, and one
   standing on such a way is left to the way, so the key has one Crossing
