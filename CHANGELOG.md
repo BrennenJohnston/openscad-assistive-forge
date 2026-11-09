@@ -84,6 +84,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preview's buttons lay over the Design, View, Window and Help menus. The
   editor now closes the column while it is open and Close opens it again,
   and the Preview Settings row wraps to two lines beside an open column.
+- The names on the map paper and in the PDF no longer print over one
+  another, over a tape channel, or past the sheet's edge: a name that
+  cannot stand at its thing moves to the nearest clear line and a thin
+  leader points back to the thing.
 - A raised title on plates of its own: the band is as deep as the smallest
   plate, so the title plates no longer stand 12 mm past the backing board;
   the title wraps to the first plate's width, so no letter is cut by a seam;

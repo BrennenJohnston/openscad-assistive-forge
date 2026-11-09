@@ -176,10 +176,113 @@ export function paperTexts(plan) {
   return out;
 }
 
+/** A name's box on the paper: centered on its place, a little room around. */
+function nameBox(text, [x, y], letterMm) {
+  const half =
+    (String(text).length * LETTER_ADVANCE * (letterMm / CAP_OF_SIZE)) / 2;
+  const pad = 0.5;
+  return {
+    x0: x - half - pad,
+    x1: x + half + pad,
+    y0: y - letterMm / 2 - pad,
+    y1: y + letterMm / 2 + pad,
+  };
+}
+
+const overlapArea = (a, b) =>
+  Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) *
+  Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+
 /**
- * The texts that fall on a plate, moved to the plate's corner.
+ * The names laid out so they can be read: each inside the sheet, off the
+ * tape channels, and on a line of its own where two would print over
+ * each other. A name stays at its thing when it can; otherwise it moves
+ * down or up a line at a time, the nearest clear line first, and keeps
+ * `from`, the place it names, for a leader. Names are taken top to
+ * bottom, so the first at a spot keeps it.
  *
- * @param {Array<{at: number[]}>} items
+ * @param {Array<{text: string, at: number[]}>} items
+ * @param {object} input
+ * @param {{w: number, h: number}} input.size - The sheet (or plate) the names lie on
+ * @param {Array<{x0: number, y0: number, x1: number, y1: number}>} [input.obstacles] - Boxes to keep off, the channels
+ * @param {number} [input.letterMm]
+ * @returns {Array<{text: string, at: number[], from?: number[]}>}
+ */
+export function spreadTexts(
+  items,
+  { size, obstacles = [], letterMm = PAPER_LETTER_MM }
+) {
+  const step = Math.round(letterMm * 1.4 * 10) / 10;
+  const edge = 0.5;
+  const inside = (text, x, y) => {
+    const box = nameBox(text, [x, y], letterMm);
+    const half = (box.x1 - box.x0) / 2;
+    const tall = (box.y1 - box.y0) / 2;
+    return [
+      Math.min(
+        Math.max(x, edge + half),
+        Math.max(edge + half, size.w - edge - half)
+      ),
+      Math.min(
+        Math.max(y, edge + tall),
+        Math.max(edge + tall, size.h - edge - tall)
+      ),
+    ];
+  };
+  const placed = obstacles.map((o) => ({ ...o }));
+  const order = items
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => a.t.at[1] - b.t.at[1] || a.t.at[0] - b.t.at[0]);
+  const out = new Array(items.length);
+  // Where a name may go, nearest first: its place, then a line down or up,
+  // then beside its place (the name's half width and a little, right or
+  // left) on each of those lines, out to eight lines away.
+  const rows = [0];
+  for (let k = 1; k <= 8; k += 1) rows.push(k, -k);
+  for (const { t, i } of order) {
+    const [ax, ay] = t.at;
+    const half = nameBox(t.text, [ax, ay], letterMm).x1 - ax + 1.5;
+    let best = null;
+    for (const k of rows) {
+      for (const dx of [0, half, -half]) {
+        const [x, y] = inside(t.text, ax + dx, ay + k * step);
+        const box = nameBox(t.text, [x, y], letterMm);
+        const hit = placed.reduce((sum, p) => sum + overlapArea(box, p), 0);
+        if (!best || hit < best.hit - 1e-9) best = { x, y, box, hit };
+        if (hit === 0) break;
+      }
+      if (best.hit === 0) break;
+    }
+    placed.push(best.box);
+    const round = (v) => Math.round(v * 1000) / 1000;
+    const moved = Math.hypot(best.x - ax, best.y - ay) > 1e-6;
+    out[i] = moved
+      ? { ...t, at: [round(best.x), round(best.y)], from: [ax, ay] }
+      : t;
+  }
+  return out;
+}
+
+/** The channels' boxes, for the names to keep off. */
+export function channelBoxes(channels) {
+  return (channels || []).map((ch) => {
+    const [cx, cy] = ch.at;
+    const rw = ch.vertical ? ch.across : ch.length;
+    const rh = ch.vertical ? ch.length : ch.across;
+    return {
+      x0: cx - rw / 2,
+      y0: cy - rh / 2,
+      x1: cx + rw / 2,
+      y1: cy + rh / 2,
+    };
+  });
+}
+
+/**
+ * The texts that fall on a plate, moved to the plate's corner, a moved
+ * name's place of origin with them.
+ *
+ * @param {Array<{at: number[], from?: number[]}>} items
  * @param {{x: number, y: number, w: number, h: number}} plate
  */
 export function shiftTexts(items, plate) {
@@ -188,7 +291,9 @@ export function shiftTexts(items, plate) {
     const [x, y] = item.at;
     if (x < plate.x || x >= plate.x + plate.w) continue;
     if (y < plate.y || y >= plate.y + plate.h) continue;
-    out.push({ ...item, at: [x - plate.x, y - plate.y] });
+    const next = { ...item, at: [x - plate.x, y - plate.y] };
+    if (item.from) next.from = [item.from[0] - plate.x, item.from[1] - plate.y];
+    out.push(next);
   }
   return out;
 }
@@ -196,14 +301,28 @@ export function shiftTexts(items, plate) {
 /**
  * The texts moved by an offset: the face's into the sheet's frame.
  *
- * @param {Array<{at: number[]}>} items
+ * @param {Array<{at: number[], from?: number[]}>} items
  * @param {[number, number]} offset
  */
 export function moveTexts(items, [dx, dy]) {
   return items.map((item) => ({
     ...item,
     at: [item.at[0] + dx, item.at[1] + dy],
+    ...(item.from ? { from: [item.from[0] + dx, item.from[1] + dy] } : {}),
   }));
+}
+
+/**
+ * Where a leader meets a name: the point of the name's box nearest the
+ * place it names.
+ */
+export function leaderEnd(item, letterMm = PAPER_LETTER_MM) {
+  const box = nameBox(item.text, item.at, letterMm);
+  const [fx, fy] = item.from;
+  return [
+    Math.min(Math.max(fx, box.x0), box.x1),
+    Math.min(Math.max(fy, box.y0), box.y1),
+  ];
 }
 
 /**
@@ -327,6 +446,18 @@ export function mapPaperSvg({
     }
   }
   parts.push(`<g id="paper-channels">${channelParts.join('')}</g>`);
+  // A name moved off its thing points back to it.
+  parts.push(
+    `<g id="paper-leaders" stroke="${c.faint}" stroke-width="0.3">` +
+      texts
+        .filter((t) => Array.isArray(t.from))
+        .map((t) => {
+          const [ex, ey] = leaderEnd(t);
+          return `<line x1="${say(t.from[0])}" y1="${say(t.from[1])}" x2="${say(ex)}" y2="${say(ey)}"/>`;
+        })
+        .join('') +
+      '</g>'
+  );
   parts.push(
     `<g id="paper-names" font-size="${fontSize}" fill="${c.ink}" stroke="${c.ground}" stroke-width="0.6" paint-order="stroke" text-anchor="middle">` +
       texts
