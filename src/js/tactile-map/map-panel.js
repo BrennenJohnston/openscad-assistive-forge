@@ -964,7 +964,9 @@ class MapPanel {
         { x: x - length / 2, y: y + across / 2 },
       ];
     });
-    const labels = [...keptLabels, ...tapeLabels];
+    const labels = [...keptLabels, ...tapeLabels].sort(
+      (a, b) => (a.number || 0) - (b.number || 0)
+    );
     return {
       labeled: {
         ...labeled,

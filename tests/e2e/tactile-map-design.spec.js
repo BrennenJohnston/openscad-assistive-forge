@@ -245,6 +245,26 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       Array.from({ length: 21 }, (_, i) => `key-${i + 1}`)
     );
 
+    // Braille label tape, chosen by keyboard: its pieces are channels, quick
+    // to render, and the README lists the tape to write.
+    await tabTo(page, '#tactileMapLabels', 80);
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('#tactileMapLabels')).toHaveValue('tape');
+    await expect(page.locator('#tactileMapTapeGrade')).toHaveValue('g1');
+    await expect(page.locator('#tactileMapTapeNote')).toHaveText(
+      /^Label tape: uncontracted braille \(Grade 1\)\. /,
+      { timeout: 30000 }
+    );
+    const summary = (
+      await page.locator('#tactileMapSummary').textContent()
+    ).trim();
+    const pieces = await page.evaluate(() =>
+      document
+        .getElementById('tactileMapPanel')
+        .__forgeMapPanel.keyPages.map((p) => ({ id: p.id, size: p.size }))
+    );
+    expect(pieces).toHaveLength(21);
+
     // The zip: the map's plates, the key's pieces, and the README.
     const downloadPromise = page.waitForEvent('download', { timeout: 420_000 });
     await tabTo(page, '#tactileMapRenderAll', 80);
@@ -252,29 +272,44 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     const download = await downloadPromise;
     const zip = await JSZip.loadAsync(readFileSync(await download.path()));
     const names = Object.keys(zip.files);
-    for (const id of ['A1', 'A2', 'B1', 'B2', ...key.plates]) {
+    for (const id of ['A1', 'A2', 'B1', 'B2', ...pieces.map((p) => p.id)]) {
       expect(names).toContain(`tactile_map_${id}.stl`);
       expect(names).toContain(`levels_${id}.svg`);
     }
     expect(names).not.toContain('tactile_map_B3.stl');
     const readme = await zip.file('README.txt').async('string');
+    expect(summary).toBe(
+      '4 plates of 218.5 x 128 mm, A1 to B2. The key takes 21 plates.'
+    );
     expect(readme).toContain(
-      'each 202.5 x 126.5 mm, trimmed to the shapes with a 10 mm margin, wider at the sides that hold numbers. Print one of each: A1, A2, B1, B2.'
+      'each 218.5 x 128 mm, trimmed to the shapes with a 10 mm margin, wider at the sides that hold numbers. Print one of each: A1, A2, B1, B2.'
     );
     expect(readme).toContain('\nKey\nSymbols: University of Oregon symbols.\n');
     expect(readme).toContain(
       'Symbols: Lobben and Lawrence 2012, University of Oregon, GPL-3'
     );
-    // Wedges carry the braille: no tape to write.
-    expect(readme).not.toContain('Label tape:');
-    expect(readme).not.toContain('label tape top to bottom');
-    expect(readme).toContain('10 Restaurant: Plaza Cafe');
+    // The tape measured by the translator, uncontracted to start.
+    expect(readme).toMatch(
+      /Label tape: uncontracted braille \(Grade 1\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; contracted would take \d+ labels?, about \d+ mm\./
+    );
+    expect(readme).not.toContain('sized by an estimate');
+    // Each place's number on the map, a label of its own with its braille.
+    expect(readme).toMatch(/- #10 \([⠀-⣿]+, 3 cells, 26\.6 mm\): /);
+    // Each key piece's tape, its number then its name.
+    expect(readme).toContain('Key 1 plate, label tape top to bottom:');
+    expect(readme.replace(/\n- /g, ' ')).toMatch(
+      /#10 restaurant: plaza cafe\b/
+    );
     expect(readme).not.toMatch(/Abbreviations/);
+    // The map's labels in number order, wherever each number stands.
+    const listed = [...readme.matchAll(/^- #(\d+) \(/gm)].map((m) =>
+      Number(m[1])
+    );
+    expect(listed).toEqual(listed.map((_, i) => i + 1));
 
-    // A key piece is the size of its row, with no channels: its words stand
-    // on wedges.
+    // A key piece is the size of its row, its channels cut for the tape.
     const levels = await zip.file('levels_key-1.svg').async('string');
-    expect(levels).toMatch(/<g id="channels"><\/g>/);
+    expect(levels).toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
     const { triangles } = parseSTL(
       await zip.file('tactile_map_key-1.stl').async('uint8array')
     );
@@ -287,9 +322,9 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       }
       return hi - lo;
     });
-    expect(size[0]).toBeCloseTo(key.first.w, 1);
-    expect(size[1]).toBeCloseTo(key.first.h, 1);
-    expect(key.first.h).toBeLessThan(75);
+    expect(size[0]).toBeCloseTo(pieces[0].size.w, 1);
+    expect(size[1]).toBeCloseTo(pieces[0].size.h, 1);
+    expect(pieces[0].size.h).toBeLessThan(75);
     await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
       'All 25 plates are in tactile_map_plates.zip.'
     );

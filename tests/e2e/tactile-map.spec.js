@@ -1254,6 +1254,7 @@ test.describe('numbers on the map', () => {
         const panel =
           document.getElementById('tactileMapPanel').__forgeMapPanel;
         window.__sets = [];
+        window.__realRender = window.__realRender || panel.render;
         panel.render = async (parameters) => {
           window.__sets.push({
             kind: parameters.plate_kind,
@@ -1311,6 +1312,22 @@ test.describe('numbers on the map', () => {
     expect(places.length).toBeGreaterThan(0);
     expect(places.every((x) => /^\d+:\d+:[\d.]+/.test(x.braille))).toBe(true);
     expect(keys.every((x) => x.h < 75)).toBe(true);
+    // One place's piece through the engine itself: the number's wedge and
+    // the name's wedges build, dots and all.
+    const real = await page.evaluate(async () => {
+      const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+      const set = panel
+        .keyParameterSets(window.stateManager.getState().parameters)
+        .find((x) => x.parameters.number_wedges && x.parameters.braille_wedges);
+      const bytes = await window.__realRender(set.parameters, {
+        format: 'stl',
+        timeoutMs: 120000,
+      });
+      // The engine hands back an ArrayBuffer or a Uint8Array.
+      const size = bytes?.byteLength ?? 84;
+      return { id: set.id, triangles: (size - 84) / 50 };
+    });
+    expect(real.triangles, real.id).toBeGreaterThan(5000);
 
     // Braille label tape: a channel for each number on the map, no wedge.
     await labels.selectOption('tape');
