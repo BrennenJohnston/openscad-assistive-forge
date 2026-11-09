@@ -82,6 +82,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The braille card's Business card preset sets Max rows per card to the
   four rows its card holds, instead of leaving eight and warning at once
   that only four fit.
+- One form for a crossing: a crossing mapped as a point draws as a short
+  ticked line across its road, as one mapped as a way does, and one
+  standing on such a way is left to the way, so the key has one Crossing
+  row; a crossing with no marking has its own row, Crossing, unmarked;
+  and a traffic island, the plain stretch of a crossing, has no row of
+  its own: the Crossing row says the ticks pause there.
 - The names on the map paper and in the PDF no longer print over one
   another, over a tape channel, or past the sheet's edge: a name that
   cannot stand at its thing moves to the nearest clear line and a thin

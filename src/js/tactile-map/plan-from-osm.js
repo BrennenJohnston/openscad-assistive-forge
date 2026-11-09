@@ -40,6 +40,15 @@ import { DESTINATION_CONE_MM } from './symbol-library.js';
 export const NEAR_M = 30;
 /** A crossing whose end lies this close to an on walkway's end starts on. */
 export const TOUCH_MM = 2;
+/**
+ * A crossing mapped as a point draws across the nearest road or path
+ * within this reach; one standing this close to a crossing way is the
+ * way's; it runs a meter past each curb, or this long across a path.
+ */
+export const CROSSING_REACH_M = 8;
+export const CROSSING_ON_WAY_M = 2;
+export const CROSSING_PAST_CURB_M = 1;
+export const CROSSING_ACROSS_PATH_M = 6;
 /** Simplification: the largest deviation allowed. */
 export const SIMPLIFY_MM = 0.5;
 /** Lines shorter than this and areas smaller than this are left out. */
@@ -401,6 +410,12 @@ export function draftPlan({
   };
   // Stop positions, read against their platforms once every stop is in.
   const stopPositions = new Set();
+  // The roads, paths and crossing ways, for the crossings mapped as points,
+  // which wait until every way is read.
+  const roads = [];
+  const paths = [];
+  const crossingWays = [];
+  const pendingCrossings = [];
 
   for (const el of elements) {
     const t = el.tags || {};
@@ -438,6 +453,7 @@ export function draftPlan({
       if (ROAD_VALUES.includes(highway)) {
         const widthM =
           Number(t.width) > 0 ? Number(t.width) : ROAD_WIDTHS_M[highway];
+        roads.push({ points, widthM });
         // A street whose curbs would fall too close to read as two draws as
         // one line; over a whole neighborhood the streets are the map, on.
         if (streetAsOneLine(widthM)) {
@@ -469,6 +485,7 @@ export function draftPlan({
         );
       } else if (cls === 'crossing') {
         if (!rules.crossings) continue;
+        crossingWays.push(points);
         addLine(id, 'crossing', points, ticked.has('crossing'), name);
         // Near a building the crossing's marking is kept: one with none is
         // dashed, a marked one keeps the class's ticks.
@@ -479,6 +496,7 @@ export function draftPlan({
         }
       } else if (cls === 'walkway') {
         if (!rules.sidePaths) continue;
+        paths.push(points);
         addLine(id, 'walkway', points, nearCenter(points), name);
       } else if (cls === 'traffic-island') {
         if (!rules.crossings) continue;
@@ -520,7 +538,13 @@ export function draftPlan({
       }
       if (cls === 'crossing') {
         if (rules.crossings)
-          addPoint(id, 'crossing', at, ticked.has('crossing'), name);
+          pendingCrossings.push({
+            id,
+            at,
+            on: ticked.has('crossing'),
+            name,
+            tags: t,
+          });
         continue;
       }
       if (CURB_CLASSES.has(cls)) {
@@ -530,6 +554,68 @@ export function draftPlan({
       const f = addPoint(id, cls, at, landmarkOn(cls), name, t);
       if (f && cls === 'transit-stop' && t.public_transport === 'stop_position')
         stopPositions.add(f);
+    }
+  }
+
+  // A crossing mapped as a point is the thing a crossing way is: it draws
+  // as a short ticked line across the road it stands on, as wide as the
+  // road and a meter past each curb, so the key has one form for a
+  // crossing. One standing on a crossing way is the way's, which draws it.
+  // With no road near, the line runs across the nearest path; with nothing
+  // near, north to south.
+  const nearest = (lines, p, within) => {
+    let best = null;
+    for (const line of lines) {
+      for (let i = 1; i < line.points.length; i += 1) {
+        const a = line.points[i - 1];
+        const b = line.points[i];
+        const d = segmentDistance(p, a, b);
+        if (d <= within && (!best || d < best.d)) best = { d, a, b, line };
+      }
+    }
+    return best;
+  };
+  const nodeCrossings = new Set();
+  for (const { id, at, on, name, tags } of pendingCrossings) {
+    const ways = crossingWays.map((points) => ({ points }));
+    if (nearest(ways, at, CROSSING_ON_WAY_M * k)) continue;
+    const road = nearest(roads, at, CROSSING_REACH_M * k);
+    const path = road
+      ? null
+      : nearest(
+          paths.map((points) => ({ points })),
+          at,
+          CROSSING_REACH_M * k
+        );
+    const along = road || path;
+    let nx = 0;
+    let ny = 1;
+    if (along) {
+      const vx = along.b[0] - along.a[0];
+      const vy = along.b[1] - along.a[1];
+      const len = Math.hypot(vx, vy) || 1;
+      nx = -vy / len;
+      ny = vx / len;
+    }
+    const halfM = road
+      ? road.line.widthM / 2 + CROSSING_PAST_CURB_M
+      : CROSSING_ACROSS_PATH_M / 2;
+    // Never under the shortest line the draft keeps.
+    const half = Math.max(halfM * k, (MIN_LINE_MM + 1) / 2);
+    const before = features.length;
+    addLine(
+      id,
+      'crossing',
+      [
+        [at[0] - nx * half, at[1] - ny * half],
+        [at[0] + nx * half, at[1] + ny * half],
+      ],
+      on,
+      name
+    );
+    for (const f of features.slice(before)) {
+      nodeCrossings.add(f);
+      if (rules.crossingMarkings && unmarked(tags)) f.style = 'dashed';
     }
   }
 
@@ -580,6 +666,12 @@ export function draftPlan({
     if (f.class !== 'crossing' || f.on) continue;
     const ends =
       f.kind === 'line' ? [f.points[0], f.points[f.points.length - 1]] : [f.at];
+    // One drawn from a point touches by that point, the line's middle.
+    if (nodeCrossings.has(f)) {
+      const a = f.points[0];
+      const b = f.points[f.points.length - 1];
+      ends.push([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+    }
     if (ends.some(touches)) {
       f.on = true;
       f.way = true;

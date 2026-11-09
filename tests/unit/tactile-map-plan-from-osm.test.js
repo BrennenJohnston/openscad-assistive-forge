@@ -195,7 +195,7 @@ describe('draftPlan', () => {
     expect(far.on).toBe(false);
   });
 
-  it("turns a crossing touching an on walkway's end on, as a line for a way and a point for a node", () => {
+  it("turns a crossing touching an on walkway's end on, as a line for a way and a short ticked line across its path for a node", () => {
     const { plan } = DRAFT();
     const crossingWay = byId(plan, 'osm-way-3');
     expect([crossingWay.class, crossingWay.kind, crossingWay.on]).toEqual([
@@ -203,14 +203,53 @@ describe('draftPlan', () => {
       'line',
       true,
     ]);
+    // Node 12 stands on the end of Near Walk, which runs east to west and
+    // has no road near: its crossing is a 6 m line across the walk, north
+    // to south, centered on the node, on since the walk is on.
     const crossingNode = byId(plan, 'osm-node-12');
     expect([crossingNode.class, crossingNode.kind, crossingNode.on]).toEqual([
       'crossing',
-      'point',
+      'line',
       true,
     ]);
-    close(crossingNode.at[0], X(-50));
-    close(crossingNode.at[1], Y(20));
+    expect(crossingNode.points).toHaveLength(2);
+    const [p, q] = crossingNode.points;
+    close(p[0], X(-50));
+    close(q[0], X(-50));
+    close((p[1] + q[1]) / 2, Y(20));
+    close(Math.abs(q[1] - p[1]), 6 * K);
+    expect(
+      plan.features.some((f) => f.class === 'crossing' && f.kind === 'point')
+    ).toBe(false);
+  });
+
+  it('draws a crossing node on a road as a ticked line across the road, a meter past each curb, and leaves out one that stands on a crossing way', () => {
+    const { plan } = draftPlan({
+      elements: [
+        ...ELEMENTS,
+        node(21, { highway: 'crossing', crossing: 'marked' }, [0, 100]),
+        node(22, { highway: 'crossing', crossing: 'marked' }, [53, 20]),
+      ],
+      center: CENTER,
+      radiusM: 250,
+      landmarks: ['crossing'],
+      size: { w: 480, h: 360 },
+    });
+    // Pine St is 8 m wide and runs east to west: the crossing is 10 m,
+    // north to south, centered on the node.
+    const onRoad = byId(plan, 'osm-node-21');
+    expect([onRoad.class, onRoad.kind, onRoad.on]).toEqual([
+      'crossing',
+      'line',
+      true,
+    ]);
+    const [p, q] = onRoad.points;
+    close(p[0], X(0));
+    close(q[0], X(0));
+    close((p[1] + q[1]) / 2, Y(100));
+    close(Math.abs(q[1] - p[1]), 10 * K);
+    // Node 22 stands on crossing way 3, which draws it already.
+    expect(byId(plan, 'osm-node-22')).toBeUndefined();
   });
 
   it('makes a building and a park areas, off', () => {
