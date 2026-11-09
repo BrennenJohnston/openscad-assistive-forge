@@ -359,6 +359,10 @@ describe('the waiting plate and the status box', () => {
     ).elements.map(trimElement);
   const params = () => stateManager.getState().parameters;
   const DATA = { elements: [], bytes: 10, ms: 1, host: "VK Maps' server" };
+  // Making a map loads the draft code on first use, and a full board on a
+  // busy machine has stretched that past the one-second default; the case's
+  // own limit is ten seconds.
+  const MADE = { timeout: 8000 };
 
   function mountWith(extra = {}) {
     destroyMapPanel();
@@ -426,7 +430,7 @@ describe('the waiting plate and the status box', () => {
       'Make the map first.'
     );
     make().click();
-    await vi.waitFor(() => expect(editor.open).toHaveBeenCalled());
+    await vi.waitFor(() => expect(editor.open).toHaveBeenCalled(), MADE);
     expect(next().disabled).toBe(false);
   });
 
@@ -477,7 +481,7 @@ describe('the waiting plate and the status box', () => {
     await pickFirst();
     expect(params().title_text).toBe('NO MAP YET');
     make().click();
-    await vi.waitFor(() => expect(editor.open).toHaveBeenCalled());
+    await vi.waitFor(() => expect(editor.open).toHaveBeenCalled(), MADE);
     expect(params().title_text).toBe('');
     expect(getMapPlan().meta.waiting).toBeFalsy();
 
@@ -488,7 +492,7 @@ describe('the waiting plate and the status box', () => {
       parameters: { ...params(), title_text: 'Gates Center' },
     });
     make().click();
-    await vi.waitFor(() => expect(editor.open).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(editor.open).toHaveBeenCalledTimes(2), MADE);
     expect(params().title_text).toBe('Gates Center');
   });
 
@@ -503,7 +507,7 @@ describe('the waiting plate and the status box', () => {
     });
     await pickFirst();
     make().click();
-    await vi.waitFor(() => expect(editor.open).toHaveBeenCalled());
+    await vi.waitFor(() => expect(editor.open).toHaveBeenCalled(), MADE);
     const drafted = getMapPlan();
     expect(drafted.features.length).toBeGreaterThan(0);
     await pickFirst();
