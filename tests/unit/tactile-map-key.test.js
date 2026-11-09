@@ -46,6 +46,7 @@ function fixture() {
     line('w', 'walkway'),
     line('c', 'crossing'),
     line('c2', 'crossing', { style: 'dashed' }),
+    line('isl', 'traffic-island'),
     line('curb', 'curb', { on: false }),
     {
       id: 'b',
@@ -101,7 +102,7 @@ describe('keyFor', () => {
       ['point', 'Street furniture'],
       ['line', 'Walkway'],
       ['line', 'Crossing'],
-      ['line', 'Crossing'],
+      ['line', 'Crossing, unmarked'],
       ['area', 'Area'],
     ]);
     const cone = entries[0];
@@ -117,8 +118,17 @@ describe('keyFor', () => {
       10,
       true,
     ]);
-    const crossings = entries.filter((e) => e.name === 'Crossing');
+    const crossings = entries.filter((e) => e.classes[0] === 'crossing');
     expect(crossings.map((e) => e.style)).toEqual(['ticks', 'dashed']);
+    // The island is the plain stretch of a crossing, said in its row, not a
+    // row of its own.
+    expect(crossings[0].shape).toBe(
+      'a line 1.5 mm wide with short cross-ticks, middle, plain where it crosses a traffic island'
+    );
+    expect(crossings[1].shape).toBe('a dashed line 1.5 mm wide, middle');
+    expect(entries.some((e) => e.classes.includes('traffic-island'))).toBe(
+      false
+    );
     expect(entries.find((e) => e.name === 'Walkway').widthMm).toBe(1.5);
   });
 
@@ -273,7 +283,9 @@ describe('the key with a published set in use', () => {
     const key = keyFor(plan, settingsForSet('oregon-2012'));
     const row = (cls) => key.entries.find((e) => e.classes.includes(cls));
     expect(row('entrance').shape).toBe('Entrance, 13 mm');
-    expect(row('curb-ramp').shape).toBe('three rising bars, 13 mm, basic shape');
+    expect(row('curb-ramp').shape).toBe(
+      'three rising bars, 13 mm, basic shape'
+    );
     expect(key.notes).toEqual([]);
     // The basic set itself borrows nothing, so it never says so.
     setActiveSet('forge-basic');
