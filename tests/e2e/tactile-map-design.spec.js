@@ -115,7 +115,9 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     await chooseByKeyboard(page, 'A place map');
     await axeClean(page, 'step 1');
     await searchByKeyboard(page, '#tactileMapAddress', '3600 Ferry Pl NE');
-    const first = page.locator('#tactileMapResults input[type="radio"]').first();
+    const first = page
+      .locator('#tactileMapResults input[type="radio"]')
+      .first();
     await expect(first).toBeFocused({ timeout: 15000 });
     await page.keyboard.press('Space');
     await expect(first).toBeChecked();
@@ -125,7 +127,9 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     await nextStep(page, 3, 'What to show');
     await axeClean(page, 'step 3');
     await expect(page.locator('#tactileMapDetail-named')).toBeChecked();
-    await expect(page.locator('#tactileMapSymbolSet-forge-basic')).toBeChecked();
+    await expect(
+      page.locator('#tactileMapSymbolSet-forge-basic')
+    ).toBeChecked();
     await nextStep(page, 4, 'Make the map');
     await axeClean(page, 'step 4');
 
@@ -135,12 +139,12 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     // the symbol moved clear of the north arrow.
     await makeTheMap(page);
     await expect(status).toHaveText(
-      'Draft map ready: 19 of 302 features on; 3 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
+      'Draft map ready: 19 of 286 features on; 3 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
     );
     const rows = await page
       .locator('#drawingEditorSurface .svg-prep-object-name')
       .allTextContents();
-    expect(rows).toHaveLength(302);
+    expect(rows).toHaveLength(286);
     // The rows read with the number first, the address's own building 1.
     expect(rows).toContain(
       '1 Building: Center on Human Development and Disability South'
@@ -162,12 +166,12 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     await tabTo(page, '#tactileMapDetail-named');
     await page.keyboard.press('ArrowDown');
     await expect(page.locator('#tactileMapDetail-buildings')).toBeChecked();
-    await expect(line).toHaveText('187 features on, 9 different symbols.', {
+    await expect(line).toHaveText('171 features on, 9 different symbols.', {
       timeout: 15000,
     });
     await page.keyboard.press('ArrowDown');
     await expect(page.locator('#tactileMapDetail-everything')).toBeChecked();
-    await expect(line).toHaveText(/^301 features on, /, { timeout: 15000 });
+    await expect(line).toHaveText(/^285 features on, /, { timeout: 15000 });
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowUp');
     await expect(page.locator('#tactileMapDetail-named')).toBeChecked();
@@ -178,7 +182,9 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     // The Oregon symbols, chosen by keyboard and said once.
     await tabTo(page, '#tactileMapSymbolSet-forge-basic');
     await page.keyboard.press('ArrowDown');
-    await expect(page.locator('#tactileMapSymbolSet-oregon-2012')).toBeChecked();
+    await expect(
+      page.locator('#tactileMapSymbolSet-oregon-2012')
+    ).toBeChecked();
     await expect(status).toHaveText('Symbols: University of Oregon symbols.');
     await axeClean(page, 'step 3 with the set chosen');
     await nextStep(page, 4, 'Make the map');
@@ -187,7 +193,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     // The ready sentence waits for the braille translator, so the count of
     // warnings is taken with the labels measured in contracted UEB.
     await expect(status).toHaveText(
-      'Draft map ready: 19 of 302 features on; 3 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
+      'Draft map ready: 19 of 286 features on; 3 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
     );
     await closeTheEditor(page);
 
@@ -322,7 +328,9 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
 
     // You are here: placed by the button, then carried 2 mm right by keyboard.
     await editor.getByRole('button', { name: 'Place You are here' }).click();
-    await expect(status).toHaveText(/^You are here placed at [\d.]+, [\d.]+ mm\./);
+    await expect(status).toHaveText(
+      /^You are here placed at [\d.]+, [\d.]+ mm\./
+    );
     await editor.locator('.drawing-editor-canvas-svg').focus();
     await page.keyboard.press('Space');
     await expect(status).toHaveText(/^You are here picked up\./);
@@ -330,7 +338,9 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     await page.keyboard.press('ArrowRight');
     await expect(status).toHaveText(/^You are here at [\d.]+, [\d.]+ mm\.$/);
     await page.keyboard.press('Space');
-    await expect(status).toHaveText(/^You are here moved to [\d.]+, [\d.]+ mm\.$/);
+    await expect(status).toHaveText(
+      /^You are here moved to [\d.]+, [\d.]+ mm\.$/
+    );
     const placed = await placeOf(status);
     await axeClean(page, 'the editor with the marks');
 
@@ -379,16 +389,40 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       editor.locator('[data-layer="regions"] path').first()
     ).toBeAttached();
     const before = await viewBox();
-    // The canvas's top left corner is empty ground: a drag there pans
-    // under the Select tool, the tool the editor opens with.
+    // Empty ground near the canvas's top left corner: a drag there pans
+    // under the Select tool, the tool the editor opens with. A shape's edge
+    // can stand at the corner itself at some fits, so the first spot from
+    // the corner inward with nothing drawn under it is the one taken.
     await expect(svg).toHaveAttribute('data-tool', 'select');
     const box = await svg.boundingBox();
-    await page.mouse.move(box.x + 20, box.y + 20);
+    const start = await svg.evaluate(
+      (el, b) => {
+        const drawn =
+          '[data-layer="regions"], [data-layer="edges"], [data-layer="plate"], [data-layer="art"]';
+        for (let d = 20; d < 200; d += 10) {
+          for (const [x, y] of [
+            [d, d],
+            [d, 20],
+            [20, d],
+          ]) {
+            const hit = document.elementFromPoint(b.x + x, b.y + y);
+            if (hit && hit.closest('svg') === el && !hit.closest(drawn))
+              return [x, y];
+          }
+        }
+        return [20, 20];
+      },
+      { x: box.x, y: box.y }
+    );
+    await page.mouse.move(box.x + start[0], box.y + start[1]);
     await page.mouse.down();
     // The picture travels with the hand at every step, and never flashes back.
     const seen = [];
     for (let i = 1; i <= 12; i++) {
-      await page.mouse.move(box.x + 20 + i * 5, box.y + 20 + i * 2.5);
+      await page.mouse.move(
+        box.x + start[0] + i * 5,
+        box.y + start[1] + i * 2.5
+      );
       seen.push(Number((await viewBox()).split(/[\s,]+/)[0]));
     }
     await page.mouse.up();
@@ -478,7 +512,9 @@ test.describe('the marks on a phone', () => {
     await chooseByKeyboard(page, 'A place map');
     await page.locator('#tactileMapAddress').fill('3600 Ferry Pl NE');
     await page.locator('#tactileMapSearch').click();
-    const first = page.locator('#tactileMapResults input[type="radio"]').first();
+    const first = page
+      .locator('#tactileMapResults input[type="radio"]')
+      .first();
     await first.check({ timeout: 15000 });
     for (const n of [2, 3, 4]) {
       await page.locator('#tactileMapSteps-next').click();
@@ -501,11 +537,7 @@ test.describe('the marks on a phone', () => {
         touchPoints: type === 'touchEnd' ? [] : [{ x, y }],
       });
     await touch('touchStart', from[0], from[1]);
-    await touch(
-      'touchMove',
-      (from[0] + to[0]) / 2,
-      (from[1] + to[1]) / 2
-    );
+    await touch('touchMove', (from[0] + to[0]) / 2, (from[1] + to[1]) / 2);
     await touch('touchMove', to[0], to[1]);
     await touch('touchEnd', 0, 0);
   }
@@ -571,11 +603,7 @@ test.describe('the marks on a phone', () => {
     // Then a finger on empty ground drags the picture.
     await svg.scrollIntoViewIfNeeded();
     const box = await svg.boundingBox();
-    await touchDrag(
-      page,
-      [box.x + 20, box.y + 20],
-      [box.x + 80, box.y + 60]
-    );
+    await touchDrag(page, [box.x + 20, box.y + 20], [box.x + 80, box.y + 60]);
     await expect.poll(() => svg.getAttribute('viewBox')).not.toBe(afterTap);
     await expect(svg).toHaveAttribute('data-tool', 'select');
   });

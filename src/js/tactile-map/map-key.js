@@ -89,6 +89,11 @@ const LINE_WORDS = Object.freeze({
 
 const say = (n) => String(Math.round(n * 10) / 10);
 
+/** The key row of a crossing drawn dashed, one with no marking. A11Y. */
+const UNMARKED_CROSSING = 'Crossing, unmarked';
+/** Added to the Crossing row where a traffic island is on. A11Y. */
+const ISLAND_NOTE = ', plain where it crosses a traffic island';
+
 /** Said when a loaded set draws two kinds alike. A11Y. */
 const sharedShapeNote = (names) =>
   `${names.join(' and ')} share one shape in this set; the key lists them together.`;
@@ -180,23 +185,33 @@ export function keyFor(plan, settings = {}) {
     (a, b) => rank(POINT_ORDER, a.classes[0]) - rank(POINT_ORDER, b.classes[0])
   );
 
-  // Lines: one entry per class and style.
+  // Lines: one entry per class and style. A traffic island is the plain
+  // stretch of a crossing: no row of its own while a crossing row says so.
   const byLine = new Map();
-  for (const f of on.filter((x) => x.kind === 'line')) {
+  const onLines = on.filter((x) => x.kind === 'line');
+  const island = onLines.some((x) => x.class === 'traffic-island');
+  const crossingRow = onLines.some((x) => x.class === 'crossing');
+  for (const f of onLines) {
+    if (f.class === 'traffic-island' && crossingRow) continue;
     const cls = classes[f.class] || {};
     const style = f.style ?? cls.style ?? 'solid';
     const widthMm = f.width ?? cls.width ?? 1.5;
     const level = f.level ?? cls.level ?? 1;
     const key = `${f.class}|${style}|${widthMm}|${level}`;
     if (!byLine.has(key)) {
+      const unmarked = f.class === 'crossing' && style === 'dashed';
+      const pause =
+        f.class === 'crossing' && island && style !== 'dashed'
+          ? ISLAND_NOTE
+          : '';
       byLine.set(key, {
         kind: 'line',
         classes: [f.class],
-        name: className(f.class),
+        name: unmarked ? UNMARKED_CROSSING : className(f.class),
         style,
         widthMm,
         level,
-        shape: `${(LINE_WORDS[style] || LINE_WORDS.solid)(say(widthMm))}, ${LEVEL_WORDS[level] || 'low'}`,
+        shape: `${(LINE_WORDS[style] || LINE_WORDS.solid)(say(widthMm))}, ${LEVEL_WORDS[level] || 'low'}${pause}`,
       });
     }
   }
