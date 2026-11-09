@@ -138,6 +138,15 @@ const workerSettled = (page) =>
   );
 
 /**
+ * This page was loaded under the worker registered at the app's own address,
+ * already activated, and that worker is the only one. The address and state
+ * are read by an init script as the page starts.
+ */
+const loadedUnderOwnWorker = async (page) =>
+  (await readPage(page, () => window.__loadedUnder, null)) ===
+    '/sw.js activated' && (await workerSettled(page));
+
+/**
  * A page that reloads itself when a newer worker takes charge can abort a
  * navigation started in the same moment (the test's next-version worker is
  * registered under two addresses in turn, so it takes charge twice); after
@@ -175,6 +184,11 @@ test('prod-engine-cache: a downloaded engine stays through a service worker upda
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    const worker = navigator.serviceWorker?.controller;
+    const url = worker ? new URL(worker.scriptURL) : null;
+    window.__loadedUnder = url
+      ? `${url.pathname}${url.search} ${worker.state}`
+      : null;
   });
   const builds = [];
   page.on('console', (message) => {
@@ -231,11 +245,18 @@ test('prod-engine-cache: a downloaded engine stays through a service worker upda
     .poll(() => cacheNames(page), { timeout: 30_000 })
     .not.toContain(oldCache);
   expect(await keptFiles(page)).toEqual(KEPT_FILES);
+  // The page registers its own address on every load, so that reload
+  // installs the next version once more, under /sw.js, and reloads the page
+  // again when it takes charge. Both happen while the route still answers:
+  // a takeover still running when the route went reloaded the next load
+  // midway, and the page started in Recovery Mode.
+  await expect
+    .poll(() => loadedUnderOwnWorker(page), { timeout: 60_000 })
+    .toBe(true);
   await context.unroute('**/sw.js*');
 
-  // Chosen, then loaded online until one worker is in charge again (the
-  // page registers its own address, an update of its own), so the app's
-  // files are in that worker's cache; the kept engine is still there.
+  // Chosen, then loaded online with that one worker in charge, so the app's
+  // files are in its cache; the kept engine is still there.
   await page.evaluate(
     (id) => localStorage.setItem('openscad-forge-engine', id),
     KEPT_ENGINE

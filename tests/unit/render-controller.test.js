@@ -161,8 +161,6 @@ describe('RenderController', () => {
   it('cancels the current render request (soft cancel path)', () => {
     const controller = new RenderController()
     controller.worker = { postMessage: vi.fn(), terminate: vi.fn() }
-    // Prevent the 200 ms watchdog from calling _hardCancelAndReinit after the test ends.
-    controller._hardCancelAndReinit = vi.fn().mockResolvedValue(undefined)
     const reject = vi.fn()
     controller.currentRequest = { id: 'render-3', reject }
 
@@ -174,6 +172,10 @@ describe('RenderController', () => {
     })
     expect(controller.currentRequest).toBeNull()
     expect(reject).toHaveBeenCalled()
+    // The soft cancel leaves its 200 ms watchdog running. Left alone it
+    // fired only as the file closed, and its warning was sometimes still on
+    // its way when Vitest shut the worker down.
+    clearTimeout(controller._cancelWatchdogHandle)
   })
   
   it('handles memory warning callback', () => {
@@ -1204,10 +1206,9 @@ describe('Binary STL Detection', () => {
 })
 
 describe('a restart that fails does not stop later renders', () => {
-  // The file's last case, and it logs each failed attempt and, last of all,
-  // the finished render (console.debug). Every console method is held here,
-  // so no write is still in flight when the file ends and Vitest closes its
-  // channel to the worker.
+  // It logs each failed attempt and, last of all, the finished render
+  // (console.debug). Every console method is held here, so none of that
+  // reaches the board's output.
   let errorSpy
   beforeEach(() => {
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
