@@ -137,10 +137,13 @@ describe('keyPieces', () => {
           return { x: Number(x) / 10, y: Number(y) / 10, rest };
         })
       : [];
+  /** A row's pieces: the first by its name, then its lines' pieces. */
+  const piecesOfRow = (all, name) =>
+    all.filter((p) => p.name === name || p.name.startsWith(`${name}, line `));
 
   it('lays the key out a row a piece: the title, the kinds, then the numbered places, each its own piece', () => {
     const key = keyFor(plan());
-    const all = pieces('wedge');
+    const all = pieces('tape');
     expect(all).toHaveLength(1 + key.entries.length + key.numbers.length);
     expect(all.map((p) => p.id)).toEqual(all.map((_, i) => `key-${i + 1}`));
     expect(all[0].name).toBe('Key: Station');
@@ -157,11 +160,12 @@ describe('keyPieces', () => {
 
   it("with braille wedges: the number's wedge at the left, the name on wedges in contracted braille to its right, both on one reading line", () => {
     const key = keyFor(plan());
-    const last = pieces('wedge').at(-1);
     const n = key.numbers.at(-1);
+    const row = piecesOfRow(pieces('wedge'), `${n.number} ${n.name}`);
+    const [last] = row;
     const [number] = rowsOf(last.wedges);
     expect(number.rest).toEqual([String(n.number)]);
-    const words = rowsOf(last.brailleWedges);
+    const words = row.flatMap((p) => rowsOf(p.brailleWedges));
     expect(words.length).toBeGreaterThan(0);
     // The first line of the name stands on the number's reading line.
     expect(words[0].y).toBeCloseTo(number.y, 6);
@@ -177,10 +181,41 @@ describe('keyPieces', () => {
     expect(dots(bits)).toEqual(dots(want));
     expect(last.print).toBe('');
     expect(last.tape).toEqual([]);
-    expect(last.marks.map((m) => Boolean(m.number))).toEqual([
+    expect(row.flatMap((p) => p.marks.map((m) => Boolean(m.number)))).toEqual([
       true,
       ...words.map(() => false),
     ]);
+  });
+
+  it("with braille wedges, gives each line of a long name a piece of its own in the name's column, so no wedge stands behind another", () => {
+    const key = keyFor(plan());
+    const n = key.numbers.find((k) => /Montlake/.test(k.name));
+    const name = `${n.number} ${n.name}`;
+    const all = pieces('wedge', { maxWidthMm: 120 });
+    const row = piecesOfRow(all, name);
+    expect(row.length).toBeGreaterThan(1);
+    expect(row.map((p) => p.name)).toEqual(
+      row.map((_, g) => (g ? `${name}, line ${g + 1}` : name))
+    );
+    for (const p of row) expect(rowsOf(p.brailleWedges)).toHaveLength(1);
+    // Only the first piece carries the number.
+    expect(row.map((p) => rowsOf(p.wedges).length)).toEqual(
+      row.map((_, g) => (g ? 0 : 1))
+    );
+    // Every line starts at the name's column.
+    const starts = row.map((p) => {
+      const m = p.marks.find((mark) => !mark.number);
+      return m.wedge.x - m.wedge.w / 2;
+    });
+    for (const x of starts) expect(x).toBeCloseTo(starts[0], 6);
+    expect(all.map((p) => p.id)).toEqual(all.map((_, i) => `key-${i + 1}`));
+    // Tape and raised letters keep a long name's lines on one piece.
+    for (const style of ['tape', 'raised']) {
+      expect(
+        piecesOfRow(pieces(style, { maxWidthMm: 120 }), name),
+        style
+      ).toHaveLength(1);
+    }
   });
 
   it('with label tape: a channel for the braille number, then the name on tape to its right, 9.525 mm apart, the texts in that order', () => {
@@ -270,7 +305,7 @@ describe('keyPieces', () => {
       const clinic = all.find((p) => /Montlake/.test(p.name));
       const lines =
         style === 'wedge'
-          ? rowsOf(clinic.brailleWedges).length
+          ? piecesOfRow(all, clinic.name).length
           : style === 'tape'
             ? clinic.tape.length - 1
             : wordsOf(clinic).length - 1;

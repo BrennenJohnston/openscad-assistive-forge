@@ -50,8 +50,8 @@ export const channelLengthMm = (cells) =>
 /**
  * The wedge's constants, the model's (tactile_map.scad, from the embosser's
  * `label_wedge`): the back's angle, the flat top, the face's margins, the
- * dots. The two dials and their ranges are the model's too; the foot's
- * start is a placeholder until the owner's print decides it.
+ * dots. The two dials, their ranges and their starts are the model's too:
+ * a 6 mm foot at 75 degrees. A test keeps the two files equal.
  */
 export const WEDGE = Object.freeze({
   backAngleDeg: 60,
@@ -61,7 +61,7 @@ export const WEDGE = Object.freeze({
   dotPitchMm: 2.5,
   dotBaseMm: 1.5,
   cellPitchMm: 6.5,
-  footMm: Object.freeze({ start: 2, min: 2, max: 12 }),
+  footMm: Object.freeze({ start: 6, min: 2, max: 12 }),
   angleDeg: Object.freeze({ start: 75, min: 45, max: 90 }),
 });
 

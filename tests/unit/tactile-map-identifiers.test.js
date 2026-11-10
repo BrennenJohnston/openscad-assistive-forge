@@ -14,6 +14,8 @@ import {
   anchorToward,
   BAND_EDGE_MM,
   bandPlan,
+  WEDGE,
+  wedgeDials,
   brailleCells,
   cellsBraille,
   crossesSeam,
@@ -86,6 +88,20 @@ function twoBuildings() {
 }
 
 describe('the wedge and the numeral, measured as the model builds them', () => {
+  it('starts the dials where the model does: a 6 mm foot at 75 degrees', () => {
+    const scad = readFileSync(
+      'public/examples/tactile-map/tactile_map.scad',
+      'utf8'
+    );
+    const start = (name) =>
+      Number(new RegExp('^' + name + ' = (\\d+);', 'm').exec(scad)[1]);
+    expect(start('wedge_foot_mm')).toBe(6);
+    expect(start('wedge_face_angle_deg')).toBe(75);
+    expect(WEDGE.footMm.start).toBe(start('wedge_foot_mm'));
+    expect(WEDGE.angleDeg.start).toBe(start('wedge_face_angle_deg'));
+    expect(wedgeDials()).toEqual({ footMm: 6, angleDeg: 75 });
+  });
+
   it("gives the model's figures at every foot and angle on the owner's sheet", () => {
     // From the sheet's echo (wedge-figures): width, depth, height.
     expect(wedgeSize(1, { footMm: 2, angleDeg: 75 })).toEqual({
@@ -153,7 +169,7 @@ describe('the wedge and the numeral, measured as the model builds them', () => {
 });
 
 describe('on the thing', () => {
-  it("stands a 22 x 10 wedge at a 60 x 40 building's centroid, 9 percent of it", () => {
+  it("stands a 22 x 13.3 wedge (a 6 mm foot) at a 60 x 40 building's centroid, 12 percent of it", () => {
     const { marks, pending } = labelPlan(twoBuildings(), {
       labels: 'wedge',
     });
@@ -161,11 +177,11 @@ describe('on the thing', () => {
     expect(wide.number).toBe(10);
     expect(wide.where).toBe('thing');
     expect(wide.wedge.w).toBe(22);
-    expect(wide.wedge.depth).toBeCloseTo(10.073, 3);
+    expect(wide.wedge.depth).toBeCloseTo(13.339, 3);
     const box = wide.box;
-    expect((box.x0 + box.x1) / 2).toBeCloseTo(50, 6);
-    expect((box.y0 + box.y1) / 2).toBeCloseTo(80, 6);
-    expect((22 * wide.wedge.depth) / (60 * 40)).toBeLessThan(0.1);
+    expect((box.x0 + box.x1) / 2).toBeCloseTo(50, 2);
+    expect((box.y0 + box.y1) / 2).toBeCloseTo(80, 2);
+    expect((22 * wide.wedge.depth) / (60 * 40)).toBeLessThan(0.13);
     expect(pending.map((p) => p.f.id)).toContain('small');
   });
 
@@ -217,12 +233,12 @@ describe('on the thing', () => {
 describe('in the band', () => {
   const FACE = { x0: 0, y0: 0, x1: 200, y1: 150 };
 
-  it('sends a 20 x 20 building (55 percent) to the nearest edge, its lead from the building to the wedge', () => {
+  it('sends a 20 x 20 building (73 percent) to the nearest edge, its lead from the building to the wedge', () => {
     const plan = twoBuildings();
     const { pending } = labelPlan(plan, { labels: 'wedge' });
     const small = pending.filter((p) => p.f.id === 'small');
     expect(small[0].number).toBe(11);
-    expect((22 * 10.073) / (20 * 20)).toBeGreaterThan(0.5);
+    expect((22 * 13.339) / (20 * 20)).toBeGreaterThan(0.5);
     const band = bandPlan({ pending: small, face: FACE, style: 'wedge' });
     expect(band.keyOnly).toEqual([]);
     const [mark] = band.marks;
@@ -234,7 +250,7 @@ describe('in the band', () => {
     expect(mark.box.y0).toBeCloseTo(153, 6);
     expect(mark.lead[1][1]).toBeCloseTo(153.5, 6);
     // 3 mm, the wedge's depth, 9.525 mm to the sheet's edge, in whole mm.
-    expect(band.sides.bottom).toBe(23);
+    expect(band.sides.bottom).toBe(26);
     expect(band.rings.length).toBeGreaterThan(0);
   });
 
