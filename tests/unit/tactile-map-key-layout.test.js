@@ -18,6 +18,7 @@ import {
   wrapPrint,
 } from '../../src/js/tactile-map/key-layout.js';
 import { brailleCells } from '../../src/js/tactile-map/identifiers.js';
+import { signRowWidthMm } from '../../src/js/sign-letter-metrics.js';
 import { emptyPlan } from '../../src/js/tactile-map/plan.js';
 
 function plan() {
@@ -89,6 +90,25 @@ describe('wrapPrint', () => {
       'FERRY',
       'PLACE',
       'NORTHEAST',
+    ]);
+  });
+
+  it('fills each line: after a break the words join the next line as long as they fit', () => {
+    const text = 'KEY: CENTER ON HUMAN DEVELOPMENT AND DISABILITY SOUTH';
+    const lines = wrapPrint(text, 231, 16);
+    expect(lines.join(' ')).toBe(text);
+    const width = (s) =>
+      signRowWidthMm(s, { charHeightMm: 16, letterSpacing: 1.21 });
+    lines.forEach((line, k) => {
+      expect(width(line), line).toBeLessThanOrEqual(231);
+      if (k + 1 < lines.length) {
+        const next = `${line} ${lines[k + 1].split(' ')[0]}`;
+        expect(width(next), next).toBeGreaterThan(231);
+      }
+    });
+    expect(wrapPrint('RESTAURANT: PLAZA CAFE', 231, 16)).toEqual([
+      'RESTAURANT:',
+      'PLAZA CAFE',
     ]);
   });
 });
@@ -201,6 +221,33 @@ describe('keyPieces', () => {
     expect(words[1].x).toBeGreaterThan(words[0].x);
     expect(last.tape).toEqual([]);
     expect(last.wedges).toBe('');
+  });
+
+  it('stands a raised numeral on a line of its own when a word of the name is too wide beside it, so no word breaks', () => {
+    const key = {
+      entries: [],
+      numbers: Array.from({ length: 13 }, (_, i) => ({
+        number: i + 1,
+        featureId: `f${i}`,
+        name: i === 12 ? 'Information: Experimental' : `P${i + 1}`,
+      })),
+    };
+    const last = keyPieces(key, { style: 'raised' }).at(-1);
+    const words = wordsOf(last);
+    expect(words[0].text).toBe('#13');
+    expect(words[1].baseline).toBeGreaterThan(words[0].baseline);
+    expect(
+      words
+        .slice(1)
+        .map((w) => w.text)
+        .join(' ')
+    ).toBe('INFORMATION: EXPERIMENTAL');
+    // A short name keeps its numeral beside it.
+    const short = keyPieces(key, { style: 'raised' }).at(-2);
+    expect(wordsOf(short)[1].baseline).toBeCloseTo(
+      wordsOf(short)[0].baseline,
+      1
+    );
   });
 
   it("gives a kind's row its sample at the left and its name in the form chosen", () => {
