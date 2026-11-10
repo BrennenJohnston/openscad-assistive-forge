@@ -1908,10 +1908,14 @@ test.describe("the draft keeps the editor's changes", () => {
     const reopen = async () => {
       await goToStep(page, 4);
       await page.locator('#tactileMapMake').click();
+      // A closed editor keeps its purpose; it is open when it shows, which
+      // on a slow runner takes seconds for a draft of 286 rows.
       await expect(editor).toHaveAttribute('data-purpose', 'map', {
         timeout: 60000,
       });
-      await expect(page.locator('#drawingEditorSurface')).toBeVisible();
+      await expect(page.locator('#drawingEditorSurface')).toBeVisible({
+        timeout: 60000,
+      });
     };
     const close = async () => {
       await page.keyboard.press('Escape');
