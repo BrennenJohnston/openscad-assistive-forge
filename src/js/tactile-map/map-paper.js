@@ -23,6 +23,7 @@ import { ringsToPathData } from '../ring-geometry.js';
 import { featureNames } from './feature-names.js';
 import { LETTER_SPACING } from './key-layout.js';
 import { numberedName } from './map-numbers.js';
+import { wedgeDots } from './identifiers.js';
 import { signRowWidthMm } from '../sign-letter-metrics.js';
 
 /** The capitals' height of a name on the paper (mm). */
@@ -385,6 +386,8 @@ export function paperWords(print, letterMm, plateH) {
  * @param {Array<{text: string, at: number[]}>} [input.texts]
  * @param {ReturnType<typeof paperChannels>} [input.channels]
  * @param {ReturnType<typeof paperWords>} [input.words]
+ * @param {object[]} [input.marks] - The numbers on the plate (identifiers.js),
+ *   its wedges drawn with their braille laid flat, as a sighted helper reads it
  * @param {boolean} [input.channelsThrough] - The channels cut right
  *   through the plate: drawn with a dashed edge
  * @param {string} [input.title]
@@ -398,6 +401,7 @@ export function mapPaperSvg({
   texts = [],
   channels = [],
   words = [],
+  marks = [],
   channelsThrough = false,
   title = '',
   plateId = '',
@@ -418,6 +422,7 @@ export function mapPaperSvg({
     ['level2', c.level2],
     ['level3', c.level3],
     ['here', c.ink],
+    ['leads', c.ink],
   ]) {
     const list = rings?.[key] || [];
     const body = list.length ? `<path d="${ringsToPathData(list, 3)}"/>` : '';
@@ -446,6 +451,24 @@ export function mapPaperSvg({
     }
   }
   parts.push(`<g id="paper-channels">${channelParts.join('')}</g>`);
+  // A wedge from above, its braille laid flat on it, a dot a circle.
+  parts.push(
+    `<g id="paper-wedges" stroke="${c.ink}" stroke-width="0.3">` +
+      marks
+        .filter((m) => m.wedge)
+        .map((m) => {
+          const { x, y, w: ww, depth } = m.wedge;
+          const dots = wedgeDots(m.wedge)
+            .map(
+              ([dx, dy]) =>
+                `<circle cx="${say(dx)}" cy="${say(dy)}" r="0.6" fill="${c.ink}" stroke="none"/>`
+            )
+            .join('');
+          return `<rect x="${say(x - ww / 2)}" y="${say(y - depth)}" width="${say(ww)}" height="${say(depth)}" fill="${c.ground}"/>${dots}`;
+        })
+        .join('') +
+      '</g>'
+  );
   // A name moved off its thing points back to it.
   parts.push(
     `<g id="paper-leaders" stroke="${c.faint}" stroke-width="0.3">` +
@@ -473,14 +496,17 @@ export function mapPaperSvg({
       words
         .map(
           // At the width the model prints the row (the sign's measure), so
-          // a letter falls on the paper where it falls on the plate.
+          // a letter falls on the paper where it falls on the plate. A number
+          // ("#12") is bold and centered on its place, as the model's.
           (r) =>
-            `<text x="${say(r.x)}" y="${say(r.y)}" font-size="${say(r.h / CAP_OF_SIZE)}" textLength="${say(
-              signRowWidthMm(String(r.text), {
-                charHeightMm: r.h,
-                letterSpacing: LETTER_SPACING,
-              })
-            )}" lengthAdjust="spacingAndGlyphs">${escapeXml(r.text)}</text>`
+            String(r.text).startsWith('#') && r.text.length > 1
+              ? `<text x="${say(r.x)}" y="${say(r.y)}" font-size="${say(r.h / CAP_OF_SIZE)}" font-weight="700" text-anchor="middle">${escapeXml(r.text.slice(1))}</text>`
+              : `<text x="${say(r.x)}" y="${say(r.y)}" font-size="${say(r.h / CAP_OF_SIZE)}" textLength="${say(
+                  signRowWidthMm(String(r.text), {
+                    charHeightMm: r.h,
+                    letterSpacing: LETTER_SPACING,
+                  })
+                )}" lengthAdjust="spacingAndGlyphs">${escapeXml(r.text)}</text>`
         )
         .join('') +
       '</g>'

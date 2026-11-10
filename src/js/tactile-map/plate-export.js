@@ -14,6 +14,7 @@ import { keyLabel } from './key-layout.js';
 import { plateLevelsSvg, titleLabel } from './plate-tiling.js';
 import { levelsSvgFromRings } from './levels-svg.js';
 import { plateRows, rowsText } from './sheet.js';
+import { wedgeRows } from './identifiers.js';
 import { TAPE_GRADES, gradeOf } from './tape-cells.js';
 import { ATTRIBUTION } from './overpass.js';
 import { TRANSIT_STRINGS } from './transit.js';
@@ -117,6 +118,7 @@ export function plateRoles(plate, layout, northCue) {
  * @param {Object} input
  * @param {Object} input.rings - buildLevelRings(...).rings, in the sheet's frame
  * @param {Array<[number, number]>} [input.cones] - Cone centers, sheet mm
+ * @param {object[]} [input.marks] - The numbers (identifiers.js), sheet frame
  * @param {Array<[number, number, number, number, string]>} [input.rows] - The
  *   sheet's raised words (sheet.js titleRows), split per plate
  * @param {number|null} [input.sheetH] - The sheet's height, for the rows
@@ -132,6 +134,7 @@ export function plateRoles(plate, layout, northCue) {
 export function plateParameterSets({
   rings,
   cones = [],
+  marks = [],
   rows = [],
   sheetH = null,
   titleInside = true,
@@ -161,6 +164,9 @@ export function plateParameterSets({
         lastCol: plate.col === last.col,
         lastRow: plate.row === last.row,
       });
+    }
+    if (config.numberWedgesParam) {
+      next[config.numberWedgesParam] = wedgeRows(marks, plate);
     }
     if (config.raisedWordsParam) {
       next[config.raisedWordsParam] = rowsText(
@@ -223,6 +229,7 @@ export function titlePlateSets({
       },
     };
     if (config.coneMarksParam) next[config.coneMarksParam] = '';
+    if (config.numberWedgesParam) next[config.numberWedgesParam] = '';
     const held = plateRows(rows, plate, sheetH);
     if (config.raisedWordsParam) {
       next[config.raisedWordsParam] = rowsText(held);
@@ -281,7 +288,9 @@ const GRID_FILLS = {
   level2: '#8f8f8f',
   level3: '#3a3a3a',
   here: '#000000',
+  leads: '#000000',
 };
+const round = (v) => Math.round(v * 1000) / 1000;
 const GRID_RED = '#c81e1e';
 const GRID_BLUE = '#1b6ac9';
 const GRID_FONT = 'Liberation Sans, Arial, sans-serif';
@@ -302,12 +311,13 @@ const escapeXml = (text) =>
  * @param {{ rows: number, cols: number, plateW: number, plateH: number, plates: Array<{id: string, x: number, y: number, w: number, h: number}> }} input.layout
  * @param {{ w: number, h: number }} input.size - The whole map
  * @param {string} input.bedName
+ * @param {object[]} [input.marks] - The numbers (identifiers.js), sheet frame
  * @returns {string} SVG text
  */
-export function plateGridSvg({ rings, layout, size, bedName }) {
+export function plateGridSvg({ rings, layout, size, bedName, marks = [] }) {
   const { w, h } = size;
   let body = '';
-  for (const level of ['level1', 'level2', 'level3', 'here']) {
+  for (const level of ['level1', 'level2', 'level3', 'here', 'leads']) {
     const list = rings[level] || [];
     if (list.length) {
       body += `<path d="${ringsToPathData(list, 3)}" fill="${GRID_FILLS[level]}" fill-rule="nonzero"/>`;
@@ -318,6 +328,12 @@ export function plateGridSvg({ rings, layout, size, bedName }) {
   const channels = [...(rings.channels || []), ...(rings.cutouts || [])];
   if (channels.length) {
     body += `<path d="${ringsToPathData(channels, 3)}" fill="none" stroke="${GRID_BLUE}" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+  }
+  // Each number's box, with its number, where it stands.
+  for (const m of marks) {
+    const b = m.box;
+    body += `<rect x="${b.x0}" y="${b.y0}" width="${round(b.x1 - b.x0)}" height="${round(b.y1 - b.y0)}" fill="none" stroke="#000000" stroke-width="0.8"/>`;
+    body += `<text x="${round((b.x0 + b.x1) / 2)}" y="${b.y1 - 2}" font-family="${GRID_FONT}" font-size="8" font-weight="700" text-anchor="middle" fill="#000000">${m.number}</text>`;
   }
   for (const p of [...(layout.titlePlates || []), ...layout.plates]) {
     const name = p.title ? titleLabel(p.id) : p.id;
@@ -423,6 +439,8 @@ function aboutOf(about) {
  * @param {string[]} [input.unspelled] - names the PDF's fonts could not spell
  * @param {number} [input.trimMm] - the margin kept when the sheet was
  *   trimmed to the shapes; nothing when it was not
+ * @param {boolean} [input.numbersInMargin] - a side of the margin widened
+ *   for the places' numbers standing in it
  * @param {object} [input.tape] - the labels' tape as `tapeSentence` takes
  *   it, with `failed` when the braille engine did not load
  * @param {boolean} [input.channelsThrough] - the channels cut right through
@@ -443,6 +461,7 @@ export function readmeText({
   pdfName = '',
   unspelled = [],
   trimMm = 0,
+  numbersInMargin = false,
   tape = null,
   channelsThrough = false,
   blankTitles = [],
@@ -469,7 +488,9 @@ export function readmeText({
     (lead ? `${lead}\n` : '') +
     `${mapName}: ${n} ${n === 1 ? 'plate' : 'plates'} for a ${bedName} bed, ` +
     `each ${layout.plateW} x ${layout.plateH} mm` +
-    (trimMm ? `, trimmed to the shapes with a ${trimMm} mm margin. ` : '. ') +
+    (trimMm
+      ? `, trimmed to the shapes with a ${trimMm} mm margin${numbersInMargin ? ', wider at the sides that hold numbers' : ''}. `
+      : '. ') +
     `Print one of each: ${ids}. ` +
     titleNote +
     blankNote +

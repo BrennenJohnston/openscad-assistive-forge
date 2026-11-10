@@ -22,6 +22,9 @@
     "keyLetterParam": "key_letter_height_mm",
     "coneMarksParam": "cone_marks",
     "numberWedgesParam": "number_wedges",
+    "brailleWedgesParam": "braille_wedges",
+    "wedgeFootParam": "wedge_foot_mm",
+    "wedgeAngleParam": "wedge_face_angle_deg",
     "marginParam": "margin_mm",
     "titleBandParam": "title_band_mm"
   },

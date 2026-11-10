@@ -17,6 +17,7 @@ import { PdfWriter, textWidthMm } from './pdf-writer.js';
 import { THROUGH_DASH_MM, THROUGH_GAP_MM, leaderEnd } from './map-paper.js';
 import { LETTER_SPACING } from './key-layout.js';
 import { signRowWidthMm } from '../sign-letter-metrics.js';
+import { wedgeDots } from './identifiers.js';
 
 /** The papers offered, sideways, the first the default. */
 export const PAPER_SIZES = Object.freeze([
@@ -74,6 +75,7 @@ function drawPlate(w, data, { x, y, scale, colors, seams }) {
     ['level2', colors.level2],
     ['level3', colors.level3],
     ['here', null],
+    ['leads', null],
   ]) {
     w.polygons(map(data.rings?.[key]), {
       fill: token ? colorOf(token) : INK,
@@ -141,7 +143,36 @@ function drawPlate(w, data, { x, y, scale, colors, seams }) {
       }
     );
   }
+  // A wedge from above, its braille laid flat on it.
+  for (const m of data.marks || []) {
+    if (!m.wedge) continue;
+    const { x: wx, y: wy, w: ww, depth } = m.wedge;
+    w.rect(px(wx - ww / 2), py(wy - depth), ww * s, depth * s, {
+      stroke: INK,
+      fill: [1, 1, 1],
+      widthMm: 0.3,
+    });
+    for (const [dx, dy] of wedgeDots(m.wedge)) {
+      w.circle(px(dx), py(dy), 0.6 * s);
+    }
+  }
   for (const r of data.words || []) {
+    const text = String(r.text);
+    if (text.length > 1 && text[0] === '#') {
+      // A number, bold and centered on its place, as the model raises it.
+      w.text(
+        px(r.x),
+        py(r.y),
+        (r.h / CAP_OF_SIZE) * s * PT_OF_MM,
+        text.slice(1),
+        {
+          align: 'center',
+          bold: true,
+          color: INK,
+        }
+      );
+      continue;
+    }
     // At the width the model prints the row (the sign's measure), so a
     // letter falls on the page where it falls on the plate.
     w.text(px(r.x), py(r.y), (r.h / CAP_OF_SIZE) * s * PT_OF_MM, r.text, {

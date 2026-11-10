@@ -249,26 +249,21 @@ test.describe('Tactile Map tile', () => {
       timeout: WASM_READY_TIMEOUT,
     });
     await goToStep(page, 5);
+    // The tape's choices stand while label tape is chosen.
     const cut = page.locator('#tactileMapChannelCut');
+    await expect(cut).toBeHidden();
+    await page.locator('#tactileMapLabels').selectOption('tape');
+    await expect(cut).toBeVisible();
     await expect(cut).toHaveValue('recess');
     await expect(page.locator('label[for="tactileMapChannelCut"]')).toHaveText(
       'Tape channels'
     );
-    // The empty note takes no room: the next control stands as far under this
-    // select as any other control does under its own.
-    const gapUnder = (select, label) =>
-      page.evaluate(
-        ([s, l]) =>
-          document.querySelector(l).getBoundingClientRect().top -
-          document.querySelector(s).getBoundingClientRect().bottom,
-        [select, label]
-      );
+    // The empty note takes no room.
     expect(
-      await gapUnder('#tactileMapChannelCut', 'label[for="tactileMapKeyWords"]')
-    ).toBeCloseTo(
-      await gapUnder('#tactileMapIdStyle', 'label[for="tactileMapTapeGrade"]'),
-      1
-    );
+      await page
+        .locator('#tactileMapChannelNote')
+        .evaluate((n) => n.getBoundingClientRect().height)
+    ).toBe(0);
     const levels = () =>
       page.evaluate(() => {
         const d = window.stateManager.getState().parameters.map_file?.data;
@@ -684,6 +679,90 @@ test.describe('the map data row', () => {
   });
 });
 
+/**
+ * The draft at 3600 Ferry Pl NE from the real tiles, the editor closed, at
+ * step 5. Hands back the address step's status line.
+ */
+async function makeFerryDraft(page) {
+  const TILES = {
+    5250: readFileSync(
+      'tests/fixtures/tactile-map/sourdough-15-5250-11438.mvt'
+    ),
+    5251: readFileSync(
+      'tests/fixtures/tactile-map/sourdough-15-5251-11438.mvt'
+    ),
+  };
+  await page.route('https://nominatim.openstreetmap.org/search*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify([
+        {
+          place_id: 1,
+          lat: '47.6481285',
+          lon: '-122.3086726',
+          type: 'building',
+          importance: 0.5,
+          display_name:
+            'Center on Human Development and Disability South, 3600, Ferry Place Northeast, Seattle, Washington, 98195, United States',
+        },
+      ]),
+    })
+  );
+  await page.route('https://tiles.openstreetmap.us/**', (route) => {
+    const x = route
+      .request()
+      .url()
+      .match(/\/15\/(\d+)\/11438\.mvt$/)?.[1];
+    const body = TILES[x];
+    return route.fulfill({
+      status: body ? 200 : 204,
+      contentType: 'application/vnd.mapbox-vector-tile',
+      headers: { 'access-control-allow-origin': '*' },
+      body: body || '',
+    });
+  });
+  await openTactileMap(page, 'place');
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: WASM_READY_TIMEOUT,
+  });
+  await page.locator('#tactileMapAddress').fill('3600 Ferry Pl NE, Seattle');
+  await page.locator('#tactileMapSearch').click();
+  await page.locator('#tactileMapPlace1').check();
+  await goToStep(page, 4);
+  await page.locator('#tactileMapMake').click();
+  const status = page.locator('#tactileMapAddressStatus');
+  await expect(status).toContainText('Draft map ready: ', { timeout: 15000 });
+  await expect(status).toHaveText(
+    / The key has \d+ symbols and \d+ numbered places\.$/
+  );
+  await expect(
+    page.locator('#drawingEditorSurface .drawing-editor').first()
+  ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });
+  await page.keyboard.press('Escape');
+  await goToStep(page, 5);
+  return status;
+}
+
+/** The plate shown's levels file and rows, as the model is handed them. */
+function shownPlate(page) {
+  return page.evaluate(() => {
+    const p = window.stateManager.getState().parameters;
+    const d = p.map_file?.data || '';
+    const body = d.split(',')[1] || '';
+    return {
+      wedges: p.number_wedges,
+      words: p.raised_words,
+      levels: d.includes(';base64,') ? atob(body) : decodeURIComponent(body),
+      paper:
+        document.getElementById('tactileMapPanel').__forgeMapPanel.paper?.svg ||
+        '',
+    };
+  });
+}
+
 test.describe('the draft map', () => {
   const OVERPASS = readFileSync(
     'tests/fixtures/tactile-map/overpass-20.json',
@@ -985,74 +1064,33 @@ test.describe('the draft map', () => {
     ).toEqual([]);
   });
 
-  test('the key and the labels at 3600 Ferry Pl NE: channels beside the named places, the key listed after the plates, its braille on tape in channels, previewed in the tile Key mode', async ({
+  test("the key and the labels at 3600 Ferry Pl NE on label tape: a channel for each place's braille number on the map, the key a row a piece, the number then the name on tape, previewed in the tile Key mode", async ({
     page,
   }) => {
     test.setTimeout(240_000);
-    const TILES = {
-      5250: readFileSync(
-        'tests/fixtures/tactile-map/sourdough-15-5250-11438.mvt'
-      ),
-      5251: readFileSync(
-        'tests/fixtures/tactile-map/sourdough-15-5251-11438.mvt'
-      ),
-    };
-    await page.route('https://nominatim.openstreetmap.org/search*', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        headers: { 'access-control-allow-origin': '*' },
-        body: JSON.stringify([
-          {
-            place_id: 1,
-            lat: '47.6481285',
-            lon: '-122.3086726',
-            type: 'building',
-            importance: 0.5,
-            display_name:
-              'Center on Human Development and Disability South, 3600, Ferry Place Northeast, Seattle, Washington, 98195, United States',
-          },
-        ]),
-      })
-    );
-    await page.route('https://tiles.openstreetmap.us/**', (route) => {
-      const x = route
-        .request()
-        .url()
-        .match(/\/15\/(\d+)\/11438\.mvt$/)?.[1];
-      const body = TILES[x];
-      return route.fulfill({
-        status: body ? 200 : 204,
-        contentType: 'application/vnd.mapbox-vector-tile',
-        headers: { 'access-control-allow-origin': '*' },
-        body: body || '',
-      });
-    });
-    await openTactileMap(page, 'place');
-    await page.waitForSelector('body[data-wasm-ready="true"]', {
-      state: 'attached',
-      timeout: WASM_READY_TIMEOUT,
-    });
-    await page.locator('#tactileMapAddress').fill('3600 Ferry Pl NE, Seattle');
-    await page.locator('#tactileMapSearch').click();
-    await page.locator('#tactileMapPlace1').check();
-    await goToStep(page, 4);
-    await page.locator('#tactileMapMake').click();
-    const status = page.locator('#tactileMapAddressStatus');
-    await expect(status).toContainText('Draft map ready: ', { timeout: 15000 });
-    await expect(status).toHaveText(
-      / The key has \d+ symbols and \d+ numbered places\.$/
-    );
-    await expect(
-      page.locator('#drawingEditorSurface .drawing-editor').first()
-    ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });
-    await page.keyboard.press('Escape');
-    await goToStep(page, 5);
+    const status = await makeFerryDraft(page);
     await expect(page.locator('#tactileMapSummary')).toContainText(
       'The key takes'
     );
-    // The named places get channels for their braille labels; one with no
-    // room carries its number, and the key names it.
+    await page.locator('#tactileMapLabels').selectOption('tape');
+    // Each numbered place gets a channel for its braille number; the names
+    // are in the key.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            document.getElementById('tactileMapPanel').__forgeMapPanel.labeled()
+              .labels.length
+        )
+      )
+      .toBeGreaterThan(0);
+    const mapLabels = await page.evaluate(() =>
+      document
+        .getElementById('tactileMapPanel')
+        .__forgeMapPanel.labeled()
+        .labels.map((l) => l.text)
+    );
+    expect(mapLabels.every((t) => /^#\d+$/.test(t))).toBe(true);
     const levels = await page.evaluate(() => {
       const d = window.stateManager.getState().parameters.map_file?.data || '';
       const body = d.split(',')[1] || '';
@@ -1067,46 +1105,43 @@ test.describe('the draft map', () => {
       (await status.textContent()).match(/; (\d+) warnings?\./)?.[1] ?? 0
     );
     expect(said).toBe(await page.locator('#tactileMapWarnings li').count());
-    // The key's braille goes on label tape: each row's text is listed for
-    // its channel, the cafe's among them.
-    const tape = await page.evaluate(() =>
+    // The key, a row a piece: each place's piece holds its number's channel,
+    // then its name on tape, the cafe's among them.
+    const pieces = await page.evaluate(() =>
       document
         .getElementById('tactileMapPanel')
-        .__forgeMapPanel.keyPages.flatMap((p) => p.tape)
+        .__forgeMapPanel.keyPages.map((p) => p.tape)
     );
-    // The key plates are the map's plate size; on the trimmed map's 189 mm
-    // plates a long row wraps onto two strips, so the pieces are joined.
-    expect(tape.join(' ')).toMatch(/\b\d+ restaurant: plaza cafe\b/);
-    expect(tape.join(' ')).toMatch(/\b\d+ parking: south campus garage\b/);
+    const cafe = pieces.find((t) => t.join(' ').includes('plaza cafe'));
+    expect(cafe[0]).toMatch(/^#\d+$/);
+    expect(cafe.slice(1).join(' ')).toBe('restaurant: plaza cafe');
+    const tape = pieces.flat();
     // The labels' tape, measured by the braille translator in the grade
-    // chosen: contracted UEB to start, uncontracted on a switch, the note
-    // saying each and what the other would need.
+    // chosen: uncontracted to start, as a hand-press labeler writes,
+    // contracted on a switch, the note saying each and what the other would
+    // need.
     const grade = page.locator('#tactileMapTapeGrade');
-    await expect(grade).toHaveValue('g2');
+    await expect(grade).toHaveValue('g1');
     const tapeNote = page.locator('#tactileMapTapeNote');
     await expect(tapeNote).toHaveText(
-      /^Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; uncontracted would take \d+ labels?, about \d+ mm\.$/,
+      /^Label tape: uncontracted braille \(Grade 1\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; contracted would take \d+ labels?, about \d+ mm\.$/,
       { timeout: 30000 }
     );
-    const contracted = (await tapeNote.textContent()).match(/about (\d+) mm of/)[1];
-    // What the sentence promises for the other grade is what a switch gives:
-    // fewer names keep within six cells uncontracted, so the labels themselves
-    // change with the grade, and the figure is theirs.
+    // What the sentence promises for the other grade is what a switch gives.
     const promised = (await tapeNote.textContent()).match(
       /would take (\d+) labels?, about (\d+) mm/
     );
-    expect(Number(contracted)).toBeGreaterThan(0);
-    await grade.selectOption('g1');
+    await grade.selectOption('g2');
     await expect(tapeNote).toHaveText(
-      /^Label tape: uncontracted braille \(Grade 1\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; contracted would take \d+ labels?, about \d+ mm\.$/,
+      /^Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels?, \d+ cells, about \d+ mm of 12\.7 mm tape; uncontracted would take \d+ labels?, about \d+ mm\.$/,
       { timeout: 30000 }
     );
     const got = (await tapeNote.textContent()).match(
       /(\d+) labels?, \d+ cells, about (\d+) mm of/
     );
     expect([got[1], got[2]]).toEqual([promised[1], promised[2]]);
-    await grade.selectOption('g2');
-    await expect(tapeNote).toHaveText(/^Label tape: contracted braille/, {
+    await grade.selectOption('g1');
+    await expect(tapeNote).toHaveText(/^Label tape: uncontracted braille/, {
       timeout: 30000,
     });
     // The typed address is the destination, the first row after the key's
@@ -1118,7 +1153,7 @@ test.describe('the draft map', () => {
     );
     expect(destinationRow).toBeGreaterThan(-1);
     expect(destinationRow).toBeLessThan(
-      tape.findIndex((t) => /^\d+ /.test(t))
+      tape.findIndex((t) => /^#\d+$/.test(t))
     );
     const keyRadio = page.locator(
       'input[name="tactileMapPlate"][value^="key"]'
@@ -1162,10 +1197,12 @@ test.describe('the draft map', () => {
       'fits a 256 x 256 mm bed in 1 plate.',
       { timeout: PREVIEW_TIMEOUT }
     );
-    // Key words: braille only to start; Print and braille raises the words.
-    const keyWords = page.locator('#tactileMapKeyWords');
-    await expect(keyWords).toHaveValue('braille');
-    await keyWords.selectOption('both');
+    // Raised numbers and letters raise the key's words.
+    await page.locator('#tactileMapLabels').selectOption('raised');
+    await page
+      .locator('input[name="tactileMapPlate"][value^="key"]')
+      .first()
+      .check();
     await expect
       .poll(
         () =>
@@ -1189,6 +1226,153 @@ test.describe('the draft map', () => {
       violations,
       violations.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`).join('\n')
     ).toEqual([]);
+  });
+});
+
+test.describe('numbers on the map', () => {
+  test('the Labels switch at 3600 Ferry Pl NE: one kind at a time on the map and in the key, braille wedges to start, then label tape, then raised numbers and letters', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await makeFerryDraft(page);
+    const labels = page.locator('#tactileMapLabels');
+    await expect(labels).toHaveValue('wedge');
+    await expect(labels.locator('option')).toHaveText([
+      'Braille wedges',
+      'Braille label tape',
+      'Raised numbers and letters',
+    ]);
+    const WEDGE_ROW = /^\d+:\d+:\d+(\|\d+:\d+:\d+)*$/;
+    const NUMERAL = /:#\d+(\||$)/;
+    const CHANNELS = /<g id="channels"><path d="[^"]+"\/><\/g>/;
+    const NO_CHANNELS = /<g id="channels"><\/g>/;
+    const grade = page.locator('#tactileMapTapeGrade');
+
+    // Every plate the button renders, with what it hands the model.
+    const renderAll = async () => {
+      await page.evaluate(() => {
+        const panel =
+          document.getElementById('tactileMapPanel').__forgeMapPanel;
+        window.__sets = [];
+        window.__realRender = window.__realRender || panel.render;
+        panel.render = async (parameters) => {
+          window.__sets.push({
+            kind: parameters.plate_kind,
+            file: parameters.map_file?.name || '',
+            wedges: parameters.number_wedges,
+            braille: parameters.braille_wedges,
+            words: parameters.raised_words,
+            w: parameters.map_width_mm,
+            h: parameters.map_height_mm,
+          });
+          return new Uint8Array(84);
+        };
+        panel.download = () => {};
+      });
+      await page.locator('#tactileMapRenderAll').click();
+      await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
+        /are in \S+_plates\.zip\.$/,
+        { timeout: 60000 }
+      );
+      return page.evaluate(() => window.__sets);
+    };
+    // No wedge stands across a seam: each lies whole on its plate.
+    const whole = (x) =>
+      (x.wedges || '')
+        .split('|')
+        .filter(Boolean)
+        .every((row) => {
+          const [wx, wy, n] = row.split(':').map(Number);
+          const half = (n < 10 ? 15.5 : 22) / 2;
+          return (
+            wx / 10 - half >= 0 &&
+            wx / 10 + half <= x.w &&
+            wy / 10 >= 0 &&
+            wy / 10 + 10.1 <= x.h
+          );
+        });
+
+    // Braille wedges: wedges on the map, no tape, no numeral; each key row a
+    // piece, a place's number on a wedge and its name on wedges.
+    await expect
+      .poll(async () => (await shownPlate(page)).wedges)
+      .toMatch(WEDGE_ROW);
+    let shown = await shownPlate(page);
+    expect(shown.words).not.toMatch(NUMERAL);
+    expect(shown.levels).toMatch(NO_CHANNELS);
+    expect(shown.paper).toMatch(/<g id="paper-wedges"[^>]*><rect /);
+    await expect(grade).toBeHidden();
+    let sets = await renderAll();
+    let maps = sets.filter((x) => x.kind === 'Map');
+    let keys = sets.filter((x) => x.kind === 'Key');
+    expect(maps.some((x) => WEDGE_ROW.test(x.wedges))).toBe(true);
+    expect(maps.every(whole)).toBe(true);
+    expect(keys.length).toBeGreaterThan(5);
+    const places = keys.filter((x) => x.wedges);
+    expect(places.length).toBeGreaterThan(0);
+    expect(places.every((x) => /^\d+:\d+:[\d.]+/.test(x.braille))).toBe(true);
+    expect(keys.every((x) => x.h < 75)).toBe(true);
+    // One place's piece through the engine itself: the number's wedge and
+    // the name's wedges build, dots and all.
+    const real = await page.evaluate(async () => {
+      const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+      const set = panel
+        .keyParameterSets(window.stateManager.getState().parameters)
+        .find((x) => x.parameters.number_wedges && x.parameters.braille_wedges);
+      const bytes = await window.__realRender(set.parameters, {
+        format: 'stl',
+        timeoutMs: 120000,
+      });
+      // The engine hands back an ArrayBuffer or a Uint8Array.
+      const size = bytes?.byteLength ?? 84;
+      return { id: set.id, triangles: (size - 84) / 50 };
+    });
+    expect(real.triangles, real.id).toBeGreaterThan(5000);
+
+    // Braille label tape: a channel for each number on the map, no wedge.
+    await labels.selectOption('tape');
+    await expect(grade).toBeVisible();
+    await expect(grade).toHaveValue('g1');
+    await expect.poll(async () => (await shownPlate(page)).wedges).toBe('');
+    await expect
+      .poll(async () => (await shownPlate(page)).levels)
+      .toMatch(CHANNELS);
+    shown = await shownPlate(page);
+    expect(shown.words).not.toMatch(NUMERAL);
+    // One label and one channel a place, wherever its number stands.
+    const tape = await page.evaluate(() => {
+      const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+      const { labeled } = panel.clearedPlan(panel.labeled());
+      return {
+        numbered: labeled.key.numbers.length,
+        keyOnly: labeled.keyOnly.length,
+        labels: labeled.labels.map((l) => l.featureId),
+        channels: labeled.plan.features
+          .filter((f) => f.kind === 'channel')
+          .map((f) => f.id),
+      };
+    });
+    expect(tape.labels).toHaveLength(tape.numbered - tape.keyOnly);
+    expect(new Set(tape.labels).size).toBe(tape.labels.length);
+    expect(new Set(tape.channels).size).toBe(tape.channels.length);
+    sets = await renderAll();
+    expect(sets.every((x) => !x.wedges && !x.braille)).toBe(true);
+
+    // Raised numbers and letters: numerals on the map; the key's words raised.
+    await labels.selectOption('raised');
+    await expect(grade).toBeHidden();
+    await expect
+      .poll(async () => (await shownPlate(page)).levels)
+      .toMatch(NO_CHANNELS);
+    shown = await shownPlate(page);
+    expect(shown.words).toMatch(NUMERAL);
+    expect(shown.wedges).toBe('');
+    sets = await renderAll();
+    maps = sets.filter((x) => x.kind === 'Map');
+    keys = sets.filter((x) => x.kind === 'Key');
+    expect(maps.some((x) => NUMERAL.test(x.words))).toBe(true);
+    expect(keys.filter((x) => NUMERAL.test(x.words)).length).toBeGreaterThan(0);
+    expect(sets.every((x) => !x.wedges && !x.braille)).toBe(true);
   });
 });
 

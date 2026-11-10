@@ -163,6 +163,8 @@ export function titleBandOf(
  * @param {number} [input.bandMinMm] - the band no shallower than this
  * @param {number} [input.titleWidthMm] - the title wrapped to this, else the face
  * @param {number} [input.titleWordMaxMm] - a lone word may run to this
+ * @param {{left?: number, right?: number, bottom?: number}} [input.bandsMm] -
+ *   a side no narrower than this: the numbers standing in the band there
  * @returns {{
  *   w: number, h: number, face: {w: number, h: number}, marginMm: number,
  *   faceAt: [number, number], band: {left: number, right: number, top: number, bottom: number},
@@ -178,6 +180,7 @@ export function sheetOf({
   bandMinMm = 0,
   titleWidthMm = null,
   titleWordMaxMm = null,
+  bandsMm = {},
 }) {
   const m = Math.min(
     MARGIN_MM.max,
@@ -197,13 +200,17 @@ export function sheetOf({
         )
       : null;
   const bandH = band ? band.h : 0;
+  const side = (k) => Math.max(m, Math.ceil(Number(bandsMm?.[k]) || 0));
+  const left = side('left');
+  const right = side('right');
+  const bottom = side('bottom');
   return {
-    w: round3(face.w + 2 * m),
-    h: round3(face.h + 2 * m + bandH),
+    w: round3(face.w + left + right),
+    h: round3(face.h + m + bottom + bandH),
     face: { w: face.w, h: face.h },
     marginMm: m,
-    faceAt: [m, round3(m + bandH)],
-    band: { left: m, right: m, top: m, bottom: m },
+    faceAt: [left, round3(m + bandH)],
+    band: { left, right, top: m, bottom },
     titleBand: band ? { y: m, h: band.h, lines: band.lines } : null,
     placement: where,
   };
@@ -331,13 +338,17 @@ export function plateRows(rows, plate, sheetH) {
       const baseline = sheetH - r.y;
       const top = baseline - r.h;
       if (!(baseline > plate.y && top < plate.y + plate.h)) return false;
-      const end =
-        r.x +
-        signRowWidthMm(String(r.text), {
-          charHeightMm: r.h,
-          letterSpacing: LETTER_SPACING,
-        });
-      return r.x < plate.x + plate.w && end > plate.x;
+      // A number ("#12") stands centered on its x, in bold at the model's
+      // own letter spacing; any other row starts at its x.
+      const text = String(r.text);
+      const numeral = text.length > 1 && text[0] === '#';
+      const width = signRowWidthMm(numeral ? text.slice(1) : text, {
+        charHeightMm: r.h,
+        letterSpacing: numeral ? 1 : LETTER_SPACING,
+      });
+      const start = numeral ? r.x - width / 2 - 0.5 : r.x;
+      const end = numeral ? r.x + width / 2 + 0.5 : r.x + width;
+      return start < plate.x + plate.w && end > plate.x;
     })
     .map((r) => ({
       ...r,

@@ -182,15 +182,25 @@ test('a route map from the Husky Union Building to the Bill & Melinda Gates Cent
   const warned = await page.locator('#tactileMapWarnings li').allTextContents();
   expect(warned).toEqual([]);
 
-  // The model takes the fitted size in its 10 mm band and renders with no
-  // warning. Escape leaves the editor, and focus goes back to the button
-  // that opened it.
+  // The model takes the fitted face in its band, each side at least 10 mm
+  // and wider where the places' numbers stand, and renders with no warning.
+  // Escape leaves the editor, and focus goes back to the button that opened
+  // it.
   await page.keyboard.press('Escape');
   await expect(make).toBeFocused();
-  await expect(page.locator('#param-map_width_mm-spinbox')).toHaveValue('192', {
-    timeout: 10000,
+  const sheet = await page.evaluate(() => {
+    const s = document.getElementById('tactileMapPanel').__forgeMapPanel.sheet;
+    return { w: s.w, h: s.h, face: s.face, band: s.band };
   });
-  await expect(page.locator('#param-map_height_mm-spinbox')).toHaveValue('380');
+  expect(sheet.face).toEqual({ w: 172, h: 360 });
+  expect(Math.min(...Object.values(sheet.band))).toBeGreaterThanOrEqual(10);
+  await expect(page.locator('#param-map_width_mm-spinbox')).toHaveValue(
+    String(sheet.w),
+    { timeout: 10000 }
+  );
+  await expect(page.locator('#param-map_height_mm-spinbox')).toHaveValue(
+    String(sheet.h)
+  );
   // The preview holds the route map's model, not the sample's before it.
   await expect
     .poll(
@@ -203,7 +213,7 @@ test('a route map from the Husky Union Building to the Bill & Melinda Gates Cent
         }),
       { timeout: PREVIEW_TIMEOUT }
     )
-    .toBe(192);
+    .toBe(Math.round(sheet.w));
   await expect(page.locator('.preview-state-indicator')).toHaveClass(
     /state-current/,
     { timeout: PREVIEW_TIMEOUT }
