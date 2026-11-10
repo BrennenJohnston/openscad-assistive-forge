@@ -103,7 +103,7 @@ cone_marks = "";
 // Face angle of a number's braille wedge (degrees), 45 to 90: 75 leans the braille back toward the reader, as my embosser's assembly map does.
 wedge_face_angle_deg = 75; // [45:1:90]
 // Sloped face below the braille on a number's wedge (mm), 2 to 12: it lifts the cells so a fingertip reading them rests on the wedge, not on the plate. A larger foot makes a taller wedge.
-wedge_foot_mm = 2; // [2:1:12]
+wedge_foot_mm = 6; // [2:1:12]
 // How far a raised numeral stands above what it stands on (mm). 0.8 mm is the ADA 703.2.1 minimum.
 numeral_raise_mm = 1.0; // [0.8:0.05:2]
 // Where the numbers' braille wedges stand, written by the panel: rows of x:y:n, x and y in tenths of a millimeter from the plate's bottom left to the middle of the wedge's front foot, n the number; rows split by |.

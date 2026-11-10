@@ -1288,7 +1288,7 @@ test.describe('numbers on the map', () => {
             wx / 10 - half >= 0 &&
             wx / 10 + half <= x.w &&
             wy / 10 >= 0 &&
-            wy / 10 + 10.1 <= x.h
+            wy / 10 + 13.34 <= x.h
           );
         });
 

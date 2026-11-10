@@ -35,7 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trimmed sheet as a dashed frame, and the README says the plates are
   trimmed to the shapes.
 - The Tactile Map model can raise a number's braille wedge with a face angle
-  dial, bold raised numerals and lead lines on a level of their own.
+  dial and a foot dial (75 degrees and 6 mm to start), bold raised numerals
+  and lead lines on a level of their own.
 - Numbers on the map, one kind at a time (Labels in step 5): a braille
   wedge, to start; a channel for the braille number on label tape; or a bold
   raised numeral. A number stands on its place when it fits, else in the
@@ -57,7 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The Tactile Map key prints a row a piece, each as small as its row, so a
-  row can be kept for another map; it follows Labels in place of Key words.
+  row can be kept for another map; it follows Labels in place of Key words,
+  and a braille name too long for one wedge continues on a piece of its own.
 - Numbers replace the two-letter codes on a tactile map: the key lists every
   named thing as "3 Building: Haring Center", counted out from the address,
   or in walking order on a route.

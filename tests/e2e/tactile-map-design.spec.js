@@ -205,19 +205,21 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     // inside the 480 x 360 face. Its band is 10 mm, wider at the sides whose
     // numbers stand there (braille wedges to start), and the sheet cuts into
     // four plates. Off, the whole face in its band cuts into six. The key is
-    // a piece a row: its title, its five kinds and the fifteen places.
+    // a piece a row: its title, its five kinds and the fifteen places; on
+    // wedges a name too long for one wedge goes on to a piece of its own (six
+    // here).
     const trim = page.locator('#tactileMapTrim');
     await expect(trim).toBeChecked();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 202.5 x 126.5 mm, A1 to B2. The key takes 21 plates.'
+      '4 plates of 202.5 x 128 mm, A1 to B2. The key takes 27 plates.'
     );
     await trim.uncheck();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '6 plates of 181.3 x 196.5 mm, A1 to B3. The key takes 21 plates.'
+      '6 plates of 181.3 x 198 mm, A1 to B3. The key takes 27 plates.'
     );
     await trim.check();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 202.5 x 126.5 mm, A1 to B2. The key takes 21 plates.'
+      '4 plates of 202.5 x 128 mm, A1 to B2. The key takes 27 plates.'
     );
     // The key follows Labels, braille wedges to start.
     await expect(page.locator('#tactileMapLabels')).toHaveValue('wedge');
@@ -242,7 +244,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       'Area: a raised area, low',
     ]);
     expect(key.plates).toEqual(
-      Array.from({ length: 21 }, (_, i) => `key-${i + 1}`)
+      Array.from({ length: 27 }, (_, i) => `key-${i + 1}`)
     );
 
     // Braille label tape, chosen by keyboard: its pieces are channels, quick

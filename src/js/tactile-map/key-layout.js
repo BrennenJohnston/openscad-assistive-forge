@@ -328,8 +328,10 @@ const bitsOf = (dots) => dots.reduce((b, d) => b | (1 << (d - 1)), 0);
  * translator's. Raised numbers and letters: the bold numeral, then the name
  * in raised capitals built as the Braille Sign builds its letters (ADA
  * 703.2). A name too long for the piece goes on in lines below, the first
- * line farthest from the reader as on a page; every part keeps the sign's
- * 9.525 mm from the next and from the piece's edge (ADA 703.2.7, 703.3.2).
+ * line farthest from the reader as on a page; on wedges each further line
+ * is a piece of its own, since a wedge behind another would stand in its
+ * shadow. Every part keeps the sign's 9.525 mm from the next and from the
+ * piece's edge (ADA 703.2.7, 703.3.2).
  *
  * @param {{ entries: Array<object>, numbers: Array<object> }} key
  * @param {object} options
@@ -363,225 +365,240 @@ export function keyPieces(
   const rows = keyRows(key, title);
   const pitch = letterHeightMm * PRINT_PITCH;
 
-  return rows.map((row, i) => {
-    // The row's left: its number in the switch's form (a raised numeral when
-    // a wedge cannot hold the number), or its kind's sample.
-    let left = null;
-    if (row.number) {
-      const box =
-        identifierBox(row.number, style, s.wedge, {
-          inBand: true,
-          acrossMm: across,
-        }) || identifierBox(row.number, 'raised', s.wedge, { inBand: true });
-      left = { kind: 'number', w: box.w, h: box.h, part: box.parts[0] };
-    } else if (row.sample) {
-      left = {
-        kind: 'sample',
-        w: Math.max(SAMPLE_MM, Number(row.sample.sizeMm) || 0),
-        h: sampleTallMm(row.sample),
-      };
-    }
-    // Raised capitals: a name with a word too wide to stand beside the
-    // numeral takes the whole width, the numeral on a line of its own above
-    // it, so no word breaks in the middle.
-    let above = null;
-    if (style === 'raised' && left?.kind === 'number') {
-      const beside = maxWidthMm - 2 * M - left.w - KEY_CLEARANCE_MM;
-      const tooWide = clean(row.print)
-        .toUpperCase()
-        .split(/\s+/)
-        .some(
-          (word) =>
-            signRowWidthMm(word, {
-              charHeightMm: letterHeightMm,
-              letterSpacing: LETTER_SPACING,
-            }) > beside
-        );
-      if (tooWide) {
-        above = left.part;
-        left = null;
+  return rows
+    .map((row, i) => {
+      // The row's left: its number in the switch's form (a raised numeral when
+      // a wedge cannot hold the number), or its kind's sample.
+      let left = null;
+      if (row.number) {
+        const box =
+          identifierBox(row.number, style, s.wedge, {
+            inBand: true,
+            acrossMm: across,
+          }) || identifierBox(row.number, 'raised', s.wedge, { inBand: true });
+        left = { kind: 'number', w: box.w, h: box.h, part: box.parts[0] };
+      } else if (row.sample) {
+        left = {
+          kind: 'sample',
+          w: Math.max(SAMPLE_MM, Number(row.sample.sizeMm) || 0),
+          h: sampleTallMm(row.sample),
+        };
       }
-    }
-    const room = maxWidthMm - 2 * M - (left ? left.w + KEY_CLEARANCE_MM : 0);
+      // Raised capitals: a name with a word too wide to stand beside the
+      // numeral takes the whole width, the numeral on a line of its own above
+      // it, so no word breaks in the middle.
+      let above = null;
+      if (style === 'raised' && left?.kind === 'number') {
+        const beside = maxWidthMm - 2 * M - left.w - KEY_CLEARANCE_MM;
+        const tooWide = clean(row.print)
+          .toUpperCase()
+          .split(/\s+/)
+          .some(
+            (word) =>
+              signRowWidthMm(word, {
+                charHeightMm: letterHeightMm,
+                letterSpacing: LETTER_SPACING,
+              }) > beside
+          );
+        if (tooWide) {
+          above = left.part;
+          left = null;
+        }
+      }
+      const room = maxWidthMm - 2 * M - (left ? left.w + KEY_CLEARANCE_MM : 0);
 
-    // The name's lines, each with its height, its width and the gap above.
-    let lines;
-    if (style === 'tape') {
-      const maxCells = Math.max(
-        1,
-        Math.floor((room - 2 * LABEL_END_MM) / LABEL_CELL_MM)
-      );
-      lines = wrapTape(clean(row.say), maxCells, cellsOf).map((text, k) => ({
-        kind: 'tape',
-        text,
-        w: channelLengthMm(cellsOf(text)),
-        h: across,
-        gap: k ? CHANNEL_GAP_MM : 0,
-        read: across,
-      }));
-    } else if (style === 'raised') {
-      const texts = wrapPrint(
-        clean(row.print).toUpperCase(),
-        room,
-        letterHeightMm
-      );
-      lines = texts.map((text, k) => ({
-        kind: 'words',
-        text,
-        w: signRowWidthMm(text, {
-          charHeightMm: letterHeightMm,
-          letterSpacing: LETTER_SPACING,
-        }),
-        h: letterHeightMm + descentMm(text, letterHeightMm),
-        gap: k
-          ? pitch - letterHeightMm - descentMm(texts[k - 1], letterHeightMm)
-          : above
-            ? pitch - above.capMm
-            : 0,
-        read: letterHeightMm,
-      }));
-      if (above) {
-        lines.unshift({
-          kind: 'numeral',
-          w: above.w,
-          h: above.h,
-          capMm: above.capMm,
-          gap: 0,
-          read: above.h,
+      // The name's lines, each with its height, its width and the gap above.
+      let lines;
+      if (style === 'tape') {
+        const maxCells = Math.max(
+          1,
+          Math.floor((room - 2 * LABEL_END_MM) / LABEL_CELL_MM)
+        );
+        lines = wrapTape(clean(row.say), maxCells, cellsOf).map((text, k) => ({
+          kind: 'tape',
+          text,
+          w: channelLengthMm(cellsOf(text)),
+          h: across,
+          gap: k ? CHANNEL_GAP_MM : 0,
+          read: across,
+        }));
+      } else if (style === 'raised') {
+        const texts = wrapPrint(
+          clean(row.print).toUpperCase(),
+          room,
+          letterHeightMm
+        );
+        lines = texts.map((text, k) => ({
+          kind: 'words',
+          text,
+          w: signRowWidthMm(text, {
+            charHeightMm: letterHeightMm,
+            letterSpacing: LETTER_SPACING,
+          }),
+          h: letterHeightMm + descentMm(text, letterHeightMm),
+          gap: k
+            ? pitch - letterHeightMm - descentMm(texts[k - 1], letterHeightMm)
+            : above
+              ? pitch - above.capMm
+              : 0,
+          read: letterHeightMm,
+        }));
+        if (above) {
+          lines.unshift({
+            kind: 'numeral',
+            w: above.w,
+            h: above.h,
+            capMm: above.capMm,
+            gap: 0,
+            read: above.h,
+          });
+        }
+      } else {
+        const cells = brailleCells(brailleOf(clean(row.say)));
+        lines = wrapCells(cells, wedgeCellsFor(room)).map((c, k) => {
+          const size = wedgeSize(c, s.wedge);
+          return {
+            kind: 'wedge',
+            cells: c,
+            w: size.w,
+            h: size.depth,
+            gap: k ? KEY_CLEARANCE_MM : 0,
+            read: size.depth,
+          };
         });
       }
-    } else {
-      const cells = brailleCells(brailleOf(clean(row.say)));
-      lines = wrapCells(cells, wedgeCellsFor(room)).map((c, k) => {
-        const size = wedgeSize(c, s.wedge);
+
+      // Wedges: a line a piece, so no wedge stands behind another; a piece
+      // after the first keeps the name's column, to lie in line under it.
+      const groups =
+        style === 'wedge' && lines.length > 1 ? lines.map((l) => [l]) : [lines];
+      const indent = left ? left.w + KEY_CLEARANCE_MM : 0;
+      const name = row.number ? `${row.number} ${row.print}` : row.print;
+      return groups.map((group, g) => {
+        const own = g === 0 ? left : null;
+        // The first line's reading line and the left's bottom are one line.
+        const firstRead = group.length ? group[0].read : 0;
+        const reading = M + Math.max(firstRead, own ? own.h : 0);
+        const x0 = M + indent;
+        let bottom = reading;
+        let y = reading - firstRead;
+        const placed = group.map((line, k) => {
+          if (k > 0) y = bottom + line.gap;
+          let top = y;
+          // The model reads a baseline in tenths of a millimeter: the words
+          // settle down onto the next tenth, never up into the clearance.
+          if (line.kind === 'words') {
+            top =
+              Math.ceil((top + letterHeightMm) * 10 - 1e-9) / 10 -
+              letterHeightMm;
+          }
+          bottom = top + line.h;
+          return { ...line, top };
+        });
+        const w = Math.max(
+          20,
+          Math.ceil(x0 + Math.max(0, ...placed.map((l) => l.w)) + M - 1e-9)
+        );
+        const h = Math.max(20, Math.ceil(Math.max(bottom, reading) + M - 1e-9));
+
+        const plan = emptyPlan(w, h);
+        const print = [];
+        const wedges = [];
+        const brailleWedges = [];
+        const marks = [];
+        const tape = [];
+        if (own?.kind === 'sample') {
+          plan.features.push(
+            sampleOf(row.sample, `key-sample-${i}`, [
+              M + own.w / 2,
+              reading - own.h / 2,
+            ])
+          );
+        } else if (own) {
+          const cx = M + own.w / 2;
+          const part = own.part;
+          if (part.kind === 'channel') {
+            plan.features.push({
+              id: `key-number-${i}`,
+              class: 'channel',
+              kind: 'channel',
+              at: [round3(cx), round3(reading - part.h / 2)],
+              length: part.w,
+              on: true,
+            });
+            tape.push(`#${row.number}`);
+          } else if (part.kind === 'numeral') {
+            print.push(
+              `${tenths(cx)}:${tenths(h - reading)}:${tenths(part.capMm)}:0:#${row.number}`
+            );
+          } else {
+            wedges.push(`${tenths(cx)}:${tenths(h - reading)}:${row.number}`);
+            marks.push({
+              number: row.number,
+              wedge: {
+                x: round3(cx),
+                y: round3(reading),
+                w: part.w,
+                depth: part.h,
+                cells: wedgeCells(row.number),
+              },
+            });
+          }
+        }
+        placed.forEach((line, k) => {
+          if (line.kind === 'tape') {
+            plan.features.push({
+              id: `key-tape-${i}-${k}`,
+              class: 'channel',
+              kind: 'channel',
+              at: [round3(x0 + line.w / 2), round3(line.top + line.h / 2)],
+              length: line.w,
+              on: true,
+            });
+            tape.push(line.text);
+          } else if (line.kind === 'words') {
+            print.push(
+              `${tenths(x0)}:${tenths(h - (line.top + letterHeightMm))}:${tenths(letterHeightMm)}:0:${line.text}`
+            );
+          } else if (line.kind === 'numeral') {
+            print.push(
+              `${tenths(x0 + line.w / 2)}:${tenths(h - (line.top + line.h))}:${tenths(line.capMm)}:0:#${row.number}`
+            );
+          } else {
+            const foot = line.top + line.h;
+            brailleWedges.push(
+              `${tenths(x0 + line.w / 2)}:${tenths(h - foot)}:${line.cells.map(bitsOf).join('.')}`
+            );
+            marks.push({
+              number: null,
+              wedge: {
+                x: round3(x0 + line.w / 2),
+                y: round3(foot),
+                w: line.w,
+                depth: line.h,
+                cells: line.cells,
+              },
+            });
+          }
+        });
+        const { rings, cones } = buildLevelRings(plan, settings);
         return {
-          kind: 'wedge',
-          cells: c,
-          w: size.w,
-          h: size.depth,
-          gap: k ? KEY_CLEARANCE_MM : 0,
-          read: size.depth,
+          name: g === 0 ? name : `${name}, line ${g + 1}`,
+          size: { w, h },
+          plan,
+          svg: levelsSvgFromRings(rings, plan.size),
+          print: print.join('|'),
+          wedges: wedges.join('|'),
+          brailleWedges: brailleWedges.join('|'),
+          marks,
+          tape,
+          cones,
         };
       });
-    }
-
-    // The first line's reading line and the left's bottom are one line.
-    const firstRead = lines.length ? lines[0].read : 0;
-    const reading = M + Math.max(firstRead, left ? left.h : 0);
-    const x0 = M + (left ? left.w + KEY_CLEARANCE_MM : 0);
-    let bottom = reading;
-    let y = reading - firstRead;
-    const placed = lines.map((line, k) => {
-      if (k > 0) y = bottom + line.gap;
-      let top = y;
-      // The model reads a baseline in tenths of a millimeter: the words
-      // settle down onto the next tenth, never up into the clearance.
-      if (line.kind === 'words') {
-        top =
-          Math.ceil((top + letterHeightMm) * 10 - 1e-9) / 10 - letterHeightMm;
-      }
-      bottom = top + line.h;
-      return { ...line, top };
-    });
-    const w = Math.max(
-      20,
-      Math.ceil(x0 + Math.max(0, ...placed.map((l) => l.w)) + M - 1e-9)
-    );
-    const h = Math.max(20, Math.ceil(Math.max(bottom, reading) + M - 1e-9));
-
-    const plan = emptyPlan(w, h);
-    const print = [];
-    const wedges = [];
-    const brailleWedges = [];
-    const marks = [];
-    const tape = [];
-    if (left?.kind === 'sample') {
-      plan.features.push(
-        sampleOf(row.sample, `key-sample-${i}`, [
-          M + left.w / 2,
-          reading - left.h / 2,
-        ])
-      );
-    } else if (left) {
-      const cx = M + left.w / 2;
-      const part = left.part;
-      if (part.kind === 'channel') {
-        plan.features.push({
-          id: `key-number-${i}`,
-          class: 'channel',
-          kind: 'channel',
-          at: [round3(cx), round3(reading - part.h / 2)],
-          length: part.w,
-          on: true,
-        });
-        tape.push(`#${row.number}`);
-      } else if (part.kind === 'numeral') {
-        print.push(
-          `${tenths(cx)}:${tenths(h - reading)}:${tenths(part.capMm)}:0:#${row.number}`
-        );
-      } else {
-        wedges.push(`${tenths(cx)}:${tenths(h - reading)}:${row.number}`);
-        marks.push({
-          number: row.number,
-          wedge: {
-            x: round3(cx),
-            y: round3(reading),
-            w: part.w,
-            depth: part.h,
-            cells: wedgeCells(row.number),
-          },
-        });
-      }
-    }
-    placed.forEach((line, k) => {
-      if (line.kind === 'tape') {
-        plan.features.push({
-          id: `key-tape-${i}-${k}`,
-          class: 'channel',
-          kind: 'channel',
-          at: [round3(x0 + line.w / 2), round3(line.top + line.h / 2)],
-          length: line.w,
-          on: true,
-        });
-        tape.push(line.text);
-      } else if (line.kind === 'words') {
-        print.push(
-          `${tenths(x0)}:${tenths(h - (line.top + letterHeightMm))}:${tenths(letterHeightMm)}:0:${line.text}`
-        );
-      } else if (line.kind === 'numeral') {
-        print.push(
-          `${tenths(x0 + line.w / 2)}:${tenths(h - (line.top + line.h))}:${tenths(line.capMm)}:0:#${row.number}`
-        );
-      } else {
-        const foot = line.top + line.h;
-        brailleWedges.push(
-          `${tenths(x0 + line.w / 2)}:${tenths(h - foot)}:${line.cells.map(bitsOf).join('.')}`
-        );
-        marks.push({
-          number: null,
-          wedge: {
-            x: round3(x0 + line.w / 2),
-            y: round3(foot),
-            w: line.w,
-            depth: line.h,
-            cells: line.cells,
-          },
-        });
-      }
-    });
-    const { rings, cones } = buildLevelRings(plan, settings);
-    return {
-      id: rows.length === 1 ? 'key' : `key-${i + 1}`,
-      name: row.number ? `${row.number} ${row.print}` : row.print,
-      size: { w, h },
-      plan,
-      svg: levelsSvgFromRings(rings, plan.size),
-      print: print.join('|'),
-      wedges: wedges.join('|'),
-      brailleWedges: brailleWedges.join('|'),
-      marks,
-      tape,
-      cones,
-    };
-  });
+    })
+    .flat()
+    .map((piece, n, all) => ({
+      id: all.length === 1 ? 'key' : `key-${n + 1}`,
+      ...piece,
+    }));
 }
