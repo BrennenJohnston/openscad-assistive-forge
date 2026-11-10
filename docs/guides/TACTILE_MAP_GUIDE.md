@@ -4,6 +4,8 @@ The Tactile Map Designer makes a map that is read by touch and printed on an ord
 
 It is for anyone who makes a map for a blind or low-vision reader: a station, a campus, a building floor, a park, a street corner, a walk to a bus stop. You need a printer, and an address or a drawing. You do not need to type a coordinate.
 
+The map maker is a prototype and still a work in progress, so a map may have mistakes. Check each map before a reader relies on it. If you find a mistake, please report it on [GitHub Issues](https://github.com/BrennenJohnston/openscad-assistive-forge/issues) so I can fix it. The panel says so under its heading, and the README in each zip says so on its first line.
+
 ## What the tool makes
 
 - A base plate, 0.4 mm thick by default, meant to be glued to a backing board; or a 1.2 mm plate that stands on its own.

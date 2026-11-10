@@ -16756,6 +16756,46 @@ body.tutorial-body-locked {
   text-decoration-thickness: 2.5px;
 }
 
+/* The map maker is a prototype: a note under the panel's heading. Its link
+   takes the same convention; its hit area reaches a touch target's height
+   without opening up the line it sits in. */
+.tactile-map-prototype {
+  margin: 0;
+  padding: 0 var(--space-sm);
+  border-left: 3px solid var(--color-accent);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.tactile-map-prototype a {
+  position: relative;
+  white-space: nowrap;
+  color: var(--color-accent-fg);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+  transition:
+    color var(--motion-base),
+    text-decoration-color var(--motion-base);
+}
+
+.tactile-map-prototype a::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--size-touch-target);
+  transform: translateY(-50%);
+}
+
+@media (hover: hover) {
+  .tactile-map-prototype a:hover {
+    color: var(--color-accent-hover);
+    text-decoration-thickness: 2.5px;
+  }
+}
+
 .braille-panel {
   margin-bottom: var(--space-md);
   padding: var(--space-md);

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The Tactile Map maker says it is a prototype, under its heading and on the
+  README's first line, with a link to report a mistake on GitHub Issues.
 - The Tactile Map Designer lays a map paper under the plate in the preview:
   the shapes in the editor's colors with every name and label text in
   place, so a map can be checked before it prints; the View menu's Show

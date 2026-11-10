@@ -91,6 +91,83 @@ test.describe('Tactile Map tile', () => {
     ).not.toHaveCount(0);
   });
 
+  test('says under its heading that the map maker is a prototype, its link to report a mistake a touch target tall, by keyboard, in a new tab', async ({
+    page,
+  }) => {
+    for (const size of [
+      { width: 1280, height: 720 },
+      { width: 412, height: 915 },
+    ]) {
+      await page.setViewportSize(size);
+      if (size.width < 900) {
+        // On a phone the panel is a drawer, here on the type chooser.
+        await page.goto('/?example=tactile-map');
+        await dismissSavePrompt(page);
+        const toggle = page.locator('#mobileDrawerToggle');
+        await expect(toggle).toBeVisible({ timeout: 30000 });
+        if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+          await toggle.click();
+        }
+        await expect(page.locator('#tactileMapChooser')).toBeVisible({
+          timeout: 30000,
+        });
+      } else {
+        await openTactileMap(page);
+      }
+      const note = page.locator(
+        '#tactileMapPanel > h2 + p#tactileMapPrototype'
+      );
+      await expect(note).toBeVisible();
+      await expect(note).toHaveText(
+        'This map maker is a prototype and still a work in progress, so a map may have mistakes. Check each map before a reader relies on it. If you find a mistake, please report it on GitHub Issues (opens in a new tab) so I can fix it.'
+      );
+      const link = note.getByRole('link', {
+        name: 'GitHub Issues (opens in a new tab)',
+      });
+      await expect(link).toHaveAttribute(
+        'href',
+        'https://github.com/BrennenJohnston/openscad-assistive-forge/issues'
+      );
+      await expect(link).toHaveAttribute('target', '_blank');
+      await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      // A press anywhere a touch target's height around the words lands on
+      // the link; the line it sits in keeps the note's spacing. Measured
+      // once the drawer has stopped moving.
+      const measure = () =>
+        link.evaluate((a) => {
+          a.scrollIntoView({ block: 'center' });
+          a.focus();
+          const r = a.getBoundingClientRect();
+          const target = parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue(
+              '--size-touch-target'
+            )
+          );
+          const cx = r.left + r.width / 2;
+          const cy = r.top + r.height / 2;
+          const on = (y) => a.contains(document.elementFromPoint(cx, y));
+          const p = a.parentElement;
+          return {
+            hits: [on(cy - target / 2 + 1), on(cy + target / 2 - 1)],
+            width: r.width,
+            target,
+            lineGap:
+              parseFloat(getComputedStyle(p).lineHeight) -
+              parseFloat(getComputedStyle(a).lineHeight),
+            outline: getComputedStyle(a).outlineStyle,
+          };
+        });
+      await expect
+        .poll(async () => (await measure()).hits, { message: `${size.width}` })
+        .toEqual([true, true]);
+      const { width, target, lineGap, outline } = await measure();
+      expect(width, `${size.width}`).toBeGreaterThanOrEqual(target);
+      expect(lineGap).toBe(0);
+      await expect(link).toBeFocused();
+      expect(outline).toBe('solid');
+    }
+  });
+
   test('lays the map paper over the plate, never the map file itself, and Show Model hides the plate to read it', async ({
     page,
   }) => {
@@ -361,7 +438,9 @@ test.describe('Tactile Map tile', () => {
     expect(names).toContain('map_print.pdf');
     const pdf = await zip.file('map_print.pdf').async('uint8array');
     expect(String.fromCharCode(...pdf.slice(0, 5))).toBe('%PDF-');
-    expect(readme).toMatch(/^map_print\.pdf shows where each label goes/);
+    expect(readme).toMatch(
+      /^This map maker is a prototype [^\n]*\/issues so I can fix it\.\n\nmap_print\.pdf shows where each label goes/
+    );
     const a1 = await zip.file('tactile_map_A1.stl').async('uint8array');
     expect(a1.length).toBeGreaterThan(84);
     const { triangles } = parseSTL(a1);
