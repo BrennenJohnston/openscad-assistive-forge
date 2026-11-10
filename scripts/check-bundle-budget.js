@@ -111,11 +111,12 @@ const BUDGETS = {
   },
   totalAssets: {
     name: 'Total Assets',
-    // 1,250,000 B, set when this line stopped weighing library files the
-    // app never loads. Measured then: 1,183,705 B gzipped, so about 5.6
-    // percent of room. It weighs code the browser may fetch, not the
-    // vendored WASM engine.
-    budget: 1250000,
+    // It weighs code the browser may fetch, not the vendored WASM engine,
+    // so a chunk loaded later still counts. Set at 1,250,000 B when this
+    // line stopped weighing library files the app never loads (1,183,705 B
+    // then, about 5.6 percent of room); raised to 1,320,000 B when the
+    // tactile map maker had grown it to 1,247,405 B, about the same room.
+    budget: 1320000,
     pattern: null, // Sum all
     exclude: BRAILLE_ENGINE,
     critical: true,
