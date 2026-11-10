@@ -770,10 +770,14 @@ test.describe('Braille translation workflow (card)', () => {
 
     // Business card height (51 mm) fits 4 rows at the default 10.1 mm line
     // spacing and the preset's 5 mm margin (three pitches and a cell's
-    // 6.6 mm of dots in the 41 mm between the margins); the default Max rows
-    // per card is 8.
+    // 6.6 mm of dots in the 41 mm between the margins). The preset asks for
+    // those 4 rows itself, so asking for 8 afterwards is the clamp.
     await page.locator('#brailleSizePreset').selectOption('business');
     await page.locator('#brailleTextInput').fill('hello');
+    await expect(page.locator('#brailleMaxRows')).toHaveValue('4');
+    await page.getByText('Layout options', { exact: true }).click();
+    await page.locator('#brailleMaxRows').fill('8');
+    await page.locator('#brailleMaxRows').press('Tab');
 
     const warnings = page.locator('#brailleWarnings');
     await expect(warnings).not.toBeEmpty({ timeout: 20000 });
