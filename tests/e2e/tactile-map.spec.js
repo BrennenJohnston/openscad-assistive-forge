@@ -1959,4 +1959,3 @@ test.describe('a place map, end to end', () => {
     }
   });
 });
-
