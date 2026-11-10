@@ -2584,7 +2584,7 @@ class MapPanel {
       heights: levelHeights(parameters),
       tapeWidthMm: this.tapeWidth(),
       about: this.mapAbout(),
-      keyIds: this.keyPages.map((p) => p.id),
+      keyPlates: this.keyPages.map((p) => ({ id: p.id, name: p.name })),
       keyText: this.keyPages.length ? keyText(cleared.key) : '',
       keyTape: this.keyPages.map((p) => ({ id: p.id, texts: p.tape })),
       pdfName: PDF_NAME,

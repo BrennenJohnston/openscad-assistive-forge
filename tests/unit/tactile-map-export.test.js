@@ -528,20 +528,51 @@ describe('the README says what the map is', () => {
     ]);
   });
 
-  it('names the key plates and lists each one’s label tape, top to bottom', () => {
+  it('names each key plate by its row, in the order to lay them', () => {
     const readme = readmeText({
       ...base,
       about: { type: 'drawing' },
-      keyIds: ['key-1', 'key-2'],
+      keyPlates: [
+        { id: 'key-1', name: 'Key: Station' },
+        { id: 'key-2', name: '1 Building: Center on Human Development' },
+        { id: 'key-3', name: '1 Building: Center on Human Development, line 2' },
+      ],
+    });
+    expect(readme).toContain(
+      'The key prints on 3 plates of its own, to read before the map. ' +
+        'Lay them in this order, the first farthest from the reader:\n' +
+        '- key-1: Key: Station\n' +
+        '- key-2: 1 Building: Center on Human Development\n' +
+        '- key-3: 1 Building: Center on Human Development, line 2\n'
+    );
+    const one = readmeText({
+      ...base,
+      about: { type: 'drawing' },
+      keyPlates: [{ id: 'key', name: 'Key: Station' }],
+    });
+    expect(one).toContain(
+      'The key prints on a plate of its own, to read before the map:\n' +
+        '- key: Key: Station\n'
+    );
+    expect(readmeText({ ...base, about: { type: 'drawing' } })).not.toContain(
+      'The key prints'
+    );
+  });
+
+  it('lists each key plate’s label tape, top to bottom', () => {
+    const readme = readmeText({
+      ...base,
+      about: { type: 'drawing' },
+      keyPlates: [
+        { id: 'key-1', name: 'Key: Station' },
+        { id: 'key-2', name: 'Restaurant: Plaza Cafe' },
+      ],
       keyText: 'Key\n\nSymbols, You are here first:\n- You are here: a disc\n',
       keyTape: [
         { id: 'key-1', texts: ['key: station', 'you are here'] },
         { id: 'key-2', texts: ['pc restaurant: plaza cafe'] },
       ],
     });
-    expect(readme).toMatch(
-      /The key prints on its own plates, key-1, key-2, to read before the map\.\n/
-    );
     expect(readme.trimEnd().split('\n').slice(-7)).toEqual([
       '- You are here: a disc',
       '',

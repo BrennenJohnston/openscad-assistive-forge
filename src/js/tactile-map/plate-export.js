@@ -432,7 +432,8 @@ function aboutOf(about) {
  * @param {{ base: number, tops: number[] }} input.heights
  * @param {number} input.tapeWidthMm
  * @param {object} [input.about] - what the map is (`mapAbout`)
- * @param {string[]} [input.keyIds] - the key plates' ids
+ * @param {Array<{id: string, name: string}>} [input.keyPlates] - the key
+ *   plates in the key's order, each named by its row's words
  * @param {string} [input.keyText] - the key as text (map-key.js `keyText`)
  * @param {Array<{id: string, texts: string[]}>} [input.keyTape] - each key
  *   plate's texts to write on label tape, top to bottom
@@ -456,7 +457,7 @@ export function readmeText({
   heights,
   tapeWidthMm,
   about,
-  keyIds = [],
+  keyPlates = [],
   keyText = '',
   keyTape = [],
   pdfName = '',
@@ -507,9 +508,14 @@ export function readmeText({
     (tape ? `${tapeSentence(tape)} ` : '') +
     (tape?.failed ? `${ENGINE_ESTIMATE_SENTENCE} ` : '') +
     'The picture plate_grid.svg shows the layout.\n' +
-    (keyIds.length
-      ? `The key prints on its own ${keyIds.length === 1 ? 'plate' : 'plates'}, ${keyIds.join(', ')}, to read before the map.\n`
+    (keyPlates.length === 1
+      ? 'The key prints on a plate of its own, to read before the map:\n'
       : '') +
+    (keyPlates.length > 1
+      ? `The key prints on ${keyPlates.length} plates of its own, to read before the map. ` +
+        'Lay them in this order, the first farthest from the reader:\n'
+      : '') +
+    keyPlates.map((p) => `- ${p.id}: ${p.name}\n`).join('') +
     credits.map((line) => `${line}\n`).join('') +
     (keyText ? `\n${keyText}` : '') +
     (tapeLists.length ? '\n' : '') +
