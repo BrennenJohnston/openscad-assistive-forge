@@ -3495,6 +3495,49 @@ details summary:focus,
   justify-content: center;
 }
 
+/* Held by a panel's steps (primary-action-hold.js): unavailable but still
+   focusable, so a press can say why. 0.7, as the braille pager's held ends
+   are: at a disabled button's 0.5 the focus ring falls under 3:1. */
+#primaryActionBtn[aria-disabled='true'] {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+#primaryActionBtn[aria-disabled='true']:hover {
+  background-color: var(--color-accent);
+}
+
+#primaryActionBtn[aria-disabled='true']:active {
+  transform: none;
+}
+
+@media (forced-colors: active) {
+  #primaryActionBtn[aria-disabled='true'] {
+    opacity: 1;
+    color: GrayText;
+    border-color: GrayText !important;
+  }
+}
+
+/* The note a press on a held Generate shows, just above the button
+   (primary-action-hold.js places it). It takes no pointer, so it never
+   covers a control; a change of step takes it away. */
+.primary-action-hold-note {
+  position: fixed;
+  z-index: calc(var(--z-index-modal-backdrop) + 20);
+  max-width: min(360px, calc(100vw - 2 * var(--space-md)));
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-md);
+  font-size: var(--font-size-sm);
+  pointer-events: none;
+}
+
 /* Actions More Dropdown */
 .actions-more {
   position: relative;

@@ -62,6 +62,11 @@ import {
 } from './map-types.js';
 import { STEP_STRINGS, createSteps } from './steps.js';
 import {
+  holdPrimaryAction,
+  releasePrimaryAction,
+  hideHoldNote,
+} from '../primary-action-hold.js';
+import {
   drawingBox,
   filledOutlines,
   planFromRegions,
@@ -354,8 +359,11 @@ class MapPanel {
     // The map type the card or the link chose; none opens the chooser.
     this.mapType = mapType(config.type)?.key ?? null;
     this.lastType = this.mapType;
-    // The type's numbered steps (see arrange()) and the parts they hold.
+    // The type's numbered steps (see arrange()) and the parts they hold;
+    // the step on show, null on the type chooser.
     this.steps = null;
+    this.stepShown = null;
+    this.destroyed = false;
     this.parts = {};
     this.plan = options.plan || sampleStationPlan();
     this.setFile = options.setFile || setFileThroughControl;
@@ -1783,6 +1791,8 @@ class MapPanel {
       delete this.el.dataset.mapType;
       heading.textContent = MAP_TYPE_QUESTION;
       this.steps = null;
+      this.stepShown = null;
+      this.syncGenerateHold();
       this.fileSlot = null;
       box.replaceChildren(this.buildChooser());
       this.syncFileControl();
@@ -1797,6 +1807,10 @@ class MapPanel {
       id: 'tactileMapSteps',
       names: type.steps,
       need: (i) => this.stepNeed(i),
+      onShow: (i) => {
+        this.stepShown = i;
+        this.syncGenerateHold();
+      },
       onBackFromFirst: () => this.chooseAgain(),
     });
     const a = this.address?.parts || {};
@@ -3478,10 +3492,32 @@ class MapPanel {
     this.altOff = off;
     for (const el of this.sections()) el.hidden = off;
     this.syncFileControl();
+    this.syncGenerateHold();
     if (off) announce(ALT_VIEW_SENTENCE, { source: SOURCE });
   }
 
+  /**
+   * Generate waits for the map's last step: the map is made through the
+   * steps, and a press before then says so (the type chooser counts as
+   * before). Free under the Alt View, where the panel stands aside, and
+   * once the panel is gone. A change of step takes a shown note away.
+   */
+  syncGenerateHold() {
+    hideHoldNote();
+    // Every type's last step is Check and print; the chooser names it too.
+    const names = mapType(this.mapType || 'place').steps;
+    const last = names.length - 1;
+    const onLast = Boolean(this.mapType) && this.stepShown === last;
+    if (!this.destroyed && !this.altOff && !onLast) {
+      holdPrimaryAction(STEP_STRINGS.generateHeld(last + 1, names[last]));
+    } else {
+      releasePrimaryAction();
+    }
+  }
+
   destroy() {
+    this.destroyed = true;
+    releasePrimaryAction();
     clearTimeout(this.timer);
     this.paper = null;
     this.syncPaper();

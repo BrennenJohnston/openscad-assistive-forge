@@ -238,7 +238,7 @@ The sentences give the real numbers; the ones above are examples.
 
 ## Generating and downloading
 
-The preview follows every choice. Once you have pressed **Generate**, the file does too: a later change in any step generates the map again by itself when its preview has settled, and **Download** always hands over the map on screen.
+**Generate** waits for step 5, Check and print: on the type chooser and steps 1 to 4 it is grayed out, and a press shows a note above it, said too, to finish the map's steps first, so a map is made through the steps before it is generated. The preview follows every choice. Once you have pressed **Generate**, the file does too: a later change in any step generates the map again by itself when its preview has settled, and **Download** always hands over the map on screen.
 
 ## Printing
 

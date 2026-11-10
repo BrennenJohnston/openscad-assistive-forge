@@ -35,6 +35,7 @@ import {
   getMapPlan,
 } from '../../src/js/tactile-map/map-panel.js';
 import { ADDRESS_STRINGS } from '../../src/js/tactile-map/address-section.js';
+import { STEP_STRINGS } from '../../src/js/tactile-map/steps.js';
 import { trimElement } from '../../src/js/tactile-map/osm-geometry.js';
 import {
   announce,
@@ -530,6 +531,32 @@ describe('the live line under the detail levels', () => {
     );
     expect(ADDRESS_STRINGS.detailCountWarned(301, warning)).toBe(
       `301 features on, ${warning}`
+    );
+  });
+});
+
+describe('Generate during the map steps', () => {
+  it('is held on steps 1 to 4 and free on step 5; going back holds it again, the panel leaving frees it', () => {
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      '<button type="button" id="primaryActionBtn">Generate</button>'
+    );
+    const generate = document.getElementById('primaryActionBtn');
+    mount(vi.fn(async () => PLACES));
+    const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+    expect(generate.getAttribute('aria-disabled')).toBe('true');
+    expect(generate.disabled).toBe(false);
+    panel.steps.show(4);
+    expect(generate.hasAttribute('aria-disabled')).toBe(false);
+    panel.steps.show(1);
+    expect(generate.getAttribute('aria-disabled')).toBe('true');
+    destroyMapPanel();
+    expect(generate.hasAttribute('aria-disabled')).toBe(false);
+  });
+
+  it('names the last step in the note a press shows', () => {
+    expect(STEP_STRINGS.generateHeld(5, 'Check and print')).toBe(
+      "Finish the map's steps first. Generate works at step 5, Check and print."
     );
   });
 });

@@ -59,6 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Generate waits for a tactile map's last step, Check and print: grayed out
+  before it, and a press says to finish the map's steps first.
 - The Tactile Map key prints a row a piece, each as small as its row, so a
   row can be kept for another map; it follows Labels in place of Key words,
   and a braille name too long for one wedge continues on a piece of its own;

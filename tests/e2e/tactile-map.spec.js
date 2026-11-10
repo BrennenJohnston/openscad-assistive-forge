@@ -1894,3 +1894,68 @@ test.describe('a place map, end to end', () => {
     }
   });
 });
+
+test.describe('Generate during the map steps', () => {
+  test('is unavailable on steps 1 to 4, still focusable: a press says why above it and generates nothing', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    const NOTE =
+      "Finish the map's steps first. Generate works at step 5, Check and print.";
+    const generate = page.locator('#primaryActionBtn');
+    const note = page.locator('#primaryActionHoldNote');
+
+    // Step 1: held, still focusable, a press says why and nothing renders.
+    await openTactileMap(page, 'place');
+    await expect(generate).toHaveAttribute('aria-disabled', 'true');
+    // Unavailable, not disabled: the native flag stays off so it keeps focus.
+    expect(await generate.evaluate((b) => b.disabled)).toBe(false);
+    await generate.focus();
+    await expect(generate).toBeFocused();
+    await listenToAnnouncer(page);
+    await page.keyboard.press('Enter');
+    await expect(note).toBeVisible();
+    await expect(note).toHaveText(NOTE);
+    await expect(page.locator('#cancelRenderBtn')).toBeHidden();
+    expect((await saidSince(page)).filter((s) => s.includes(NOTE))).toHaveLength(
+      1
+    );
+    const n = await note.boundingBox();
+    const b = await generate.boundingBox();
+    expect(n.y + n.height).toBeLessThanOrEqual(b.y);
+    expect(
+      await note.evaluate((el) => getComputedStyle(el).pointerEvents)
+    ).toBe('none');
+  });
+
+  test('is free on step 5 and held again on going back; a change of step takes the note away; on step 5 it generates', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    const generate = page.locator('#primaryActionBtn');
+    const note = page.locator('#primaryActionHoldNote');
+
+    // Step 5 of a draft: free. Back to step 3: held again; a press, then
+    // the next step takes the note away.
+    await makeFerryDraft(page);
+    await expect(generate).not.toHaveAttribute('aria-disabled', 'true');
+    await goToStep(page, 3);
+    await expect(generate).toHaveAttribute('aria-disabled', 'true');
+    // A mouse press where it stands (a locator's click waits for an
+    // aria-disabled button to come free).
+    const at = await generate.boundingBox();
+    await page.mouse.click(at.x + at.width / 2, at.y + at.height / 2);
+    await expect(note).toBeVisible();
+    await goToStep(page, 4);
+    await expect(note).toHaveCount(0);
+
+    // Step 5 again: Generate generates.
+    await goToStep(page, 5);
+    await expect(generate).not.toHaveAttribute('aria-disabled', 'true');
+    await generate.click();
+    await expect(note).toHaveCount(0);
+    await expect(page.locator('#cancelRenderBtn')).toBeVisible({
+      timeout: 30000,
+    });
+  });
+});
