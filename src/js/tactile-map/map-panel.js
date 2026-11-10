@@ -293,6 +293,23 @@ function backTo(button) {
   if (button?.isConnected && !button.disabled) button.focus();
 }
 
+/** Where a draft is of: its place and a walk's end, or the file it came from. */
+function placeKeyOf(osm) {
+  return JSON.stringify({
+    at: osm?.place ? [osm.place.lat, osm.place.lon] : null,
+    to: osm?.to ? [osm.to.lat, osm.to.lon] : null,
+    file: osm?.source === 'file' ? (osm.bytes ?? null) : null,
+  });
+}
+
+/** The ground a plan's millimeters stand for: its size, center and scale. */
+function groundKeyOf(plan) {
+  return JSON.stringify({
+    size: plan?.size ?? null,
+    geo: plan?.meta?.geo ?? null,
+  });
+}
+
 /** Whether an SVG is a levels file this panel wrote, by its groups. */
 function isLevelsFile(svg) {
   return /<g id="level1"/.test(svg) && /<g id="channels"/.test(svg);
@@ -423,6 +440,14 @@ class MapPanel {
     // radiusM, source, place, landmarks, bytes }.
     this.osm = null;
     this.draft = null;
+    // What the person changed in the editor, by feature id, for a draft
+    // made again from the same place: its place, the ground its points were
+    // measured on, and the inputs the draft on show was made from (the same
+    // inputs reopen that draft rather than make another).
+    this.edits = new Map();
+    this.editsPlace = null;
+    this.editsGround = null;
+    this.draftKey = null;
     this.address = null;
     // The drawing the door works on: the picture last seen in the file
     // control that was not a levels file of this panel's own, with the
@@ -2146,17 +2171,63 @@ class MapPanel {
     if (line) this.sayAddress(line);
   }
 
+  /** The inputs a draft is made from: the same inputs make the same draft. */
+  draftKeyOf(osm) {
+    const detail = this.currentDetail(osm);
+    return JSON.stringify({
+      data: osm.key ?? null,
+      source: osm.source ?? null,
+      bytes: osm.bytes ?? null,
+      elements: osm.elements?.length ?? 0,
+      place: placeKeyOf(osm),
+      landmarks: osm.landmarks ?? null,
+      travel: osm.travel
+        ? { walk: osm.travel.walk ?? null, stop: osm.travel.stopName ?? null }
+        : null,
+      level: detail.level ?? null,
+      switches: detail.switches ?? null,
+      size: this.draftSize(),
+      symbolMm: this.levelSettings().symbolSizeMm,
+      avoidSteps: this.address?.avoidSteps?.() ?? false,
+    });
+  }
+
+  /**
+   * The person's changes in the editor laid on a draft made again from the
+   * same place, by feature id; a moved mark keeps its place only on the
+   * same ground. A new place starts fresh. The count of what is on follows.
+   */
+  async keptEdits(plan, counts, osm) {
+    const place = placeKeyOf(osm);
+    if (place !== this.editsPlace) {
+      this.edits = new Map();
+      this.editsPlace = place;
+    }
+    if (!this.edits.size) return { plan, counts };
+    const { withEdits } = await import('./plan-drawing.js');
+    const kept = withEdits(plan, this.edits, {
+      withPlaces: groundKeyOf(plan) === this.editsGround,
+    });
+    const on = kept.features.filter((f) => f.on !== false).length;
+    return { plan: kept, counts: { ...counts, on } };
+  }
+
   async makeDraft() {
     const osm = this.osm;
     if (!osm) return;
-    if (osm.to) {
-      await this.makeRouteDraft(osm);
+    // Nothing in steps 1 to 3 changed since the draft on show: that draft
+    // opens again as the person left it.
+    const key = this.draftKeyOf(osm);
+    if (this.source === 'draft' && this.draftKey === key) {
+      await this.openDraft();
       return;
     }
-    const { plan, counts, judged, found, nothing } = await this.placeDraft(
-      osm,
-      this.currentDetail(osm)
-    );
+    if (osm.to) {
+      await this.makeRouteDraft(osm, key);
+      return;
+    }
+    const made = await this.placeDraft(osm, this.currentDetail(osm));
+    const { judged, found, nothing } = made;
     if (!found) {
       this.sayAddress(nothing, true);
       return;
@@ -2165,8 +2236,10 @@ class MapPanel {
       this.sayAddress(judged.refusal, true);
       return;
     }
+    const { plan, counts } = await this.keptEdits(made.plan, made.counts, osm);
     this.plan = plan;
     this.source = 'draft';
+    this.draftKey = key;
     // Counted as step 5 lists them: the labels' and the plates' warnings.
     const labeled = this.labeled();
     const cleared = this.clearedPlan(labeled);
@@ -2201,16 +2274,14 @@ class MapPanel {
    * this panel's plan, said in one sentence with its length, crossings and
    * steps, then the editor opens on it. No walk is a sentence and no change.
    */
-  async makeRouteDraft(osm) {
+  async makeRouteDraft(osm, key = this.draftKeyOf(osm)) {
     const short = (p) => (p?.name || '').split(',')[0].trim();
     const from = short(osm.place);
     const to = short(osm.to);
     const travel = osm.travel;
-    const { plan, counts, judged } = await this.routeDraft(
-      osm,
-      this.currentDetail(osm)
-    );
-    if (!plan) {
+    const made = await this.routeDraft(osm, this.currentDetail(osm));
+    const { judged } = made;
+    if (!made.plan) {
       this.sayAddress(ADDRESS_STRINGS.noWalk(from, to), true);
       return;
     }
@@ -2218,8 +2289,10 @@ class MapPanel {
       this.sayAddress(judged.refusal, true);
       return;
     }
+    const { plan, counts } = await this.keptEdits(made.plan, made.counts, osm);
     this.plan = plan;
     this.source = 'draft';
+    this.draftKey = key;
     // Counted as step 5 lists them: the labels', the plates', the channels'
     // and the moved symbol's, as the place map counts its own.
     const labeled = this.labeled();
@@ -2268,7 +2341,7 @@ class MapPanel {
       this.sayAddress('The drawing editor is not on this page.', true);
       return;
     }
-    const { drawingFromPlan, applyRowsToPlan, rowOrder } =
+    const { drawingFromPlan, applyRowsToPlan, editsBetween, rowOrder } =
       await import('./plan-drawing.js');
     const { joinRoute } = await import('./route.js');
     const { analyzeSvg } = await import('../svg-preparer.js');
@@ -2308,6 +2381,11 @@ class MapPanel {
         : null,
       onApply: (result) => {
         const applied = applyRowsToPlan(opened, result?.regions || [], order);
+        // What the person changed is kept by id, for a draft made again.
+        for (const [id, edit] of editsBetween(opened, applied)) {
+          this.edits.set(id, edit);
+        }
+        this.editsGround = groundKeyOf(applied);
         // The route's segments that meet become one Route line.
         this.plan = { ...applied, features: joinRoute(applied.features) };
         this.plate = 'whole';
