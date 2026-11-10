@@ -216,8 +216,8 @@ record step by step. How to set that up, and what to listen for, is in the
 
 After any changes, verify:
 
-- [ ] `npm run test:run` -- all unit tests pass (298 files, 8,135 tests and 2 skipped, as of 2026-11-04).
-- [ ] `npm run test:e2e` -- E2E tests pass on Chromium (1,725 cases over 153 spec files on one worker, as of 2026-11-04).
+- [ ] `npm run test:run` -- all unit tests pass (306 files, 8,343 tests and 2 skipped, as of 2026-11-10).
+- [ ] `npm run test:e2e` -- E2E tests pass on Chromium (1,760 cases over 153 spec files on one worker, as of 2026-11-10).
 - [ ] Vector parameter widgets still render correctly.
 - [ ] Expert Mode toggle (Ctrl+E) is functional.
 - [ ] Share link generation and loading works.

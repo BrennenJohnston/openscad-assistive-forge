@@ -111,7 +111,7 @@ test.describe('the Tactile Map Designer with the live services', () => {
     await makeTheMap(page);
     await editorOpens(page);
     await expect(page.locator('#tactileMapAddressStatus')).toHaveText(
-      /^Draft map ready: \d+ of \d+ features on.* The key has \d+ symbols? and \d+ abbreviations?\.$/
+      /^Draft map ready: \d+ of \d+ features on.* The key has \d+ symbols? and \d+ numbered places?\.$/
     );
     const plan = await page.evaluate(() => {
       const p = document.getElementById('tactileMapPanel').__forgeMapPanel.plan;
@@ -147,6 +147,8 @@ test.describe('the Tactile Map Designer with the live services', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator('#tactileMapMake')).toBeFocused();
     await goToStep(page, 5);
+    // Label tape, so the key's pieces carry strips to write.
+    await page.locator('#tactileMapLabels').selectOption('tape');
     const downloadPromise = page.waitForEvent('download', { timeout: 240000 });
     await page.locator('#tactileMapRenderAll').click();
     const download = await downloadPromise;

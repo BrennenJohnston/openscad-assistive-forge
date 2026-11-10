@@ -775,8 +775,12 @@ test.describe('the map data row', () => {
 /**
  * The draft at 3600 Ferry Pl NE from the real tiles, the editor closed, at
  * step 5. Hands back the address step's status line.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {{ detail?: string }} [options] - a step 3 level other than the
+ *   first, by its radio's id end (`buildings`, `everything`)
  */
-async function makeFerryDraft(page) {
+async function makeFerryDraft(page, { detail } = {}) {
   const TILES = {
     5250: readFileSync(
       'tests/fixtures/tactile-map/sourdough-15-5250-11438.mvt'
@@ -824,6 +828,10 @@ async function makeFerryDraft(page) {
   await page.locator('#tactileMapAddress').fill('3600 Ferry Pl NE, Seattle');
   await page.locator('#tactileMapSearch').click();
   await page.locator('#tactileMapPlace1').check();
+  if (detail) {
+    await goToStep(page, 3);
+    await page.locator(`#tactileMapDetail-${detail}`).check();
+  }
   await goToStep(page, 4);
   await page.locator('#tactileMapMake').click();
   const status = page.locator('#tactileMapAddressStatus');
@@ -1791,5 +1799,98 @@ test.describe('Tactile Map, what a change says', () => {
       restyled.filter((s) => /^Message: /.test(s)),
       JSON.stringify(restyled)
     ).toEqual([]);
+  });
+});
+
+test.describe('a place map, end to end', () => {
+  test('at 3600 Ferry Pl NE with every building: the paper under the plate, Show Model, numbers in the key, the tape grade, and a zip with the PDF, the margin band and no key plate without a row', async ({
+    page,
+  }) => {
+    test.setTimeout(420_000);
+    const status = await makeFerryDraft(page, { detail: 'buildings' });
+    const places = Number(
+      (await status.textContent()).match(/and (\d+) numbered places\.$/)[1]
+    );
+    // Named places numbers 15 here; every building numbers more.
+    expect(places).toBeGreaterThan(15);
+
+    // The paper under the plate, and the View menu's switch hiding the
+    // plate to read it.
+    await expect(page.locator('#tactileMapPaper')).toBeChecked();
+    const overlay = () =>
+      page.evaluate(() => ({
+        source: window.previewManager?.getOverlayConfig?.()?.sourceFileName,
+        visible: Boolean(window.previewManager?.referenceOverlay?.visible),
+        model: window.previewManager?.mesh?.visible ?? null,
+      }));
+    await expect
+      .poll(overlay, { timeout: PREVIEW_TIMEOUT })
+      .toMatchObject({ source: 'paper_whole.svg', visible: true, model: true });
+    const showModel = page.getByRole('menuitemcheckbox', {
+      name: 'Show Model',
+    });
+    await page.evaluate(() => document.getElementById('viewMenuBtn')?.click());
+    await showModel.click();
+    expect(await overlay()).toMatchObject({ visible: true, model: false });
+    await page.evaluate(() => document.getElementById('viewMenuBtn')?.click());
+    await showModel.click();
+    expect((await overlay()).model).toBe(true);
+
+    // Label tape, its note saying the grade chosen.
+    await page.locator('#tactileMapLabels').selectOption('tape');
+    await page.locator('#tactileMapTapeGrade').selectOption('g2');
+    await expect(page.locator('#tactileMapTapeNote')).toHaveText(
+      /^Label tape: contracted braille \(UEB Grade 2\)\. \d+ labels?, /,
+      { timeout: 30000 }
+    );
+
+    // The zip, each plate's mesh stood in for: what travels with the plates.
+    const sets = await page.evaluate(() => {
+      const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+      window.__sets = [];
+      panel.render = async (parameters) => {
+        window.__sets.push(parameters.plate_kind);
+        return new Uint8Array(84);
+      };
+      return panel.keyPages.length;
+    });
+    const downloadPromise = page.waitForEvent('download', { timeout: 120_000 });
+    await page.locator('#tactileMapRenderAll').click();
+    const download = await downloadPromise;
+    const zip = await JSZip.loadAsync(readFileSync(await download.path()));
+    const names = Object.keys(zip.files);
+    expect(
+      (await page.evaluate(() => window.__sets)).filter((k) => k === 'Key')
+    ).toHaveLength(sets);
+
+    const pdf = await zip.file('map_print.pdf').async('uint8array');
+    expect(String.fromCharCode(...pdf.slice(0, 5))).toBe('%PDF-');
+
+    const readme = await zip.file('README.txt').async('string');
+    const numbered = readme
+      .split('\nNumbered places on the map:\n')[1]
+      .split('\n\n')[0]
+      .split('\n')
+      .filter((line) => /^- \d+ /.test(line));
+    expect(numbered).toHaveLength(places);
+    expect(numbered[0]).toMatch(/^- 1 /);
+
+    // The grid picture draws the whole sheet, its margin band included.
+    const sheet = await page.evaluate(
+      () => document.getElementById('tactileMapPanel').__forgeMapPanel.sheet
+    );
+    expect(sheet.marginMm).toBeGreaterThanOrEqual(10);
+    const grid = await zip.file('plate_grid.svg').async('string');
+    expect(grid).toContain(
+      `<rect x="0" y="0" width="${sheet.w}" height="${sheet.h}"`
+    );
+
+    // Every key plate carries its row: on label tape, a channel at least.
+    const keyLevels = names.filter((n) => /^levels_key(-\d+)?\.svg$/.test(n));
+    expect(keyLevels).toHaveLength(sets);
+    for (const name of keyLevels) {
+      const svg = await zip.file(name).async('string');
+      expect(svg, name).toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
+    }
   });
 });
