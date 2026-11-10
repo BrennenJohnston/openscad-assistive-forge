@@ -345,6 +345,14 @@ export const EDITOR_STRINGS = Object.freeze({
   /** After the button, with where the mark landed. A11Y. */
   herePlaced: (x, y) =>
     `You are here placed at ${x}, ${y} mm. Drag it, or press Space on it and use the arrow keys.`,
+  /**
+   * The button that puts the destination at the middle of the view, shown
+   * when a draft holds it off (the map data lacked the number typed).
+   */
+  placeCone: 'Place the destination',
+  /** After that button, with the destination's name and place. A11Y. */
+  conePlaced: (name, x, y) =>
+    `${name} placed at ${x}, ${y} mm. Drag it onto the right building, or press Space on it and use the arrow keys.`,
   /** Space on a highlighted mark. A11Y. */
   markPickedUp: (name) =>
     `${name} picked up. Arrow keys move it 1 mm, with Shift 10 mm. Space puts it down, Escape puts it back.`,
@@ -357,6 +365,7 @@ export const EDITOR_STRINGS = Object.freeze({
   /** The command labels, heard again on redo. */
   labelMoveMark: (name) => `${name} moved`,
   labelPlaceHere: 'You are here placed',
+  labelPlaceCone: (name) => `${name} placed`,
   /** A draft's switches above the list: one per class. A11Y. */
   mapGroupsLegend: 'Turn a whole class on or off',
   /** A switch's words: the class and how many shapes have it. A11Y. */

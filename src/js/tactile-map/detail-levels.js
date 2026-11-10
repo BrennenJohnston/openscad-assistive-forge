@@ -259,13 +259,14 @@ export function applyDetail(features, { switches, scale, mmPerM }) {
   const reach = ALONG_M * (mmPerM || 1);
 
   const decide = (f) => {
-    // You are here is the reader's own place, placed by them in the editor:
-    // no tier turns it on or off.
-    if (f.class === 'you-are-here') return f.on !== false;
+    // You are here is the reader's own place, placed by them in the editor,
+    // and the destination is on at the address unless the map data lacked
+    // the number typed: no tier turns either on or off.
+    if (f.class === 'you-are-here' || f.class === 'destination') {
+      return f.on !== false;
+    }
     if (sw.everything) return true;
     switch (f.class) {
-      case 'destination':
-        return true;
       case 'walkway':
         return sw.sidewalks === 'all' || !!f.way;
       case 'crossing':

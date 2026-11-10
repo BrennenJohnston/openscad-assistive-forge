@@ -97,6 +97,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rows, the words after a line break join the next line instead of each
   standing alone, and a key number stands above a name whose long word
   would not fit beside it, so no word breaks in the middle.
+- A tactile map's address search says when the map data has no place with the
+  house number typed, and the destination then waits off until you place it
+  in the editor, instead of standing at the street's middle under the number.
 - On a phone held sideways with the Customizer column open, the drawing
   editor's Shapes, More and Close were cut off at its edge, and the
   preview's buttons lay over the Design, View, Window and Help menus. The

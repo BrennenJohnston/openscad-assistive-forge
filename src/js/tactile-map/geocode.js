@@ -33,11 +33,41 @@ function fail(code, message) {
 }
 
 /**
+ * The house number a search starts with ("1701 NE Columbia Rd"), or ''. An
+ * ordinal street ("3rd Ave") and a lone postal code are not one.
+ *
+ * @param {string} query
+ * @returns {string}
+ */
+export function typedNumber(query) {
+  const m = String(query ?? '')
+    .trim()
+    .match(/^(\d+[A-Za-z]?)(?=[\s,])/);
+  return m ? m[1] : '';
+}
+
+/**
+ * The house numbers a place carries: Nominatim's address part when asked
+ * for, else the parts of its long name that are a number ("..., 1000, 4th
+ * Avenue, ...").
+ */
+function numbersOf(hit) {
+  const listed = String(hit?.address?.house_number ?? '')
+    .split(/[;,]/)
+    .map((s) => s.trim());
+  const named = String(hit?.display_name ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => /^\d+[A-Za-z]?$/.test(s));
+  return [...listed, ...named].filter(Boolean).map((s) => s.toLowerCase());
+}
+
+/**
  * A geocoder with its own clock and fetch (injected for tests) and its own
  * one-a-second gate.
  *
  * @param {{ fetch?: Function, now?: () => number }} [deps]
- * @returns {{ searchPlaces: (query: string, options?: { signal?: AbortSignal }) => Promise<Array<{ name: string, lat: number, lon: number, kind: string }>> }}
+ * @returns {{ searchPlaces: (query: string, options?: { signal?: AbortSignal }) => Promise<Array<{ name: string, lat: number, lon: number, kind: string, missingNumber?: string }>> }}
  */
 export function createGeocoder({
   fetch: fetchImpl = globalThis.fetch,
@@ -95,12 +125,21 @@ export function createGeocoder({
       );
     }
     if (!Array.isArray(list)) return [];
-    return list.slice(0, RESULT_LIMIT).map((hit) => ({
-      name: String(hit.display_name ?? hit.name ?? ''),
-      lat: Number(hit.lat),
-      lon: Number(hit.lon),
-      kind: String(hit.type ?? hit.category ?? ''),
-    }));
+    // A number the map data does not hold comes back as the street alone:
+    // such a place is marked, so the destination never claims the number.
+    const asked = typedNumber(q);
+    return list.slice(0, RESULT_LIMIT).map((hit) => {
+      const place = {
+        name: String(hit.display_name ?? hit.name ?? ''),
+        lat: Number(hit.lat),
+        lon: Number(hit.lon),
+        kind: String(hit.type ?? hit.category ?? ''),
+      };
+      if (asked && !numbersOf(hit).includes(asked.toLowerCase())) {
+        place.missingNumber = asked;
+      }
+      return place;
+    });
   }
 
   return { searchPlaces };

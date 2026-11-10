@@ -210,6 +210,14 @@ export function createDrawingEditor({
     'place-here'
   );
   placeHereBtn.hidden = true;
+  // The destination the same way, when a draft holds it off: an Off shape
+  // lies under the painted ones, out of a pointer's reach until placed.
+  const placeConeBtn = button(
+    S.placeCone,
+    'btn btn-secondary drawing-editor-place-here',
+    'place-cone'
+  );
+  placeConeBtn.hidden = true;
 
   const paintSelect = document.createElement('select');
   paintSelect.className = 'drawing-editor-paint-select';
@@ -287,7 +295,13 @@ export function createDrawingEditor({
   // row. At a 1280 px window the toolbar's real width is 692 px (the editor
   // shares the window with the customizer) and the groups sum to 1,705 px, so
   // two rows cannot hold them: three named rows, none of which wraps.
-  stencilTools.append(toolsGroup, clearRouteBtn, placeHereBtn, paintGroup);
+  stencilTools.append(
+    toolsGroup,
+    clearRouteBtn,
+    placeHereBtn,
+    placeConeBtn,
+    paintGroup
+  );
   stencilTools.hidden = true;
   viewGroup.hidden = true;
   zoomGroup.hidden = true;
@@ -1681,7 +1695,10 @@ export function createDrawingEditor({
       }
     }
     clearRouteBtn.hidden = !map;
-    if (!map) placeHereBtn.hidden = true;
+    if (!map) {
+      placeHereBtn.hidden = true;
+      placeConeBtn.hidden = true;
+    }
     viewGroup.hidden = !stencil;
     // Undo and Redo belong to the two purposes with a command stack.
     historyGroup.hidden = !(stencil || map);
@@ -2675,8 +2692,19 @@ export function createDrawingEditor({
     return orig === undefined ? null : orig;
   }
 
+  /** The destination's row when the draft held it off, or null. */
+  function waitingConeOriginal() {
+    const orig = originalIndices().find(
+      (i) => markOf(i)?.class === 'destination' && markOf(i).on === false
+    );
+    return orig === undefined ? null : orig;
+  }
+
   function syncPlaceHere() {
     placeHereBtn.hidden = !(purpose === 'map' && hereOriginal() !== null);
+    placeConeBtn.hidden = !(
+      purpose === 'map' && waitingConeOriginal() !== null
+    );
   }
 
   /** A move and a class written together, as one command does and undoes them. */
@@ -2718,9 +2746,11 @@ export function createDrawingEditor({
     });
   }
 
-  /** You are here to the middle of the view, on, highlighted, to be moved from there. */
-  function placeHere() {
-    const orig = hereOriginal();
+  /**
+   * A mark to the middle of the view, on, highlighted, to be moved from
+   * there: You are here, or a destination the draft held off.
+   */
+  function placeMark(orig, cls, label, sentence) {
     if (orig === null) return;
     const f = markOf(orig);
     const vb = canvas.getViewBox();
@@ -2729,15 +2759,28 @@ export function createDrawingEditor({
     const after = [round1(target[0] - f.at[0]), round1(target[1] - f.at[1])];
     const classBefore = mapClasses.get(orig) || 'ignore';
     stack.run({
-      label: S.labelPlaceHere,
+      label,
       do: () => {
-        writeMark(orig, after, 'you-are-here');
+        writeMark(orig, after, cls);
         canvas.setHighlight(String(orig), { pulse: true });
         const [x, y] = markPosition(orig);
-        say(S.herePlaced(x, y));
+        say(sentence(x, y));
       },
       undo: () => writeMark(orig, before, classBefore),
     });
+  }
+
+  function placeHere() {
+    placeMark(hereOriginal(), 'you-are-here', S.labelPlaceHere, S.herePlaced);
+  }
+
+  function placeCone() {
+    const orig = waitingConeOriginal();
+    if (orig === null) return;
+    const name = nameOfOriginal(orig);
+    placeMark(orig, 'destination', S.labelPlaceCone(name), (x, y) =>
+      S.conePlaced(name, x, y)
+    );
   }
 
   /**
@@ -3221,6 +3264,7 @@ export function createDrawingEditor({
   }
   clearRouteBtn.addEventListener('click', () => clearRoute());
   placeHereBtn.addEventListener('click', () => placeHere());
+  placeConeBtn.addEventListener('click', () => placeCone());
   paintSelectionBtn.addEventListener('click', () => {
     if (selected.size === 0) {
       say(S.nothingSelected);

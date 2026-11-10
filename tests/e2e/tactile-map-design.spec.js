@@ -408,6 +408,102 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       .toBe('match');
   });
 
+  test('a number the map data lacks: each place found says so, one sentence says what to do, and the draft holds the cone off until it is dragged onto a building', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await routeMapServices(page);
+    // Nominatim's answer of 2026-11-10 for "1701 NE Columbia Rd, Seattle,
+    // WA 98195": no place with that number, two pieces of the street.
+    const street = (lat, lon) => ({
+      category: 'highway',
+      type: 'service',
+      lat,
+      lon,
+      importance: 0.1,
+      display_name:
+        'Northeast Columbia Road, South Campus, University District, Seattle, King County, Washington, 98195, United States',
+    });
+    await page.route('https://nominatim.openstreetmap.org/search*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify([
+          street('47.6487089', '-122.3075435'),
+          street('47.6498576', '-122.3097091'),
+        ]),
+      })
+    );
+    const status = page.locator('#tactileMapAddressStatus');
+    await openChooser(page);
+    await chooseByKeyboard(page, 'A place map');
+    await searchByKeyboard(
+      page,
+      '#tactileMapAddress',
+      '1701 NE Columbia Rd, Seattle, WA 98195'
+    );
+    const first = page.locator('#tactileMapResults input[type="radio"]').first();
+    await expect(first).toBeFocused({ timeout: 15000 });
+    await expect(page.locator('#tactileMapResults label')).toHaveText([
+      /^Northeast Columbia Road, .* \(no number 1701 in the map data\)$/,
+      /^Northeast Columbia Road, .* \(no number 1701 in the map data\)$/,
+    ]);
+    const missing =
+      "No place numbered 1701 is in the map data, so the places found lack it. Search the building's name instead, or pick one and drag the destination onto the right building in the editor.";
+    await expect(status).toHaveText(missing);
+    // Shown under the places as well, where step 1 can see it.
+    await expect(page.locator('#tactileMapPlaceNumberNote')).toBeVisible();
+    await expect(page.locator('#tactileMapPlaceNumberNote')).toHaveText(missing);
+    await page.keyboard.press('Space');
+    await expect(first).toBeChecked();
+    await nextStep(page, 2, 'How much ground');
+    await nextStep(page, 3, 'What to show');
+    await nextStep(page, 4, 'Make the map');
+    await makeTheMap(page);
+    await expect(status).toHaveText(
+      / The map data has no number 1701, so the destination waits, off: press Place the destination in the editor and drag it onto the right building\.$/
+    );
+    const cone = () =>
+      page.evaluate(
+        () =>
+          document
+            .getElementById('tactileMapPanel')
+            .__forgeMapPanel.plan.features.find((f) => f.id === 'destination')
+            .on
+      );
+    expect(await cone()).toBe(false);
+
+    // Placed by its button, then dragged; Apply keeps it on.
+    const editor = page.locator('#drawingEditorSurface');
+    const editorStatus = editor.locator('.drawing-editor-status');
+    await editor.getByRole('button', { name: 'Place the destination' }).click();
+    await expect(editorStatus).toHaveText(
+      /^1701 NE Columbia Rd placed at [\d.]+, [\d.]+ mm\. Drag it onto the right building, or press Space on it and use the arrow keys\.$/
+    );
+    const region = await markRegion(page, '1701 NE Columbia Rd');
+    const box = await region.boundingBox();
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx - 20, cy + 20, { steps: 4 });
+    await page.mouse.move(cx - 40, cy + 40, { steps: 4 });
+    await page.mouse.up();
+    await expect(editorStatus).toHaveText(
+      /^1701 NE Columbia Rd moved to [\d.]+, [\d.]+ mm\.$/
+    );
+    await page
+      .locator('#drawingEditorSurface')
+      .getByRole('button', { name: 'Apply classes' })
+      .click();
+    await expect(page.locator('#tactileMapMake')).toBeFocused({
+      timeout: 30000,
+    });
+    expect(await cone()).toBe(true);
+    await axeClean(page, 'the draft with the cone placed by hand');
+  });
+
   test('the picture pans by a drag on empty ground, by Shift with the arrows, by the arrows in the Hand tool, and by four buttons of 44 px', async ({
     page,
   }) => {

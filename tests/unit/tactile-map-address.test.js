@@ -219,6 +219,37 @@ describe('the address section', () => {
     expect(getMapPlace()).toBeNull();
   });
 
+  it('says when no place has the number typed: each place marked, one sentence on what to do, said after the list', async () => {
+    const street = {
+      name: 'Northeast Columbia Road, South Campus, University District, Seattle, King County, Washington, 98195, United States',
+      lat: 47.6487089,
+      lon: -122.3075435,
+      kind: 'service',
+      missingNumber: '1701',
+    };
+    mount(vi.fn(async () => [street, { ...street, lat: 47.6498576 }]));
+    type('1701 NE Columbia Rd, Seattle, WA 98195');
+    searchBtn().click();
+    await vi.waitFor(() => expect(radios()).toHaveLength(2));
+    expect(
+      results().querySelector(`label[for="${radios()[0].id}"]`).textContent
+    ).toBe(`${street.name} (no number 1701 in the map data)`);
+    const sentence =
+      "No place numbered 1701 is in the map data, so the places found lack it. Search the building's name instead, or pick one and drag the destination onto the right building in the editor.";
+    expect(status()).toBe(sentence);
+    // Shown under the places too: the status box stands in step 4.
+    expect(document.getElementById('tactileMapPlaceNumberNote').textContent).toBe(
+      sentence
+    );
+    expect(results().contains(document.getElementById('tactileMapPlaceNumberNote'))).toBe(
+      true
+    );
+    expect(announce).toHaveBeenCalledWith(sentence, { source: 'tactile-map' });
+    expect(withdrawAnnouncement).not.toHaveBeenCalled();
+    radios()[0].click();
+    expect(getMapPlace()).toEqual(street);
+  });
+
   it('says when the search did not answer, as an error', async () => {
     mount(failing('no-answer'));
     type('Pike St');

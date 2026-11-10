@@ -62,6 +62,14 @@ export const ADDRESS_STRINGS = Object.freeze({
   none: (q) => `No place found for ${q}. Try adding the city or a postal code.`,
   /** A11Y: the results group's name. */
   found: 'Places found',
+  /** A11Y: a found place's name when it lacks the house number typed. */
+  withoutNumber: (name, n) => `${name} (no number ${n} in the map data)`,
+  /** A11Y: said after the list when no place found has the number typed. */
+  numberMissing: (n) =>
+    `No place numbered ${n} is in the map data, so the places found lack it. Search the building's name instead, or pick one and drag the destination onto the right building in the editor.`,
+  /** A11Y: the draft's sentence ends so when the destination waits, off. */
+  destinationWaits: (n) =>
+    `The map data has no number ${n}, so the destination waits, off: press Place the destination in the editor and drag it onto the right building.`,
   /** A11Y: after a pick. */
   picked: (name) => `${name} picked.`,
   /** A11Y: said after the pick while the preview shows the empty plate. */
@@ -904,7 +912,11 @@ export function createAddressSection({
       radio.addEventListener('change', () => {
         if (radio.checked) onPick(p);
       });
-      const text = el('label', '', p.name);
+      const text = el(
+        'label',
+        '',
+        p.missingNumber ? S.withoutNumber(p.name, p.missingNumber) : p.name
+      );
       text.htmlFor = radio.id;
       line.appendChild(radio);
       line.appendChild(text);
@@ -959,9 +971,21 @@ export function createAddressSection({
         say(S.none(q), true);
       } else {
         showList(which.list, places, which);
-        // The places are said as focus reaches them; a "Searching..." still
-        // waiting would be said after them.
-        unsay();
+        if (places.every((p) => p.missingNumber)) {
+          // No place has the number typed: what to do instead, said after
+          // the first place focus reaches (it replaces the waiting
+          // "Searching...") and shown under the places, since the status
+          // box stands in a later step.
+          const sentence = S.numberMissing(places[0].missingNumber);
+          const note = el('p', 'braille-panel-help', sentence);
+          note.id = `${which.prefix}NumberNote`;
+          which.list.appendChild(note);
+          say(sentence);
+        } else {
+          // The places are said as focus reaches them; a "Searching..." still
+          // waiting would be said after them.
+          unsay();
+        }
       }
     } catch (error) {
       clearList(which.list);

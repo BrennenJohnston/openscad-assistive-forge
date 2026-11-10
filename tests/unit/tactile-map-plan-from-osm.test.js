@@ -542,6 +542,29 @@ describe('draftPlan', () => {
     expect(plan.features.filter((f) => f.on).length).toBe(counts.on);
   });
 
+  it('carries the destination off, still named by the typed words, when the map data has no place with the number typed', () => {
+    const { plan, counts } = draftPlan({
+      elements: ELEMENTS,
+      center: CENTER,
+      radiusM: 250,
+      landmarks: ['entrance', 'transit-stop'],
+      size: { w: 480, h: 360 },
+      place: {
+        name: 'Pine Street, Seattle, Washington',
+        query: '1701 Pine St, Seattle',
+        missingNumber: '1701',
+        ...CENTER,
+      },
+    });
+    const destination = byId(plan, 'destination');
+    expect([destination.on, destination.at, destination.name]).toEqual([
+      false,
+      [240, 180],
+      '1701 Pine St',
+    ]);
+    expect(plan.features.filter((f) => f.on).length).toBe(counts.on);
+  });
+
   it('drops a line under 3 mm and an area under 10 square millimeters', () => {
     const tiny = [
       way(30, { highway: 'footway' }, [
