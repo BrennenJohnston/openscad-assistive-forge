@@ -21,6 +21,9 @@ export const STEP_STRINGS = Object.freeze({
   heading: (n, total, name) => `Step ${n} of ${total}: ${name}`,
   back: 'Back',
   next: 'Next',
+  /** A11Y: shown above Generate and said when it is pressed before the last step. */
+  generateHeld: (n, name) =>
+    `Finish the map's steps first. Generate works at step ${n}, ${name}.`,
 });
 
 function el(tag, className, text) {

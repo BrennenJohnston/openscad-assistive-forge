@@ -145,6 +145,7 @@ import {
   showErrorToast,
 } from './js/error-translator.js';
 import { reserveSpaceForActionsBar } from './js/actions-bar-reserve.js';
+import { showHoldNote } from './js/primary-action-hold.js';
 import { engineStartFailureNotice } from './js/engine-start-notice.js';
 import {
   getStorageEstimate,
@@ -12401,6 +12402,8 @@ if (rounded) {
 
   // Primary Action Button (transforms between Generate and Download)
   primaryActionBtn.addEventListener('click', async () => {
+    // A panel's steps hold it (the tactile map's): say why, do nothing.
+    if (showHoldNote()) return;
     const action = primaryActionBtn.dataset.action;
     const state = stateManager.getState();
 
