@@ -109,7 +109,14 @@ export function wrapPrint(text, widthMm, letterMm, wordMaxMm = widthMm) {
       continue;
     }
     if (line) lines.push(line);
-    if (width(word) <= Math.max(widthMm, wordMaxMm)) {
+    // A word that fits the line starts the next one, and the words after it
+    // join it; only a word wider than the line, within the room a lone word
+    // may take, stands on a line of its own.
+    if (fits(word)) {
+      line = word;
+      continue;
+    }
+    if (width(word) <= wordMaxMm) {
       lines.push(word);
       line = '';
       continue;
@@ -374,6 +381,27 @@ export function keyPieces(
         h: sampleTallMm(row.sample),
       };
     }
+    // Raised capitals: a name with a word too wide to stand beside the
+    // numeral takes the whole width, the numeral on a line of its own above
+    // it, so no word breaks in the middle.
+    let above = null;
+    if (style === 'raised' && left?.kind === 'number') {
+      const beside = maxWidthMm - 2 * M - left.w - KEY_CLEARANCE_MM;
+      const tooWide = clean(row.print)
+        .toUpperCase()
+        .split(/\s+/)
+        .some(
+          (word) =>
+            signRowWidthMm(word, {
+              charHeightMm: letterHeightMm,
+              letterSpacing: LETTER_SPACING,
+            }) > beside
+        );
+      if (tooWide) {
+        above = left.part;
+        left = null;
+      }
+    }
     const room = maxWidthMm - 2 * M - (left ? left.w + KEY_CLEARANCE_MM : 0);
 
     // The name's lines, each with its height, its width and the gap above.
@@ -407,9 +435,21 @@ export function keyPieces(
         h: letterHeightMm + descentMm(text, letterHeightMm),
         gap: k
           ? pitch - letterHeightMm - descentMm(texts[k - 1], letterHeightMm)
-          : 0,
+          : above
+            ? pitch - above.capMm
+            : 0,
         read: letterHeightMm,
       }));
+      if (above) {
+        lines.unshift({
+          kind: 'numeral',
+          w: above.w,
+          h: above.h,
+          capMm: above.capMm,
+          gap: 0,
+          read: above.h,
+        });
+      }
     } else {
       const cells = brailleCells(brailleOf(clean(row.say)));
       lines = wrapCells(cells, wedgeCellsFor(room)).map((c, k) => {
@@ -507,6 +547,10 @@ export function keyPieces(
       } else if (line.kind === 'words') {
         print.push(
           `${tenths(x0)}:${tenths(h - (line.top + letterHeightMm))}:${tenths(letterHeightMm)}:0:${line.text}`
+        );
+      } else if (line.kind === 'numeral') {
+        print.push(
+          `${tenths(x0 + line.w / 2)}:${tenths(h - (line.top + line.h))}:${tenths(line.capMm)}:0:#${row.number}`
         );
       } else {
         const foot = line.top + line.h;
