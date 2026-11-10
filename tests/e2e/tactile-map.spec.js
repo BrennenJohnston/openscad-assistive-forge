@@ -438,7 +438,9 @@ test.describe('Tactile Map tile', () => {
     expect(names).toContain('map_print.pdf');
     const pdf = await zip.file('map_print.pdf').async('uint8array');
     expect(String.fromCharCode(...pdf.slice(0, 5))).toBe('%PDF-');
-    expect(readme).toMatch(/^map_print\.pdf shows where each label goes/);
+    expect(readme).toMatch(
+      /^This map maker is a prototype [^\n]*\/issues so I can fix it\.\n\nmap_print\.pdf shows where each label goes/
+    );
     const a1 = await zip.file('tactile_map_A1.stl').async('uint8array');
     expect(a1.length).toBeGreaterThan(84);
     const { triangles } = parseSTL(a1);

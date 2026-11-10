@@ -263,8 +263,13 @@ test.describe('the three map types end to end', () => {
     );
     const readme = await zip.file('README.txt').async('string');
     const lines = readme.split('\n');
-    expect(lines[0]).toMatch(/^map_print\.pdf shows where each label goes/);
-    expect(lines[1]).toBe('A map from a drawing.');
+    // The prototype note first, then a blank line.
+    expect(lines[0]).toMatch(
+      /^This map maker is a prototype .* report it on https:\/\/github\.com\/BrennenJohnston\/openscad-assistive-forge\/issues so I can fix it\.$/
+    );
+    expect(lines[1]).toBe('');
+    expect(lines[2]).toMatch(/^map_print\.pdf shows where each label goes/);
+    expect(lines[3]).toBe('A map from a drawing.');
     expect(readme).not.toMatch(/OpenStreetMap/);
   });
 });
