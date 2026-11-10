@@ -1894,3 +1894,77 @@ test.describe('a place map, end to end', () => {
     }
   });
 });
+
+test.describe("the draft keeps the editor's changes", () => {
+  test('a stop switched off in the editor stays off when Make the map opens the draft again, and when a new level in step 3 drafts it again', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await makeFerryDraft(page);
+    const editor = page.locator('#drawingEditorSurface .drawing-editor').first();
+    const selects = page.locator(
+      '#drawingEditorSurface .drawing-editor-class-select'
+    );
+    const reopen = async () => {
+      await goToStep(page, 4);
+      await page.locator('#tactileMapMake').click();
+      // A closed editor keeps its purpose; it is open when it shows, which
+      // on a slow runner takes seconds for a draft of 286 rows.
+      await expect(editor).toHaveAttribute('data-purpose', 'map', {
+        timeout: 60000,
+      });
+      await expect(page.locator('#drawingEditorSurface')).toBeVisible({
+        timeout: 60000,
+      });
+    };
+    const close = async () => {
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#drawingEditorSurface')).toBeHidden();
+    };
+    const onOf = (cls) =>
+      page.evaluate(
+        (c) =>
+          document
+            .getElementById('tactileMapPanel')
+            .__forgeMapPanel.plan.features.filter(
+              (f) => f.class === c && f.on !== false
+            )
+            .map((f) => f.id),
+        cls
+      );
+
+    await reopen();
+    const stops = await onOf('transit-stop');
+    expect(stops.length).toBeGreaterThan(0);
+    const row = await selects.evaluateAll((list) =>
+      list.findIndex((s) => s.value === 'transit-stop')
+    );
+    await selects.nth(row).selectOption('ignore');
+    await page.locator('#drawingEditorSurface .drawing-editor-apply').click();
+    await expect(page.locator('#drawingEditorSurface')).toBeHidden();
+    const stillOn = await onOf('transit-stop');
+    const off = stops.filter((id) => !stillOn.includes(id));
+    expect(off).toHaveLength(1);
+
+    // Pressed again with nothing changed, the draft opens as it was left.
+    await reopen();
+    await expect
+      .poll(() =>
+        selects.evaluateAll(
+          (list) => list.filter((s) => s.value === 'transit-stop').length
+        )
+      )
+      .toBe(stops.length - 1);
+    expect(await onOf('transit-stop')).not.toContain(off[0]);
+    await close();
+
+    // Every building drafts again: more on, the stop still off.
+    const buildings = (await onOf('area')).length;
+    await goToStep(page, 3);
+    await page.locator('#tactileMapDetail-buildings').check();
+    await reopen();
+    await close();
+    expect((await onOf('area')).length).toBeGreaterThan(buildings);
+    expect(await onOf('transit-stop')).not.toContain(off[0]);
+  });
+});

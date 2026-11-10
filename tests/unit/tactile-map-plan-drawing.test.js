@@ -10,6 +10,8 @@ import { describe, it, expect } from 'vitest';
 import {
   drawingFromPlan,
   applyRowsToPlan,
+  editsBetween,
+  withEdits,
   rowOrder,
 } from '../../src/js/tactile-map/plan-drawing.js';
 import { analyzeSvg } from '../../src/js/svg-preparer.js';
@@ -217,6 +219,66 @@ describe('applyRowsToPlan', () => {
         expect(f.at ?? null).toEqual(snapshot.features[i].at ?? null);
       }
     }
+  });
+});
+
+describe("the editor's changes kept for a draft made again", () => {
+  /** The editor's Apply: one row off, one on as an area, one point moved. */
+  const applied = () => {
+    const before = plan();
+    const k = before.features.findIndex((f) => f.kind === 'point');
+    const regions = before.features.map((f, index) => ({
+      index,
+      class: f.on ? f.class : 'ignore',
+    }));
+    regions[0].class = 'ignore';
+    regions[1].class = 'area';
+    regions[k].at = [12.5, 34];
+    return { before, after: applyRowsToPlan(before, regions), k };
+  };
+
+  it('names each feature the editor changed, by id, with the state it ended in, and no other', () => {
+    const { before, after, k } = applied();
+    const edits = new Map(editsBetween(before, after));
+    expect([...edits.keys()].sort()).toEqual(
+      [before.features[0].id, before.features[1].id, before.features[k].id].sort()
+    );
+    expect(edits.get(before.features[0].id)).toEqual({
+      on: false,
+      class: before.features[0].class,
+    });
+    expect(edits.get(before.features[1].id)).toEqual({ on: true, class: 'area' });
+    expect(edits.get(before.features[k].id).at).toEqual([12.5, 34]);
+  });
+
+  it('lays the changes on a fresh draft by id, its other features as drafted', () => {
+    const { before, after, k } = applied();
+    const edits = editsBetween(before, after);
+    const fresh = plan();
+    const snapshot = JSON.parse(JSON.stringify(fresh));
+    const kept = withEdits(fresh, edits);
+    expect(fresh).toEqual(snapshot);
+    expect(kept.features[0].on).toBe(false);
+    expect(kept.features[1]).toMatchObject({ on: true, class: 'area' });
+    expect(kept.features[k].at).toEqual([12.5, 34]);
+    for (const [i, f] of kept.features.entries()) {
+      if (i > 1 && i !== k) expect(f).toEqual(snapshot.features[i]);
+    }
+  });
+
+  it('keeps a moved point where the draft put it when the ground was measured anew', () => {
+    const { before, after, k } = applied();
+    const fresh = plan();
+    const kept = withEdits(fresh, editsBetween(before, after), {
+      withPlaces: false,
+    });
+    expect(kept.features[k].at).toEqual(fresh.features[k].at);
+    expect(kept.features[0].on).toBe(false);
+  });
+
+  it('hands back the same plan when there is nothing to lay on', () => {
+    const fresh = plan();
+    expect(withEdits(fresh, [])).toBe(fresh);
   });
 });
 

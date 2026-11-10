@@ -168,3 +168,59 @@ export function applyRowsToPlan(plan, regions, order = null) {
   }
   return { ...plan, features };
 }
+
+const sameAt = (a, b) =>
+  Array.isArray(a) && Array.isArray(b) && a[0] === b[0] && a[1] === b[1];
+
+/**
+ * What the editor changed, feature by feature: each feature whose on,
+ * class or place differs between the plan opened and the plan applied, by
+ * id, with the state it ended in. A draft made again from the same place
+ * takes these back by id (`withEdits`).
+ *
+ * @param {object} before - the plan the editor opened on
+ * @param {object} after - the plan Apply made
+ * @returns {Array<[string, {on: boolean, class: string, at?: [number, number]}]>}
+ */
+export function editsBetween(before, after) {
+  const was = new Map((before?.features || []).map((f) => [f.id, f]));
+  const edits = [];
+  for (const f of after?.features || []) {
+    const b = f.id ? was.get(f.id) : null;
+    if (!b) continue;
+    const on = f.on !== false;
+    const moved =
+      f.kind === 'point' && Array.isArray(f.at) && !sameAt(f.at, b.at);
+    if (on === (b.on !== false) && f.class === b.class && !moved) continue;
+    const edit = { on, class: f.class };
+    if (moved) edit.at = [f.at[0], f.at[1]];
+    edits.push([f.id, edit]);
+  }
+  return edits;
+}
+
+/**
+ * A plan with the person's edits laid back on by id: on and class, and a
+ * point's place unless the ground was measured anew (another scale or
+ * plate, where the old millimeters mean somewhere else). Features the
+ * edits do not name stay as drafted; the plan returned is new.
+ *
+ * @param {object} plan
+ * @param {Map|Array} edits - `editsBetween`'s pairs, or a Map of them
+ * @param {{ withPlaces?: boolean }} [options]
+ * @returns {object}
+ */
+export function withEdits(plan, edits, { withPlaces = true } = {}) {
+  const byId = edits instanceof Map ? edits : new Map(edits || []);
+  if (!byId.size) return plan;
+  const features = (plan.features || []).map((f) => {
+    const edit = byId.get(f.id);
+    if (!edit) return f;
+    const next = { ...f, on: edit.on, class: edit.class };
+    if (withPlaces && edit.at && f.kind === 'point') {
+      next.at = [edit.at[0], edit.at[1]];
+    }
+    return next;
+  });
+  return { ...plan, features };
+}

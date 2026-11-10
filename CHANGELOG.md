@@ -90,6 +90,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A tactile map's draft keeps what you change in the editor: Make the map,
+  pressed again, opens the draft as you left it instead of drafting it anew,
+  and a new level or scale keeps your changes on the same features.
 - Raised words fill their lines: on the map's title and the key's raised
   rows, the words after a line break join the next line instead of each
   standing alone, and a key number stands above a name whose long word
