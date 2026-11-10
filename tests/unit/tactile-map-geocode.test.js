@@ -9,7 +9,10 @@
  * @license GPL-3.0-or-later
  */
 import { describe, it, expect, vi } from 'vitest';
-import { createGeocoder } from '../../src/js/tactile-map/geocode.js';
+import {
+  createGeocoder,
+  typedNumber,
+} from '../../src/js/tactile-map/geocode.js';
 
 const FIXTURE = [
   {
@@ -105,6 +108,50 @@ describe('createGeocoder().searchPlaces', () => {
       'waste_basket',
       'fountain',
     ]);
+  });
+
+  it('marks each place that lacks the house number typed, as the street alone does when the map data has no such number', async () => {
+    // Trimmed from Nominatim's real jsonv2 answer of 2026-11-10 for
+    // "1701 NE Columbia Rd, Seattle, WA 98195": two pieces of the street.
+    const street = (osm_id, type, lat, lon) => ({
+      osm_type: 'way',
+      osm_id,
+      lat,
+      lon,
+      category: 'highway',
+      type,
+      name: 'Northeast Columbia Road',
+      display_name:
+        'Northeast Columbia Road, South Campus, University District, Seattle, King County, Washington, 98195, United States',
+    });
+    const STREET = [
+      street(4921076, 'unclassified', '47.6498576', '-122.3097091'),
+      street(409892504, 'service', '47.6487089', '-122.3075435'),
+    ];
+    const lacking = await createGeocoder({
+      fetch: answer(STREET),
+      now: () => 10_000,
+    }).searchPlaces(' 1701 NE Columbia Rd, Seattle, WA 98195');
+    expect(lacking.map((p) => p.missingNumber)).toEqual(['1701', '1701']);
+    const numbered = await createGeocoder({
+      fetch: answer(FIXTURE),
+      now: () => 10_000,
+    }).searchPlaces('1000 4th Ave, Seattle, WA');
+    expect(numbered.some((p) => 'missingNumber' in p)).toBe(false);
+    const named = await createGeocoder({
+      fetch: answer(STREET),
+      now: () => 10_000,
+    }).searchPlaces('NE Columbia Rd, Seattle');
+    expect(named.some((p) => 'missingNumber' in p)).toBe(false);
+  });
+
+  it('reads the house number a search starts with, and none from an ordinal street', () => {
+    expect(typedNumber(' 1701 NE Columbia Rd, Seattle')).toBe('1701');
+    expect(typedNumber('100A Main St')).toBe('100A');
+    expect(typedNumber('1000, 4th Avenue')).toBe('1000');
+    expect(typedNumber('3rd Ave & Pike St')).toBe('');
+    expect(typedNumber('Seattle Central Library')).toBe('');
+    expect(typedNumber('98195')).toBe('');
   });
 
   it('asks Nominatim for jsonv2, five results and the encoded query, with no email and no custom header', async () => {

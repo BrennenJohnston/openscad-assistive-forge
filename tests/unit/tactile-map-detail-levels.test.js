@@ -167,6 +167,25 @@ describe('the detail levels', () => {
     expect(onOf(at(placed, 'way'), 'you-are-here')).toHaveLength(1);
   });
 
+  it('leaves the destination as the draft set it at every tier, Everything included: on at the address, off where the map data lacked the number typed', async () => {
+    const { plan, scale } = await ferry();
+    const at = (features, key) =>
+      applyDetail(features, {
+        type: 'place',
+        switches: switchesFor('place', key),
+        scale,
+        size: plan.size,
+        mmPerM: plan.meta.geo.mmPerM,
+      }).features;
+    const waiting = plan.features.map((f) =>
+      f.class === 'destination' ? { ...f, on: false } : f
+    );
+    for (const level of DETAIL_LEVELS.place) {
+      expect(onOf(at(plan.features, level.key), 'destination')).toHaveLength(1);
+      expect(onOf(at(waiting, level.key), 'destination')).toHaveLength(0);
+    }
+  });
+
   it('turns a whole group on or off with one switch: every building, every bench', async () => {
     const { plan, scale } = await ferry();
     const base = switchesFor('place', 'named');

@@ -755,6 +755,8 @@ export function draftPlan({
   // was typed. You are here is the reader's own place: the draft carries it
   // off, at the center, for the person to put where they stand in the
   // editor (Place You are here, or a drag); nothing prints until they do.
+  // A place without the number typed is the street alone, so the cone waits
+  // off the same way until the person drags it onto the right building.
   features.push(
     {
       id: 'destination',
@@ -763,7 +765,7 @@ export function draftPlan({
       name: addressName(place),
       size: DESTINATION_CONE_MM,
       at: [w / 2, h / 2],
-      on: true,
+      on: !place?.missingNumber,
     },
     {
       id: 'you-are-here',

@@ -2190,7 +2190,8 @@ class MapPanel {
         (judged.warning ? ` ${judged.warning}` : '') +
         (counts.leftOut ? ADDRESS_STRINGS.leftOut(counts.leftOut) : '') +
         this.bigNote(osm) +
-        ` ${keySentence(this.labeled().key)}`
+        ` ${keySentence(this.labeled().key)}` +
+        this.waitingConeNote(osm)
     );
     await this.steepIfWanted();
     await this.openDraft();
@@ -2317,6 +2318,15 @@ class MapPanel {
       onKeepOriginal: () => backTo(opener),
       onClose: () => backTo(opener),
     });
+  }
+
+  /** The map data lacks the number typed: the cone waits off, said so. */
+  waitingConeNote(osm) {
+    const n = osm?.place?.missingNumber;
+    const cone = this.plan.features.find((f) => f.id === 'destination');
+    return n && cone?.on === false
+      ? ` ${ADDRESS_STRINGS.destinationWaits(n)}`
+      : '';
   }
 
   /** Over 2 MB of data: the size warning, said with the draft. */

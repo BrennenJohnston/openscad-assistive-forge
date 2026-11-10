@@ -90,6 +90,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A tactile map's address search says when the map data has no place with the
+  house number typed, and the destination then waits off until you place it
+  in the editor, instead of standing at the street's middle under the number.
 - Raised words fill their lines: on the map's title and the key's raised
   rows, the words after a line break join the next line instead of each
   standing alone, and a key number stands above a name whose long word
