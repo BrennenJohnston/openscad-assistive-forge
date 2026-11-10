@@ -26,8 +26,14 @@ import {
 import { buildLevelRings } from '../../src/js/tactile-map/levels-svg.js';
 import { sampleStationPlan } from '../../src/js/tactile-map/plan.js';
 import { sheetOf, titleRows } from '../../src/js/tactile-map/sheet.js';
+import {
+  ISSUES_URL,
+  PROTOTYPE_README,
+} from '../../src/js/tactile-map/map-types.js';
 
 const x1c = BED_PRESETS.find((b) => b.key === 'x1c');
+/** The README after its first line, the prototype note, and the blank line. */
+const afterNote = (readme) => readme.slice(PROTOTYPE_README.length + 2);
 const layout = planPlates({ w: 480, h: 360, bed: x1c });
 const CONFIG = {
   mapFileParam: 'map_file',
@@ -331,7 +337,7 @@ describe('the README says what the map is', () => {
         ratio: 500,
       },
     });
-    const lines = readme.trimEnd().split('\n');
+    const lines = afterNote(readme).trimEnd().split('\n');
     expect(lines[0]).toBe(
       'A place map of Bill & Melinda Gates Center at 1:500.'
     );
@@ -353,7 +359,7 @@ describe('the README says what the map is', () => {
           '22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony.',
       },
     });
-    const lines = readme.trimEnd().split('\n');
+    const lines = afterNote(readme).trimEnd().split('\n');
     expect(lines[0]).toBe(
       'A route map of a 60 m walk from Husky Union Building to East Stevens Way NE & Benton Ln. The walk is part of a journey by bus and train: 22 min, 1 change: the 72 to Stevens Way & Rainier Vista NE, then the 2 Line to Symphony.'
     );
@@ -365,8 +371,23 @@ describe('the README says what the map is', () => {
 
   it('opens a map from a drawing plainly, with no map data credit', () => {
     const readme = readmeText({ ...base, about: { type: 'drawing' } });
-    expect(readme.split('\n')[0]).toBe('A map from a drawing.');
+    expect(afterNote(readme).split('\n')[0]).toBe('A map from a drawing.');
     expect(readme).not.toMatch(/OpenStreetMap/);
+  });
+
+  it('says first that the map maker is a prototype, with the address to report a mistake', () => {
+    for (const about of [{ type: 'place', place: 'P' }, { type: 'drawing' }]) {
+      const readme = readmeText({ ...base, about });
+      expect(readme.split('\n').slice(0, 2)).toEqual([PROTOTYPE_README, '']);
+    }
+    expect(PROTOTYPE_README).toBe(
+      'This map maker is a prototype and still a work in progress, so a map may have mistakes. Check each map before a reader relies on it. If you find a mistake, please report it on ' +
+        ISSUES_URL +
+        ' so I can fix it.'
+    );
+    expect(ISSUES_URL).toBe(
+      'https://github.com/BrennenJohnston/openscad-assistive-forge/issues'
+    );
   });
 
   it('says the labels’ tape in one sentence: the grade, the labels, the cells, the length, and what the other grade would need', () => {
@@ -572,7 +593,7 @@ describe('the archive and its README', () => {
       tapeWidthMm: 12.7,
       pdfName: 'map_print.pdf',
     });
-    expect(readme).toMatch(
+    expect(afterNote(readme)).toMatch(
       /^map_print\.pdf shows where each label goes, with its text, for assembly and labeling\.\n/
     );
     const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46]);

@@ -61,6 +61,11 @@ import { announce, announceError } from '../../src/js/announcer.js';
 import { stateManager } from '../../src/js/state.js';
 import { sampleStationPlan } from '../../src/js/tactile-map/plan.js';
 import {
+  ISSUES_URL,
+  PROTOTYPE_NOTE,
+  PROTOTYPE_README,
+} from '../../src/js/tactile-map/map-types.js';
+import {
   BUILT_IN_SYMBOLS,
   activeLibrary,
   activeSetKey,
@@ -218,6 +223,30 @@ describe('the map types and their steps', () => {
     );
     // Nothing of a type's steps is on the page yet.
     expect(document.getElementById('tactileMapAddress')).toBeNull();
+  });
+
+  it('says under its heading, on the chooser and in the steps, that the map maker is a prototype, with a link to report a mistake in a new tab', () => {
+    mount({ type: null });
+    const note = () => document.getElementById('tactileMapPrototype');
+    const check = () => {
+      expect(note().tagName).toBe('P');
+      expect(note().previousElementSibling).toBe(heading());
+      expect(note().nextElementSibling.id).toBe('tactileMapWorkflow');
+      expect(note().textContent).toBe(PROTOTYPE_NOTE.join(''));
+      const link = note().querySelector('a');
+      expect(link.textContent).toBe('GitHub Issues (opens in a new tab)');
+      expect(link.getAttribute('href')).toBe(ISSUES_URL);
+      expect(link.target).toBe('_blank');
+      expect(link.rel).toBe('noopener noreferrer');
+    };
+    check();
+    const place = document.getElementById('tactileMapType-place');
+    place.checked = true;
+    place.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('tactileMapChooserNext').click();
+    expect(heading().textContent).toBe('A place map');
+    check();
+    expect(document.querySelectorAll('#tactileMapPrototype')).toHaveLength(1);
   });
 
   it('choosing a route map opens its steps on the first, focused, and Back returns to the choice with the route still ticked', () => {
@@ -1459,7 +1488,10 @@ describe('render every plate and download', () => {
     ]);
     const pdf = await zip.file('map_print.pdf').async('uint8array');
     expect(String.fromCharCode(...pdf.slice(0, 5))).toBe('%PDF-');
-    expect(readme).toMatch(/^map_print\.pdf shows where each label goes/);
+    expect(readme.startsWith(`${PROTOTYPE_README}\n\n`)).toBe(true);
+    expect(readme.slice(PROTOTYPE_README.length + 2)).toMatch(
+      /^map_print\.pdf shows where each label goes/
+    );
     expect(
       (await zip.file('tactile_map_A1.stl').async('uint8array')).length
     ).toBe(84);
@@ -1471,7 +1503,8 @@ describe('render every plate and download', () => {
       JSON.parse(await zip.file('map_plan.json').async('string')).size
     ).toEqual({ w: 480, h: 360 });
     expect(readme).toBe(
-      'map_print.pdf shows where each label goes, with its text, for assembly and labeling.\n' +
+      `${PROTOTYPE_README}\n\n` +
+        'map_print.pdf shows where each label goes, with its text, for assembly and labeling.\n' +
         'A map from a drawing.\n' +
         'Station: 4 plates for a Bambu Lab X1C, P1S or P1P (256 x 256 mm) bed, each 250 x 190 mm. ' +
         'Print one of each: A1, A2, B1, B2. ' +

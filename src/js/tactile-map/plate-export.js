@@ -18,6 +18,7 @@ import { wedgeRows } from './identifiers.js';
 import { TAPE_GRADES, gradeOf } from './tape-cells.js';
 import { ATTRIBUTION } from './overpass.js';
 import { TRANSIT_STRINGS } from './transit.js';
+import { PROTOTYPE_README } from './map-types.js';
 
 /** A11Y: said once in step 5 when the engine cannot load; in the README too. */
 export const ENGINE_ESTIMATE_SENTENCE =
@@ -482,6 +483,7 @@ export function readmeText({
     : '';
   const { lead, credits } = mapAbout(about);
   return (
+    `${PROTOTYPE_README}\n\n` +
     (pdfName
       ? `${pdfName} shows where each label goes, with its text, for assembly and labeling.\n`
       : '') +

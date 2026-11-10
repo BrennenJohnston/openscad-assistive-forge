@@ -53,8 +53,10 @@ import {
 import { dataUrlToText } from '../svg-text-encoding.js';
 import { WAITING_TITLE, sampleStationPlan, waitingPlan } from './plan.js';
 import {
+  ISSUES_URL,
   MAP_TYPES,
   MAP_TYPE_QUESTION,
+  PROTOTYPE_NOTE,
   WORKFLOW_STRINGS,
   mapType,
 } from './map-types.js';
@@ -1273,6 +1275,16 @@ class MapPanel {
     heading.id = 'tactileMapHeading';
     section.appendChild(heading);
     this.refs.heading = heading;
+
+    // Under the heading, so it stands on the chooser and every step.
+    const prototype = el('p', 'tactile-map-prototype', PROTOTYPE_NOTE[0]);
+    prototype.id = 'tactileMapPrototype';
+    const issues = el('a', '', PROTOTYPE_NOTE[1]);
+    issues.href = ISSUES_URL;
+    issues.target = '_blank';
+    issues.rel = 'noopener noreferrer';
+    prototype.append(issues, PROTOTYPE_NOTE[2]);
+    section.appendChild(prototype);
 
     // The parts the steps lay out, by group (see arrange()).
     const parts = {};

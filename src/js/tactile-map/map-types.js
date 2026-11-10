@@ -55,6 +55,24 @@ export const MAP_TYPES = Object.freeze([
 
 export const MAP_TYPE_QUESTION = 'What map do you want to make?';
 
+/** Where a person reports a mistake in a map. */
+export const ISSUES_URL =
+  'https://github.com/BrennenJohnston/openscad-assistive-forge/issues';
+
+/**
+ * A11Y: the map maker is a prototype, said under the panel's heading on the
+ * chooser and every step: the words before the link, the link, the words
+ * after it.
+ */
+export const PROTOTYPE_NOTE = Object.freeze([
+  'This map maker is a prototype and still a work in progress, so a map may have mistakes. Check each map before a reader relies on it. If you find a mistake, please report it on ',
+  'GitHub Issues (opens in a new tab)',
+  ' so I can fix it.',
+]);
+
+/** A11Y: the README's first line, the same note with the issues address. */
+export const PROTOTYPE_README = `${PROTOTYPE_NOTE[0]}${ISSUES_URL}${PROTOTYPE_NOTE[2]}`;
+
 /** The words of the chooser and of the steps' needs and notes. */
 export const WORKFLOW_STRINGS = Object.freeze({
   /** A11Y: the chooser's group name (the heading above asks the question). */
