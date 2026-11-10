@@ -61,7 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The Tactile Map key prints a row a piece, each as small as its row, so a
   row can be kept for another map; it follows Labels in place of Key words,
-  and a braille name too long for one wedge continues on a piece of its own.
+  and a braille name too long for one wedge continues on a piece of its own;
+  the README names each piece by its row, in the order to lay them.
 - Numbers replace the two-letter codes on a tactile map: the key lists every
   named thing as "3 Building: Haring Center", counted out from the address,
   or in walking order on a route.

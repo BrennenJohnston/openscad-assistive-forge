@@ -431,6 +431,20 @@ test.describe('Tactile Map tile', () => {
     expect(readme).toMatch(
       /\nKey\nSymbols: Forge basic shapes\.\n\nSymbols, You are here first:\n/
     );
+    // Each key plate by its row's words, in the key's order.
+    const keyNames = await page.evaluate(() =>
+      document
+        .getElementById('tactileMapPanel')
+        .__forgeMapPanel.keyPages.map((p) => p.name)
+    );
+    expect(keyNames.every(Boolean)).toBe(true);
+    expect(readme).toContain(
+      (keyIds.length === 1
+        ? 'The key prints on a plate of its own, to read before the map:\n'
+        : `The key prints on ${keyIds.length} plates of its own, to read before the map. ` +
+          'Lay them in this order, the first farthest from the reader:\n') +
+        keyIds.map((id, i) => `- ${id}: ${keyNames[i]}\n`).join('')
+    );
     expect(names).toContain('map_plan.json');
     expect(names).toContain('README.txt');
     expect(names).toContain('levels_A1.svg');
