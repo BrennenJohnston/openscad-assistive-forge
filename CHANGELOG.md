@@ -7,231 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.8.0] - 2026-11-10
+
 ### Added
 
-- The Tactile Map maker says it is a prototype, under its heading and on the
-  README's first line, with a link to report a mistake on GitHub Issues.
-- The Tactile Map Designer lays a map paper under the plate in the preview:
-  the shapes in the editor's colors with every name and label text in
-  place, so a map can be checked before it prints; the View menu's Show
-  Model switch hides the plate to read the paper.
-- The map's PDF, in the zip and from a Download the PDF button: the map
-  with its plates, each plate at full size with every label channel and its
-  text, the labels and the key, on Letter or A4, for the person who makes
-  the labels and assembles the plates.
-- The destination cone is printed: the model raises Touch Mapper's cone at
-  the address on the map plate and beside its row on the key plate. In the
-  editor the cone and You are here are dragged with the mouse or a finger,
-  or carried by keyboard (Space picks one up, the arrow keys move it, Space
-  puts it down); Place You are here puts the reader's mark at the middle of
-  the view, and one Undo takes a whole move back.
-- The map prints as a sheet: a blank band of 10 to 40 mm around the map on
-  every side, set in step 5, and the raised title on a band of its own above
-  the map, wrapped to the map's width and spaced as a sign's letters are; or
-  inside the map's top edge as before, or left off. A title band that would
-  force a row of short plates prints on title plates of its own above row A.
-  A place map can be made portrait, upright at the same scale.
-- Trim the empty edges, a switch in step 5 that starts on for a place map:
-  the sheet is cut down to the box around what prints, the margin band kept,
-  so the empty plate around a map is not printed; the editor shows the
-  trimmed sheet as a dashed frame, and the README says the plates are
-  trimmed to the shapes.
-- The Tactile Map model can raise a number's braille wedge with a face angle
-  dial and a foot dial (75 degrees and 6 mm to start), bold raised numerals
-  and lead lines on a level of their own.
-- Numbers on the map, one kind at a time (Labels in step 5): a braille
-  wedge, to start; a channel for the braille number on label tape; or a bold
-  raised numeral. A number stands on its place when it fits, else in the
-  margin at the end of a raised lead line, and the key repeats it in the
-  same form beside the place's name; the map paper and the PDF draw them.
-- Tape channels, a choice in step 5: a recess with a floor under the tape,
-  as before, or cut right through the plate so the tape lies on the backing
-  board; the key plates follow, the map paper and the PDF draw a cut-through
-  channel with a dashed edge, the README says which, and a warning says
-  when a cut-through channel would leave nothing under the tape on an All
-  printed plate.
-
-- A Drawing editor button in the Customizer's header, beside Undo and Redo,
-  on every tile whose file control takes a drawing: it opens the editor on
-  the design the model shows, or on the empty editor that asks for a
-  picture, from anywhere on the tile. The file control's own button now
-  stands whatever the control holds.
+- The Tactile Map Designer, a prototype that says so, with a link to report a
+  mistake: maps of up to three raised levels with research-sized symbols, a
+  raised title and a north cue, made in five steps from a place, a route or
+  your own drawing; Generate waits for the last step.
+- A place map drafts from an address and OpenStreetMap at a scale from a
+  building's doors to a neighborhood, with a cone at the address (yours to
+  place when the data lacks its number); a route map raises a walk from door
+  to door, or a trip by bus and train planned by Transitous.
+- A detail level chooses how much a map shows, and each kind of thing prints
+  in a shape of its own: basic shapes, the University of Oregon's tactile
+  symbols (Lobben and Lawrence 2012, GPL-3) or your own file.
+- Every named thing carries a number, as a braille wedge, a channel for
+  braille label tape or a raised numeral, on a lead line in the margin when it
+  does not fit; the key repeats each number beside its name, a row a piece.
+- The map prints as a sheet with margin and title bands, its empty plate
+  trimmed by a switch, on plates for your print bed, each named by touch.
+- The preview lays a paper under the plate with every name and label, and the
+  zip carries a PDF of the plates at full size, the labels and the key, and a
+  README of the key, the tape texts and the data credits.
+- The drawing editor turns a line drawing, a DXF or a traced photo into a map
+  plan. A Drawing editor button in the Customizer's header opens the editor
+  from anywhere on a tile that takes a drawing.
 
 ### Changed
 
-- Generate waits for a tactile map's last step, Check and print: grayed out
-  before it, and a press says to finish the map's steps first.
-- The Tactile Map key prints a row a piece, each as small as its row, so a
-  row can be kept for another map; it follows Labels in place of Key words,
-  and a braille name too long for one wedge continues on a piece of its own;
-  the README names each piece by its row, in the order to lay them.
-- Numbers replace the two-letter codes on a tactile map: the key lists every
-  named thing as "3 Building: Haring Center", counted out from the address,
-  or in walking order on a route.
-- Label tape channels are sized by the app's braille translator, uncontracted
-  (Grade 1) to start or contracted UEB on a switch in step 5, instead of
-  an estimate; the note under the switch, the README and the PDF say what
-  the tape comes to, and the PDF draws each label's braille as dots.
-- The plates are cut from the sheet, the map in its band: the sample's
-  480 x 360 mm map prints as four 250 x 190 mm plates on a 256 mm bed, and
-  the README's backing board is the sheet's size.
-
-- The drawing editor's picture moves in every tool: a drag on empty ground
-  pans it with the mouse or a finger, Shift with an arrow key moves it a
-  tenth of the view (the arrow keys alone in the Hand tool), and four pan
-  buttons stand beside Fit and the zoom buttons, on a phone as on a desktop.
-  The charm's relief picture, the stencil's regions and the map's shapes
-  all move by this one rule; the relief pane's own zoom row is gone.
-- The drawing editor's toolbar is two rows: the name, the view switch and
-  the ways out, then one working row that wraps as the width asks; Save,
-  Keep original and Reset wait behind More where Apply leads, and on the
-  standalone door Save keeps its place on the row. The picture fills the
-  stage, the shape rows are one line each and wrap only when the words are
-  too wide for the list, and a shape chosen on the picture opens the shapes
-  list and brings its row to the middle of the view.
+- The drawing editor's picture moves one way everywhere: a drag on empty
+  ground, Shift with an arrow key, or four pan buttons. Its toolbar is two
+  rows, with a screen reader the picture takes its own keys, and on a phone
+  held sideways the working row folds behind More.
 
 ### Fixed
 
-- A tactile map's draft keeps what you change in the editor: Make the map,
-  pressed again, opens the draft as you left it instead of drafting it anew,
-  and a new level or scale keeps your changes on the same features.
-- Raised words fill their lines: on the map's title and the key's raised
-  rows, the words after a line break join the next line instead of each
-  standing alone, and a key number stands above a name whose long word
-  would not fit beside it, so no word breaks in the middle.
-- A tactile map's address search says when the map data has no place with the
-  house number typed, and the destination then waits off until you place it
-  in the editor, instead of standing at the street's middle under the number.
-- On a phone held sideways with the Customizer column open, the drawing
-  editor's Shapes, More and Close were cut off at its edge, and the
-  preview's buttons lay over the Design, View, Window and Help menus. The
-  editor now closes the column while it is open and Close opens it again,
-  and the Preview Settings row wraps to two lines beside an open column.
-- The braille card's Business card preset sets Max rows per card to the
-  four rows its card holds, instead of leaving eight and warning at once
-  that only four fit.
-- One form for a crossing: a crossing mapped as a point draws as a short
-  ticked line across its road, as one mapped as a way does, and one
-  standing on such a way is left to the way, so the key has one Crossing
-  row; a crossing with no marking has its own row, Crossing, unmarked;
-  and a traffic island, the plain stretch of a crossing, has no row of
-  its own: the Crossing row says the ticks pause there.
-- The names on the map paper and in the PDF no longer print over one
-  another, over a tape channel, or past the sheet's edge: a name that
-  cannot stand at its thing moves to the nearest clear line and a thin
-  leader points back to the thing.
-- A raised title on plates of its own: the band is as deep as the smallest
-  plate, so the title plates no longer stand 12 mm past the backing board;
-  the title wraps to the first plate's width, so no letter is cut by a seam;
-  a title plate no letters reach is named blank in step 5, the README and
-  the PDF; and the paper and the PDF draw raised words at the width the
-  model prints them.
-- Compare with original, in the drawing editor's More, looks pressed while
-  the original is shown, as Show roles does.
-- In the drawing editor's More, Compare with original no longer runs under
-  Show roles on a phone, and Show roles and the help sentence under Design
-  width no longer run past the panel's edge.
-- The drawing editor's picture stays where it is while shapes combine. It
-  slid and shrank by up to 123 px, by itself when the charm reported its
-  width, so a press could land beside the shape it was aimed at; the
-  sentence and the bar now lie over the picture's edges.
-- On a phone, the first tap on a shape after a drag of the charm's picture
-  no longer does nothing, and a tap on a shape in the map's picture leaves
-  the focus on its row's Class menu, as a mouse click does.
-- The Tactile Map's tape note says what switching the braille grade really
-  gives, labels and length; it had given the same labels' tape, which the
-  switch then contradicted because fewer names fit uncontracted.
-- With a screen reader, the drawing editor's picture says how it is used, in
-  a shorter sentence, and takes its own keys, so the arrow keys and Space reach
-  it without a mode change first.
-- A change on the Tactile Map says one thing once: the tape and channel notes
-  were spoken twice, a map regenerating itself said Generating, and a model's
-  message repeated even when its words had not changed.
-- On a phone held sideways the drawing editor showed none of its picture:
-  its rows took the whole height. On a short screen the working row now folds
-  behind More, Fit and the main action join the header row, the status line
-  speaks without taking a line, the app header steps aside until Close, and
-  the whole picture fits on at least 40 percent of the screen, with Shapes
-  and More opening beside it.
-- The drawing editor's shapes list and picture end above the OpenSCAD
-  Messages bar, which had covered the lower half of the last row's switches.
-- On a phone, the drawing editor's Save, Keep original and Reset did nothing:
-  the buttons moved into More, where their presses were never heard.
-- Cropping a traced picture in the drawing editor keeps the part that was
-  framed, whether the picture came through the Customizer or the editor's
-  own door: on a picture over the pixel cap or from a camera, the crop had
-  landed on the picture's top-left corner instead. A crop that keeps nothing
-  now says so in the picture panel instead of leaving its waiting line up.
-- Dragging the picture in the drawing editor moves it smoothly with the
-  pointer; before, it flashed between positions until the button was released.
-- The braille card counts its rows and cells as the model prints them, so a
-  business card holds four rows at the default margin where three were
-  counted before; a margin or rows-per-card value typed in the Customizer
-  now sets the panel's Margin and Max rows per card instead of being
-  written back over at the next change. The Business card preset also sets
-  6.2 mm between cells and a 5 mm margin, the spacing of the Braille
-  Authority's business card examples: 13 cells and 4 rows.
-- Nothing stands on the north arrow: lines and areas stop 9.525 mm short of it,
-  and a symbol in its way moves out and says so. No symbol sits on the
-  destination or on You are here.
-- Once a map is generated, a change in any step generates it again by itself,
-  so Download is never an older map than the one on screen.
-- One form means one thing on a map: stairs, elevators, entrances, crossings,
-  landmarks, street furniture, transit stops and curbs each print in a shape of
-  their own, where most had been a disc, and the key gives each its own row.
-- A place map marks the typed address: a destination cone (Touch Mapper's
-  marker, 4.9 mm tall) stands at the address and the key names it first
-  with the address; a route's end carries the same cone. You are here is
-  no longer dropped at the plate's center as if it were the address.
-- Named buildings on a tactile map have an identifier: they had no label
-  and no row in the key, and the key could list codes found nowhere on the
-  map.
-- Choosing All printed for a tactile map no longer stops the model at the
-  default 0.4 mm base: it prints at 1.2 mm, as the setting says.
-
-## [5.8.0] - 2026-11-04
-
-### Added
-
-- The Tactile Map Designer: a tactile map of up to three raised levels, with
-  research-sized symbols, a raised title, a north cue, a guide and a symbols
-  page. It asks what map to make, a place, a route or your own drawing, and
-  walks you through numbered steps to one Make the map button.
-- A place map drafts from an address and OpenStreetMap, live or from a file, at
-  a named scale from a building's doors to a neighborhood, and names each point.
-  It reads OpenStreetMap US's tiles first, then OpenStreetMap's main Overpass
-  server and VK Maps' server, saying which it is asking and what failed.
-- A route map raises a walk from door to door with its crossings and steps, on
-  a plate fitted to the walk, and can avoid steps where another way exists; or
-  a trip by bus and train, planned by Transitous.
-- A level chooses how much a map shows, from the way alone to everything in
-  the data, with a choice for each group of features.
-- A map near a building shows curb ramps, raised curbs, traffic islands and
-  crossings with no paint. Sidewalks steeper than a grade you set can carry
-  uphill chevrons, from the map's incline data or public terrain tiles.
-- **Symbol set** draws a map with basic shapes, the University of Oregon's
-  published tactile symbols (Lobben and Lawrence 2012, GPL-3) or a file of your
-  own; a sheet in `docs/guides/symbol-sheet/` prints a set to feel.
-- You are here is a 10 mm disc with a center dot one step above any symbol.
-- A map comes with its key: every symbol, line and area it draws, on key plates
-  with a channel for each entry's braille on label tape, its name raised in
-  16 mm capitals if you choose. Named places get channels for their labels.
-- Maps split into plates for your print bed, each named by touch; one button
-  renders them all into one zip with the plan, the levels files, a layout
-  picture and a README of the key, the tape texts and the data credits.
-- The drawing editor turns a line drawing, a DXF or a traced photo into a map
-  plan: a class on every shape, in the charm customizer's layer colors, with
-  pan, zoom, a keyboard walk and one press for a whole class on or off.
-
-### Fixed
-
-- The welcome cards' Tool menus are 44 px tall on a touch screen.
-- A menu focused by keyboard shows a solid ring in every look.
+- The braille card counts rows and cells as the model prints them; the
+  Business card preset sets 6.2 mm between cells, a 5 mm margin and four rows;
+  a margin or rows per card typed in the Customizer stays.
+- In the drawing editor a crop keeps the part framed on a large picture too,
+  a drag is smooth, nothing sits under the Messages bar, and on a phone Save,
+  Keep original and Reset work and the first tap after a drag counts.
+- On a phone held sideways the preview's buttons no longer cover the menus.
+- The welcome cards' Tool menus are 44 px tall on a touch screen, a keyboard
+  focused menu shows a solid ring, and the help mark is a 20 px circle again.
 - In the Alt View, reaching the end of a list is the last sound a scroll makes.
-- On a phone held sideways the drawing editor scrolls to its picture, which its
-  toolbar used to cut to a strip.
-- The Customizer's help mark is a 20 px circle again, beside its label, not a
-  44 px disc over the end of it, when the descriptions are behind help marks.
 
 ## [5.7.2] - 2026-10-26
 
