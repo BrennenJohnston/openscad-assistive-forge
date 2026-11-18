@@ -24,7 +24,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
-  // Windows: 1 worker (terminal hang avoidance). CI: 2 workers (ubuntu-latest has 2 vCPUs).
+  // Windows: 1 worker (terminal hang avoidance). CI: 2 workers (ubuntu-24.04 has 2 vCPUs).
   workers: isWindows ? 1 : (isCI ? 2 : undefined),
   // Use list reporter in CI to prevent HTML reporter hangs, HTML locally.
   // The JSON report feeds scripts/check-e2e-complete.mjs: a run the
