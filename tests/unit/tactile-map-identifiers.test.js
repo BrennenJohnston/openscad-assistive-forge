@@ -24,6 +24,9 @@ import {
   KEY_ONLY_SENTENCE,
   LABEL_STYLES,
   DEFAULT_LABEL_STYLE,
+  LEAD,
+  leadRows,
+  leadWidths,
   numeralRows,
   packAlong,
   wedgeCells,
@@ -168,6 +171,35 @@ describe('the wedge and the numeral, measured as the model builds them', () => {
   });
 });
 
+describe('the lead line, measured as the model builds it', () => {
+  it("starts and holds the section's dials where the model does: a 0.8 mm top, 0.4 mm chamfers, a 0.8 mm skirt", () => {
+    const scad = readFileSync(
+      'public/examples/tactile-map/tactile_map.scad',
+      'utf8'
+    );
+    const dial = (name) => {
+      const m = new RegExp(
+        '^' + name + ' = ([\\d.]+); // \\[([\\d.]+):[\\d.]+:([\\d.]+)\\]',
+        'm'
+      ).exec(scad);
+      return { start: Number(m[1]), min: Number(m[2]), max: Number(m[3]) };
+    };
+    expect(dial('lead_top_mm')).toEqual({ ...LEAD.topMm });
+    expect(dial('lead_chamfer_mm')).toEqual({ ...LEAD.chamferMm });
+    expect(dial('lead_skirt_mm')).toEqual({ ...LEAD.skirtMm });
+  });
+
+  it('gives a 1.6 mm middle and a 3.2 mm foot to start, and holds each dial to its range', () => {
+    expect(leadWidths()).toEqual({ middleMm: 1.6, footMm: 3.2 });
+    expect(leadWidths({ topMm: 1.2 })).toEqual({ middleMm: 2, footMm: 3.6 });
+    // 9 mm held to 2, 0 held to 0.2, a word read as the start.
+    expect(leadWidths({ topMm: 9, chamferMm: 0, skirtMm: 'x' })).toEqual({
+      middleMm: 2.4,
+      footMm: 4,
+    });
+  });
+});
+
 describe('on the thing', () => {
   it("stands a 22 x 13.3 wedge (a 6 mm foot) at a 60 x 40 building's centroid, 12 percent of it", () => {
     const { marks, pending } = labelPlan(twoBuildings(), {
@@ -252,6 +284,37 @@ describe('in the band', () => {
     // 3 mm, the wedge's depth, 9.525 mm to the sheet's edge, in whole mm.
     expect(band.sides.bottom).toBe(26);
     expect(band.rings.length).toBeGreaterThan(0);
+    // The lead comes down onto the building's level (an area's, 1), and the
+    // paper draws it at its middle's width.
+    expect(mark.leadOn).toBe(1);
+    const xs = band.rings.flat().map((p) => p.x);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(1.6, 6);
+  });
+
+  it("keeps a lead's foot off a number on another thing: the 3.2 mm foot goes round one 1.2 mm beside its line, a 2 mm foot passes it", () => {
+    const plan = twoBuildings();
+    const { pending } = labelPlan(plan, { labels: 'wedge' });
+    const small = pending.filter((p) => p.f.id === 'small');
+    // Beside the lead's line from (100, 140) down to the bottom band.
+    const beside = {
+      featureId: 'other',
+      box: { x0: 101.2, y0: 141, x1: 120, y1: 149 },
+    };
+    const start = bandPlan({
+      pending: small,
+      face: FACE,
+      style: 'wedge',
+      marks: [beside],
+    });
+    expect(start.marks[0].where).toBe('left');
+    const narrow = bandPlan({
+      pending: small,
+      face: FACE,
+      style: 'wedge',
+      marks: [beside],
+      lead: { topMm: 0.8, chamferMm: 0.2, skirtMm: 0.4 },
+    });
+    expect(narrow.marks[0].where).toBe('bottom');
   });
 
   it('gives three things on one edge slots in their order, and no two leads cross', () => {
@@ -509,6 +572,43 @@ describe('the sheet and the model rows', () => {
     expect(wedgeRows(marks, { x: 0, y: 0, w: 95, h: 100 })).toBe('1000:500:4');
     expect(wedgeRows(marks, { x: 95, y: 0, w: 95, h: 100 })).toBe('50:500:4');
     expect(wedgeRows(marks, { x: 0, y: 60, w: 200, h: 100 })).toBe('');
+  });
+
+  it("writes a lead row on every plate it reaches: the thing's end, its level, the number's end, y up in tenths, and 1 into a wedge", () => {
+    const marks = [
+      {
+        number: 4,
+        wedge: { x: 100, y: 70, w: 15.5, depth: 10 },
+        box: {},
+        lead: [
+          [100, 40],
+          [100, 60.5],
+        ],
+        leadOn: 1,
+      },
+      {
+        number: 5,
+        numeral: { x: 30, y: 90, capMm: 16 },
+        box: {},
+        lead: [
+          [30, 20],
+          [30, 70],
+        ],
+      },
+      { number: 6, wedge: { x: 160, y: 90, w: 15.5, depth: 10 }, box: {} },
+    ];
+    expect(leadRows(marks, { x: 0, y: 0, w: 200, h: 100 })).toBe(
+      '1000:600:1:1000:395:1|300:800:0:300:300:0'
+    );
+    // Across a seam at x = 95: the lead at x = 100 reaches both plates (its
+    // foot and its slopes run past its line), each in its own frame.
+    expect(leadRows(marks, { x: 0, y: 0, w: 95, h: 100 })).toBe(
+      '1000:600:1:1000:395:1|300:800:0:300:300:0'
+    );
+    expect(leadRows(marks, { x: 95, y: 0, w: 95, h: 100 })).toBe(
+      '50:600:1:50:395:1'
+    );
+    expect(leadRows(marks, { x: 0, y: 200, w: 200, h: 100 })).toBe('');
   });
 
   it('writes a numeral as a centered row on the level under it', () => {

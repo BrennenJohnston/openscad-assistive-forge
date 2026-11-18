@@ -22,7 +22,7 @@
  */
 
 import { signRowWidthMm } from '../sign-letter-metrics.js';
-import { strokePolyline } from './levels-svg.js';
+import { featureLevel, strokePolyline } from './levels-svg.js';
 
 /**
  * Raised work keeps 9.525 mm (3/8 in) from the sheet's edge (ADA 703.2.7),
@@ -78,11 +78,25 @@ export const PART_GAP_MM = 3;
 /** How far a number keeps from a seam between two plates (mm). */
 export const SEAM_GAP_MM = 1;
 
-/** A lead line's width, and the gap it leaves before a numeral or a channel (mm). */
-export const LEAD_WIDTH_MM = 1.2;
+/**
+ * A lead line's section, the model's dials (tactile_map.scad's Lead lines
+ * group): a flat top, a 45 degree chamfer along each side of it, and a skirt
+ * flaring at 45 degrees to its foot. A test keeps the two files equal.
+ */
+export const LEAD = Object.freeze({
+  topMm: Object.freeze({ start: 0.8, min: 0.8, max: 2.0 }),
+  chamferMm: Object.freeze({ start: 0.4, min: 0.2, max: 0.6 }),
+  skirtMm: Object.freeze({ start: 0.8, min: 0.4, max: 1.2 }),
+});
+/** The gap a lead leaves before a numeral or a channel (mm). */
 export const LEAD_GAP_MM = 3;
-/** How far a lead runs into a wedge's back, so the two are one solid. */
+/** How far a lead's end is set into a wedge (mm); the model runs it on in. */
 const LEAD_INTO_MM = 0.5;
+/**
+ * How far a lead's solid reaches past its line (mm): its foot, its slope into
+ * the place it names, its run into a wedge, at the dials' largest.
+ */
+const LEAD_REACH_MM = 15;
 
 /** The edges a band number may stand at: the top holds the title and the cue. */
 export const BAND_SIDES = Object.freeze(['bottom', 'left', 'right']);
@@ -126,6 +140,22 @@ export function wedgeDials(dials = {}) {
     footMm: clamp(dials.footMm, WEDGE.footMm),
     angleDeg: clamp(dials.angleDeg, WEDGE.angleDeg),
   };
+}
+
+/**
+ * A lead's widths from the model's dials, held to their ranges: its middle,
+ * the line the map paper and the PDF draw, and its foot on the plate, which
+ * keeps off the other numbers.
+ *
+ * @param {{ topMm?: number, chamferMm?: number, skirtMm?: number }} [dials]
+ * @returns {{ middleMm: number, footMm: number }}
+ */
+export function leadWidths(dials = {}) {
+  const top = clamp(dials.topMm, LEAD.topMm);
+  const chamfer = clamp(dials.chamferMm, LEAD.chamferMm);
+  const skirt = clamp(dials.skirtMm, LEAD.skirtMm);
+  const middleMm = round3(top + 2 * chamfer);
+  return { middleMm, footMm: round3(middleMm + 2 * skirt) };
 }
 
 /**
@@ -487,9 +517,9 @@ function crosses(a, b, c, d) {
   return turn(c, d, a) * turn(c, d, b) < 0 && turn(a, b, c) * turn(a, b, d) < 0;
 }
 
-/** Whether a lead from a to b runs over a box, grown by half the lead's width. */
-function overBox(a, b, box) {
-  const g = LEAD_WIDTH_MM / 2;
+/** Whether a lead from a to b runs over a box, grown by half the lead's foot. */
+function overBox(a, b, box, footMm) {
+  const g = footMm / 2;
   const r = { x0: box.x0 - g, y0: box.y0 - g, x1: box.x1 + g, y1: box.y1 + g };
   const inside = ([x, y]) => x > r.x0 && x < r.x1 && y > r.y0 && y < r.y1;
   if (inside(a) || inside(b)) return true;
@@ -523,6 +553,8 @@ function overBox(a, b, box) {
  * @param {{x?: number[], y?: number[]}} [input.seams] - the seams between
  *   plates, plan frame: no number stands across one
  * @param {number} [input.acrossMm] - a channel's width, for numbers on tape
+ * @param {{ topMm?: number, chamferMm?: number, skirtMm?: number }} [input.lead] - the lead's dials
+ * @param {(f: object) => number} [input.levelOf] - the level a thing stands on
  * @returns {{ marks: object[], leads: Array<[number[], number[]]>, rings: Array<Array<{x: number, y: number}>>, sides: {left: number, right: number, bottom: number}, keyOnly: Array<{featureId: string, number: number, name: string}> }}
  */
 export function bandPlan({
@@ -535,7 +567,10 @@ export function bandPlan({
   marks: onThings = [],
   seams = {},
   acrossMm = ACROSS_MM,
+  lead = {},
+  levelOf = (f) => featureLevel(f),
 }) {
+  const { middleMm, footMm } = leadWidths(lead);
   // A seam across the bottom margin runs up and down; across a side, along.
   const blocked = {
     bottom: seams.x || [],
@@ -601,7 +636,7 @@ export function bandPlan({
         open.push({
           side,
           next,
-          clear: !others.some((m) => overBox(anchor, end, m.box)),
+          clear: !others.some((m) => overBox(anchor, end, m.box, footMm)),
         });
       }
       const pick = open.find((o) => o.clear) || open[0];
@@ -649,6 +684,10 @@ export function bandPlan({
         where: side,
       });
       mark.lead = [it.anchor.map(round3), leadEnd(mark, side).map(round3)];
+      // The level the lead's slope comes down onto at the thing: the model's
+      // levels 1 to 3, else the plate.
+      const on = Number(levelOf(it.f));
+      mark.leadOn = Number.isInteger(on) && on >= 1 && on <= 3 ? on : 0;
       return mark;
     });
   };
@@ -690,7 +729,7 @@ export function bandPlan({
     marks,
     leads,
     rings: leads.flatMap(([a, b]) =>
-      strokePolyline([a, b], LEAD_WIDTH_MM, { caps: 'butt' })
+      strokePolyline([a, b], middleMm, { caps: 'butt' })
     ),
     sides,
     keyOnly,
@@ -777,6 +816,42 @@ export function wedgeRows(marks, plate) {
     .map(
       (m) =>
         `${tenths(m.wedge.x - plate.x)}:${tenths(plate.h - (m.wedge.y - plate.y))}:${m.number}`
+    )
+    .join('|');
+}
+
+/**
+ * The model's lead rows for one plate: "ax:ay:level:bx:by:into" per lead that
+ * reaches the plate, the thing's end then the number's end in tenths of a
+ * millimeter from the plate's bottom left (y up), the level the thing stands
+ * on (0 for the plate), and 1 when the lead runs into a wedge, else 0. The
+ * model cuts each lead to its plate, so one across a seam is whole when the
+ * plates are put together.
+ *
+ * @param {object[]} marks - in the frame `plate` is in
+ * @param {{x: number, y: number, w: number, h: number}} plate
+ * @returns {string}
+ */
+export function leadRows(marks, plate) {
+  const tenths = (v) => String(Math.round(v * 10));
+  const at = ([x, y]) =>
+    `${tenths(x - plate.x)}:${tenths(plate.h - (y - plate.y))}`;
+  return (marks || [])
+    .filter((m) => m.lead)
+    .filter(({ lead: [a, b] }) =>
+      overlapsPlate(
+        {
+          x0: Math.min(a[0], b[0]) - LEAD_REACH_MM,
+          x1: Math.max(a[0], b[0]) + LEAD_REACH_MM,
+          y0: Math.min(a[1], b[1]) - LEAD_REACH_MM,
+          y1: Math.max(a[1], b[1]) + LEAD_REACH_MM,
+        },
+        plate
+      )
+    )
+    .map(
+      (m) =>
+        `${at(m.lead[0])}:${m.leadOn || 0}:${at(m.lead[1])}:${m.wedge ? 1 : 0}`
     )
     .join('|');
 }

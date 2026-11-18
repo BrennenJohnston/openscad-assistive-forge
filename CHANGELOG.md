@@ -38,7 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trimmed to the shapes.
 - The Tactile Map model can raise a number's braille wedge with a face angle
   dial and a foot dial (75 degrees and 6 mm to start), bold raised numerals
-  and lead lines on a level of their own.
+  and lead lines on a level of their own: a chamfered top, a foot flared
+  onto the plate, and ends that slope down instead of stopping in a step,
+  set in a Lead lines group of dials.
 - Numbers on the map, one kind at a time (Labels in step 5): a braille
   wedge, to start; a channel for the braille number on label tape; or a bold
   raised numeral. A number stands on its place when it fits, else in the

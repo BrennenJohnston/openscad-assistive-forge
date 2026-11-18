@@ -1344,6 +1344,17 @@ test.describe('numbers on the map', () => {
       'Raised numbers and letters',
     ]);
     const WEDGE_ROW = /^\d+:\d+:\d+(\|\d+:\d+:\d+)*$/;
+    const LEAD = '-?\\d+:-?\\d+:[0-3]:-?\\d+:-?\\d+:[01]';
+    const LEAD_ROWS = new RegExp(`^${LEAD}(\\|${LEAD})*$`);
+    // Every lead row a map plate hands the model, and the end each says: 1
+    // into a wedge, 0 to the plate before tape or a numeral.
+    const leadEnds = (list) =>
+      list.flatMap((x) =>
+        (x.leads || '')
+          .split('|')
+          .filter(Boolean)
+          .map((row) => row.split(':')[5])
+      );
     const NUMERAL = /:#\d+(\||$)/;
     const CHANNELS = /<g id="channels"><path d="[^"]+"\/><\/g>/;
     const NO_CHANNELS = /<g id="channels"><\/g>/;
@@ -1362,10 +1373,13 @@ test.describe('numbers on the map', () => {
             file: parameters.map_file?.name || '',
             wedges: parameters.number_wedges,
             braille: parameters.braille_wedges,
+            leads: parameters.lead_lines,
             words: parameters.raised_words,
             w: parameters.map_width_mm,
             h: parameters.map_height_mm,
           });
+          if (parameters.lead_lines && !window.__leadSet)
+            window.__leadSet = parameters;
           return new Uint8Array(84);
         };
         panel.download = () => {};
@@ -1408,6 +1422,20 @@ test.describe('numbers on the map', () => {
     let keys = sets.filter((x) => x.kind === 'Key');
     expect(maps.some((x) => WEDGE_ROW.test(x.wedges))).toBe(true);
     expect(maps.every(whole)).toBe(true);
+    // A number in the margin has its lead raised from rows: on every map
+    // plate it reaches, running into its wedge; never on a key plate.
+    const banded = await page.evaluate(() => {
+      const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+      return panel
+        .clearedPlan(panel.labeled())
+        .labeled.marks.filter((m) => m.lead).length;
+    });
+    expect(banded).toBeGreaterThan(0);
+    expect(maps.every((x) => !x.leads || LEAD_ROWS.test(x.leads))).toBe(true);
+    const ends = leadEnds(maps);
+    expect(ends.length).toBeGreaterThanOrEqual(banded);
+    expect(ends.every((e) => e === '1')).toBe(true);
+    expect(keys.every((x) => !x.leads)).toBe(true);
     expect(keys.length).toBeGreaterThan(5);
     const places = keys.filter((x) => x.wedges);
     expect(places.length).toBeGreaterThan(0);
@@ -1429,6 +1457,51 @@ test.describe('numbers on the map', () => {
       return { id: set.id, triangles: (size - 84) / 50 };
     });
     expect(real.triangles, real.id).toBeGreaterThan(5000);
+    // A map plate's leads through the engine itself, on an empty plate of its
+    // size: the plate with its leads holds more than the plate without.
+    const realLeads = await page.evaluate(async () => {
+      const set = window.__leadSet;
+      const w = set.map_width_mm;
+      const h = set.map_height_mm;
+      const groups = [
+        'level1',
+        'level2',
+        'level3',
+        'here',
+        'channels',
+        'cutouts',
+        'leads',
+      ]
+        .map((id) => `<g id="${id}"></g>`)
+        .join('');
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}">${groups}</svg>`;
+      const empty = {
+        ...set,
+        map_file: {
+          name: 'levels_empty.svg',
+          data: `data:image/svg+xml;base64,${btoa(svg)}`,
+          type: 'image/svg+xml',
+        },
+        raised_words: '',
+        cone_marks: '',
+      };
+      const triangles = async (parameters) => {
+        const bytes = await window.__realRender(parameters, {
+          format: 'stl',
+          timeoutMs: 120000,
+        });
+        return ((bytes?.byteLength ?? 84) - 84) / 50;
+      };
+      return {
+        rows: set.lead_lines.split('|').length,
+        without: await triangles({ ...empty, lead_lines: '' }),
+        with: await triangles(empty),
+      };
+    });
+    expect(realLeads.rows).toBeGreaterThan(0);
+    expect(realLeads.with, JSON.stringify(realLeads)).toBeGreaterThan(
+      realLeads.without
+    );
 
     // Braille label tape: a channel for each number on the map, no wedge.
     await labels.selectOption('tape');
@@ -1458,6 +1531,8 @@ test.describe('numbers on the map', () => {
     expect(new Set(tape.channels).size).toBe(tape.channels.length);
     sets = await renderAll();
     expect(sets.every((x) => !x.wedges && !x.braille)).toBe(true);
+    // A lead to a tape channel slopes to the plate 3 mm before it.
+    expect(leadEnds(sets).every((e) => e === '0')).toBe(true);
 
     // Raised numbers and letters: numerals on the map; the key's words raised.
     await labels.selectOption('raised');
@@ -1474,6 +1549,8 @@ test.describe('numbers on the map', () => {
     expect(maps.some((x) => NUMERAL.test(x.words))).toBe(true);
     expect(keys.filter((x) => NUMERAL.test(x.words)).length).toBeGreaterThan(0);
     expect(sets.every((x) => !x.wedges && !x.braille)).toBe(true);
+    expect(leadEnds(sets).every((e) => e === '0')).toBe(true);
+    expect(keys.every((x) => !x.leads)).toBe(true);
   });
 });
 

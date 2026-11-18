@@ -13,12 +13,13 @@
 // is cut right through the plate (a plate's name as notches on its edge, and
 // the label channels when the panel's Tape channels cuts them through, for
 // tape that lies on the backing board), and <g id="leads"> the lines from a
-// thing to its number in the margin, on a level of their own.
+// thing to its number in the margin, drawn flat for the map paper and the PDF.
 // Each group is imported on its own by its id and raised to its level, so one
 // file carries the whole map and the heights never drift apart. The Tactile
 // Map Designer panel writes this file; a saved one works the same in desktop
-// OpenSCAD. Every group must be present, empty or not: a missing id is a
-// warning.
+// OpenSCAD. Every group the model imports must be present, empty or not: a
+// missing id is a warning. The lead lines are raised from the lead_lines rows,
+// so each can slope at its ends and flare at its foot.
 //
 // The heights are the ones my printed station maps settled on: a 0.4 mm base
 // glued to a corrugated plastic board, the floor 0.6 mm above it, the symbols
@@ -111,6 +112,18 @@ number_wedges = "";
 // A key piece's braille wedges for words, written by the panel: rows of x:y:cells, x and y in tenths of a millimeter from the plate's bottom left to the middle of the wedge's front foot, then the cells split by "." (each 0 to 63, dot 1 the 1 up to dot 6 the 32; 0 a space); rows split by |.
 braille_wedges = "";
 
+/* [Lead lines] */
+// Width of a lead line's flat top (mm), 0.8 to 2.0: the line a finger follows from a place to its number in the margin. 0.8 is two lines of a 0.4 mm nozzle.
+lead_top_mm = 0.8; // [0.8:0.1:2.0]
+// The 45 degree chamfer along each side of a lead's top (mm), 0.2 to 0.6, so the top has no sharp edge. The lead's middle is its top and both chamfers.
+lead_chamfer_mm = 0.4; // [0.2:0.05:0.6]
+// Height of the 45 degree skirt along each side of a lead's foot (mm), 0.4 to 1.2: it flares the lead out on the plate, so it holds on and does not snap off.
+lead_skirt_mm = 0.8; // [0.4:0.05:1.2]
+// Slope of a lead's ends (degrees), 20 to 45: each end comes down onto the place it names, or to the plate before its number, with no sharp corner.
+lead_slope_deg = 30; // [20:1:45]
+// Where the lead lines run, written by the panel: rows of ax:ay:level:bx:by:into, the place's end then the number's end in tenths of a millimeter from the plate's bottom left, the level the place stands on (0 for the plate), and 1 when the lead runs into a braille wedge (else 0); rows split by |.
+lead_lines = "";
+
 /* [Hidden] */
 $fn = 32;
 
@@ -146,6 +159,13 @@ NUMBER_SIGN = [3, 4, 5, 6];
 DIGIT_DOTS = [[2, 4, 5], [1], [1, 2], [1, 4], [1, 4, 5], [1, 5], [1, 2, 4], [1, 2, 4, 5], [1, 2, 5], [2, 4]];
 // A number on a thing stands 10 mm tall; in the margin and on the key, 16 mm.
 NUMERAL_ON_THING_MM = 10;
+
+// A lead's slope passes through the height of the place it names this far
+// inside it, so the two are one solid.
+LEAD_INTO_PLACE_MM = 0.5;
+// On a low map a lead's chamfer keeps at least this much, so its middle keeps
+// the 1.2 mm wall.
+LEAD_CHAMFER_FLOOR_MM = 0.2;
 
 // Overlap for every boolean, so no two faces touch exactly.
 _fuse = 0.01;
@@ -200,6 +220,13 @@ DOT_BASE_RANGE_MM = [1.5, 1.6];        // ADA 703.3.1
 DOT_HEIGHT_RANGE_MM = [0.6, 0.9];      // ADA 703.3.1
 DOT_PITCH_RANGE_MM = [2.3, 2.5];       // ADA 703.3.1
 CELL_PITCH_RANGE_MM = [6.13, 7.6];     // ADA 703.3.1, as the Braille Sign keeps to
+// No standard gives a lead line's section (BANA 2022 3.4.3.5 and 3.4.3.6 give
+// its length and its gap): these come from my printed lead sheet.
+LEAD_TOP_RANGE_MM = [0.8, 2.0];        // my lead sheet (0.8); two lines of a 0.4 mm nozzle at the least
+LEAD_CHAMFER_RANGE_MM = [0.2, 0.6];    // my lead sheet (0.4); one 0.2 mm layer at the least
+LEAD_SKIRT_RANGE_MM = [0.4, 1.2];      // my lead sheet (0.8)
+LEAD_SLOPE_RANGE_DEG = [20, 45];       // my lead sheet (30; 45 tried)
+LEAD_LEVEL_RANGE = [0, 3];             // the plate, or the level a place stands on
 
 function in_range(v, r) = v >= r[0] && v <= r[1];
 
@@ -247,6 +274,14 @@ assert(in_range(wedge_foot_mm, WEDGE_FOOT_RANGE_MM),
        str("wedge_foot_mm is ", wedge_foot_mm, " mm, outside 2 to 12 mm."));
 assert(in_range(numeral_raise_mm, NUMERAL_RAISE_RANGE_MM),
        str("numeral_raise_mm is ", numeral_raise_mm, " mm, outside 0.8 to 2.0 mm."));
+assert(in_range(lead_top_mm, LEAD_TOP_RANGE_MM),
+       str("lead_top_mm is ", lead_top_mm, " mm, outside 0.8 to 2.0 mm."));
+assert(in_range(lead_chamfer_mm, LEAD_CHAMFER_RANGE_MM),
+       str("lead_chamfer_mm is ", lead_chamfer_mm, " mm, outside 0.2 to 0.6 mm."));
+assert(in_range(lead_skirt_mm, LEAD_SKIRT_RANGE_MM),
+       str("lead_skirt_mm is ", lead_skirt_mm, " mm, outside 0.4 to 1.2 mm."));
+assert(in_range(lead_slope_deg, LEAD_SLOPE_RANGE_DEG),
+       str("lead_slope_deg is ", lead_slope_deg, " degrees, outside 20 to 45."));
 // The braille figures against their spec, should anyone edit the constants.
 assert(in_range(DOT_BASE_MM, DOT_BASE_RANGE_MM), "The wedge's dot base is outside 1.5 to 1.6 mm.");
 assert(in_range(DOT_BASE_HEIGHT_MM + DOT_DOME_HEIGHT_MM, DOT_HEIGHT_RANGE_MM), "The wedge's dot height is outside 0.6 to 0.9 mm.");
@@ -612,14 +647,130 @@ module braille_wedges() {
         }
 }
 
-// The lead lines, from a thing to its number in the margin: on a level of
-// their own, one step above the top level the map uses, so nothing else on the
-// map stands at their height.
-module leads() {
-    if (map_file_kind == "levels")
-        translate([0, 0, base_eff - _fuse])
-            linear_extrude(height = level_z(levels_used) + level_step_mm - base_eff + _fuse)
-                import(map_file, id = "leads", center = false);
+// =============================================================================
+// THE LEAD LINES, from a thing to its number in the margin
+// =============================================================================
+
+// A lead's section across it: a flat top, a 45 degree chamfer along each side
+// of it, a straight middle, and a skirt flaring at 45 degrees to a wider foot,
+// so the lead holds to the plate and has no sharp edge. It stands one level
+// step above the top level the map uses, so nothing else on the map is at its
+// height. On a low map the chamfer and the skirt shrink together to half the
+// lead's height at most.
+_lead_h = level_z(levels_used) + level_step_mm - base_eff;
+_lead_k = min(1, _lead_h / (2 * (lead_chamfer_mm + lead_skirt_mm)));
+_lead_ch = max(LEAD_CHAMFER_FLOOR_MM, lead_chamfer_mm * _lead_k);
+_lead_sk = lead_skirt_mm * _lead_k;
+_lead_mid = lead_top_mm + 2 * _lead_ch;
+_lead_foot = _lead_mid + 2 * _lead_sk;
+// How far a slope from the plate to the lead's top runs.
+_lead_run = _lead_h / tan(lead_slope_deg);
+
+if (len(lead_lines) > 0)
+    echo(str("Lead lines: a ", lead_top_mm, " mm top, ", _lead_mid, " mm middle and ",
+             _lead_foot, " mm foot, ", _lead_h, " mm tall, the ends sloped at ",
+             lead_slope_deg, " degrees."));
+
+// The whole section, for a straight run (concave where the skirt meets the
+// middle).
+module _lead_section2d() {
+    polygon([[-_lead_foot / 2, -_fuse], [_lead_foot / 2, -_fuse],
+             [_lead_mid / 2, _lead_sk], [_lead_mid / 2, _lead_h - _lead_ch],
+             [lead_top_mm / 2, _lead_h], [-lead_top_mm / 2, _lead_h],
+             [-_lead_mid / 2, _lead_h - _lead_ch], [-_lead_mid / 2, _lead_sk]]);
+}
+
+// The section's two convex pieces at height h (the lead's own, or a ridge's
+// below it), for the hulls of the slopes: the middle with its chamfered top,
+// and the skirt, whose top corners sit a hair inside the middle.
+module _lead_body2d(h) {
+    s = h / _lead_h;
+    polygon([[-_lead_mid / 2, -_fuse], [_lead_mid / 2, -_fuse],
+             [_lead_mid / 2, (_lead_h - _lead_ch) * s], [lead_top_mm / 2, h],
+             [-lead_top_mm / 2, h], [-_lead_mid / 2, (_lead_h - _lead_ch) * s]]);
+}
+module _lead_skirt2d(h) {
+    s = h / _lead_h;
+    polygon([[-_lead_foot / 2, -_fuse], [_lead_foot / 2, -_fuse],
+             [_lead_mid / 2 - _fuse, _lead_sk * s + _fuse],
+             [-(_lead_mid / 2 - _fuse), _lead_sk * s + _fuse]]);
+}
+
+// Where a slope meets the plate: a sliver of the piece's width on the base.
+module _lead_foot2d(w) {
+    translate([-w / 2, -_fuse]) square([w, 2 * _fuse]);
+}
+
+// A 2D section stood across the lead at u along it, t thick toward +u.
+module _at_u(u, t = _fuse) {
+    translate([u, 0, 0]) rotate([90, 0, 90]) linear_extrude(height = t) children();
+}
+
+// A slope from the section of height h_top at u_top down to the plate at
+// u_foot, piece by piece.
+module _lead_slope(u_top, h_top, u_foot) {
+    hull() {
+        _at_u(u_top) _lead_body2d(h_top);
+        _at_u(u_foot) _lead_foot2d(_lead_mid);
+    }
+    hull() {
+        _at_u(u_top) _lead_skirt2d(h_top);
+        _at_u(u_foot) _lead_foot2d(_lead_foot);
+    }
+}
+
+// One lead in its own frame, along +x from the place's end (0) to the
+// number's end (len), on the base's top. The place's end slopes down through
+// the place's height LEAD_INTO_PLACE_MM inside it and on to the plate, so it
+// never stops in a step, even where a symbol does not fill its square. The
+// number's end slopes to the plate, or runs on into a braille wedge until its
+// whole height and width are inside it, whatever the angle it meets it at.
+module _lead_along(len, level, into_wedge) {
+    on = level >= 1 && level <= levels_used ? level_z(level) - base_eff : 0;
+    sa = on > 0 ? LEAD_INTO_PLACE_MM + on / tan(lead_slope_deg) : 0;
+    ua = _lead_run - sa;
+    ub = into_wedge
+        ? len + _lead_h / tan(WEDGE_BACK_ANGLE_DEG) + _lead_foot
+        : len - _lead_run;
+    if (ub > ua) {
+        _at_u(ua, ub - ua) _lead_section2d();
+        _lead_slope(ua, _lead_h, -sa);
+        if (!into_wedge) _lead_slope(ub - _fuse, _lead_h, len - _fuse);
+    } else {
+        // A lead shorter than its two slopes: they meet in a ridge.
+        up = into_wedge ? ub : (len - sa) / 2;
+        h = min(_lead_h, (up + sa) * tan(lead_slope_deg));
+        _lead_slope(up, h, -sa);
+        if (!into_wedge) _lead_slope(up - _fuse, h, len - _fuse);
+    }
+}
+
+// Rows of whole numbers split by ":", rows split by "|".
+function _int_rows(s) =
+    len(s) == 0 ? [] : [for (r = _split(s, "|")) if (len(r) > 0) [for (c = _split(r, ":")) _int(c)]];
+
+// Every lead the panel wrote, cut to the plate, so a lead across a seam is
+// whole when the plates are put together.
+module lead_lines() {
+    rows = _int_rows(lead_lines);
+    if (len(rows) > 0)
+        intersection() {
+            translate([0, 0, base_eff - 2 * _fuse])
+                cube([map_width_mm, map_height_mm, WEDGE_CLIP_MM]);
+            for (r = rows) {
+                assert(len(r) == 6, "a lead line's row is ax:ay:level:bx:by:into.");
+                assert(in_range(r[2], LEAD_LEVEL_RANGE),
+                       str("a lead line lands on level ", r[2], "; the plate is 0 and the levels 1 to 3."));
+                assert(r[5] == 0 || r[5] == 1,
+                       "a lead line's last figure is 1 when it runs into a wedge, else 0.");
+                a = [r[0], r[1]] / 10;
+                d = [r[3], r[4]] / 10 - a;
+                if (norm(d) > 0)
+                    translate([a[0], a[1], base_eff])
+                        rotate([0, 0, atan2(d[1], d[0])])
+                            _lead_along(norm(d), r[2], r[5] == 1);
+            }
+        }
 }
 
 module tactile_map() {
@@ -632,7 +783,7 @@ module tactile_map() {
             raised_words();
             number_wedges();
             braille_wedges();
-            leads();
+            lead_lines();
             if (plate_kind != "Key") {
                 title();
                 north_cue();
