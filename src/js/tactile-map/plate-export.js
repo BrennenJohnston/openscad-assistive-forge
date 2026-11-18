@@ -14,7 +14,7 @@ import { keyLabel } from './key-layout.js';
 import { plateLevelsSvg, titleLabel } from './plate-tiling.js';
 import { levelsSvgFromRings } from './levels-svg.js';
 import { plateRows, rowsText } from './sheet.js';
-import { wedgeRows } from './identifiers.js';
+import { leadRows, wedgeRows } from './identifiers.js';
 import { TAPE_GRADES, gradeOf } from './tape-cells.js';
 import { ATTRIBUTION } from './overpass.js';
 import { TRANSIT_STRINGS } from './transit.js';
@@ -169,6 +169,9 @@ export function plateParameterSets({
     if (config.numberWedgesParam) {
       next[config.numberWedgesParam] = wedgeRows(marks, plate);
     }
+    if (config.leadLinesParam) {
+      next[config.leadLinesParam] = leadRows(marks, plate);
+    }
     if (config.raisedWordsParam) {
       next[config.raisedWordsParam] = rowsText(
         plateRows(rows, plate, sheetH ?? plate.y + plate.h)
@@ -231,6 +234,7 @@ export function titlePlateSets({
     };
     if (config.coneMarksParam) next[config.coneMarksParam] = '';
     if (config.numberWedgesParam) next[config.numberWedgesParam] = '';
+    if (config.leadLinesParam) next[config.leadLinesParam] = '';
     const held = plateRows(rows, plate, sheetH);
     if (config.raisedWordsParam) {
       next[config.raisedWordsParam] = rowsText(held);

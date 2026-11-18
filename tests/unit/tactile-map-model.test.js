@@ -152,7 +152,7 @@ describe('the Tactile Map tile', () => {
       /translate\(\[row\[0\], row\[1\], base_eff - _fuse\]\)\s*_label_wedge\(row\[2\]\);/
     );
     expect(src).toMatch(
-      /number_wedges\(\);\s*braille_wedges\(\);\s*leads\(\);/
+      /number_wedges\(\);\s*braille_wedges\(\);\s*lead_lines\(\);/
     );
     // A key piece's words on wedges: cells as dot bits, cut to the piece.
     expect(p.braille_wedges.default).toBe('');
@@ -183,11 +183,47 @@ describe('the Tactile Map tile', () => {
     expect(src).toMatch(/numeral \? numeral_raise_mm : title_raise_mm/);
   });
 
-  it('raises the lead lines on a level of their own, one step above the top level the map uses', () => {
+  it('raises the lead lines from the lead_lines rows, one step above the top level the map uses, with a chamfered top, a flared foot and sloped ends', () => {
     const src = source();
-    expect(src).toMatch(/import\s*\(\s*map_file\s*,\s*id\s*=\s*"leads"/);
+    const p = params();
+    // From rows, so each lead can slope and flare; the levels file's flat
+    // leads group is the paper's.
+    expect(src).not.toMatch(/import\s*\(\s*map_file\s*,\s*id\s*=\s*"leads"/);
+    expect(p.lead_lines.default).toBe('');
+    expect(manifest().tactileMap.leadLinesParam).toBe('lead_lines');
+    // Its height as before: a level step above the top level used.
     expect(src).toMatch(
-      /linear_extrude\(height = level_z\(levels_used\) \+ level_step_mm - base_eff \+ _fuse\)\s*import\(map_file, id = "leads"/
+      /_lead_h = level_z\(levels_used\) \+ level_step_mm - base_eff;/
+    );
+    // The section from the printed lead sheet, each dial a tactile value.
+    for (const [name, value, min, max] of [
+      ['lead_top_mm', 0.8, 0.8, 2],
+      ['lead_chamfer_mm', 0.4, 0.2, 0.6],
+      ['lead_skirt_mm', 0.8, 0.4, 1.2],
+      ['lead_slope_deg', 30, 20, 45],
+    ]) {
+      expect(Number(p[name].default), `${name} default`).toBe(value);
+      expect(p[name].minimum, `${name} minimum`).toBe(min);
+      expect(p[name].maximum, `${name} maximum`).toBe(max);
+      expect(manifest().tactile).toContain(name);
+    }
+    // On a low map the chamfer keeps 0.2 mm, so the middle keeps the wall.
+    expect(src).toMatch(/^LEAD_CHAMFER_FLOOR_MM = 0\.2;/m);
+    // The thing's end slopes through the thing's height 0.5 mm inside it and
+    // on to the plate; the number's end slopes to the plate, or runs on into
+    // a wedge past its back's slope and the lead's foot.
+    expect(src).toMatch(/^LEAD_INTO_PLACE_MM = 0\.5;/m);
+    expect(src).toMatch(
+      /sa = on > 0 \? LEAD_INTO_PLACE_MM \+ on \/ tan\(lead_slope_deg\) : 0;/
+    );
+    expect(src).toMatch(
+      /len \+ _lead_h \/ tan\(WEDGE_BACK_ANGLE_DEG\) \+ _lead_foot/
+    );
+    // Each row's level and end are asserted; the leads are cut to the plate.
+    expect(src).toMatch(/assert\(in_range\(r\[2\], LEAD_LEVEL_RANGE\)/);
+    expect(src).toMatch(/assert\(r\[5\] == 0 \|\| r\[5\] == 1/);
+    expect(src).toMatch(
+      /module lead_lines\(\) \{\s*rows = _int_rows\(lead_lines\);\s*if \(len\(rows\) > 0\)\s*intersection\(\) \{\s*translate\(\[0, 0, base_eff - 2 \* _fuse\]\)/
     );
   });
 

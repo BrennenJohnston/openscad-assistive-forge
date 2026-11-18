@@ -152,6 +152,19 @@ function shapeRings(shape) {
 export const LEVELS_BY_CLASS = levelsByClass();
 
 /**
+ * The level a feature is raised to, as buildLevelRings raises it: its own,
+ * else its class's, else 2 for a point and 1 for a line or an area.
+ *
+ * @param {object} f - a plan feature
+ * @param {object} [classes] - the class table
+ * @returns {number}
+ */
+export function featureLevel(f, classes = LEVELS_BY_CLASS) {
+  const cls = classes[f.class] || {};
+  return f.level ?? cls.level ?? (f.kind === 'point' ? 2 : 1);
+}
+
+/**
  * How a label channel is cut: a recess with a floor under the tape (the
  * model's depth), or right through the plate, for a map glued to a backing
  * board that the tape then lies on. The panel's "Tape channels" offers

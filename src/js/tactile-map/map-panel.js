@@ -77,6 +77,7 @@ import {
   CHANNEL_CUTS,
   DEFAULT_SETTINGS,
   buildLevelRings,
+  featureLevel,
   levelsSvgFromRings,
   settingsForSet,
 } from './levels-svg.js';
@@ -95,6 +96,8 @@ import {
   LABEL_STYLES,
   bandPlan,
   crossesSeam,
+  leadRows,
+  leadWidths,
   moveMarks,
   numeralRows,
   plateMarks,
@@ -780,10 +783,25 @@ class MapPanel {
     });
   }
 
-  /** What the numbers' places depend on among the model's controls. */
+  /** The lead line's section dials as the model's controls hold them. */
+  leadDials() {
+    const parameters = stateManager.getState()?.parameters || {};
+    return {
+      topMm: parameters[this.config.leadTopParam],
+      chamferMm: parameters[this.config.leadChamferParam],
+      skirtMm: parameters[this.config.leadSkirtParam],
+    };
+  }
+
+  /**
+   * What the numbers' places and their leads depend on among the model's
+   * controls: the wedge's size, and the lead's foot (kept off the other
+   * numbers) and middle (drawn on the paper).
+   */
   wedgeKey() {
     const { footMm, angleDeg } = this.wedgeDials();
-    return `${footMm}\n${angleDeg}`;
+    const lead = leadWidths(this.leadDials());
+    return `${footMm}\n${angleDeg}\n${lead.footMm}\n${lead.middleMm}`;
   }
 
   /** A level's top above the base (mm), as the model stacks them; 0 for none. */
@@ -1081,17 +1099,19 @@ class MapPanel {
       if (f) pending.push({ f, number: m.number, name: row?.name || f.name });
     }
     pending.sort((a, b) => a.number - b.number);
+    const s = { ...DEFAULT_SETTINGS, ...this.levelSettings() };
     const band = bandPlan({
       pending,
       face,
       style: this.labelStyle,
       dials: this.wedgeDials(),
-      symbolSizeMm: { ...DEFAULT_SETTINGS, ...this.levelSettings() }
-        .symbolSizeMm,
+      symbolSizeMm: s.symbolSizeMm,
       zones,
       marks: stay,
       seams,
       acrossMm: this.tapeWidth() + DEFAULT_SETTINGS.channelClearanceMm,
+      lead: this.leadDials(),
+      levelOf: (f) => featureLevel(f, s.classes),
     });
     return {
       ...band,
@@ -3149,6 +3169,7 @@ class MapPanel {
     if (this.config.plateKindParam) next[this.config.plateKindParam] = 'Map';
     if (this.config.raisedWordsParam) next[this.config.raisedWordsParam] = '';
     if (this.config.numberWedgesParam) next[this.config.numberWedgesParam] = '';
+    if (this.config.leadLinesParam) next[this.config.leadLinesParam] = '';
     if (this.config.brailleWedgesParam)
       next[this.config.brailleWedgesParam] = '';
     const sheet = this.sheet || this.sheetNow();
@@ -3177,6 +3198,7 @@ class MapPanel {
       };
       if (this.config.numberWedgesParam)
         next[this.config.numberWedgesParam] = page.wedges;
+      if (this.config.leadLinesParam) next[this.config.leadLinesParam] = '';
       if (this.config.brailleWedgesParam)
         next[this.config.brailleWedgesParam] = page.brailleWedges;
       if (this.config.coneMarksParam) {
@@ -3295,6 +3317,7 @@ class MapPanel {
     const parts = this.sheetParts(sheet, built, labeled.marks);
     const inside = sheet.placement === 'inside';
     let wedges = '';
+    let leads = '';
     let brailleWedges = '';
     let marks = [];
     let svg;
@@ -3316,6 +3339,7 @@ class MapPanel {
       words = rowsText(parts.rows);
       marks = parts.marks;
       wedges = wedgeRows(marks, { x: 0, y: 0, w: sheet.w, h: sheet.h });
+      leads = leadRows(marks, { x: 0, y: 0, w: sheet.w, h: sheet.h });
     } else if (isKeyId(this.plate)) {
       keyPage = this.keyPages.find((p) => p.id === this.plate);
       svg = keyPage.svg;
@@ -3354,6 +3378,7 @@ class MapPanel {
       words = rowsText(plateRows(parts.rows, plate, sheet.h));
       marks = plateMarks(parts.marks, plate);
       wedges = wedgeRows(parts.marks, plate);
+      leads = leadRows(parts.marks, plate);
     }
     setParameterValue(this.config.widthParam, size.w);
     setParameterValue(this.config.heightParam, size.h);
@@ -3370,6 +3395,8 @@ class MapPanel {
       setParameterValue(this.config.raisedWordsParam, words);
     if (this.config.numberWedgesParam)
       setParameterValue(this.config.numberWedgesParam, wedges);
+    if (this.config.leadLinesParam)
+      setParameterValue(this.config.leadLinesParam, leads);
     if (this.config.brailleWedgesParam)
       setParameterValue(this.config.brailleWedgesParam, brailleWedges);
     if (this.config.marginParam)
