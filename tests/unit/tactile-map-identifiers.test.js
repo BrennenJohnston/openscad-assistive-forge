@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
+  anchorOnShape,
   anchorToward,
   BAND_EDGE_MM,
   bandPlan,
@@ -38,6 +39,7 @@ import {
   labelPlan,
   segmentsCross,
 } from '../../src/js/tactile-map/map-labels.js';
+import { pointRings } from '../../src/js/tactile-map/levels-svg.js';
 import { sheetOf, SHEET_CLEARANCE_MM } from '../../src/js/tactile-map/sheet.js';
 import { emptyPlan } from '../../src/js/tactile-map/plan.js';
 import {
@@ -542,6 +544,116 @@ describe('in the band', () => {
     expect(anchorToward(ring, 'bottom')).toEqual([20, 20]);
     expect(anchorToward(ring, 'left')).toEqual([10, 15]);
     expect(anchorToward(ring, 'right')).toEqual([30, 15]);
+  });
+
+  it("leaves a symbol's lead from the symbol's own outline, not the square around it", () => {
+    // A triangle pointing up in a 10 mm square: its left side runs from the
+    // base's corner to the apex, so the square's side misses it.
+    const triangle = [
+      [
+        { x: 25, y: 80 },
+        { x: 30, y: 70 },
+        { x: 35, y: 80 },
+      ],
+    ];
+    expect(anchorOnShape(triangle, 'left')).toEqual([25, 80]);
+    expect(anchorOnShape(triangle, 'bottom')).toEqual([30, 80]);
+    // Two pieces: the outermost wins, then the one nearer the middle.
+    const two = [
+      [
+        [0, 0],
+        [4, 0],
+        [4, 4],
+        [0, 4],
+      ],
+      [
+        [6, 0],
+        [10, 0],
+        [10, 6],
+        [6, 6],
+      ],
+    ];
+    expect(anchorOnShape(two, 'bottom')).toEqual([8, 6]);
+    expect(anchorOnShape(two, 'left')).toEqual([0, 2]);
+    expect(anchorOnShape([], 'left')).toBeNull();
+  });
+
+  it('starts every symbol in the library on its own outline, toward every edge', () => {
+    const KEYS = [
+      'stairs',
+      'elevator-up',
+      'elevator-down',
+      'entrance',
+      'crossing',
+      'landmark',
+      'furniture',
+      'curb-ramp',
+      'raised-curb',
+      'transit-stop',
+      'chevron-uphill',
+    ];
+    const offOutline = (p, rings) => {
+      let best = Infinity;
+      for (const r of rings) {
+        for (let i = 0; i < r.length; i += 1) {
+          const a = r[i];
+          const b = r[(i + 1) % r.length];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const l2 = dx * dx + dy * dy;
+          const t = l2
+            ? Math.max(0, Math.min(1, ((p[0] - a.x) * dx + (p[1] - a.y) * dy) / l2))
+            : 0;
+          best = Math.min(
+            best,
+            Math.hypot(p[0] - (a.x + t * dx), p[1] - (a.y + t * dy))
+          );
+        }
+      }
+      return best;
+    };
+    for (const symbol of KEYS) {
+      const rings = pointRings({
+        kind: 'point',
+        at: [100, 100],
+        symbol,
+        size: 10,
+      });
+      for (const side of ['bottom', 'left', 'right']) {
+        const at = anchorOnShape(rings, side);
+        expect(offOutline(at, rings), `${symbol} ${side}`).toBeLessThan(1e-6);
+      }
+    }
+  });
+
+  it("runs a symbol's lead from its shape when the band is given the shapes: the stairs' foot, 3 mm above its square's", () => {
+    const f = {
+      id: 'stairs',
+      kind: 'point',
+      class: 'landmark',
+      symbol: 'stairs',
+      at: [100, 140],
+      size: 10,
+      on: true,
+      name: 'Stairs',
+    };
+    const face = { x0: 0, y0: 0, x1: 200, y1: 150 };
+    const pending = [{ f, number: 1, name: 'Stairs' }];
+    const square = bandPlan({ pending, face, style: 'wedge' });
+    expect(square.marks[0].where).toBe('bottom');
+    expect(square.marks[0].lead[0]).toEqual([100, 145]);
+    const shaped = bandPlan({
+      pending,
+      face,
+      style: 'wedge',
+      shapeOf: (g) => pointRings(g),
+    });
+    const [x, y] = shaped.marks[0].lead[0];
+    expect(y).toBeLessThan(145 - 2.9);
+    const rings = pointRings(f);
+    const low = Math.max(...rings.flat().map((p) => p.y));
+    expect(y).toBeCloseTo(low, 3);
+    expect(Math.abs(x - 100)).toBeLessThan(5);
   });
 });
 

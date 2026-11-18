@@ -438,6 +438,35 @@ export function anchorToward(points, side) {
 }
 
 /**
+ * Where a lead leaves a symbol toward an edge: anchorToward on the symbol's
+ * own outline, ring by ring, the point nearest the edge (and nearest the
+ * symbol's middle among those), so the lead touches the shape itself rather
+ * than the square around it. Null for a symbol with no outline.
+ *
+ * @param {Array<Array<{x: number, y: number}|number[]>>} rings - the symbol
+ * @param {'bottom'|'left'|'right'} side
+ * @returns {number[]|null}
+ */
+export function anchorOnShape(rings, side) {
+  const lists = (rings || [])
+    .map((r) => r.map((p) => (Array.isArray(p) ? p : [p.x, p.y])))
+    .filter((r) => r.length >= 3);
+  if (!lists.length) return null;
+  const bottom = side === 'bottom';
+  const along = (p) => (bottom ? p[0] : p[1]);
+  const reach = (p) => (bottom ? p[1] : side === 'left' ? -p[0] : p[0]);
+  const all = lists.flat().map(along);
+  const mid = (Math.min(...all) + Math.max(...all)) / 2;
+  return lists
+    .map((r) => anchorToward(r, side))
+    .reduce((a, b) => {
+      const d = reach(b) - reach(a);
+      if (Math.abs(d) > 1e-6) return d > 0 ? b : a;
+      return Math.abs(along(b) - mid) < Math.abs(along(a) - mid) ? b : a;
+    });
+}
+
+/**
  * Items along one edge, packed: each centered at its ideal place when it
  * can be, in the order of those places (or in the order given),
  * PART_GAP_MM apart, within [lo, hi]. Null when they do not fit.
@@ -555,6 +584,9 @@ function overBox(a, b, box, footMm) {
  * @param {number} [input.acrossMm] - a channel's width, for numbers on tape
  * @param {{ topMm?: number, chamferMm?: number, skirtMm?: number }} [input.lead] - the lead's dials
  * @param {(f: object) => number} [input.levelOf] - the level a thing stands on
+ * @param {(f: object) => Array<Array<{x: number, y: number}>>} [input.shapeOf] -
+ *   a point's symbol as drawn, so its lead starts on the shape; without it, on
+ *   the symbol's square
  * @returns {{ marks: object[], leads: Array<[number[], number[]]>, rings: Array<Array<{x: number, y: number}>>, sides: {left: number, right: number, bottom: number}, keyOnly: Array<{featureId: string, number: number, name: string}> }}
  */
 export function bandPlan({
@@ -569,6 +601,7 @@ export function bandPlan({
   acrossMm = ACROSS_MM,
   lead = {},
   levelOf = (f) => featureLevel(f),
+  shapeOf = null,
 }) {
   const { middleMm, footMm } = leadWidths(lead);
   // A seam across the bottom margin runs up and down; across a side, along.
@@ -628,7 +661,11 @@ export function bandPlan({
       const open = [];
       for (const side of sides) {
         const box = boxFor(item.number);
-        const anchor = anchorToward(outline, side);
+        const anchor =
+          (item.f.kind === 'point' &&
+            shapeOf &&
+            anchorOnShape(shapeOf(item.f), side)) ||
+          anchorToward(outline, side);
         const ideal = side === 'bottom' ? anchor[0] : anchor[1];
         const next = [...taken[side], { ...item, box, anchor, ideal }];
         if (!fits(side, next)) continue;

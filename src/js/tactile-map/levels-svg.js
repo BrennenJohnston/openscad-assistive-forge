@@ -466,6 +466,25 @@ export function symbolRings(shape, size, at) {
   );
 }
 
+/**
+ * A point feature's symbol as buildLevelRings draws it, in the plan's frame;
+ * an unknown symbol is drawn as the circle.
+ *
+ * @param {object} f - a point feature
+ * @param {object} [settings] - the levels builder's
+ * @returns {Array<Array<{x: number, y: number}>>}
+ */
+export function pointRings(f, settings = {}) {
+  const s = { ...DEFAULT_SETTINGS, ...settings };
+  const cls = (s.classes || LEVELS_BY_CLASS)[f.class] || {};
+  const symbols = symbolMap(s.symbols || activeLibrary());
+  const shape =
+    symbols[f.symbol ?? cls.symbol ?? 'circle'] ||
+    symbols.circle ||
+    BUILTIN_SYMBOLS.circle;
+  return symbolRings(shape, f.size ?? s.symbolSizeMm, f.at);
+}
+
 // ---------------------------------------------------------------------------
 // Distances for the checks
 // ---------------------------------------------------------------------------
