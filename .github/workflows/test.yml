@@ -7,10 +7,15 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+# Every Linux job here, in release-checks.yml and in visual-baselines.yml
+# names ubuntu-24.04, not ubuntu-latest. In November 2026 ubuntu-latest moved
+# to Ubuntu 26.04, where Playwright 1.57 has no browsers, and the Linux
+# screenshot baselines were captured on 24.04. Move the three files together,
+# with a Playwright that supports the newer image and baselines captured on it.
 jobs:
   unit-tests:
     name: Unit Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     
     steps:
@@ -59,7 +64,7 @@ jobs:
   # pipeline is broken no matter what the other (heavily skipped) jobs say.
   wasm-smoke:
     name: WASM Smoke (blocking, no skips)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     steps:
@@ -127,7 +132,7 @@ jobs:
   # tolerance. Any change that alters exported geometry bytes fails here.
   parity-check:
     name: Geometry Parity (golden, blocking)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     steps:
@@ -206,7 +211,7 @@ jobs:
   # than seeing the other shards' tests as missing.
   e2e-tests-chromium-shard:
     name: E2E Tests (Chromium ${{ matrix.shard }}/7)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     strategy:
@@ -315,7 +320,7 @@ jobs:
   # it would leave the merge waiting rather than refused.
   e2e-tests-chromium:
     name: E2E Tests (Chromium)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     needs: [e2e-tests-chromium-shard]
     if: always()
@@ -340,7 +345,7 @@ jobs:
   # reads the check name looking in the wrong place.
   e2e-tests-production:
     name: E2E Tests (Production CSP)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     steps:
@@ -407,7 +412,7 @@ jobs:
 
   build:
     name: Build Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     
     steps:
@@ -453,7 +458,7 @@ jobs:
   # Security checks - blocking.
   security-checks:
     name: Security Checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     
     steps:
@@ -511,7 +516,7 @@ jobs:
   # is excluded on the same reasoning, one link in OPEN_SOURCE_PROJECTS.md.
   link-check:
     name: Docs Link Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
@@ -546,7 +551,7 @@ jobs:
 
   mermaid-check:
     name: Mermaid Diagrams
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
@@ -584,7 +589,7 @@ jobs:
   # vendored folders stay out either way.
   lint-markdown:
     name: Lint Markdown
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
@@ -604,7 +609,7 @@ jobs:
   # nobody can ever adjust.
   validate-examples:
     name: Validate Examples (changed)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:

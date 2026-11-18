@@ -13,6 +13,8 @@ on:
     branches: [develop]
   workflow_dispatch:
 
+# The Linux jobs name ubuntu-24.04 on purpose; the comment above test.yml's
+# jobs says why.
 jobs:
   # Edge E2E tests - Tier 1 browser.
   #
@@ -27,7 +29,7 @@ jobs:
   # two cases landing on the same machine.
   e2e-tests-edge:
     name: E2E Tests (Edge ${{ matrix.shard }}/4)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     strategy:
@@ -127,7 +129,7 @@ jobs:
   # always()` so a failed shard still reaches this job and turns it red.
   e2e-tests-edge-summary:
     name: E2E Tests (Edge)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     needs: [e2e-tests-edge]
     if: always()
@@ -157,7 +159,7 @@ jobs:
     # job below carries the lane's name), so the shard count can change
     # without a ruleset edit.
     name: E2E Tests (Firefox ${{ matrix.shard }}/4)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     strategy:
@@ -257,7 +259,7 @@ jobs:
   # means a failed shard turns this red rather than skipping it.
   e2e-tests-firefox:
     name: E2E Tests (Firefox)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     needs: [e2e-tests-firefox-shard]
     if: always()
@@ -381,7 +383,7 @@ jobs:
   # compared nothing, and must never again be able to report that as green.
   visual-regression:
     name: Visual Regression (Linux)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     steps:
@@ -481,7 +483,7 @@ jobs:
 
   lighthouse:
     name: Lighthouse Performance Audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     
     steps:
       - name: Checkout code
