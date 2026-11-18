@@ -16493,6 +16493,26 @@ body.tutorial-body-locked {
   min-height: var(--size-touch-target);
 }
 
+/* Step 5's paper and model switches: the row is the touch target, its label
+   stretched to the row's height so a press anywhere on it toggles the box */
+.tactile-map-panel .tactile-map-switch-row {
+  min-height: var(--size-touch-target);
+  align-items: stretch;
+}
+
+.tactile-map-panel .tactile-map-switch-row input[type='checkbox'] {
+  flex-shrink: 0;
+  align-self: center;
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  margin: 0;
+}
+
+.tactile-map-panel .tactile-map-switch-row label {
+  display: flex;
+  align-items: center;
+}
+
 .tactile-map-warnings {
   margin: 0;
   padding: 0 var(--space-md) var(--space-sm) var(--space-xl);

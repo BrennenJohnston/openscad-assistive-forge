@@ -428,6 +428,9 @@ class MapPanel {
     // The map paper: the plate shown, drawn flat with its names, laid on
     // the preview's reference overlay while the checkbox says so.
     this.getController = options.getAutoPreviewController || null;
+    // The preview's display options, whose model switch step 5 shows beside
+    // the paper's: null until the app has made them.
+    this.getDisplayOptions = options.getDisplayOptions || null;
     this.showPaper = options.showPaper !== false;
     this.paper = null;
     this.paperShown = false;
@@ -1448,7 +1451,10 @@ class MapPanel {
     add('bed', plates);
     this.refs.plates = plates;
 
-    const paperRow = el('div', 'braille-panel-toggle-row');
+    const paperRow = el(
+      'div',
+      'braille-panel-toggle-row tactile-map-switch-row'
+    );
     const paperBox = document.createElement('input');
     paperBox.type = 'checkbox';
     paperBox.id = 'tactileMapPaper';
@@ -1463,6 +1469,38 @@ class MapPanel {
     paperRow.appendChild(paperLabel);
     add('bed', paperRow);
     this.refs.paper = paperBox;
+
+    // The plate itself, beside its paper: off, the model hides so the paper
+    // reads. The View menu's Show Model is the same switch, but that menu
+    // shows only in Standard mode; each follows the other.
+    if (this.getDisplayOptions) {
+      const modelRow = el(
+        'div',
+        'braille-panel-toggle-row tactile-map-switch-row'
+      );
+      const modelBox = document.createElement('input');
+      modelBox.type = 'checkbox';
+      modelBox.id = 'tactileMapModel';
+      modelBox.checked = this.getDisplayOptions()?.get('model') ?? true;
+      modelBox.addEventListener('change', () => {
+        // The box speaks its own state; the switch stays quiet.
+        this.getDisplayOptions()?.set('model', modelBox.checked, {
+          announce: false,
+        });
+      });
+      const modelLabel = el('label', '', 'Show the model');
+      modelLabel.htmlFor = modelBox.id;
+      modelRow.appendChild(modelBox);
+      modelRow.appendChild(modelLabel);
+      add('bed', modelRow);
+      this.refs.model = modelBox;
+      this.onDisplayOption = (event) => {
+        if (event.detail?.option === 'model') {
+          modelBox.checked = Boolean(event.detail.enabled);
+        }
+      };
+      document.addEventListener('display-option-change', this.onDisplayOption);
+    }
 
     const sizeLabel = el('label', 'braille-panel-label', 'Paper');
     sizeLabel.htmlFor = 'tactileMapPaperSize';
@@ -3633,6 +3671,13 @@ class MapPanel {
   destroy() {
     this.destroyed = true;
     releasePrimaryAction();
+    if (this.onDisplayOption) {
+      document.removeEventListener(
+        'display-option-change',
+        this.onDisplayOption
+      );
+      this.onDisplayOption = null;
+    }
     clearTimeout(this.timer);
     this.paper = null;
     this.syncPaper();
