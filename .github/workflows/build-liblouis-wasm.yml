@@ -25,10 +25,11 @@ on:
 permissions:
   contents: read
 
+# ubuntu-24.04 on purpose; the comment above test.yml's jobs says why.
 jobs:
   build:
     name: Compile and check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     steps:
