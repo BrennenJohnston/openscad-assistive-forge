@@ -7,9 +7,10 @@
  * Seattle; one to four tiles for a map), keeps each feature once by clipping
  * it to its own tile (a tile repeats a margin of its neighbors), joins a
  * building cut by a tile edge into one outline, snaps the end of a walk onto
- * a walk it meets within a meter (the tiles simplify lines, which can drop
- * the shared point a junction needs), and keeps what lies in the area: a
- * circle around a place, or the box around two.
+ * a walk it meets within a meter and joins two ways that cross on one level
+ * (the tiles merge and simplify lines, which can drop the shared point a
+ * junction needs), and keeps what lies in the area: a circle around a place,
+ * or the box around two.
  *
  * Measured 2026-11-01 (`04_DATA_SOURCES.md`): the tile over the Gates Center
  * carries its sidewalks and crossings, crossing points, curbs, entrances,
@@ -330,6 +331,92 @@ function snapEnds(lines, snapUnits) {
   }
 }
 
+/** Ways on different levels of the ground cross without meeting. */
+const levelOf = (t) =>
+  [
+    t.layer || '0',
+    t.level || '',
+    t.bridge && t.bridge !== 'no' ? 'bridge' : '',
+    t.tunnel && t.tunnel !== 'no' ? 'tunnel' : '',
+  ].join('|');
+
+/** Where two segments cross inside both, or null. */
+function crossingOf(a, b, c, d) {
+  const rx = b[0] - a[0];
+  const ry = b[1] - a[1];
+  const sx = d[0] - c[0];
+  const sy = d[1] - c[1];
+  const den = rx * sy - ry * sx;
+  if (den === 0) return null;
+  const qx = c[0] - a[0];
+  const qy = c[1] - a[1];
+  const t = (qx * sy - qy * sx) / den;
+  const u = (qx * ry - qy * rx) / den;
+  if (t <= 0 || t >= 1 || u <= 0 || u >= 1) return null;
+  return { t, u, p: [a[0] + t * rx, a[1] + t * ry] };
+}
+
+/** The grid that keeps the crossing search near-linear, in world units. */
+const CROSS_CELL = 128;
+
+/**
+ * Two ways that cross on one level share the point where they cross, as
+ * OpenStreetMap ways that cross share a node: the tiles merge and simplify
+ * lines and can drop that node, leaving a footway that crosses a sidewalk
+ * without meeting it, or paths that enter a plaza without touching its
+ * outline. The point goes into both, the same numbers in each.
+ *
+ * @param {Array<{tags: object, points: number[][]}>} shapes - lines and
+ *   closed outlines in world units, changed in place
+ * @returns {number} the crossings joined
+ */
+export function joinCrossings(shapes) {
+  const segs = [];
+  const grid = new Map();
+  shapes.forEach((shape, s) => {
+    for (let i = 1; i < shape.points.length; i += 1) {
+      const a = shape.points[i - 1];
+      const b = shape.points[i];
+      const g = segs.length;
+      segs.push({ s, i, a, b });
+      const x0 = Math.floor(Math.min(a[0], b[0]) / CROSS_CELL);
+      const x1 = Math.floor(Math.max(a[0], b[0]) / CROSS_CELL);
+      const y0 = Math.floor(Math.min(a[1], b[1]) / CROSS_CELL);
+      const y1 = Math.floor(Math.max(a[1], b[1]) / CROSS_CELL);
+      for (let x = x0; x <= x1; x += 1) {
+        for (let y = y0; y <= y1; y += 1) {
+          const key = `${x},${y}`;
+          if (!grid.has(key)) grid.set(key, []);
+          grid.get(key).push(g);
+        }
+      }
+    }
+  });
+  const levels = shapes.map((shape) => levelOf(shape.tags));
+  const tried = new Set();
+  const cuts = [];
+  for (const cell of grid.values()) {
+    for (let m = 0; m < cell.length; m += 1) {
+      for (let n = m + 1; n < cell.length; n += 1) {
+        const A = segs[cell[m]];
+        const B = segs[cell[n]];
+        if (A.s === B.s || levels[A.s] !== levels[B.s]) continue;
+        const pair = `${cell[m]},${cell[n]}`;
+        if (tried.has(pair)) continue;
+        tried.add(pair);
+        const hit = crossingOf(A.a, A.b, B.a, B.b);
+        if (!hit) continue;
+        cuts.push({ s: A.s, i: A.i, t: hit.t, p: hit.p });
+        cuts.push({ s: B.s, i: B.i, t: hit.u, p: hit.p });
+      }
+    }
+  }
+  // The last cut of a shape goes in first, so each index still holds.
+  cuts.sort((x, y) => x.s - y.s || y.i - x.i || y.t - x.t);
+  for (const cut of cuts) shapes[cut.s].points.splice(cut.i, 0, cut.p);
+  return cuts.length / 2;
+}
+
 /** Whether a line or ring (world units) touches the area. */
 function touches(points, area, closed = false) {
   const { circle } = area;
@@ -466,9 +553,12 @@ export async function pullTiles({
     });
     if (el) elements.push(el);
   };
+  const shapes = [];
   for (const line of lines) {
     if (!WAY_KEYS.some((k) => k in line.tags)) continue;
-    if (touches(line.points, area)) way(line.tags, line.points);
+    if (touches(line.points, area)) {
+      shapes.push({ tags: line.tags, points: line.points });
+    }
   }
   for (const { tags, rings } of areas.values()) {
     if (!WAY_KEYS.some((k) => k in tags)) continue;
@@ -476,9 +566,11 @@ export async function pullTiles({
       if (areaOf(ring) <= 0) continue;
       const pts = fromRing(ring);
       if (!touches(pts, area, true)) continue;
-      way(tags, [...pts, pts[0]]);
+      shapes.push({ tags, points: [...pts, pts[0]] });
     }
   }
+  joinCrossings(shapes.filter((s) => 'highway' in s.tags));
+  for (const s of shapes) way(s.tags, s.points);
   for (const { tags, x, y } of points) {
     if (!wantedNode(tags) || !touches([[x, y]], area)) continue;
     const at = latLon([x, y]);
