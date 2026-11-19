@@ -123,12 +123,15 @@ export function placeFinder(features = []) {
 }
 
 /**
- * The names of the features, in their order.
+ * The names of the features, in their order. Repeats are counted, "(2)",
+ * so every row of the editor reads apart; `counted: false` gives the plain
+ * names, for a reader who tells repeats apart by their numbers.
  *
  * @param {object[]} features - a plan's features
+ * @param {{ counted?: boolean }} [options]
  * @returns {string[]}
  */
-export function featureNames(features = []) {
+export function featureNames(features = [], { counted = true } = {}) {
   const nearestName = placeFinder(features);
   const seen = new Map();
   return features.map((f) => {
@@ -147,6 +150,7 @@ export function featureNames(features = []) {
       const near = at ? nearestName(at) : null;
       base = near ? `${word} near ${near}` : word;
     }
+    if (!counted) return base;
     const times = (seen.get(base) || 0) + 1;
     seen.set(base, times);
     return times === 1 ? base : `${base} (${times})`;
