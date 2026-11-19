@@ -1584,6 +1584,44 @@ test.describe('Forge direction: View menu radios', () => {
   })
 })
 
+test.describe('Forge direction: View menu names', () => {
+  test('a checked item is named by its words alone: its check mark or dot is state, not part of its name', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(
+      browserName !== 'chromium',
+      "reads the browser's own accessibility tree through a DevTools session"
+    )
+    await loadFixture(page)
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send('Accessibility.enable')
+    // The names a screen reader is handed for every checked menu item shown.
+    const checkedNames = async () => {
+      const { nodes } = await cdp.send('Accessibility.getFullAXTree')
+      return nodes
+        .filter(
+          (n) =>
+            ['menuitemcheckbox', 'menuitemradio'].includes(n.role?.value) &&
+            n.properties?.some(
+              (p) => p.name === 'checked' && p.value?.value === 'true'
+            )
+        )
+        .map((n) => `${n.role.value}: ${n.name?.value}`)
+    }
+
+    await page.locator('#viewMenuBtn').click()
+    const boxes = await checkedNames()
+    expect(boxes.some((n) => n.startsWith('menuitemcheckbox'))).toBe(true)
+    await menuItem(page, 'view', 'Preview Quality').click()
+    const all = await checkedNames()
+    expect(all.some((n) => n.startsWith('menuitemradio'))).toBe(true)
+    for (const name of all) {
+      expect(name, 'a mark spoken as a word').not.toMatch(/: [✓●]/)
+    }
+  })
+})
+
 test.describe('Forge direction: File menu', () => {
   test('File ▸ Export Quality sets the export mode and ticks on reopen', async ({
     page,

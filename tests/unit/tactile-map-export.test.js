@@ -262,6 +262,57 @@ describe('titlePlateSets', () => {
     expect(maps.every((s) => s.parameters.raised_words === '')).toBe(true);
     expect(maps[0].parameters.map_height_mm).toBe(250);
   });
+
+  it("writes each map plate's lead rows, a lead across a seam on both plates in each one's frame, and none on a title plate", () => {
+    const { rings } = buildLevelRings(sampleStationPlan());
+    const marks = [
+      {
+        number: 1,
+        numeral: { x: 100, y: 10, capMm: 16 },
+        box: { x0: 95, y0: 0, x1: 105, y1: 10 },
+        lead: [
+          [100, 50],
+          [100, 20],
+        ],
+        leadOn: 1,
+      },
+      {
+        number: 2,
+        wedge: { x: 255, y: 110, w: 15.5, depth: 10 },
+        box: { x0: 247, y0: 100, x1: 263, y1: 110 },
+        lead: [
+          [230, 100],
+          [250, 100],
+        ],
+        leadOn: 2,
+      },
+    ];
+    const config = { ...CONFIG, leadLinesParam: 'lead_lines' };
+    const sets = plateParameterSets({
+      rings,
+      marks,
+      layout,
+      idStyle: 'none',
+      northCue: 'None',
+      config,
+      parameters: { lead_lines: 'stale' },
+    });
+    // 240 x 180 plates: A1's frame is the sheet's; A2's starts at x = 240.
+    expect(sets.map((s) => [s.id, s.parameters.lead_lines])).toEqual([
+      ['A1', '1000:1300:1:1000:1600:0|2300:800:2:2500:800:1'],
+      ['A2', '-100:800:2:100:800:1'],
+      ['B1', ''],
+      ['B2', ''],
+    ]);
+    const titles = titlePlateSets({
+      titlePlates: [{ id: 'title-1', x: 0, y: 0, w: 250, h: 75 }],
+      rows: [],
+      sheetH: 435,
+      config,
+      parameters: { lead_lines: 'stale' },
+    });
+    expect(titles[0].parameters.lead_lines).toBe('');
+  });
 });
 
 describe('plateGridSvg', () => {

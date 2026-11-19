@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [5.8.0] - 2026-11-10
+## [5.8.0] - 2026-11-18
 
 ### Added
 
@@ -23,13 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in a shape of its own: basic shapes, the University of Oregon's tactile
   symbols (Lobben and Lawrence 2012, GPL-3) or your own file.
 - Every named thing carries a number, as a braille wedge, a channel for
-  braille label tape or a raised numeral, on a lead line in the margin when it
-  does not fit; the key repeats each number beside its name, a row a piece.
+  braille label tape or a raised numeral, in the margin when it does not fit,
+  on a lead line with a chamfered top, a flared foot and sloping ends; the key
+  repeats each number beside its name, a row a piece.
 - The map prints as a sheet with margin and title bands, its empty plate
   trimmed by a switch, on plates for your print bed, each named by touch.
-- The preview lays a paper under the plate with every name and label, and the
-  zip carries a PDF of the plates at full size, the labels and the key, and a
-  README of the key, the tape texts and the data credits.
+- The preview lays a paper under the plate with every name and label (Show
+  the model in step 5 hides the plate to read it), and the zip carries a PDF
+  of the plates at full size, the labels and the key, and a README of the key,
+  the tape texts and the data credits.
 - The drawing editor turns a line drawing, a DXF or a traced photo into a map
   plan. A Drawing editor button in the Customizer's header opens the editor
   from anywhere on a tile that takes a drawing.
@@ -43,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A screen reader names a checked menu item by its words alone, "Show Edges,
+  checked", not reading its check mark or dot; the mark still shows.
 - The braille card counts rows and cells as the model prints them; the
   Business card preset sets 6.2 mm between cells, a 5 mm margin and four rows;
   a margin or rows per card typed in the Customizer stays.

@@ -77,7 +77,9 @@ import {
   CHANNEL_CUTS,
   DEFAULT_SETTINGS,
   buildLevelRings,
+  featureLevel,
   levelsSvgFromRings,
+  pointRings,
   settingsForSet,
 } from './levels-svg.js';
 import { keyFor, keySentence, keyText } from './map-key.js';
@@ -95,6 +97,8 @@ import {
   LABEL_STYLES,
   bandPlan,
   crossesSeam,
+  leadRows,
+  leadWidths,
   moveMarks,
   numeralRows,
   plateMarks,
@@ -425,6 +429,9 @@ class MapPanel {
     // The map paper: the plate shown, drawn flat with its names, laid on
     // the preview's reference overlay while the checkbox says so.
     this.getController = options.getAutoPreviewController || null;
+    // The preview's display options, whose model switch step 5 shows beside
+    // the paper's: null until the app has made them.
+    this.getDisplayOptions = options.getDisplayOptions || null;
     this.showPaper = options.showPaper !== false;
     this.paper = null;
     this.paperShown = false;
@@ -780,10 +787,25 @@ class MapPanel {
     });
   }
 
-  /** What the numbers' places depend on among the model's controls. */
+  /** The lead line's section dials as the model's controls hold them. */
+  leadDials() {
+    const parameters = stateManager.getState()?.parameters || {};
+    return {
+      topMm: parameters[this.config.leadTopParam],
+      chamferMm: parameters[this.config.leadChamferParam],
+      skirtMm: parameters[this.config.leadSkirtParam],
+    };
+  }
+
+  /**
+   * What the numbers' places and their leads depend on among the model's
+   * controls: the wedge's size, and the lead's foot (kept off the other
+   * numbers) and middle (drawn on the paper).
+   */
   wedgeKey() {
     const { footMm, angleDeg } = this.wedgeDials();
-    return `${footMm}\n${angleDeg}`;
+    const lead = leadWidths(this.leadDials());
+    return `${footMm}\n${angleDeg}\n${lead.footMm}\n${lead.middleMm}`;
   }
 
   /** A level's top above the base (mm), as the model stacks them; 0 for none. */
@@ -1081,17 +1103,20 @@ class MapPanel {
       if (f) pending.push({ f, number: m.number, name: row?.name || f.name });
     }
     pending.sort((a, b) => a.number - b.number);
+    const s = { ...DEFAULT_SETTINGS, ...this.levelSettings() };
     const band = bandPlan({
       pending,
       face,
       style: this.labelStyle,
       dials: this.wedgeDials(),
-      symbolSizeMm: { ...DEFAULT_SETTINGS, ...this.levelSettings() }
-        .symbolSizeMm,
+      symbolSizeMm: s.symbolSizeMm,
       zones,
       marks: stay,
       seams,
       acrossMm: this.tapeWidth() + DEFAULT_SETTINGS.channelClearanceMm,
+      lead: this.leadDials(),
+      levelOf: (f) => featureLevel(f, s.classes),
+      shapeOf: (f) => pointRings(f, s),
     });
     return {
       ...band,
@@ -1428,7 +1453,10 @@ class MapPanel {
     add('bed', plates);
     this.refs.plates = plates;
 
-    const paperRow = el('div', 'braille-panel-toggle-row');
+    const paperRow = el(
+      'div',
+      'braille-panel-toggle-row tactile-map-switch-row'
+    );
     const paperBox = document.createElement('input');
     paperBox.type = 'checkbox';
     paperBox.id = 'tactileMapPaper';
@@ -1443,6 +1471,38 @@ class MapPanel {
     paperRow.appendChild(paperLabel);
     add('bed', paperRow);
     this.refs.paper = paperBox;
+
+    // The plate itself, beside its paper: off, the model hides so the paper
+    // reads. The View menu's Show Model is the same switch, but that menu
+    // shows only in Standard mode; each follows the other.
+    if (this.getDisplayOptions) {
+      const modelRow = el(
+        'div',
+        'braille-panel-toggle-row tactile-map-switch-row'
+      );
+      const modelBox = document.createElement('input');
+      modelBox.type = 'checkbox';
+      modelBox.id = 'tactileMapModel';
+      modelBox.checked = this.getDisplayOptions()?.get('model') ?? true;
+      modelBox.addEventListener('change', () => {
+        // The box speaks its own state; the switch stays quiet.
+        this.getDisplayOptions()?.set('model', modelBox.checked, {
+          announce: false,
+        });
+      });
+      const modelLabel = el('label', '', 'Show the model');
+      modelLabel.htmlFor = modelBox.id;
+      modelRow.appendChild(modelBox);
+      modelRow.appendChild(modelLabel);
+      add('bed', modelRow);
+      this.refs.model = modelBox;
+      this.onDisplayOption = (event) => {
+        if (event.detail?.option === 'model') {
+          modelBox.checked = Boolean(event.detail.enabled);
+        }
+      };
+      document.addEventListener('display-option-change', this.onDisplayOption);
+    }
 
     const sizeLabel = el('label', 'braille-panel-label', 'Paper');
     sizeLabel.htmlFor = 'tactileMapPaperSize';
@@ -3149,6 +3209,7 @@ class MapPanel {
     if (this.config.plateKindParam) next[this.config.plateKindParam] = 'Map';
     if (this.config.raisedWordsParam) next[this.config.raisedWordsParam] = '';
     if (this.config.numberWedgesParam) next[this.config.numberWedgesParam] = '';
+    if (this.config.leadLinesParam) next[this.config.leadLinesParam] = '';
     if (this.config.brailleWedgesParam)
       next[this.config.brailleWedgesParam] = '';
     const sheet = this.sheet || this.sheetNow();
@@ -3177,6 +3238,7 @@ class MapPanel {
       };
       if (this.config.numberWedgesParam)
         next[this.config.numberWedgesParam] = page.wedges;
+      if (this.config.leadLinesParam) next[this.config.leadLinesParam] = '';
       if (this.config.brailleWedgesParam)
         next[this.config.brailleWedgesParam] = page.brailleWedges;
       if (this.config.coneMarksParam) {
@@ -3295,6 +3357,7 @@ class MapPanel {
     const parts = this.sheetParts(sheet, built, labeled.marks);
     const inside = sheet.placement === 'inside';
     let wedges = '';
+    let leads = '';
     let brailleWedges = '';
     let marks = [];
     let svg;
@@ -3316,6 +3379,7 @@ class MapPanel {
       words = rowsText(parts.rows);
       marks = parts.marks;
       wedges = wedgeRows(marks, { x: 0, y: 0, w: sheet.w, h: sheet.h });
+      leads = leadRows(marks, { x: 0, y: 0, w: sheet.w, h: sheet.h });
     } else if (isKeyId(this.plate)) {
       keyPage = this.keyPages.find((p) => p.id === this.plate);
       svg = keyPage.svg;
@@ -3354,6 +3418,7 @@ class MapPanel {
       words = rowsText(plateRows(parts.rows, plate, sheet.h));
       marks = plateMarks(parts.marks, plate);
       wedges = wedgeRows(parts.marks, plate);
+      leads = leadRows(parts.marks, plate);
     }
     setParameterValue(this.config.widthParam, size.w);
     setParameterValue(this.config.heightParam, size.h);
@@ -3370,6 +3435,8 @@ class MapPanel {
       setParameterValue(this.config.raisedWordsParam, words);
     if (this.config.numberWedgesParam)
       setParameterValue(this.config.numberWedgesParam, wedges);
+    if (this.config.leadLinesParam)
+      setParameterValue(this.config.leadLinesParam, leads);
     if (this.config.brailleWedgesParam)
       setParameterValue(this.config.brailleWedgesParam, brailleWedges);
     if (this.config.marginParam)
@@ -3606,6 +3673,13 @@ class MapPanel {
   destroy() {
     this.destroyed = true;
     releasePrimaryAction();
+    if (this.onDisplayOption) {
+      document.removeEventListener(
+        'display-option-change',
+        this.onDisplayOption
+      );
+      this.onDisplayOption = null;
+    }
     clearTimeout(this.timer);
     this.paper = null;
     this.syncPaper();

@@ -20,10 +20,11 @@ on:
 permissions:
   contents: write
 
+# ubuntu-24.04 on purpose; the comment above test.yml's jobs says why.
 jobs:
   generate-linux-baselines:
     name: Generate Linux Baselines
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: inputs.platform == 'linux' || inputs.platform == 'all'
 
     steps:

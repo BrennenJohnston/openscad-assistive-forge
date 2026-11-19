@@ -152,6 +152,19 @@ function shapeRings(shape) {
 export const LEVELS_BY_CLASS = levelsByClass();
 
 /**
+ * The level a feature is raised to, as buildLevelRings raises it: its own,
+ * else its class's, else 2 for a point and 1 for a line or an area.
+ *
+ * @param {object} f - a plan feature
+ * @param {object} [classes] - the class table
+ * @returns {number}
+ */
+export function featureLevel(f, classes = LEVELS_BY_CLASS) {
+  const cls = classes[f.class] || {};
+  return f.level ?? cls.level ?? (f.kind === 'point' ? 2 : 1);
+}
+
+/**
  * How a label channel is cut: a recess with a floor under the tape (the
  * model's depth), or right through the plate, for a map glued to a backing
  * board that the tape then lies on. The panel's "Tape channels" offers
@@ -451,6 +464,25 @@ export function symbolRings(shape, size, at) {
   return shapeRings(shape).map((ring) =>
     ring.map((p) => pt(cx - size / 2 + p.x * size, cy - size / 2 + p.y * size))
   );
+}
+
+/**
+ * A point feature's symbol as buildLevelRings draws it, in the plan's frame;
+ * an unknown symbol is drawn as the circle.
+ *
+ * @param {object} f - a point feature
+ * @param {object} [settings] - the levels builder's
+ * @returns {Array<Array<{x: number, y: number}>>}
+ */
+export function pointRings(f, settings = {}) {
+  const s = { ...DEFAULT_SETTINGS, ...settings };
+  const cls = (s.classes || LEVELS_BY_CLASS)[f.class] || {};
+  const symbols = symbolMap(s.symbols || activeLibrary());
+  const shape =
+    symbols[f.symbol ?? cls.symbol ?? 'circle'] ||
+    symbols.circle ||
+    BUILTIN_SYMBOLS.circle;
+  return symbolRings(shape, f.size ?? s.symbolSizeMm, f.at);
 }
 
 // ---------------------------------------------------------------------------

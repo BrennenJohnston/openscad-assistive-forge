@@ -2969,3 +2969,65 @@ describe('the map paper under the plate', () => {
     expect(pm.setReferenceOverlaySource).not.toHaveBeenCalled();
   });
 });
+
+describe('the model switch beside the paper', () => {
+  const modelBox = () => document.getElementById('tactileMapModel');
+  let display;
+
+  beforeEach(() => {
+    display = { on: true, get: vi.fn(() => display.on), set: vi.fn() };
+  });
+
+  it("shows Show the model in step 5's bed group, as the display options hold it, and sets them quietly: the box speaks its own state", () => {
+    display.on = false;
+    mount({ getDisplayOptions: () => display });
+    const box = modelBox();
+    expect(box).not.toBeNull();
+    expect(box.type).toBe('checkbox');
+    expect(box.checked).toBe(false);
+    expect(
+      document.querySelector('label[for="tactileMapModel"]').textContent
+    ).toBe('Show the model');
+    // Right after the paper's switch.
+    expect(
+      box.closest('div').previousElementSibling.querySelector('input').id
+    ).toBe('tactileMapPaper');
+    box.checked = true;
+    box.dispatchEvent(new Event('change'));
+    expect(display.set).toHaveBeenLastCalledWith('model', true, {
+      announce: false,
+    });
+  });
+
+  it("follows the View menu's Show Model, and stops listening once the panel goes", () => {
+    mount({ getDisplayOptions: () => display });
+    expect(modelBox().checked).toBe(true);
+    const say = (enabled) =>
+      document.dispatchEvent(
+        new CustomEvent('display-option-change', {
+          detail: { option: 'model', enabled },
+        })
+      );
+    say(false);
+    expect(modelBox().checked).toBe(false);
+    // Another option leaves it alone.
+    document.dispatchEvent(
+      new CustomEvent('display-option-change', {
+        detail: { option: 'edges', enabled: true },
+      })
+    );
+    expect(modelBox().checked).toBe(false);
+    const box = modelBox();
+    destroyMapPanel();
+    say(true);
+    expect(box.checked).toBe(false);
+  });
+
+  it('starts shown while the app has not made its display options yet, and has no switch without them', () => {
+    mount({ getDisplayOptions: () => null });
+    expect(modelBox().checked).toBe(true);
+    modelBox().dispatchEvent(new Event('change'));
+    mount();
+    expect(modelBox()).toBeNull();
+  });
+});

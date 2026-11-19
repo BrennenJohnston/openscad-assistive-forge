@@ -261,16 +261,21 @@
   list-style: none;
 }
 
-/* Checked indicator for menuitemcheckbox */
+/* Checked indicator for menuitemcheckbox. The mark is shown, not spoken:
+   aria-checked already says "checked", so its alternative text is empty.
+   The first declaration keeps the mark in a browser without the
+   alternative-text form. */
 .menu-item-btn[role='menuitemcheckbox'][aria-checked='true']
   .menu-item-label::before {
   content: '✓ ';
+  content: '✓ ' / '';
 }
 
-/* Checked indicator for menuitemradio */
+/* Checked indicator for menuitemradio, shown and not spoken the same way */
 .menu-item-btn[role='menuitemradio'][aria-checked='true']
   .menu-item-label::before {
   content: '● ';
+  content: '● ' / '';
 }
 
 /* Submenu arrow */

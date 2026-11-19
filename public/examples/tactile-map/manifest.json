@@ -25,6 +25,10 @@
     "brailleWedgesParam": "braille_wedges",
     "wedgeFootParam": "wedge_foot_mm",
     "wedgeAngleParam": "wedge_face_angle_deg",
+    "leadLinesParam": "lead_lines",
+    "leadTopParam": "lead_top_mm",
+    "leadChamferParam": "lead_chamfer_mm",
+    "leadSkirtParam": "lead_skirt_mm",
     "marginParam": "margin_mm",
     "titleBandParam": "title_band_mm"
   },
@@ -42,7 +46,11 @@
     "key_letter_height_mm",
     "wedge_face_angle_deg",
     "wedge_foot_mm",
-    "numeral_raise_mm"
+    "numeral_raise_mm",
+    "lead_top_mm",
+    "lead_chamfer_mm",
+    "lead_skirt_mm",
+    "lead_slope_deg"
   ],
   "tags": ["tactile", "map", "accessibility", "orientation", "mobility", "braille"],
   "inspired_by": {
