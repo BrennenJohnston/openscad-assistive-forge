@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A tactile map's Named places level numbers the transit stops and the named
+  public places a traveler uses, such as a library, a school or a clinic;
+  shops, cafes and offices come in with Everything in the data or All points.
+
 ## [5.8.0] - 2026-11-18
 
 ### Added

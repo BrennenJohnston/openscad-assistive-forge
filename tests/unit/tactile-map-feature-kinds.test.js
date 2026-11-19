@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import {
   kindOf,
   isFurniture,
+  isPublicPlace,
   FURNITURE_AMENITIES,
 } from '../../src/js/tactile-map/feature-kinds.js';
 
@@ -105,5 +106,39 @@ describe('isFurniture', () => {
     expect(isFurniture({ amenity: 'cafe' })).toBe(false);
     expect(isFurniture({ amenity: 'toilets' })).toBe(false);
     expect(isFurniture({ shop: 'bakery' })).toBe(false);
+  });
+});
+
+describe('isPublicPlace', () => {
+  it('tells a public place a traveler uses from a shop, food or an office', () => {
+    for (const tags of [
+      { amenity: 'library' },
+      { amenity: 'school' },
+      { amenity: 'clinic' },
+      { amenity: 'toilets' },
+      { amenity: 'post_office' },
+      { amenity: 'townhall' },
+      { healthcare: 'physiotherapist' },
+      { office: 'government' },
+      { tourism: 'museum' },
+      { tourism: 'information', information: 'office' },
+    ]) {
+      expect([tags, isPublicPlace(tags)]).toEqual([tags, true]);
+    }
+    for (const tags of [
+      { amenity: 'cafe' },
+      { amenity: 'restaurant' },
+      { amenity: 'fast_food' },
+      { amenity: 'bar' },
+      { amenity: 'bank' },
+      { shop: 'convenience' },
+      { office: 'company' },
+      { tourism: 'hotel' },
+      { tourism: 'information', information: 'board' },
+      { tourism: 'information' },
+      {},
+    ]) {
+      expect([tags, isPublicPlace(tags)]).toEqual([tags, false]);
+    }
   });
 });
