@@ -2488,10 +2488,15 @@ class MapPanel {
       : '';
   }
 
-  /** The steep switch ticked before the draft: mark them now. */
+  /**
+   * The steep switch ticked before the draft: mark them now. The draft's
+   * sentence (its features, warnings and key) stays in the box, the steep
+   * result after it; only the steep result is said, the draft's was already.
+   */
   async steepIfWanted() {
     const wish = this.address?.steepWanted();
-    if (wish?.on) await this.markSteep(true, wish.gradePct);
+    const after = this.address?.refs?.status?.textContent?.trim() || '';
+    if (wish?.on) await this.markSteep(true, wish.gradePct, { after });
   }
 
   /**
@@ -2501,7 +2506,8 @@ class MapPanel {
    * grade become Steep sidewalk features; off, those features leave. The
    * tiles are the map's third host; a failure says so and the switch rests.
    */
-  async markSteep(on, gradePct) {
+  async markSteep(on, gradePct, { after = '' } = {}) {
+    const shown = (text) => (after ? `${after} ${text}` : text);
     const base = {
       ...this.plan,
       features: this.plan.features.filter((f) => f.class !== 'steep'),
@@ -2520,7 +2526,8 @@ class MapPanel {
     const walkways = base.features.filter(
       (f) => f.kind === 'line' && f.on && f.class === 'walkway'
     ).length;
-    this.sayAddress(ADDRESS_STRINGS.reading(walkways));
+    const reading = ADDRESS_STRINGS.reading(walkways);
+    this.sayAddress(reading, false, { shown: shown(reading) });
     try {
       const { markSteep, inclinesOf, needsTerrain } =
         await import('./steep.js');
@@ -2542,18 +2549,17 @@ class MapPanel {
       });
       this.plan = plan;
       this.schedule(0);
-      this.sayAddress(
-        steepCount
-          ? ADDRESS_STRINGS.steepMarked(steepCount, gradePct)
-          : ADDRESS_STRINGS.steepNone(gradePct)
-      );
+      const result = steepCount
+        ? ADDRESS_STRINGS.steepMarked(steepCount, gradePct)
+        : ADDRESS_STRINGS.steepNone(gradePct);
+      this.sayAddress(result, false, { shown: shown(result) });
     } catch (error) {
       if (sw) sw.checked = false;
-      if (error?.code === 'no-answer') {
-        this.sayAddress(ADDRESS_STRINGS.tilesNoAnswer, true);
-      } else {
-        this.sayAddress(error?.message || String(error), true);
-      }
+      const failure =
+        error?.code === 'no-answer'
+          ? ADDRESS_STRINGS.tilesNoAnswer
+          : error?.message || String(error);
+      this.sayAddress(failure, true, { shown: shown(failure) });
     }
   }
 
@@ -2561,10 +2567,10 @@ class MapPanel {
    * A sentence in the address section's status box, said once; a failure
    * marks the box until the next sentence.
    */
-  sayAddress(text, failed = false, { quiet = false } = {}) {
+  sayAddress(text, failed = false, { quiet = false, shown = text } = {}) {
     const line = this.address?.refs?.status;
     if (line) {
-      line.textContent = text;
+      line.textContent = shown;
       line.classList.toggle('is-failed', failed);
     }
     if (!quiet) (failed ? announceError : announce)(text, { source: SOURCE });
