@@ -79,6 +79,7 @@ import {
   buildLevelRings,
   featureLevel,
   levelsSvgFromRings,
+  pointRings,
   settingsForSet,
 } from './levels-svg.js';
 import { keyFor, keySentence, keyText } from './map-key.js';
@@ -1112,6 +1113,7 @@ class MapPanel {
       acrossMm: this.tapeWidth() + DEFAULT_SETTINGS.channelClearanceMm,
       lead: this.leadDials(),
       levelOf: (f) => featureLevel(f, s.classes),
+      shapeOf: (f) => pointRings(f, s),
     });
     return {
       ...band,
