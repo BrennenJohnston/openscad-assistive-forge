@@ -1799,6 +1799,50 @@ describe('the drawing door', () => {
     expect(dataUrlToText(svgToDataUrl(levels.svg))).toBe(levels.svg);
   });
 
+  it('waits, NO MAP YET, when another drawing comes in after one was applied, so nothing prints the first; applying the new one makes its plan', async () => {
+    mountWithDoor();
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    holdDrawing();
+    click('tactileMapEditDrawing');
+    await vi.waitFor(() => expect(opens.length).toBe(1), SETTLE);
+    opens[0].options.onApply({
+      regions: regionsOf(DRAWING, { 0: 'wall', 1: 'area' }),
+      svg: DRAWING,
+    });
+    await vi.waitFor(
+      () => expect(summary()).toBe('2 plates of 161 x 222 mm, A1 to A2.'),
+      SETTLE
+    );
+    expect(getMapPlan().features.some((f) => f.class === 'wall')).toBe(true);
+
+    const OTHER =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="200mm" height="100mm" viewBox="0 0 200 100">' +
+      '<rect x="10" y="10" width="180" height="4"/>' +
+      '</svg>';
+    stateManager.setState({
+      parameters: {
+        ...params(),
+        map_file: { name: 'other.svg', data: svgToDataUrl(OTHER) },
+      },
+    });
+    await vi.waitFor(() => expect(getMapPlan().meta.waiting).toBe(true), SETTLE);
+    expect(getMapPlan().features.some((f) => f.class === 'wall')).toBe(false);
+
+    click('tactileMapEditDrawing');
+    await vi.waitFor(() => expect(opens.length).toBe(2), SETTLE);
+    opens[1].options.onApply({
+      regions: regionsOf(OTHER, { 0: 'wall' }),
+      svg: OTHER,
+    });
+    await vi.waitFor(
+      () => expect(getMapPlan().meta.waiting).toBeFalsy(),
+      SETTLE
+    );
+    expect(getMapPlan().features.filter((f) => f.class === 'wall')).toHaveLength(
+      1
+    );
+  });
+
   it('says the scale when the drawing width changes, and rebuilds the plan at it', async () => {
     mountWithDoor();
     await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
