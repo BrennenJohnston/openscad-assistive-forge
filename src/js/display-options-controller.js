@@ -907,6 +907,17 @@ export function getDisplayOptionsController(options = {}) {
   return instance;
 }
 
+/**
+ * The controller once the app has made it, else null. A panel that only
+ * reads and sets an option calls this, so it never makes one without the
+ * app's options.
+ *
+ * @returns {DisplayOptionsController|null}
+ */
+export function existingDisplayOptionsController() {
+  return instance;
+}
+
 export function resetDisplayOptionsController() {
   if (instance) instance.dispose();
   instance = null;

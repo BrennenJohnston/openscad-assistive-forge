@@ -219,6 +219,19 @@ test.describe('Tactile Map tile', () => {
     await page.evaluate(() => document.getElementById('viewMenuBtn')?.click());
     await showModel.click();
     expect((await overlay()).model).toBe(true);
+
+    // Step 5's own switch does the same where a map reader already is, in
+    // the Simplified mode that shows no View menu; each follows the other.
+    const modelBox = page.locator('#tactileMapModel');
+    await expect(modelBox).toBeVisible();
+    await expect(modelBox).toBeChecked();
+    await modelBox.uncheck();
+    expect(await overlay()).toMatchObject({ visible: true, model: false });
+    await page.evaluate(() => document.getElementById('viewMenuBtn')?.click());
+    await expect(showModel).toHaveAttribute('aria-checked', 'false');
+    await showModel.click();
+    await expect(modelBox).toBeChecked();
+    expect((await overlay()).model).toBe(true);
   });
 
   test('the preview renders the whole map, then plate A1 at 250 x 190', async ({

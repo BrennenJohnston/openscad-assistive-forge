@@ -75,6 +75,7 @@ import {
   announceImmediate,
 } from './announcer.js';
 import { setStlViewActive } from './stl-view-mode.js';
+import { existingDisplayOptionsController } from './display-options-controller.js';
 import { showWorkflowProgress } from './workflow-progress.js';
 import { showErrorModal, showErrorToast } from './error-translator.js';
 import { closeTutorial } from './tutorial-sandbox.js';
@@ -1135,7 +1136,10 @@ export function initFileHandler({
       if (pendingMapConfig) {
         try {
           const { initMapPanel } = await loadMapPanel();
-          initMapPanel(pendingMapConfig, { getAutoPreviewController });
+          initMapPanel(pendingMapConfig, {
+            getAutoPreviewController,
+            getDisplayOptions: existingDisplayOptionsController,
+          });
         } catch (mapError) {
           console.error(
             '[TactileMap] Failed to initialize the plates panel:',

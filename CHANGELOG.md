@@ -13,8 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   README's first line, with a link to report a mistake on GitHub Issues.
 - The Tactile Map Designer lays a map paper under the plate in the preview:
   the shapes in the editor's colors with every name and label text in
-  place, so a map can be checked before it prints; the View menu's Show
-  Model switch hides the plate to read the paper.
+  place, so a map can be checked before it prints; Show the model in step
+  5, the same switch as the View menu's Show Model, hides the plate to read
+  the paper.
 - The map's PDF, in the zip and from a Download the PDF button: the map
   with its plates, each plate at full size with every label channel and its
   text, the labels and the key, on Letter or A4, for the person who makes
