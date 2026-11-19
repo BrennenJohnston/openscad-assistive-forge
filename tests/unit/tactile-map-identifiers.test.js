@@ -319,6 +319,33 @@ describe('in the band', () => {
     expect(narrow.marks[0].where).toBe('bottom');
   });
 
+  it('keeps the last order that fits when swapping two numbers of different widths would put one on a seam', () => {
+    // Four things above the bottom edge, numbered with one to three digits,
+    // and four seams across the bottom band: uncrossing two leads once gave
+    // an order that does not fit between the seams, and laying it out threw.
+    const things = [
+      [103, 125.5, 109.5, 132, 41],
+      [25, 145, 27, 147, 113],
+      [109, 98, 112, 101, 3],
+      [158, 130, 159, 131.5, 90],
+    ].map(([x0, y0, x1, y1, number], i) => ({
+      f: area(`t${i}`, x0, y0, x1, y1, `T${i}`),
+      number,
+      name: `T${i}`,
+    }));
+    const seams = { x: [150.5, 106.5, 175.5, 84] };
+    const band = bandPlan({
+      pending: things,
+      face: FACE,
+      style: 'raised',
+      seams,
+    });
+    expect(band.marks.length + band.keyOnly.length).toBe(4);
+    const bottom = band.marks.filter((m) => m.where === 'bottom');
+    expect(bottom.length).toBeGreaterThan(1);
+    for (const m of bottom) expect(crossesSeam(m.box, seams)).toBe(false);
+  });
+
   it('gives three things on one edge slots in their order, and no two leads cross', () => {
     const things = [48, 50, 52].map((x, i) => ({
       f: area(`t${i}`, x - 1, 140, x + 1, 142, 'T'),
