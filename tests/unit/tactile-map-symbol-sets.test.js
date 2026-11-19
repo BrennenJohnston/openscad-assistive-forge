@@ -27,6 +27,7 @@ import {
   setActiveSet,
   setLibrary,
   thinnestFeatureMm,
+  validateSymbolLibrary,
 } from '../../src/js/tactile-map/symbol-library.js';
 import { MAP_CLASSES } from '../../src/js/tactile-map/map-classes.js';
 import {
@@ -309,5 +310,15 @@ describe('the symbol sheet', () => {
     }
     const oregon = sheetLayout(OREGON_2012);
     expect(oregon.cells.find((c) => c.name === 'Entrance').size).toBe(13);
+  });
+});
+
+describe("the symbols guide's example file", () => {
+  it('loads as written: the example a person copies is a library the app accepts', () => {
+    const guide = readFileSync('docs/guides/TACTILE_MAP_SYMBOLS.md', 'utf8');
+    const block = guide.match(/```json\n([\s\S]*?)\n```/);
+    expect(block).not.toBeNull();
+    const data = JSON.parse(block[1]);
+    expect(() => validateSymbolLibrary(data, 'the guide')).not.toThrow();
   });
 });

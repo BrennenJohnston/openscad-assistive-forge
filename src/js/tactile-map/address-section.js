@@ -220,7 +220,7 @@ export const ADDRESS_STRINGS = Object.freeze({
   routeName: (from, to) => `Route map from ${from} to ${to}`,
   /** A11Y: the status line after a draft, with warnings. */
   draftReady: (on, total, w) =>
-    `Draft map ready: ${on} of ${total} features on; ${w} warnings. Choose what stays.`,
+    `Draft map ready: ${on} of ${total} features on; ${w} ${w === 1 ? 'warning' : 'warnings'}. Choose what stays.`,
   /** A11Y: the same, no warnings. */
   draftReadyClean: (on, total) =>
     `Draft map ready: ${on} of ${total} features on; no warnings. Choose what stays.`,

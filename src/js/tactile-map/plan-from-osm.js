@@ -303,6 +303,25 @@ export function addressName(place) {
 }
 
 /**
+ * A place's short name, as a title and a sentence say it: the name's first
+ * part, or, for a place known only by its house number, the number and its
+ * street ("1000 4th Avenue", not "1000").
+ *
+ * @param {string} [name] - the geocoder's display name
+ * @returns {string}
+ */
+export function placeTitle(name) {
+  const parts = String(name || '')
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (/^\d+[a-z]?$/i.test(parts[0] || '') && parts[1]) {
+    return `${parts[0]} ${parts[1]}`;
+  }
+  return parts[0] || '';
+}
+
+/**
  * Build the draft.
  *
  * @param {object} args
@@ -345,7 +364,7 @@ export function draftPlan({
       sidewalksAsOneLine(scale.ratio, widthM));
   const ticked = new Set(landmarks);
   const plan = emptyPlan(w, h);
-  plan.meta.title = place?.name ? place.name.split(',')[0].trim() : '';
+  plan.meta.title = placeTitle(place?.name);
   plan.meta.geo = { center: { lat: center.lat, lon: center.lon }, mmPerM: k };
 
   const mm = (pt) =>

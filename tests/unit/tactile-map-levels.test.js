@@ -344,6 +344,17 @@ describe('the clutter checks', () => {
     );
   });
 
+  it('never says a gap under the minimum is the minimum: 2.96 mm reads 2.9 mm', () => {
+    const plan = emptyPlan(200, 150);
+    plan.features.push(mark('a', 100, 75), mark('b', 112.96, 75));
+    const { warnings } = buildLevelsSvg(plan);
+    const close = warnings.filter((w) => w.code === 'too-close');
+    expect(close).toHaveLength(1);
+    expect(close[0].text).toBe(
+      'Landmark and Landmark (2) are 2.9 mm apart, closer than the 3 mm minimum. Move one or turn one off.'
+    );
+  });
+
   it('says three or more symbols at one spot in one warning: one kind, keep one; several kinds, move them apart', () => {
     const hall = {
       id: 'hall',
