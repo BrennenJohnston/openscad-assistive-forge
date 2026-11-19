@@ -464,6 +464,73 @@ describe('draftPlan', () => {
     expect(byId(plan, 'osm-node-42').on).toBe(true);
   });
 
+  it('keeps one of the stops and stations of one name whose symbols would stand closer than the gap, and drops a number two of them disagree on', () => {
+    const marks = [
+      node(
+        60,
+        { railway: 'station', public_transport: 'station', name: 'Symphony' },
+        [0, -40]
+      ),
+      node(
+        61,
+        { railway: 'platform', public_transport: 'platform', name: 'Symphony' },
+        [3, -40]
+      ),
+      node(
+        62,
+        { railway: 'platform', public_transport: 'platform', name: 'Symphony' },
+        [100, -40]
+      ),
+      node(
+        63,
+        {
+          highway: 'bus_stop',
+          public_transport: 'platform',
+          name: 'Pine & 3rd',
+          ref: '100',
+        },
+        [0, -80]
+      ),
+      node(
+        64,
+        {
+          highway: 'bus_stop',
+          public_transport: 'platform',
+          name: 'Pine & 3rd',
+          ref: '101',
+        },
+        [1, -80]
+      ),
+      node(
+        65,
+        { highway: 'bus_stop', public_transport: 'platform', name: 'Pine & 4th' },
+        [2, -42]
+      ),
+    ];
+    const { plan } = draftPlan({
+      elements: marks,
+      center: CENTER,
+      radiusM: 250,
+      landmarks: ['transit-stop'],
+      size: { w: 480, h: 360 },
+    });
+    const state = (id) => {
+      const f = byId(plan, `osm-node-${id}`);
+      return [f.on, Boolean(f.duplicate), f.ref ?? null];
+    };
+    expect(state(60)).toEqual([true, false, null]);
+    expect(state(61)).toEqual([false, true, null]);
+    expect(state(62)).toEqual([true, false, null]);
+    expect(state(63)).toEqual([true, false, null]);
+    expect(state(64)).toEqual([false, true, '101']);
+    expect(state(65)).toEqual([true, false, null]);
+    const names = featureNames(plan.features);
+    const nameOf = (id) =>
+      names[plan.features.findIndex((f) => f.id === `osm-node-${id}`)];
+    expect(nameOf(60)).toBe('Train station: Symphony');
+    expect(nameOf(63)).toBe('Bus stop: Pine & 3rd');
+  });
+
   it("starts the address's own entrance on at every scale where entrances are ticked, and no other", () => {
     const marks = [
       node(50, { entrance: 'main' }, [8, 12]),

@@ -656,6 +656,43 @@ export function draftPlan({
     }
   }
 
+  // Stops and stations of one name whose symbols would stand closer than
+  // the levels builder's gap (a station and its platforms, a stop's two
+  // directions) are one place to a reader: the first that is on stays and
+  // the rest are duplicates, off under every tier and still in the editor,
+  // so the place has one symbol, one number and one row in the key. Two
+  // numbers for it name neither, so the one kept then says none.
+  const clear = symbolSizeMm + DEFAULT_SETTINGS.minGapMm;
+  const nameKey = (f) =>
+    String(f.name || '')
+      .trim()
+      .toLowerCase();
+  const stops = features
+    .filter(
+      (f) =>
+        f.class === 'transit-stop' &&
+        f.kind === 'point' &&
+        !f.twin &&
+        nameKey(f)
+    )
+    .sort((a, b) => Number(Boolean(b.on)) - Number(Boolean(a.on)));
+  const keptStops = [];
+  for (const f of stops) {
+    const kept = keptStops.find(
+      (g) =>
+        nameKey(g) === nameKey(f) &&
+        Math.max(Math.abs(f.at[0] - g.at[0]), Math.abs(f.at[1] - g.at[1])) <
+          clear
+    );
+    if (!kept) {
+      keptStops.push(f);
+      continue;
+    }
+    f.on = false;
+    f.duplicate = true;
+    if (kept.ref && f.ref && f.ref !== kept.ref) delete kept.ref;
+  }
+
   for (const f of features) if (f.class === 'walkway') f.way = f.on;
   // A crossing whose end lies on an on walkway's end starts on.
   const walkwayEnds = features

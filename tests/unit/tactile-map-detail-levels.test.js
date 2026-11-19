@@ -16,6 +16,7 @@ import {
   DETAIL_LEVELS,
   applyDetail,
   switchesFor,
+  wantsPoint,
   SYMBOLS_WARN,
   SYMBOLS_MAX,
 } from '../../src/js/tactile-map/detail-levels.js';
@@ -290,5 +291,32 @@ describe('the detail levels', () => {
     expect(twelve.warning).toBe(
       '12 different symbols: more than 10 is hard to remember.'
     );
+  });
+
+  it("keeps a stop's duplicate off under every tier, Everything in the data too", () => {
+    const features = [
+      { id: 's', class: 'transit-stop', kind: 'point', at: [10, 10], on: true },
+      {
+        id: 'd',
+        class: 'transit-stop',
+        kind: 'point',
+        at: [10, 10],
+        on: false,
+        duplicate: true,
+      },
+    ];
+    for (const level of DETAIL_LEVELS.place) {
+      const { features: out } = applyDetail(features, {
+        type: 'place',
+        switches: switchesFor('place', level.key),
+        scale: null,
+        size: { w: 100, h: 100 },
+        mmPerM: 1,
+      });
+      expect(out.find((f) => f.id === 'd').on).toBe(false);
+      expect(wantsPoint(features[1], switchesFor('place', level.key))).toBe(
+        false
+      );
+    }
   });
 });
