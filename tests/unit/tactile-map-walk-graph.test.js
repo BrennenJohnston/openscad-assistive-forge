@@ -21,7 +21,12 @@ import {
   pointKey,
   ROAD_FACTOR,
 } from '../../src/js/tactile-map/walk-graph.js';
-import { trimElement } from '../../src/js/tactile-map/osm-geometry.js';
+import {
+  trimElement,
+  projectLatLon,
+} from '../../src/js/tactile-map/osm-geometry.js';
+import { pullTiles, TILE_URL } from '../../src/js/tactile-map/osm-tiles.js';
+import { NEAR_M } from '../../src/js/tactile-map/plan-from-osm.js';
 
 const FIXTURE = JSON.parse(
   readFileSync('tests/fixtures/tactile-map/uw-hub-gates.json', 'utf8')
@@ -156,5 +161,122 @@ describe('where a place starts', () => {
     expect(walk.ways).toEqual(REFERENCE_WAYS);
     expect(walk.from.building).toBe('Husky Union Building');
     expect(walk.to.building).toBe('Bill & Melinda Gates Center');
+  });
+});
+
+describe('a place whose nearest point joins nothing', () => {
+  // At the equator 0.00001 degrees is about 1.1 m. A plaza's outline that
+  // no path touches stands around place A; a footway leaves from P, 11 m
+  // east of A, and runs to B.
+  const A = { lat: 0, lon: 0 };
+  const B = { lat: 0.00001, lon: 0.002 };
+  const plaza = way(1, { highway: 'pedestrian' }, [
+    [-0.00005, -0.00005],
+    [-0.00005, 0.00005],
+    [0.00005, 0.00005],
+    [0.00005, -0.00005],
+    [-0.00005, -0.00005],
+  ]);
+  const footwayFrom = (lon) =>
+    way(2, { highway: 'footway' }, [
+      [0, lon],
+      [0, 0.002],
+    ]);
+
+  it('starts on the nearest point of the network that joins both places, not on the outline', () => {
+    const elements = [plaza, footwayFrom(0.0001)];
+    const graph = buildWalkGraph(elements);
+    const start = placeCandidates(graph, elements, A, 'start');
+    const end = placeCandidates(graph, elements, B, 'end');
+    expect(shortestWalk(graph, start.keys, end.keys)).toBeNull();
+    const walk = walkBetween({ elements, from: A, to: B });
+    expect(walk.ways).toEqual([2]);
+    expect(walk.from.keys).toEqual([pointKey(0, 0.0001)]);
+    expect(walk.points[0]).toEqual({ lat: 0, lon: 0.0001 });
+  });
+
+  it('says there is no walk when the joined network lies farther than NEAR_M from a place', () => {
+    expect(NEAR_M).toBe(30);
+    // P 33 m east of A.
+    const elements = [plaza, footwayFrom(0.0003)];
+    expect(walkBetween({ elements, from: A, to: B })).toBeNull();
+  });
+
+  it('says there is no walk when each place stands on a network of its own', () => {
+    const elements = [
+      way(1, { highway: 'footway' }, [
+        [0, 0],
+        [0, 0.001],
+      ]),
+      way(2, { highway: 'footway' }, [
+        [1, 1],
+        [1, 1.001],
+      ]),
+    ];
+    expect(
+      walkBetween({
+        elements,
+        from: { lat: 0, lon: 0 },
+        to: { lat: 1, lon: 1.001 },
+      })
+    ).toBeNull();
+  });
+
+  it('walks from the University of Washington Link Plaza to Ferry Place Northeast on the map tiles, whose plaza outline no path touches', async () => {
+    // Real tiles (zoom 15, x 5251, y 11437 and 11438; map data from
+    // OpenStreetMap contributors, ODbL) and the two places as the address
+    // search gives them.
+    const tile = {
+      11437: readFileSync(
+        'tests/fixtures/tactile-map/sourdough-15-5251-11437.mvt'
+      ),
+      11438: readFileSync(
+        'tests/fixtures/tactile-map/sourdough-15-5251-11438.mvt'
+      ),
+    };
+    const fetch = async (url) => {
+      const y = Object.keys(tile).find(
+        (k) =>
+          url ===
+          TILE_URL.replace('{z}', 15).replace('{x}', 5251).replace('{y}', k)
+      );
+      const bytes = y ? tile[y] : new Uint8Array(0);
+      return {
+        ok: true,
+        status: bytes.length ? 200 : 204,
+        arrayBuffer: async () =>
+          bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength
+          ),
+      };
+    };
+    const PLAZA = { lat: 47.6498905, lon: -122.3040756 };
+    const FERRY_PLACE = { lat: 47.6487434, lon: -122.3085217 };
+    const { elements } = await pullTiles({
+      box: { south: 47.6474, west: -122.3105, north: 47.6512, east: -122.3021 },
+      fetch,
+    });
+    const graph = buildWalkGraph(elements);
+    const start = placeCandidates(graph, elements, PLAZA, 'start');
+    const outline = elements.find(
+      (e) =>
+        e.type === 'way' &&
+        e.tags.name === 'University of Washington Link Plaza'
+    );
+    const onOutline = (k) =>
+      (graph.edges.get(k) || []).every((e) => e.way === outline.id);
+    expect(onOutline(start.keys[0])).toBe(true);
+    const end = placeCandidates(graph, elements, FERRY_PLACE, 'end');
+    expect(shortestWalk(graph, start.keys, end.keys)).toBeNull();
+
+    const walk = walkBetween({ elements, from: PLAZA, to: FERRY_PLACE });
+    expect(walk).not.toBeNull();
+    expect(onOutline(walk.from.keys[0])).toBe(false);
+    const [e, n] = projectLatLon(walk.points[0].lat, walk.points[0].lon, PLAZA);
+    expect(Math.hypot(e, n)).toBeLessThan(NEAR_M);
+    expect(walk.lengthM).toBeGreaterThan(725);
+    expect(walk.lengthM).toBeLessThan(726);
+    expect(walk.crossings).toHaveLength(2);
   });
 });

@@ -18,11 +18,16 @@ import {
   TILE_URL,
   pullTiles,
   tileRange,
+  joinCrossings,
 } from '../../src/js/tactile-map/osm-tiles.js';
 import { pullMapData } from '../../src/js/tactile-map/map-data.js';
 import { OVERPASS_HOSTS } from '../../src/js/tactile-map/overpass.js';
 import { draftPlan } from '../../src/js/tactile-map/plan-from-osm.js';
-import { buildWalkGraph } from '../../src/js/tactile-map/walk-graph.js';
+import {
+  buildWalkGraph,
+  walkBetween,
+  pointKey,
+} from '../../src/js/tactile-map/walk-graph.js';
 
 const TILE = {
   '15/5251/11437': readFileSync(
@@ -335,5 +340,145 @@ describe('pullMapData: the tiles first, the Overpass servers when they fail', ()
       pullMapData({ ...where, fetch: blocked, overpass, online: () => false })
     ).rejects.toMatchObject({ code: 'no-answer' });
     expect(overpass).not.toHaveBeenCalled();
+  });
+});
+
+describe('ways that cross on one level meet where they cross', () => {
+  const shape = (tags, points) => ({ tags, points });
+
+  it('puts the crossing point into both ways, the same numbers in each', () => {
+    const a = shape({ highway: 'footway' }, [
+      [0, 0],
+      [100, 100],
+    ]);
+    const b = shape({ highway: 'footway', footway: 'sidewalk' }, [
+      [0, 100],
+      [100, 0],
+    ]);
+    expect(joinCrossings([a, b])).toBe(1);
+    expect(a.points).toEqual([
+      [0, 0],
+      [50, 50],
+      [100, 100],
+    ]);
+    expect(b.points[1]).toEqual([50, 50]);
+  });
+
+  it('keeps a bridge, a tunnel, another layer and another level apart from the ground', () => {
+    const ground = () =>
+      shape({ highway: 'footway' }, [
+        [0, 50],
+        [100, 50],
+      ]);
+    for (const tags of [
+      { bridge: 'yes' },
+      { tunnel: 'yes' },
+      { layer: '1' },
+      { level: '1' },
+    ]) {
+      const over = shape({ highway: 'footway', ...tags }, [
+        [50, 0],
+        [50, 100],
+      ]);
+      const under = ground();
+      expect(joinCrossings([under, over])).toBe(0);
+      expect(under.points).toHaveLength(2);
+    }
+    const flat = shape({ highway: 'footway', bridge: 'no', layer: '0' }, [
+      [50, 0],
+      [50, 100],
+    ]);
+    expect(joinCrossings([ground(), flat])).toBe(1);
+  });
+
+  it('adds nothing where two ways only touch at a point they share or an end', () => {
+    const a = shape({ highway: 'footway' }, [
+      [0, 0],
+      [50, 50],
+      [100, 0],
+    ]);
+    const b = shape({ highway: 'footway' }, [
+      [50, 50],
+      [50, 100],
+    ]);
+    expect(joinCrossings([a, b])).toBe(0);
+    expect(a.points).toHaveLength(3);
+    expect(b.points).toHaveLength(2);
+  });
+
+  it('puts two crossings on one segment in their order along it', () => {
+    const long = shape({ highway: 'footway' }, [
+      [0, 0],
+      [300, 0],
+    ]);
+    const near = shape({ highway: 'steps' }, [
+      [100, -50],
+      [100, 50],
+    ]);
+    const far = shape({ highway: 'path' }, [
+      [200, -50],
+      [200, 50],
+    ]);
+    expect(joinCrossings([far, long, near])).toBe(2);
+    expect(long.points).toEqual([
+      [0, 0],
+      [100, 0],
+      [200, 0],
+      [300, 0],
+    ]);
+  });
+
+  it('walks from the University of Washington Link Plaza to Ferry Place Northeast by the stairs, as the map data joins them', async () => {
+    // Two real tiles (zoom 15, x 5251, y 11437 and 11438; map data from
+    // OpenStreetMap contributors, ODbL): a footway to a flight of stairs
+    // crosses a sidewalk without a shared point, and the paths into the
+    // station plaza never touch its outline.
+    const tile = {
+      11437: readFileSync(
+        'tests/fixtures/tactile-map/sourdough-15-5251-11437.mvt'
+      ),
+      11438: readFileSync(
+        'tests/fixtures/tactile-map/sourdough-15-5251-11438.mvt'
+      ),
+    };
+    const fetch = vi.fn(async (url) => {
+      const y = Object.keys(tile).find((k) => url === urlOf(15, 5251, k));
+      const bytes = y ? tile[y] : new Uint8Array(0);
+      return {
+        ok: true,
+        status: bytes.length ? 200 : 204,
+        arrayBuffer: async () =>
+          bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength
+          ),
+      };
+    });
+    const PLAZA = { lat: 47.6498905, lon: -122.3040756 };
+    const FERRY_PLACE = { lat: 47.6487434, lon: -122.3085217 };
+    const { elements } = await pullTiles({
+      box: { south: 47.6474, west: -122.3105, north: 47.6512, east: -122.3021 },
+      fetch,
+    });
+    const graph = buildWalkGraph(elements);
+    const outline = elements.find(
+      (e) =>
+        e.type === 'way' &&
+        e.tags.name === 'University of Washington Link Plaza'
+    );
+    const meeting = new Set();
+    for (const p of outline.geometry) {
+      for (const e of graph.edges.get(pointKey(p.lat, p.lon)) || []) {
+        if (e.way !== outline.id) meeting.add(e.way);
+      }
+    }
+    expect(meeting.size).toBeGreaterThan(0);
+    const walk = walkBetween({ elements, from: PLAZA, to: FERRY_PLACE });
+    expect(walk).not.toBeNull();
+    // On Overpass data the same walk is 625 m with one flight of steps.
+    expect(walk.lengthM).toBeGreaterThan(614.8);
+    expect(walk.lengthM).toBeLessThan(615.8);
+    expect(walk.steps).toHaveLength(1);
+    expect(walk.crossings).toHaveLength(3);
   });
 });
