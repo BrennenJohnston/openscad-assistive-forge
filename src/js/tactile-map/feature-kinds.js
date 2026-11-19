@@ -209,7 +209,7 @@ export function isPublicPlace(tags) {
   if (t.tourism !== undefined) {
     const v = firstValue(t.tourism);
     // Information is also a board, a map or a signpost; only an office or a
-    // visitor centre is a place to go to.
+    // visitor center is a place to go to.
     if (v === 'information')
       return ['office', 'visitor_centre'].includes(
         firstValue(t.information || '')
