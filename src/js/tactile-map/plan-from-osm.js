@@ -20,7 +20,8 @@
  * crossing that is on and leave room for the symbols already on.
  *
  * A point says what it is (`what`, feature-kinds.js) and a stop keeps its
- * number (`ref`), so the editor and the warnings name it.
+ * number (`ref`), so the editor and the warnings name it; a public place a
+ * traveler uses is marked `public`, the named places a tier numbers.
  *
  * No DOM here: a worker may import this file.
  *
@@ -33,7 +34,7 @@ import { mmPerMeter, projectLatLon, toMm } from './osm-geometry.js';
 import { intersect, simplify } from '../ring-geometry.js';
 import { mmPerMeterAt, sidewalksAsOneLine } from './scales.js';
 import { DEFAULT_SETTINGS } from './levels-svg.js';
-import { kindOf, isFurniture } from './feature-kinds.js';
+import { kindOf, isFurniture, isPublicPlace } from './feature-kinds.js';
 import { DESTINATION_CONE_MM } from './symbol-library.js';
 
 /** A walkway with a point this close to the address starts on. */
@@ -424,6 +425,7 @@ export function draftPlan({
     if (cls === 'transit-stop' && typeof tags.ref === 'string' && tags.ref) {
       f.ref = tags.ref;
     }
+    if (cls === 'landmark' && isPublicPlace(tags)) f.public = true;
     features.push(f);
     return f;
   };
