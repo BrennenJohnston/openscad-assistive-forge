@@ -2214,7 +2214,13 @@ class MapPanel {
   /** The live line under step 3's choices, from the data kept. */
   async countDetail(detail = this.currentDetail()) {
     const osm = this.osm;
-    if (!osm || !this.address?.setDetailCount) {
+    // Data of other ground (another scale, side or plate) would count that
+    // ground: no line until the next draft pulls this one.
+    if (
+      !osm ||
+      !this.address?.setDetailCount ||
+      this.address.dataFits?.() === false
+    ) {
       this.address?.setDetailCount?.('');
       return null;
     }

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A tactile map's count under What to show no longer counts the ground of an
+  earlier scale: after a new scale, side or plate it waits for the next draft.
+
 ## [5.8.0] - 2026-11-18
 
 ### Added

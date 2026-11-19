@@ -1061,6 +1061,22 @@ export function createAddressSection({
       );
     }
     customRow.hidden = currentScale().key !== 'custom';
+    // A new scale, side or plate is new ground: the count of the data kept
+    // was of the old one, so it goes until the next draft counts again.
+    if (!dataFits()) setCount('');
+  }
+
+  /**
+   * Whether the data kept is the ground the choices ask for now; a file is
+   * its own ground. Make the map pulls again when it is not.
+   */
+  function dataFits() {
+    return !osm || osm.source === 'file' || osm.key === pullKey();
+  }
+
+  function setCount(text) {
+    detailCount.textContent = text || '';
+    detailCount.hidden = !text;
   }
 
   const ticked = () =>
@@ -1507,10 +1523,9 @@ export function createAddressSection({
       return symbolRadios.find((r) => r.checked)?.value || setChoices[0].key;
     },
     /** The count under the choices, once a draft exists. */
-    setDetailCount(text) {
-      detailCount.textContent = text || '';
-      detailCount.hidden = !text;
-    },
+    setDetailCount: setCount,
+    /** Whether the data kept is the ground the choices ask for now. */
+    dataFits: () => dataFits(),
     /** Put a tier and its groups back (a refusal), as getDetail gave them. */
     setDetail(detail) {
       if (!detail) return;
