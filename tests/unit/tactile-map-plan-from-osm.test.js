@@ -15,6 +15,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   addressName,
+  placeTitle,
   draftPlan,
   DRAFT_LIMIT,
 } from '../../src/js/tactile-map/plan-from-osm.js';
@@ -589,6 +590,32 @@ describe('draftPlan', () => {
       'destination',
       'you-are-here',
     ]);
+  });
+
+  it('titles a place by its name, and a place known only by its house number by the number and its street', () => {
+    expect(
+      placeTitle(
+        'Seattle Central Library, 1000, 4th Avenue, Central Business District, Seattle'
+      )
+    ).toBe('Seattle Central Library');
+    expect(
+      placeTitle(
+        '1000, 4th Avenue, Central Business District, First Hill, Seattle, King County, Washington, 98104, United States'
+      )
+    ).toBe('1000 4th Avenue');
+    expect(placeTitle('12B, Pike Street, Seattle')).toBe('12B Pike Street');
+    expect(placeTitle('1000')).toBe('1000');
+    expect(placeTitle('')).toBe('');
+    expect(placeTitle(undefined)).toBe('');
+    const { plan } = draftPlan({
+      elements: ELEMENTS,
+      center: CENTER,
+      radiusM: 100,
+      place: {
+        name: '1000, 4th Avenue, Central Business District, Seattle',
+      },
+    });
+    expect(plan.meta.title).toBe('1000 4th Avenue');
   });
 
   it("names the destination by what was typed, up to its first comma, else by the geocoder's house number and street, else by the place's name", () => {

@@ -22,7 +22,7 @@
  * @license GPL-3.0-or-later
  */
 import { ALONG_M, wantsArea, wantsPoint } from './detail-levels.js';
-import { draftPlan } from './plan-from-osm.js';
+import { draftPlan, placeTitle } from './plan-from-osm.js';
 import { projectLatLon, toMm } from './osm-geometry.js';
 import { pointKey, walkBetween } from './walk-graph.js';
 import { DEFAULT_SETTINGS } from './levels-svg.js';
@@ -191,7 +191,7 @@ const idMatches = (f, id) =>
   f.id === `osm-way-${id}` || f.id.startsWith(`osm-way-${id}-`);
 
 const shortName = (place, fallback) =>
-  (place?.name || fallback || '').split(',')[0].trim();
+  placeTitle(place?.name || fallback || '');
 
 /**
  * Build the draft of a route map.

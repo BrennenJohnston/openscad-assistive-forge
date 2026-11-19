@@ -528,6 +528,8 @@ function distanceRectRings(r, rings) {
 
 /** A number for a sentence: one decimal at most, no trailing zero. */
 const say = (n) => String(Math.round(n * 10) / 10);
+/** The same, rounded down: a gap under a minimum never reads as the minimum. */
+const sayUnder = (n) => String(Math.floor(n * 10) / 10);
 
 // The names the editor's rows show (feature-names.js), set for each build.
 let names = new Map();
@@ -788,7 +790,7 @@ export function buildLevelRings(plan, settings = {}) {
       warn(
         'too-close',
         a.f.id,
-        `${nameOf(a.f)} and ${nameOf(b.f)} are ${say(gap)} mm apart, closer than the ${say(s.minGapMm)} mm minimum. Move one or turn one off.`,
+        `${nameOf(a.f)} and ${nameOf(b.f)} are ${sayUnder(gap)} mm apart, closer than the ${say(s.minGapMm)} mm minimum. Move one or turn one off.`,
         { featureIds: [a.f.id, b.f.id] }
       );
       continue;
@@ -817,7 +819,7 @@ export function buildLevelRings(plan, settings = {}) {
         warn(
           'channel-too-close',
           c.f.id,
-          `The label channel ${nameOf(c.f)} is ${say(d)} mm from ${nameOf(b.f)}; keep ${say(s.channelKeepClearMm)} mm clear.`,
+          `The label channel ${nameOf(c.f)} is ${sayUnder(d)} mm from ${nameOf(b.f)}; keep ${say(s.channelKeepClearMm)} mm clear.`,
           { featureIds: [c.f.id, b.f.id] }
         );
       }

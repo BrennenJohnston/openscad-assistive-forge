@@ -564,6 +564,15 @@ describe('the live line under the detail levels', () => {
       `301 features on, ${warning}`
     );
   });
+
+  it("says the draft's one warning in the singular", () => {
+    expect(ADDRESS_STRINGS.draftReady(22, 693, 1)).toBe(
+      'Draft map ready: 22 of 693 features on; 1 warning. Choose what stays.'
+    );
+    expect(ADDRESS_STRINGS.draftReady(122, 693, 24)).toBe(
+      'Draft map ready: 122 of 693 features on; 24 warnings. Choose what stays.'
+    );
+  });
 });
 
 describe('Generate during the map steps', () => {

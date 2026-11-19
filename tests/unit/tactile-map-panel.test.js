@@ -2356,7 +2356,7 @@ describe('the map Make the map drafts', () => {
     await pullData();
     await vi.waitFor(() => expect(opened).not.toBeNull());
     expect(addressStatus()).toMatch(
-      /^Draft map ready: \d+ of 22 features on; (\d+ warnings|no warnings)\. Choose what stays\. The key has \d+ symbols? and \d+ numbered places?\.$/
+      /^Draft map ready: \d+ of 22 features on; (1 warning|\d+ warnings|no warnings)\. Choose what stays\. The key has \d+ symbols? and \d+ numbered places?\.$/
     );
     expect(announce).toHaveBeenCalledWith(addressStatus(), {
       source: 'tactile-map',
@@ -2673,6 +2673,19 @@ describe('the steep switch', () => {
       ).toBeGreaterThan(0)
     );
     expect(steepBox().checked).toBe(true);
+  });
+
+  it("ticked before the map is made, keeps the draft's sentence in the box with the steep result after it, and says only the steep result", async () => {
+    await drafted({ steepFirst: true });
+    await vi.waitFor(() =>
+      expect(addressStatus()).toMatch(
+        /^Draft map ready: .+ \d+ steep segments marked, steeper than 5 %\.$/
+      )
+    );
+    const steep = addressStatus().match(
+      /\d+ steep segments marked, steeper than 5 %\.$/
+    )[0];
+    expect(announce).toHaveBeenLastCalledWith(steep, expect.anything());
   });
 
   it('on, reads the heights, marks the steep runs, says so and writes the levels file; off removes them', async () => {
