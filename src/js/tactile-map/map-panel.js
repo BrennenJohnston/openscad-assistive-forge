@@ -1186,6 +1186,16 @@ class MapPanel {
     }
     if (this.refs.drawingWidth)
       this.refs.drawingWidth.value = String(this.drawingWidthMm);
+    // The plan made from the last drawing is not this one's: the plate waits,
+    // NO MAP YET, until this drawing's classes are applied, so neither the
+    // preview nor an export carries the other drawing.
+    if (!this.plan.meta?.waiting) {
+      this.plan = waitingPlan(this.plan.size.w, this.plan.size.h);
+      this.planWarnings = [];
+      this.plate = 'whole';
+      this.setTitle(WAITING_TITLE);
+      this.schedule(0);
+    }
   }
 
   /**
@@ -1278,6 +1288,7 @@ class MapPanel {
     this.plan = plan;
     this.planWarnings = warnings;
     this.plate = 'whole';
+    this.leaveWaiting();
     this.schedule(0);
   }
 
