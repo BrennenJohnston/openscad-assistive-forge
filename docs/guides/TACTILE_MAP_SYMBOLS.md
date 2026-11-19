@@ -91,7 +91,7 @@ Under **Symbol set** in the Tactile Map Designer's step 3, choose **Your own set
     "key": "stairs",
     "name": "Stairs",
     "pathData": "M 0 0.08 H 1 V 0.24 H 0 Z M 0 0.42 H 1 V 0.58 H 0 Z M 0 0.76 H 1 V 0.92 H 0 Z",
-    "minSizeMm": 6,
+    "minSizeMm": 8,
     "source": "where this shape comes from"
   }
 ]
@@ -100,8 +100,8 @@ Under **Symbol set** in the Tactile Map Designer's step 3, choose **Your own set
 - `key` is what a map's features refer to; use the ten keys above to replace the shipped shapes one for one, or your own keys for new ones.
 - `name` is what the key sheet prints and a screen reader says.
 - `pathData` is SVG path data in a box one unit wide and one unit tall, y down, drawn as filled shapes with no strokes. Several subpaths make several parts; a subpath inside another makes a hole.
-- `minSizeMm` is the smallest size the shape still reads at; 6 is the floor.
+- `minSizeMm` is the smallest size the shape still reads at, the width of its box. Drawn at that size, the shape must reach at least 6 mm across its shorter side: the stairs above fill 0.84 of their box's height, so 8 gives 6.7 mm, where 6 would give 5 mm and be refused.
 - `raisedPathData`, if you give it, is a part of the symbol in the same box that stands one symbol step higher than the rest, as You are here's center dot does. It is checked the same way: no part thinner than 1.0 mm at 10 mm.
 - `source` says where the shape comes from, so the next person can check it.
 
-A loaded set replaces the shipped set as a whole until you choose **Use the built-in symbols**; the two are never mixed. The app refuses a file that is not such a list, a symbol smaller than 6 mm at its smallest size, and a symbol with a part thinner than 1.0 mm at 10 mm, and says which symbol and why. The file stays on your computer; nothing is uploaded.
+A loaded set replaces the shipped set as a whole until you choose another set under **Symbol set**; the two are never mixed. The app refuses a file that is not such a list, a symbol smaller than 6 mm at its smallest size, and a symbol with a part thinner than 1.0 mm at 10 mm, and says which symbol and why. The file stays on your computer; nothing is uploaded.
