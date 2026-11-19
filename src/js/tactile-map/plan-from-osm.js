@@ -658,24 +658,23 @@ export function draftPlan({
 
   // Stops and stations of one name whose symbols would stand closer than
   // the levels builder's gap (a station and its platforms, a stop's two
-  // directions) are one place to a reader: the first that is on stays and
-  // the rest are duplicates, off under every tier and still in the editor,
-  // so the place has one symbol, one number and one row in the key. Two
-  // numbers for it name neither, so the one kept then says none.
+  // directions, a platform and its stop position) are one place to a
+  // reader: one stays and the rest are duplicates, off under every tier and
+  // still in the editor, so the place has one symbol, one number and one
+  // row in the key. Two numbers for it name neither, so the one kept then
+  // says none.
   const clear = symbolSizeMm + DEFAULT_SETTINGS.minGapMm;
   const nameKey = (f) =>
     String(f.name || '')
       .trim()
       .toLowerCase();
+  // A platform is kept before a stop position, then one that is on first.
+  const rank = (f) => (f.twin ? 2 : 0) + (f.on ? 0 : 1);
   const stops = features
     .filter(
-      (f) =>
-        f.class === 'transit-stop' &&
-        f.kind === 'point' &&
-        !f.twin &&
-        nameKey(f)
+      (f) => f.class === 'transit-stop' && f.kind === 'point' && nameKey(f)
     )
-    .sort((a, b) => Number(Boolean(b.on)) - Number(Boolean(a.on)));
+    .sort((a, b) => rank(a) - rank(b));
   const keptStops = [];
   for (const f of stops) {
     const kept = keptStops.find(

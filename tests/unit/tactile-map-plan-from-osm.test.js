@@ -506,16 +506,38 @@ describe('draftPlan', () => {
         { highway: 'bus_stop', public_transport: 'platform', name: 'Pine & 4th' },
         [2, -42]
       ),
+      node(
+        66,
+        {
+          public_transport: 'stop_position',
+          bus: 'yes',
+          name: 'Pine & 5th',
+          ref: '300',
+        },
+        [0, -140]
+      ),
+      node(
+        67,
+        {
+          highway: 'bus_stop',
+          public_transport: 'platform',
+          name: 'Pine & 5th',
+          ref: '300',
+        },
+        [0.5, -140]
+      ),
     ];
-    const { plan } = draftPlan({
-      elements: marks,
-      center: CENTER,
-      radiusM: 250,
-      landmarks: ['transit-stop'],
-      size: { w: 480, h: 360 },
-    });
-    const state = (id) => {
-      const f = byId(plan, `osm-node-${id}`);
+    const draft = (landmarks) =>
+      draftPlan({
+        elements: marks,
+        center: CENTER,
+        radiusM: 250,
+        landmarks,
+        size: { w: 480, h: 360 },
+      }).plan;
+    const plan = draft(['transit-stop']);
+    const state = (id, from = plan) => {
+      const f = byId(from, `osm-node-${id}`);
       return [f.on, Boolean(f.duplicate), f.ref ?? null];
     };
     expect(state(60)).toEqual([true, false, null]);
@@ -524,6 +546,13 @@ describe('draftPlan', () => {
     expect(state(63)).toEqual([true, false, null]);
     expect(state(64)).toEqual([false, true, '101']);
     expect(state(65)).toEqual([true, false, null]);
+    // A stop position at its platform is a duplicate, and the platform is
+    // the one kept even when every stop starts off.
+    expect(state(66)).toEqual([false, true, '300']);
+    expect(state(67)).toEqual([true, false, '300']);
+    const off = draft([]);
+    expect(state(66, off)).toEqual([false, true, '300']);
+    expect(state(67, off)).toEqual([false, false, '300']);
     const names = featureNames(plan.features);
     const nameOf = (id) =>
       names[plan.features.findIndex((f) => f.id === `osm-node-${id}`)];
