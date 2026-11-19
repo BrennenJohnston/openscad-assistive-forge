@@ -2537,6 +2537,17 @@ class MapPanel {
     const walkways = base.features.filter(
       (f) => f.kind === 'line' && f.on && f.class === 'walkway'
     ).length;
+    // Nothing to measure: no tile is read, and "none is steeper" would read
+    // as a finding about ground that was never measured.
+    if (!walkways) {
+      if (base.features.length !== this.plan.features.length) {
+        this.plan = base;
+        this.schedule(0);
+      }
+      const nothing = ADDRESS_STRINGS.steepNothing;
+      this.sayAddress(nothing, false, { shown: shown(nothing) });
+      return;
+    }
     const reading = ADDRESS_STRINGS.reading(walkways);
     this.sayAddress(reading, false, { shown: shown(reading) });
     try {

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Mark steep sidewalks on a tactile map with no sidewalk drawn, as at a
+  neighborhood's scale, says nothing was measured instead of that none is
+  steep.
+
 ## [5.8.0] - 2026-11-18
 
 ### Added

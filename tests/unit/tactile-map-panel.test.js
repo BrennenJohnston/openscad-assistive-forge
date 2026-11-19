@@ -2764,6 +2764,27 @@ describe('the steep switch', () => {
     );
   });
 
+  it('says there is nothing to measure when no sidewalk is on the map, and reads no terrain tile', async () => {
+    const fetchTiles = vi.fn(async () => ({ ok: false, status: 403 }));
+    await drafted({ elevationAt: null, fetchTiles });
+    const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+    panel.plan = {
+      ...panel.plan,
+      features: panel.plan.features.map((f) =>
+        f.class === 'walkway' ? { ...f, on: false } : f
+      ),
+    };
+    steepBox().checked = true;
+    steepBox().dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(addressStatus()).toBe(
+        'No sidewalk is on the map, so no slope is measured.'
+      )
+    );
+    expect(fetchTiles).not.toHaveBeenCalled();
+    expect(steepBox().checked).toBe(true);
+  });
+
   it('says no sidewalk is steeper on flat ground, and reads again at a new grade', async () => {
     await drafted({ elevationAt: () => 100 });
     steepBox().checked = true;
