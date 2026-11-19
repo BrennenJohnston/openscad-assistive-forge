@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A tactile map from a drawing starts with no north cue, so the plate's arrow
+  no longer lands on a drawing that carries its own; Title and north adds one.
+
 ## [5.8.0] - 2026-11-18
 
 ### Added

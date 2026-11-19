@@ -3088,3 +3088,43 @@ describe('the model switch beside the paper', () => {
     expect(modelBox()).toBeNull();
   });
 });
+
+describe('the north cue of a map from a drawing', () => {
+  const panel = () =>
+    document.getElementById('tactileMapPanel').__forgeMapPanel;
+
+  it('starts at None on a drawing, says so in the last step, and gives the arrow back to a place map', async () => {
+    stateManager.setState({
+      parameters: { ...params(), north_cue: 'Arrow with N' },
+    });
+    mount({ type: 'drawing' });
+    expect(panel().mapType).toBe('drawing');
+    await vi.waitFor(() => expect(params().north_cue).toBe('None'), SETTLE);
+    expect(document.getElementById('tactileMapPanel').textContent).toContain(
+      'A map from a drawing starts with no north cue, since a drawing carries its own; Title and north adds one.'
+    );
+    panel().setType('place');
+    await vi.waitFor(
+      () => expect(params().north_cue).toBe('Arrow with N'),
+      SETTLE
+    );
+  });
+
+  it('keeps a cue the person chose, on a drawing and after it', async () => {
+    mount({ type: 'drawing' });
+    stateManager.setState({
+      parameters: { ...params(), north_cue: 'Arrow with N' },
+    });
+    await vi.waitFor(() => expect(params().north_cue).toBe('None'), SETTLE);
+    stateManager.setState({
+      parameters: { ...params(), north_cue: 'North line' },
+    });
+    panel().setType('place');
+    expect(params().north_cue).toBe('North line');
+    stateManager.setState({
+      parameters: { ...params(), north_cue: 'Arrow with N' },
+    });
+    panel().setType('route');
+    expect(params().north_cue).toBe('Arrow with N');
+  });
+});
