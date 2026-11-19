@@ -14,7 +14,9 @@
  * box is ticked; a named place is a landmark, on where the scale draws
  * landmarks, and street furniture with a name an off point of its own
  * class; the entrance nearest the address within NEAR_M starts on at every
- * scale while entrances are ticked; a stop position starts off where its
+ * scale while entrances are ticked (NEAR_M, for it and for the sidewalks,
+ * reaches from a building's outline when the address is inside one); a
+ * stop position starts off where its
  * platform stands within NEAR_M; curb ramps and raised curbs enter only at
  * a scale whose rules draw them, on where they stand on a sidewalk or
  * crossing that is on and leave room for the symbols already on.
@@ -31,10 +33,12 @@ import { emptyPlan } from './plan.js';
 import { MAP_CLASSES, ROAD_WIDTHS_M } from './map-classes.js';
 import { mmPerMeter, projectLatLon, toMm } from './osm-geometry.js';
 import { intersect, simplify } from '../ring-geometry.js';
+import { pointInPolygon } from '../svg-nesting.js';
 import { mmPerMeterAt, sidewalksAsOneLine } from './scales.js';
 import { DEFAULT_SETTINGS } from './levels-svg.js';
 import { kindOf, isFurniture } from './feature-kinds.js';
 import { DESTINATION_CONE_MM } from './symbol-library.js';
+import { segmentsCross } from './map-labels.js';
 
 /** A walkway with a point this close to the address starts on. */
 export const NEAR_M = 30;
@@ -348,12 +352,47 @@ export function draftPlan({
     toMm(projectLatLon(pt.lat, pt.lon, center), size, k).map(round3);
   const insideBox = ([x, y]) => x >= 0 && x <= w && y >= 0 && y <= h;
   // A walkway passing within NEAR_M of the address starts on: the distance
-  // to its segments, since a sidewalk's vertices may be a block apart.
+  // to its segments, since a sidewalk's vertices may be a block apart. An
+  // address inside a building is that building to a reader, so the reach
+  // runs from its outline, as a route's end does (walk-graph.js), and a
+  // large building drafts as a small one does.
   const middle = [w / 2, h / 2];
+  const asXY = (ring) => ring.map(([x, y]) => ({ x, y }));
+  const inRing = (p, xy) => pointInPolygon({ x: p[0], y: p[1] }, xy);
+  const home = place
+    ? elements.find(
+        (el) =>
+          el?.type === 'way' &&
+          el.tags?.building &&
+          Array.isArray(el.geometry) &&
+          el.geometry.length > 3 &&
+          inRing(middle, asXY(el.geometry.map(mm)))
+      )
+    : null;
+  const outline = home ? home.geometry.map(mm) : null;
+  const outlineXY = outline ? asXY(outline) : null;
+  const edges = outline ? outline.slice(1).map((e, i) => [outline[i], e]) : [];
+  const toOutline = (p) =>
+    Math.min(...edges.map(([c, e]) => segmentDistance(p, c, e)));
+  const toAddress = (a, b) => {
+    const d = segmentDistance(middle, a, b);
+    if (!outline) return d;
+    if (inRing(a, outlineXY) || inRing(b, outlineXY)) return 0;
+    let best = d;
+    for (const [c, e] of edges) {
+      if (segmentsCross(a, b, c, e)) return 0;
+      best = Math.min(
+        best,
+        segmentDistance(a, c, e),
+        segmentDistance(b, c, e),
+        segmentDistance(c, a, b),
+        segmentDistance(e, a, b)
+      );
+    }
+    return best;
+  };
   const nearCenter = (points) =>
-    points.some(
-      (p, i) => i > 0 && segmentDistance(middle, points[i - 1], p) <= NEAR_M * k
-    );
+    points.some((p, i) => i > 0 && toAddress(points[i - 1], p) <= NEAR_M * k);
 
   const features = [];
   const counts = {
@@ -619,13 +658,16 @@ export function draftPlan({
     }
   }
 
-  // The address's own entrance: the one nearest it within NEAR_M, on at
-  // every scale while entrances are ticked (it is where the map leads).
+  // The address's own entrance: the one nearest it within NEAR_M (of its
+  // building's outline, when it has one), on at every scale while
+  // entrances are ticked (it is where the map leads).
   let door = null;
-  let doorD = NEAR_M * k;
+  let doorD = Infinity;
   for (const f of features) {
     if (f.class !== 'entrance') continue;
     const d = dist(f.at, middle);
+    const reach = outline ? Math.min(d, toOutline(f.at)) : d;
+    if (reach > NEAR_M * k) continue;
     if (d <= doorD) {
       door = f;
       doorD = d;
