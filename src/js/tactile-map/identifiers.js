@@ -691,7 +691,8 @@ export function bandPlan({
     }
   }
 
-  // One edge's numbers at their starts, in the order given, with their leads.
+  // One edge's numbers at their starts, in the order given, with their leads;
+  // null when that order does not fit between the seams.
   const layOut = (side, order) => {
     const starts = packAlong(
       order.map((it) => ({ ideal: it.ideal, size: along(side, it.box) })),
@@ -699,6 +700,7 @@ export function bandPlan({
       span[side][1],
       { inOrder: true, blocked: blocked[side] }
     );
+    if (!starts) return null;
     return order.map((it, k) => {
       let x0;
       let y0;
@@ -739,9 +741,12 @@ export function bandPlan({
       ...list.map((it) => (side === 'bottom' ? it.box.h : it.box.w))
     );
     sides[side] = Math.ceil(LEAD_GAP_MM + deepest + BAND_EDGE_MM - 1e-9);
-    // In the order of the things' places first; then any two whose leads
-    // cross change places, until none do, within a bound on the passes.
-    const order = [...list].sort((a, b) => a.ideal - b.ideal);
+    // In the order of the things' places first (the order `fits` packed, so
+    // it fits); then any two whose leads cross change places, until none do,
+    // within a bound on the passes. Numbers of different widths swapped can
+    // stop fitting between the seams: that swap is not made, and the last
+    // order that fit stays.
+    let order = [...list].sort((a, b) => a.ideal - b.ideal);
     let laid = layOut(side, order);
     for (let pass = 0; pass < order.length * order.length; pass += 1) {
       let swap = null;
@@ -753,8 +758,15 @@ export function bandPlan({
         }
       }
       if (!swap) break;
-      [order[swap[0]], order[swap[1]]] = [order[swap[1]], order[swap[0]]];
-      laid = layOut(side, order);
+      const swapped = [...order];
+      [swapped[swap[0]], swapped[swap[1]]] = [
+        swapped[swap[1]],
+        swapped[swap[0]],
+      ];
+      const next = layOut(side, swapped);
+      if (!next) break;
+      order = swapped;
+      laid = next;
     }
     for (const mark of laid) {
       marks.push(mark);
