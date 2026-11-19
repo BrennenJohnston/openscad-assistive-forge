@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- After an export the app says the file is ready and the browser saves it,
+  not that it was saved; the tactile map maker adds what to do when nothing
+  arrives, since a browser can hold a download behind its own prompt.
+
 ## [5.8.0] - 2026-11-18
 
 ### Added

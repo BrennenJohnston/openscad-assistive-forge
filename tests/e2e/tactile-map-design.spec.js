@@ -328,7 +328,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     expect(size[1]).toBeCloseTo(pieces[0].size.h, 1);
     expect(pieces[0].size.h).toBeLessThan(75);
     await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
-      'All 25 plates are in tactile_map_plates.zip.'
+      'All 25 plates are in tactile_map_plates.zip; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.'
     );
   });
 
