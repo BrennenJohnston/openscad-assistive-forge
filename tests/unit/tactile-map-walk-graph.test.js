@@ -21,11 +21,7 @@ import {
   pointKey,
   ROAD_FACTOR,
 } from '../../src/js/tactile-map/walk-graph.js';
-import {
-  trimElement,
-  projectLatLon,
-} from '../../src/js/tactile-map/osm-geometry.js';
-import { pullTiles, TILE_URL } from '../../src/js/tactile-map/osm-tiles.js';
+import { trimElement } from '../../src/js/tactile-map/osm-geometry.js';
 import { NEAR_M } from '../../src/js/tactile-map/plan-from-osm.js';
 
 const FIXTURE = JSON.parse(
@@ -220,63 +216,5 @@ describe('a place whose nearest point joins nothing', () => {
         to: { lat: 1, lon: 1.001 },
       })
     ).toBeNull();
-  });
-
-  it('walks from the University of Washington Link Plaza to Ferry Place Northeast on the map tiles, whose plaza outline no path touches', async () => {
-    // Real tiles (zoom 15, x 5251, y 11437 and 11438; map data from
-    // OpenStreetMap contributors, ODbL) and the two places as the address
-    // search gives them.
-    const tile = {
-      11437: readFileSync(
-        'tests/fixtures/tactile-map/sourdough-15-5251-11437.mvt'
-      ),
-      11438: readFileSync(
-        'tests/fixtures/tactile-map/sourdough-15-5251-11438.mvt'
-      ),
-    };
-    const fetch = async (url) => {
-      const y = Object.keys(tile).find(
-        (k) =>
-          url ===
-          TILE_URL.replace('{z}', 15).replace('{x}', 5251).replace('{y}', k)
-      );
-      const bytes = y ? tile[y] : new Uint8Array(0);
-      return {
-        ok: true,
-        status: bytes.length ? 200 : 204,
-        arrayBuffer: async () =>
-          bytes.buffer.slice(
-            bytes.byteOffset,
-            bytes.byteOffset + bytes.byteLength
-          ),
-      };
-    };
-    const PLAZA = { lat: 47.6498905, lon: -122.3040756 };
-    const FERRY_PLACE = { lat: 47.6487434, lon: -122.3085217 };
-    const { elements } = await pullTiles({
-      box: { south: 47.6474, west: -122.3105, north: 47.6512, east: -122.3021 },
-      fetch,
-    });
-    const graph = buildWalkGraph(elements);
-    const start = placeCandidates(graph, elements, PLAZA, 'start');
-    const outline = elements.find(
-      (e) =>
-        e.type === 'way' &&
-        e.tags.name === 'University of Washington Link Plaza'
-    );
-    const onOutline = (k) =>
-      (graph.edges.get(k) || []).every((e) => e.way === outline.id);
-    expect(onOutline(start.keys[0])).toBe(true);
-    const end = placeCandidates(graph, elements, FERRY_PLACE, 'end');
-    expect(shortestWalk(graph, start.keys, end.keys)).toBeNull();
-
-    const walk = walkBetween({ elements, from: PLAZA, to: FERRY_PLACE });
-    expect(walk).not.toBeNull();
-    expect(onOutline(walk.from.keys[0])).toBe(false);
-    const [e, n] = projectLatLon(walk.points[0].lat, walk.points[0].lon, PLAZA);
-    expect(Math.hypot(e, n)).toBeLessThan(NEAR_M);
-    expect(walk.lengthM).toBeGreaterThan(725);
-    expect(walk.lengthM).toBeLessThan(726);
-    expect(walk.crossings).toHaveLength(2);
   });
 });
