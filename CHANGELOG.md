@@ -99,6 +99,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A screen reader names a checked item in the menus by its words alone,
   "Show Edges, checked", instead of reading its check mark or dot as part
   of the name; the mark still shows.
+- A route map from a place inside a plaza, such as a train station's, finds
+  its walk: the walk starts on the nearest path that leads to the other
+  place, within 30 m, instead of on the plaza's edge.
 - A tactile map's draft keeps what you change in the editor: Make the map,
   pressed again, opens the draft as you left it instead of drafting it anew,
   and a new level or scale keeps your changes on the same features.
