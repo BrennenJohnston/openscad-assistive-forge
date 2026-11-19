@@ -7,11 +7,13 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
-# Every Linux job here, in release-checks.yml and in visual-baselines.yml
-# names ubuntu-24.04, not ubuntu-latest. In November 2026 ubuntu-latest moved
-# to Ubuntu 26.04, where Playwright 1.57 has no browsers, and the Linux
-# screenshot baselines were captured on 24.04. Move the three files together,
-# with a Playwright that supports the newer image and baselines captured on it.
+# Every Linux job here, in release-checks.yml, in visual-baselines.yml and in
+# the three engine builds names ubuntu-24.04, not ubuntu-latest. In November
+# 2026 ubuntu-latest moved to Ubuntu 26.04, where Playwright 1.57 has no
+# browsers; the Linux screenshot baselines were captured on 24.04, and the
+# engines were last built and verified there. Move them all together, with a
+# Playwright that supports the newer image, baselines captured on it, and each
+# engine built and verified again.
 jobs:
   unit-tests:
     name: Unit Tests
