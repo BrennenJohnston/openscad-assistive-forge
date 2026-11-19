@@ -195,6 +195,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   map.
 - Choosing All printed for a tactile map no longer stops the model at the
   default 0.4 mm base: it prints at 1.2 mm, as the setting says.
+- A route map's walk takes the paths and stairs that cross each other or
+  run into a plaza: the map tiles drop the point where they meet, so a walk
+  went around them, along a street, or found no way at all.
 
 ## [5.8.0] - 2026-11-04
 
