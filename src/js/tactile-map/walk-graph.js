@@ -8,13 +8,16 @@
  * same in both, so points join on their coordinates (no node ids are kept).
  * Streets carry a walk only where no footway does: they cost three times
  * their length. Steps are allowed and marked unless a walk avoids them. A
- * place inside a building starts or ends at that building's doors.
+ * place inside a building starts or ends at that building's doors. A place
+ * whose nearest point lies on a piece that joins nothing starts instead on
+ * the network that joins both places, within NEAR_M of it.
  *
  * No DOM here: the panel imports this file lazily.
  *
  * @license GPL-3.0-or-later
  */
 import { projectLatLon } from './osm-geometry.js';
+import { NEAR_M } from './plan-from-osm.js';
 
 /** Ways a person walks. */
 const WALK = new Set([
@@ -317,6 +320,73 @@ export function placeCandidates(graph, elements, place, role) {
   return { keys: near ? [near] : [], building: null, buildingId: null };
 }
 
+/** Each graph point's network: points that any walk joins share a number. */
+function networks(graph) {
+  const of = new Map();
+  let n = 0;
+  for (const k of graph.points.keys()) {
+    if (of.has(k)) continue;
+    of.set(k, n);
+    const stack = [k];
+    while (stack.length > 0) {
+      const u = stack.pop();
+      for (const edge of graph.edges.get(u) || []) {
+        if (!of.has(edge.to)) {
+          of.set(edge.to, n);
+          stack.push(edge.to);
+        }
+      }
+    }
+    n += 1;
+  }
+  return of;
+}
+
+/**
+ * Where a place may start on each network: its own candidates that lie on
+ * it (0 m), else the network's point nearest the place within NEAR_M.
+ *
+ * @returns {Map<number, {keys: string[], m: number}>}
+ */
+function reachedNetworks(graph, net, place, ownKeys) {
+  const out = new Map();
+  for (const k of ownKeys) {
+    const c = net.get(k);
+    if (!out.has(c)) out.set(c, { keys: [], m: 0 });
+    out.get(c).keys.push(k);
+  }
+  for (const [k, p] of graph.points) {
+    const c = net.get(k);
+    if (out.get(c)?.m === 0) continue;
+    const m = meters(place, p);
+    if (m <= NEAR_M && m < (out.get(c)?.m ?? Infinity)) {
+      out.set(c, { keys: [k], m });
+    }
+  }
+  return out;
+}
+
+/**
+ * The two places' candidates moved onto the network that joins them both,
+ * when their own do not meet: map tiles can carry a plaza as an outline no
+ * path touches, and a place inside it then starts on a piece that leads
+ * nowhere. Of the networks both places reach, the one nearest them both;
+ * null when none does.
+ */
+function onJoinedNetwork(graph, from, to, start, end) {
+  const net = networks(graph);
+  const fromNets = reachedNetworks(graph, net, from, start.keys);
+  const toNets = reachedNetworks(graph, net, to, end.keys);
+  let best = null;
+  for (const [c, a] of fromNets) {
+    const b = toNets.get(c);
+    if (b && (!best || a.m + b.m < best.m)) {
+      best = { m: a.m + b.m, from: a.keys, to: b.keys };
+    }
+  }
+  return best;
+}
+
 /**
  * The walk between two places in the elements, or null when none joins them.
  *
@@ -324,9 +394,17 @@ export function placeCandidates(graph, elements, place, role) {
  */
 export function walkBetween({ elements = [], from, to, avoidSteps = false }) {
   const graph = buildWalkGraph(elements);
-  const start = placeCandidates(graph, elements, from, 'start');
-  const end = placeCandidates(graph, elements, to, 'end');
-  const walk = shortestWalk(graph, start.keys, end.keys, { avoidSteps });
+  let start = placeCandidates(graph, elements, from, 'start');
+  let end = placeCandidates(graph, elements, to, 'end');
+  let walk = shortestWalk(graph, start.keys, end.keys, { avoidSteps });
+  if (!walk) {
+    const joined = onJoinedNetwork(graph, from, to, start, end);
+    if (joined) {
+      start = { ...start, keys: joined.from };
+      end = { ...end, keys: joined.to };
+      walk = shortestWalk(graph, start.keys, end.keys, { avoidSteps });
+    }
+  }
   if (!walk) return null;
   return { ...walk, from: start, to: end };
 }
