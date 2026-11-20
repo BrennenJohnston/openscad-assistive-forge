@@ -2328,22 +2328,14 @@ class MapPanel {
     this.plan = plan;
     this.source = 'draft';
     this.draftKey = key;
-    // Counted as step 5 lists them: the labels' and the plates' warnings.
-    const labeled = this.labeled();
-    const cleared = this.clearedPlan(labeled);
-    const warnings = [
-      ...labeled.warnings,
-      ...cleared.built.warnings,
-      ...this.channelWarnings(),
-      ...(keptClearNote(cleared.moved) ? [keptClearNote(cleared.moved)] : []),
-    ];
-    this.draft = { counts, warnings: warnings.length };
     this.planWarnings = [];
     this.plate = 'whole';
     this.leaveWaiting();
     this.schedule(0);
     this.steps?.refresh();
     await this.measureNow();
+    const warnings = this.warningsOf(this.clearedPlan(this.labeled()));
+    this.draft = { counts, warnings: warnings.length };
     this.sayAddress(
       (warnings.length
         ? ADDRESS_STRINGS.draftReady(counts.on, counts.total, warnings.length)
@@ -2382,23 +2374,14 @@ class MapPanel {
     this.plan = plan;
     this.source = 'draft';
     this.draftKey = key;
-    // Counted as step 5 lists them: the labels', the plates', the channels'
-    // and the moved symbol's, as the place map counts its own.
-    const labeled = this.labeled();
-    const cleared = this.clearedPlan(labeled);
-    const warnings = [
-      ...labeled.warnings,
-      ...cleared.built.warnings,
-      ...this.channelWarnings(),
-      ...(keptClearNote(cleared.moved) ? [keptClearNote(cleared.moved)] : []),
-    ];
-    this.draft = { counts, warnings: warnings.length };
     this.planWarnings = [];
     this.plate = 'whole';
     this.leaveWaiting();
     this.schedule(0);
     this.steps?.refresh();
     await this.measureNow();
+    const warnings = this.warningsOf(this.clearedPlan(this.labeled()));
+    this.draft = { counts, warnings: warnings.length };
     this.sayAddress(
       ADDRESS_STRINGS.routeReady(
         Math.round(counts.lengthM),
@@ -2914,6 +2897,30 @@ class MapPanel {
     this.timer = setTimeout(() => this.update(), delay);
   }
 
+  /**
+   * Step 5's warnings, in the order its list shows them, from one layout
+   * (clearedPlan's). A draft's sentence counts this same list once the
+   * labels are measured, so it says the number a person finds in step 5.
+   */
+  warningsOf({ labeled, built, moved }) {
+    const list = [
+      ...this.planWarnings,
+      ...labeled.warnings,
+      ...(labeled.key?.notes || []).map((text) => ({
+        code: 'shared-shape',
+        featureId: null,
+        text,
+      })),
+      ...built.warnings,
+      ...this.channelWarnings(),
+    ];
+    const movedNote = keptClearNote(moved);
+    if (movedNote) {
+      list.push({ code: 'kept-clear', featureId: null, text: movedNote });
+    }
+    return list;
+  }
+
   rebuildPlates() {
     const fieldset = this.refs.plates;
     const focused = document.activeElement;
@@ -3342,30 +3349,11 @@ class MapPanel {
         this.refs.tapeNote.textContent = note;
     }
 
-    const channelWarnings = this.channelWarnings();
     // Written only on a change: a live region speaks every write.
-    const channelNote = channelWarnings[0]?.text || '';
+    const channelNote = this.channelWarnings()[0]?.text || '';
     if (this.refs.channelNote.textContent !== channelNote)
       this.refs.channelNote.textContent = channelNote;
-    const allWarnings = [
-      ...this.planWarnings,
-      ...labeled.warnings,
-      ...(labeled.key?.notes || []).map((text) => ({
-        code: 'shared-shape',
-        featureId: null,
-        text,
-      })),
-      ...built.warnings,
-      ...channelWarnings,
-    ];
-    const movedNote = keptClearNote(moved);
-    if (movedNote) {
-      allWarnings.push({
-        code: 'kept-clear',
-        featureId: null,
-        text: movedNote,
-      });
-    }
+    const allWarnings = this.warningsOf({ labeled, built, moved });
     this.refs.warnings.replaceChildren(
       ...allWarnings.map((warning) => el('li', '', warning.text))
     );

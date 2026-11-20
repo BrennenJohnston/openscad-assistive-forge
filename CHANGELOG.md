@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A tactile map's ready sentence counts its warnings from the list step 5
+  shows, the key's notes and the numbers only the key holds included.
+
 ## [5.8.0] - 2026-11-18
 
 ### Added
