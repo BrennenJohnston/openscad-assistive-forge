@@ -1466,6 +1466,24 @@ describe('the tape channels, a recess or cut through', () => {
 });
 
 describe('render every plate and download', () => {
+  it('packs the archive compressed: every entry in its directory is deflated', async () => {
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    document.getElementById('tactileMapRenderAll').click();
+    const { names } = await readZip();
+    const bytes = downloads[0].bytes;
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    // Each central directory entry: 'PK' 1 2, its compression method at +10
+    // (8 deflate, 0 stored).
+    const methods = [];
+    for (let i = 0; i + 46 <= bytes.length; i += 1) {
+      if (view.getUint32(i, true) === 0x02014b50) {
+        methods.push(view.getUint16(i + 10, true));
+      }
+    }
+    expect(methods).toHaveLength(names.length);
+    expect(new Set(methods)).toEqual(new Set([8]));
+  });
+
   it('renders the four plates in order into one archive of eleven entries', async () => {
     await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
     const render = document.getElementById('tactileMapRenderAll');
@@ -1827,7 +1845,10 @@ describe('the drawing door', () => {
         map_file: { name: 'other.svg', data: svgToDataUrl(OTHER) },
       },
     });
-    await vi.waitFor(() => expect(getMapPlan().meta.waiting).toBe(true), SETTLE);
+    await vi.waitFor(
+      () => expect(getMapPlan().meta.waiting).toBe(true),
+      SETTLE
+    );
     expect(getMapPlan().features.some((f) => f.class === 'wall')).toBe(false);
 
     click('tactileMapEditDrawing');
@@ -1840,9 +1861,9 @@ describe('the drawing door', () => {
       () => expect(getMapPlan().meta.waiting).toBeFalsy(),
       SETTLE
     );
-    expect(getMapPlan().features.filter((f) => f.class === 'wall')).toHaveLength(
-      1
-    );
+    expect(
+      getMapPlan().features.filter((f) => f.class === 'wall')
+    ).toHaveLength(1);
   });
 
   it('says the scale when the drawing width changes, and rebuilds the plan at it', async () => {
@@ -2402,7 +2423,10 @@ describe('the map Make the map drafts', () => {
         ok: true,
         status: x ? 200 : 204,
         arrayBuffer: async () =>
-          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+          bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength
+          ),
       };
     };
     const { elements } = await pullTiles({
