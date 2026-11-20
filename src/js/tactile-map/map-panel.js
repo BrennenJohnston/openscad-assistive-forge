@@ -37,7 +37,7 @@
  */
 
 import { stateManager } from '../state.js';
-import { setParameterValue } from '../ui-generator.js';
+import { setDesignFitBoxMm, setParameterValue } from '../ui-generator.js';
 import {
   cutZones,
   keepClear,
@@ -609,6 +609,7 @@ class MapPanel {
       this.adoptPicture();
       if (this.mapType === 'drawing') this.steps?.refresh();
     });
+    this.syncFitBox();
     this.schedule(0);
   }
 
@@ -1189,6 +1190,7 @@ class MapPanel {
     }
     if (this.refs.drawingWidth)
       this.refs.drawingWidth.value = String(this.drawingWidthMm);
+    this.syncFitBox();
     // The plan made from the last drawing is not this one's: the plate waits,
     // NO MAP YET, until this drawing's classes are applied, so neither the
     // preview nor an export carries the other drawing.
@@ -1199,6 +1201,26 @@ class MapPanel {
       this.setTitle(WAITING_TITLE);
       this.schedule(0);
     }
+  }
+
+  /**
+   * The box the file control sizes a picture or drawing by when it reviews
+   * one: on a map from a drawing, the drawing's own width (the Drawing width
+   * control) at the drawing's shape, else the plate's; on any other map
+   * none, so another tile never measures by the map's box.
+   */
+  syncFitBox() {
+    if (this.mapType !== 'drawing' || this.destroyed) {
+      setDesignFitBoxMm(null);
+      return;
+    }
+    const w = this.drawingWidthMm > 0 ? this.drawingWidthMm : this.plan.size.w;
+    const box = this.drawing?.box;
+    const aspect =
+      box?.width > 0 && box?.height > 0
+        ? box.height / box.width
+        : this.plan.size.h / this.plan.size.w;
+    setDesignFitBoxMm({ w, h: Math.round(w * aspect * 1000) / 1000 });
   }
 
   /**
@@ -1308,6 +1330,7 @@ class MapPanel {
       return;
     }
     this.drawingWidthMm = value;
+    this.syncFitBox();
     const scale = scaleFromWidth(this.drawing?.box, value);
     if (scale) announce(scaleSentence(scale), { source: SOURCE });
     this.rebuildFromDrawing();
@@ -2023,6 +2046,7 @@ class MapPanel {
     if (!type) return;
     this.mapType = type.key;
     this.lastType = type.key;
+    this.syncFitBox();
     this.trim = TRIM_BY_TYPE[type.key] ?? false;
     if (this.refs.trim) this.refs.trim.checked = this.trim;
     if (type.key === 'drawing') {
@@ -2044,6 +2068,7 @@ class MapPanel {
   chooseAgain() {
     this.lastType = this.mapType;
     this.mapType = null;
+    this.syncFitBox();
     this.arrange({ focus: true });
   }
 
@@ -3692,6 +3717,7 @@ class MapPanel {
 
   destroy() {
     this.destroyed = true;
+    setDesignFitBoxMm(null);
     releasePrimaryAction();
     if (this.onDisplayOption) {
       document.removeEventListener(
