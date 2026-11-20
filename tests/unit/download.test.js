@@ -24,6 +24,7 @@ import {
   downloadFile,
   downloadSTL,
   formatFileSize,
+  handedOver,
 } from '../../src/js/download.js';
 
 describe('Download Manager', () => {
@@ -454,5 +455,17 @@ describe('Download Manager', () => {
 
       expect(mockAnchor.click).toHaveBeenCalledTimes(7);
     });
+  });
+});
+
+describe('handedOver', () => {
+  it('says the browser saves a file, never that it was saved, and where there is room what to do when nothing arrives', () => {
+    expect(handedOver('model.stl is ready')).toBe(
+      'model.stl is ready; your browser saves it.'
+    );
+    expect(handedOver('map.pdf is ready', { hint: true })).toBe(
+      'map.pdf is ready; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.'
+    );
+    expect(handedOver('x.zip is ready')).not.toMatch(/saved|Downloaded/);
   });
 });

@@ -40,6 +40,7 @@ import {
   formatPreviewStats,
   sanitizeFilename,
   OUTPUT_FORMATS,
+  handedOver,
 } from './js/download.js';
 import { getBrailleDownloadName } from './js/braille-panel.js';
 import {
@@ -12426,7 +12427,10 @@ if (rounded) {
           getBrailleDownloadName()
         );
         downloadFile(fullSTL.stl, filename, outputFormat);
-        updateStatus(`Downloaded: ${filename}`);
+        // The bar over the preview has room for a few words; the sentence
+        // is said in full.
+        updateStatus(`Ready: ${filename}`, 'default', { announce: false });
+        announceImmediate(handedOver(`${filename} is ready`));
         return;
       }
 
@@ -12447,7 +12451,8 @@ if (rounded) {
       );
 
       downloadFile(state.stl, filename, outputFormat);
-      updateStatus(`Downloaded: ${filename}`);
+      updateStatus(`Ready: ${filename}`, 'default', { announce: false });
+      announceImmediate(handedOver(`${filename} is ready`));
       refreshFolderSaveAffordances();
       return;
     }
@@ -15923,8 +15928,8 @@ if (rounded) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    updateStatus(`Downloaded: ${filename}`, 'success');
-    announceImmediate('Console log downloaded');
+    updateStatus(`Ready: ${filename}`, 'success', { announce: false });
+    announceImmediate(handedOver('The console log is ready'));
   });
 
   // Clear console

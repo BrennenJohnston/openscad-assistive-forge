@@ -168,7 +168,12 @@ import {
   tapeSentence,
   titlePlateSets,
 } from './plate-export.js';
-import { OUTPUT_FORMATS, downloadFile, projectStem } from '../download.js';
+import {
+  OUTPUT_FORMATS,
+  downloadFile,
+  handedOver,
+  projectStem,
+} from '../download.js';
 
 const DEBOUNCE_MS = 350;
 const CUSTOM_MIN_MM = 100;
@@ -2683,11 +2688,13 @@ class MapPanel {
         });
         this.download(bytes, fileName, 'zip');
         if (stop) {
-          sentence = `Stopped after plate ${rendered.length}; the zip holds the plates finished so far.`;
+          sentence = `Stopped after plate ${rendered.length}. ${handedOver('The zip holds the plates finished so far')}`;
         } else if (n === 1) {
-          sentence = `The plate is in ${fileName}.`;
+          sentence = handedOver(`The plate is in ${fileName}`, { hint: true });
         } else {
-          sentence = `All ${n} plates are in ${fileName}.`;
+          sentence = handedOver(`All ${n} plates are in ${fileName}`, {
+            hint: true,
+          });
         }
       }
       if (stop?.error) sentence += ` ${stop.error}`;
@@ -2906,7 +2913,7 @@ class MapPanel {
     const { bytes } = this.buildPdf({ stem, parameters });
     const fileName = `${stem}_print.pdf`;
     this.download(bytes, fileName, 'pdf');
-    this.say(`The PDF is in ${fileName}.`);
+    this.say(handedOver(`${fileName} is ready`, { hint: true }));
   }
 
   schedule(delay = DEBOUNCE_MS) {

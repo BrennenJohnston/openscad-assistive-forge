@@ -484,7 +484,7 @@ test.describe('Tactile Map tile', () => {
     expect(size[1]).toBeCloseTo(190, 1);
     expect(size[2]).toBeCloseTo(2.4, 1);
     await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
-      `All ${4 + keyIds.length} plates are in tactile_map_plates.zip.`
+      `All ${4 + keyIds.length} plates are in tactile_map_plates.zip; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.`
     );
     await expect(page.locator('#tactileMapRenderAll')).toBeVisible();
     await expect(page.locator('#tactileMapRenderCancel')).toBeHidden();
@@ -508,7 +508,7 @@ test.describe('Tactile Map tile', () => {
     expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
     expect(bytes.toString('latin1')).toMatch(/\(\d+ the waiting area\) Tj/);
     await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
-      'The PDF is in tactile_map_print.pdf.'
+      'tactile_map_print.pdf is ready; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.'
     );
   });
 
@@ -1399,7 +1399,7 @@ test.describe('numbers on the map', () => {
       });
       await page.locator('#tactileMapRenderAll').click();
       await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
-        /are in \S+_plates\.zip\.$/,
+        /are in \S+_plates\.zip; your browser saves it\. /,
         { timeout: 60000 }
       );
       return page.evaluate(() => window.__sets);
