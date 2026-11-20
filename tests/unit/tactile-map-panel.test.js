@@ -2657,6 +2657,25 @@ describe('the map Make the map drafts', () => {
     expect(way.some((f) => f.class === 'you-are-here')).toBe(false);
   });
 
+  it("quiets step 3's line when the scale changes after a draft, counts nothing from the old ground, and counts again after the next draft", async () => {
+    await pullData();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    const line = document.getElementById('tactileMapDetailCount');
+    expect(line.hidden).toBe(false);
+    document.getElementById('tactileMapScale-blocks').click();
+    expect(line.hidden).toBe(true);
+    document.getElementById('tactileMapDetail-everything').click();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(line.hidden).toBe(true);
+    expect(line.textContent).toBe('');
+    opened = null;
+    make().click();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    await vi.waitFor(() => expect(line.hidden).toBe(false));
+    const on = getMapPlan().features.filter((f) => f.on).length;
+    expect(line.textContent).toMatch(new RegExp(`^${on} features on, `));
+  });
+
   it('takes the rows back by index: a feature off keeps its class, one on takes the class, and the plan is rebuilt', async () => {
     await pullData();
     await vi.waitFor(() => expect(opened).not.toBeNull());
