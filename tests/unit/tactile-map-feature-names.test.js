@@ -81,6 +81,16 @@ describe('feature names', () => {
     ]);
   });
 
+  it('gives the plain names, repeats uncounted, when asked', () => {
+    expect(featureNames(PLAN.features, { counted: false })).toEqual([
+      'Husky Union Building',
+      'East Stevens Way Northeast',
+      'East Stevens Way Northeast',
+      'Stairs near Husky Union Building',
+      'You are here',
+    ]);
+  });
+
   it('names an unnamed feature by its class alone when nothing named is on the map', () => {
     expect(
       featureNames([
