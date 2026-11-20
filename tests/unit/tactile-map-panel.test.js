@@ -29,6 +29,7 @@ vi.mock('../../src/js/ui-generator.js', async () => {
       stateManager.setState({ parameters: params });
       return true;
     }),
+    setDesignFitBoxMm: vi.fn(),
   };
 });
 
@@ -51,7 +52,10 @@ import {
   projectLatLon,
   trimElement,
 } from '../../src/js/tactile-map/osm-geometry.js';
-import { setParameterValue } from '../../src/js/ui-generator.js';
+import {
+  setDesignFitBoxMm,
+  setParameterValue,
+} from '../../src/js/ui-generator.js';
 import {
   drawingFromPlan,
   rowOrder,
@@ -1841,6 +1845,26 @@ describe('the drawing door', () => {
     expect(getMapPlan().features.filter((f) => f.class === 'wall')).toHaveLength(
       1
     );
+  });
+
+  it("tells the file control the drawing's own size, a new width at once, and nothing on a place map or once the panel has gone", async () => {
+    mountWithDoor();
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    setDesignFitBoxMm.mockClear();
+    holdDrawing();
+    await vi.waitFor(() =>
+      expect(setDesignFitBoxMm).toHaveBeenLastCalledWith({ w: 340, h: 240 })
+    );
+    const width = document.getElementById('tactileMapDrawingWidth');
+    width.value = '170';
+    width.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(setDesignFitBoxMm).toHaveBeenLastCalledWith({ w: 170, h: 120 });
+    document.getElementById('tactileMapPanel').__forgeMapPanel.setType('place');
+    expect(setDesignFitBoxMm).toHaveBeenLastCalledWith(null);
+    document.getElementById('tactileMapPanel').__forgeMapPanel.setType('drawing');
+    expect(setDesignFitBoxMm).toHaveBeenLastCalledWith({ w: 170, h: 120 });
+    destroyMapPanel();
+    expect(setDesignFitBoxMm).toHaveBeenLastCalledWith(null);
   });
 
   it('says the scale when the drawing width changes, and rebuilds the plan at it', async () => {
