@@ -7,12 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- A tactile map lays out its sheet the same way every time, so a braille
-  wedge in the margin can no longer land across the edge of a plate when the
-  plates are rendered after other changes.
-
 ## [5.8.0] - 2026-11-18
 
 ### Added
