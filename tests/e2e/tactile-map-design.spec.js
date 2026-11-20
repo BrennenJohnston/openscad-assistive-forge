@@ -211,7 +211,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     const trim = page.locator('#tactileMapTrim');
     await expect(trim).toBeChecked();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 202.5 x 128 mm, A1 to B2. The key takes 27 plates.'
+      '4 plates of 215 x 128 mm, A1 to B2. The key takes 27 plates.'
     );
     await trim.uncheck();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
@@ -219,7 +219,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     );
     await trim.check();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 202.5 x 128 mm, A1 to B2. The key takes 27 plates.'
+      '4 plates of 215 x 128 mm, A1 to B2. The key takes 27 plates.'
     );
     // The key follows Labels, braille wedges to start.
     await expect(page.locator('#tactileMapLabels')).toHaveValue('wedge');
