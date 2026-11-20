@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
+  NORTH_ARROW_COLUMN_MM,
   NORTH_ARROW_MM,
   NORTH_CLEARANCE_MM,
   NORTH_LINE_MM,
@@ -17,6 +18,7 @@ import {
   keepClear,
   keptClearNote,
   northZones,
+  zonesCover,
 } from '../../src/js/tactile-map/keep-clear.js';
 import { regionArea } from '../../src/js/ring-geometry.js';
 
@@ -84,6 +86,54 @@ describe('the zones the north cue keeps', () => {
     expect(both).toHaveLength(2);
     expect(both[1].y0).toBe(40);
     expect(both[1].y1 - both[1].y0).toBeCloseTo(both[0].y1, 6);
+  });
+
+  it("give the arrow's column the width of its zone, so a band that wide on the right leaves the face clear", () => {
+    const [zone] = northZones({ sheetW: 300, cue: 'Arrow with N' });
+    expect(NORTH_ARROW_COLUMN_MM).toBeCloseTo(300 - zone.x0, 6);
+  });
+});
+
+describe('zonesCover', () => {
+  const zone = { x0: 250, y0: 0, x1: 300, y1: 80 };
+
+  it('is true for a symbol or a label channel under a zone, half in counting', () => {
+    const at = (x, y) => [point('a', 'landmark', [x, y])];
+    expect(zonesCover(at(290, 20), { ...OPTIONS, zones: [zone] })).toBe(true);
+    // Its center 4 mm out, its 10 mm box still 1 mm in.
+    expect(zonesCover(at(246, 20), { ...OPTIONS, zones: [zone] })).toBe(true);
+    const channel = {
+      id: 'label-x',
+      kind: 'channel',
+      at: [280, 70],
+      length: 30,
+      on: true,
+    };
+    expect(zonesCover([channel], { ...OPTIONS, zones: [zone] })).toBe(true);
+  });
+
+  it('is false for a symbol beside the zone, one switched off, a shape, or no zone', () => {
+    const beside = [point('a', 'landmark', [244, 20])];
+    expect(zonesCover(beside, { ...OPTIONS, zones: [zone] })).toBe(false);
+    const off = [point('a', 'landmark', [290, 20], { on: false })];
+    expect(zonesCover(off, { ...OPTIONS, zones: [zone] })).toBe(false);
+    const area = [
+      {
+        id: 'b',
+        class: 'area',
+        kind: 'area',
+        ring: [
+          [260, 10],
+          [290, 10],
+          [290, 40],
+        ],
+        on: true,
+      },
+    ];
+    expect(zonesCover(area, { ...OPTIONS, zones: [zone] })).toBe(false);
+    expect(zonesCover([point('a', 'landmark', [290, 20])], OPTIONS)).toBe(
+      false
+    );
   });
 });
 
@@ -190,7 +240,7 @@ describe('keptClearNote', () => {
   it('says how many moved and how far, in one sentence, and nothing when none did', () => {
     expect(keptClearNote([])).toBe(null);
     expect(keptClearNote([{ id: 'a', mm: 6.04 }])).toBe(
-      'One symbol moved 6 mm to keep the north arrow and the marks clear.'
+      'One symbol moved 6 mm to keep the north cue and the marks clear.'
     );
     expect(
       keptClearNote([
@@ -198,7 +248,7 @@ describe('keptClearNote', () => {
         { id: 'b', mm: 12.3 },
       ])
     ).toBe(
-      '2 symbols moved up to 12.3 mm to keep the north arrow and the marks clear.'
+      '2 symbols moved up to 12.3 mm to keep the north cue and the marks clear.'
     );
   });
 });
