@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A file control that held a picture puts its conversion, crop and picture
+  settings away when a drawing or a DXF is chosen after it, or the file is
+  cleared.
+
 ## [5.8.0] - 2026-11-18
 
 ### Added
