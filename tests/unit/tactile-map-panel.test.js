@@ -12,7 +12,10 @@
  * @license GPL-3.0-or-later
  */
 
-import { northZones } from '../../src/js/tactile-map/keep-clear.js';
+import {
+  NORTH_ARROW_COLUMN_MM,
+  northZones,
+} from '../../src/js/tactile-map/keep-clear.js';
 import { pullTiles } from '../../src/js/tactile-map/osm-tiles.js';
 import { groundBox } from '../../src/js/tactile-map/scales.js';
 import { numberNamed } from '../../src/js/tactile-map/map-numbers.js';
@@ -1285,7 +1288,32 @@ describe('the warnings in Check and print', () => {
   };
   const box = () => document.getElementById('tactileMapWarningsBox');
 
-  it('keeps the north arrow clear in the levels file: a symbol moves out, a shape stops short, and the list says so once', async () => {
+  const panelNow = () =>
+    document.querySelector('#tactileMapPanel, .tactile-map-panel')
+      ?.__forgeMapPanel;
+  const levelsIn = (zone, sheet) => {
+    const { svg } = files[files.length - 1];
+    const found = [];
+    for (const m of svg.matchAll(/([\d.]+) ([\d.]+)/g)) {
+      const [x, y] = [Number(m[1]), Number(m[2])];
+      if (
+        x > zone.x0 + 0.01 &&
+        x < sheet.w &&
+        y > zone.y0 &&
+        y < zone.y1 - 0.01
+      ) {
+        found.push([x, y]);
+      }
+    }
+    return found;
+  };
+  const warningTexts = () =>
+    [...document.getElementById('tactileMapWarnings').children].map(
+      (li) => li.textContent
+    );
+  const COLUMN = /north arrow stands in a column of its own/;
+
+  it('gives the north arrow a column of its own where it would stand on the map: nothing moves, nothing is cut, and the plates sentence says so', async () => {
     const plan = sampleStationPlan();
     const { w } = plan.size;
     plan.features.push(landmark('corner', w - 8, 8), {
@@ -1302,24 +1330,61 @@ describe('the warnings in Check and print', () => {
     });
     mount({ type: 'drawing', plan });
     await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
-    const panel = document.querySelector(
-      '#tactileMapPanel, .tactile-map-panel'
-    )?.__forgeMapPanel;
+    const panel = panelNow();
     const sheet = panel.sheet;
+    expect(sheet.band.right).toBe(Math.ceil(NORTH_ARROW_COLUMN_MM));
     const [zone] = northZones({ sheetW: sheet.w, cue: panel.northCue() });
+    expect(sheet.faceAt[0] + sheet.face.w).toBeLessThanOrEqual(zone.x0);
+    expect(levelsIn(zone, sheet)).toEqual([]);
+    const { labeled, moved } = panel.clearedPlan(panel.labeled());
+    expect(moved).toEqual([]);
+    expect(labeled.plan.features.find((f) => f.id === 'corner').at).toEqual([
+      w - 8,
+      8,
+    ]);
+    // The block's far corner is in the levels file where it was drawn.
+    const [cx, cy] = [sheet.faceAt[0] + w - 2, sheet.faceAt[1] + 2];
     const { svg } = files[files.length - 1];
-    const inZone = [];
-    for (const m of svg.matchAll(/([\d.]+) ([\d.]+)/g)) {
-      const [x, y] = [Number(m[1]), Number(m[2])];
-      if (x > zone.x0 + 0.01 && x < sheet.w && y > 0 && y < zone.y1 - 0.01) {
-        inZone.push([x, y]);
-      }
-    }
-    expect(inZone).toEqual([]);
-    const texts = [
-      ...document.getElementById('tactileMapWarnings').children,
-    ].map((li) => li.textContent);
-    expect(texts.filter((t) => /keep the north arrow/.test(t))).toHaveLength(1);
+    const corner = [...svg.matchAll(/([\d.]+) ([\d.]+)/g)].some(
+      (m) =>
+        Math.abs(Number(m[1]) - cx) < 0.01 && Math.abs(Number(m[2]) - cy) < 0.01
+    );
+    expect(corner).toBe(true);
+    expect(document.getElementById('tactileMapSummary').textContent).toMatch(
+      COLUMN
+    );
+    expect(warningTexts().filter((t) => /keep the north/.test(t))).toEqual([]);
+  });
+
+  it('keeps its margin when the arrow stands on nothing, and says nothing of a column', async () => {
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const panel = panelNow();
+    expect(panel.clearedPlan(panel.labeled()).arrowColumn).toBe(false);
+    expect(panel.sheet.band.right).toBe(panel.sheet.marginMm);
+    expect(
+      document.getElementById('tactileMapSummary').textContent
+    ).not.toMatch(COLUMN);
+  });
+
+  it('with a north line, a symbol under it moves out, the list says so once, and the sheet keeps its margin', async () => {
+    stateManager.setState({
+      parameters: { ...params(), north_cue: 'North line' },
+    });
+    const plan = sampleStationPlan();
+    plan.features.push(landmark('top', plan.size.w / 2, 6));
+    mount({ type: 'drawing', plan });
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const panel = panelNow();
+    const sheet = panel.sheet;
+    expect(sheet.band.right).toBe(sheet.marginMm);
+    const [zone] = northZones({ sheetW: sheet.w, cue: panel.northCue() });
+    expect(levelsIn(zone, sheet)).toEqual([]);
+    expect(warningTexts().filter((t) => /keep the north/.test(t))).toHaveLength(
+      1
+    );
+    expect(
+      document.getElementById('tactileMapSummary').textContent
+    ).not.toMatch(COLUMN);
   });
 
   it('folds the list into a closed disclosure that says how many there are', async () => {
@@ -1827,7 +1892,10 @@ describe('the drawing door', () => {
         map_file: { name: 'other.svg', data: svgToDataUrl(OTHER) },
       },
     });
-    await vi.waitFor(() => expect(getMapPlan().meta.waiting).toBe(true), SETTLE);
+    await vi.waitFor(
+      () => expect(getMapPlan().meta.waiting).toBe(true),
+      SETTLE
+    );
     expect(getMapPlan().features.some((f) => f.class === 'wall')).toBe(false);
 
     click('tactileMapEditDrawing');
@@ -1840,9 +1908,9 @@ describe('the drawing door', () => {
       () => expect(getMapPlan().meta.waiting).toBeFalsy(),
       SETTLE
     );
-    expect(getMapPlan().features.filter((f) => f.class === 'wall')).toHaveLength(
-      1
-    );
+    expect(
+      getMapPlan().features.filter((f) => f.class === 'wall')
+    ).toHaveLength(1);
   });
 
   it('says the scale when the drawing width changes, and rebuilds the plan at it', async () => {
@@ -2402,7 +2470,10 @@ describe('the map Make the map drafts', () => {
         ok: true,
         status: x ? 200 : 204,
         arrayBuffer: async () =>
-          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+          bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength
+          ),
       };
     };
     const { elements } = await pullTiles({
