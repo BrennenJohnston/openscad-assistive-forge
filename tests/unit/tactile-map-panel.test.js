@@ -13,6 +13,8 @@
  */
 
 import { northZones } from '../../src/js/tactile-map/keep-clear.js';
+import { pullTiles } from '../../src/js/tactile-map/osm-tiles.js';
+import { groundBox } from '../../src/js/tactile-map/scales.js';
 import { numberNamed } from '../../src/js/tactile-map/map-numbers.js';
 import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -2381,6 +2383,74 @@ describe('the map Make the map drafts', () => {
     make().click();
     await vi.waitFor(() => expect(getMapData()).not.toBeNull());
   }
+
+  it('lays out the same sheet and the same marks on every call, whatever the last call left behind', async () => {
+    // 3600 Ferry Pl NE from its map tiles, with braille wedges: enough
+    // numbers that some stand in the margin's band, across plates' seams.
+    const FERRY = {
+      name: 'Center on Human Development and Disability South, 3600, Ferry Place Northeast, Seattle',
+      lat: 47.6481285,
+      lon: -122.3086726,
+    };
+    const tile = (x) =>
+      readFileSync(`tests/fixtures/tactile-map/sourdough-15-${x}-11438.mvt`);
+    const TILE = { 5250: tile(5250), 5251: tile(5251) };
+    const fetchTile = async (url) => {
+      const x = Object.keys(TILE).find((k) => url.includes(`/15/${k}/11438`));
+      const bytes = x ? TILE[x] : new Uint8Array(0);
+      return {
+        ok: true,
+        status: x ? 200 : 204,
+        arrayBuffer: async () =>
+          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      };
+    };
+    const { elements } = await pullTiles({
+      box: groundBox(FERRY, 1000, { w: 480, h: 360 }),
+      fetch: fetchTile,
+    });
+    opened = null;
+    mount({
+      type: 'place',
+      labels: 'wedge',
+      config: {
+        plateKindParam: 'plate_kind',
+        raisedWordsParam: 'raised_words',
+        numberWedgesParam: 'number_wedges',
+      },
+      searchPlaces: vi.fn(async () => [FERRY]),
+      pullArea: vi.fn(async () => ({ elements, bytes: 1, ms: 1 })),
+      getEditor: async () => editor,
+    });
+    const input = document.getElementById('tactileMapAddress');
+    input.value = '3600 Ferry Pl NE';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('tactileMapSearch').click();
+    await vi.waitFor(() =>
+      expect(
+        document.querySelectorAll('#tactileMapResults input[type="radio"]')
+      ).toHaveLength(1)
+    );
+    document.querySelector('#tactileMapResults input[type="radio"]').click();
+    make().click();
+    await vi.waitFor(() => expect(opened).not.toBeNull(), { timeout: 15000 });
+    const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+    const once = () => {
+      const { sheet, labeled } = panel.clearedPlan(panel.labeled());
+      return JSON.stringify({
+        w: sheet.w,
+        h: sheet.h,
+        shift: panel.faceShift(sheet),
+        marks: (labeled.marks || []).map((m) => [m.number, m.box]),
+      });
+    };
+    const settled = once();
+    expect(once()).toBe(settled);
+    panel.bandNeeds = {};
+    expect(once()).toBe(settled);
+    panel.bandNeeds = { top: 40, right: 40, bottom: 40, left: 40 };
+    expect(once()).toBe(settled);
+  });
 
   it('stands first in its step, the status box under it, then the file door and the credit', () => {
     mount({ type: 'place' });

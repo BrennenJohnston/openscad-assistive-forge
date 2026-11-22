@@ -935,8 +935,11 @@ class MapPanel {
     // The numbers the things could not hold go to the band. One that would
     // stand across a seam between plates moves off it, and the band is laid
     // out again for the sheet that gives; the seams found are kept,
-    // so the passes settle.
+    // so the passes settle. Each call starts from no band, so the same plan
+    // gives the same sheet whatever an earlier call left: the plates cut in
+    // step 5 and the marks a render places come from one layout.
     const seams = { x: [], y: [] };
+    this.bandNeeds = {};
     let band = this.placeBand(labeled, seams);
     for (let pass = 0; pass < 3; pass += 1) {
       this.bandNeeds = band.sides;
