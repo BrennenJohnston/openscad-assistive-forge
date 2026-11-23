@@ -585,6 +585,55 @@ describe('draftPlan', () => {
     expect(on(at('blocks', []), 'osm-node-50')).toBe(false);
   });
 
+  it("measures the reach from the outline of a building the address stands in, so a large building's sidewalks and door start on", () => {
+    // A library 100 x 80 m about the address, a sidewalk 10 m past its south
+    // wall (50 m from the address), its door on that wall (40 m) and one on
+    // its east wall (50 m), and another building's door further east.
+    const marks = [
+      way(70, { building: 'yes', name: 'Central Library' }, [
+        [-50, -40],
+        [50, -40],
+        [50, 40],
+        [-50, 40],
+        [-50, -40],
+      ]),
+      way(71, { highway: 'footway', footway: 'sidewalk' }, [
+        [-60, -50],
+        [60, -50],
+      ]),
+      way(72, { highway: 'footway', footway: 'sidewalk' }, [
+        [-60, -120],
+        [60, -120],
+      ]),
+      node(73, { entrance: 'main' }, [0, -40]),
+      node(74, { entrance: 'yes' }, [50, 0]),
+      node(75, { entrance: 'yes' }, [140, 0]),
+    ];
+    const draft = (place) =>
+      draftPlan({
+        elements: marks,
+        center: CENTER,
+        radiusM: 250,
+        landmarks: ['entrance'],
+        size: { w: 480, h: 360 },
+        place,
+      }).plan;
+    const state = (plan, id) => {
+      const f = byId(plan, id);
+      return [Boolean(f.on), Boolean(f.address)];
+    };
+    const library = draft({ name: 'Central Library, Seattle', ...CENTER });
+    expect(state(library, 'osm-way-71')).toEqual([true, false]);
+    expect(state(library, 'osm-way-72')).toEqual([false, false]);
+    expect(state(library, 'osm-node-73')).toEqual([true, true]);
+    expect(byId(library, 'osm-node-74').address).toBeFalsy();
+    expect(byId(library, 'osm-node-75').address).toBeFalsy();
+    // With no address (a route's base) the reach stays at the point.
+    const base = draft(null);
+    expect(state(base, 'osm-way-71')).toEqual([false, false]);
+    expect(byId(base, 'osm-node-73').address).toBeFalsy();
+  });
+
   it('makes the tram a track and the foot path a walkway, both off', () => {
     const { plan } = DRAFT();
     expect(byId(plan, 'osm-way-16').class).toBe('track');
