@@ -2017,7 +2017,7 @@ describe('the map data row', () => {
       ['Everything in the data', false],
     ]);
     expect(said(tiers()[1])).toBe(
-      'The way, the named places and transit stops the scale has room for, and the buildings along the way.'
+      'The way, the transit stops and named public places (a library, a school, a clinic) the scale has room for, and the buildings along the way.'
     );
     expect(document.getElementById('tactileMapDetailCount').hidden).toBe(true);
     expect(make().textContent).toBe('Make the map');
@@ -2263,7 +2263,7 @@ describe('the map data row', () => {
       [
         'Named places and points',
         'named',
-        ['None', 'Named places', 'All points'],
+        ['None', 'Named public places', 'All points'],
       ],
       ['Transit stops', 'on', ['Off', 'On']],
       ['Benches, bins and racks', 'off', ['Off', 'On']],
