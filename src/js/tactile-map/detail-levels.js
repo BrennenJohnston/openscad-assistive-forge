@@ -15,7 +15,7 @@
  * address's own door, `twin` on a stop's second point, `duplicate` on a
  * stop or station another of its name stands on, `roomy` on a curb
  * with room, `street` on a street drawn as one line, `what` on every
- * point, building and park).
+ * point, building and park, `public` on a public place a traveler uses).
  *
  * The scale's rules still hold (scales.js): over a few blocks or a
  * neighborhood a point class the scale leaves out stays out, and so do
@@ -115,8 +115,8 @@ export const DETAIL_LEVELS = Object.freeze({
     ],
     [
       'The sidewalks and crossings near the address, its door, the steps and You are here; nothing else.',
-      'The way, the named places and transit stops the scale has room for, and the buildings along the way.',
-      'Every sidewalk, crossing, building and entrance, and the named places.',
+      'The way, the transit stops and named public places (a library, a school, a clinic) the scale has room for, and the buildings along the way.',
+      'Every sidewalk, crossing, building and entrance, and the named public places.',
       'Every feature in the data, for you to turn off what a reader does not need.',
     ],
     PLACE_SWITCHES
@@ -130,8 +130,8 @@ export const DETAIL_LEVELS = Object.freeze({
     ],
     [
       'The route, its crossings and steps, and its two ends; nothing else.',
-      'The route, and the named places and transit stops along it.',
-      'The route, the named places along it and every building beside it.',
+      'The route, and the transit stops and named public places along it.',
+      'The route, the named public places along it and every building beside it.',
       'Every feature in the data around the route.',
     ],
     ROUTE_SWITCHES
@@ -196,7 +196,10 @@ export function wantsPoint(f, sw) {
   if (f.duplicate) return false;
   if (sw.everything) return true;
   if (f.class === 'landmark') {
-    return sw.landmarks === 'all' || (sw.landmarks === 'named' && !!f.name);
+    return (
+      sw.landmarks === 'all' ||
+      (sw.landmarks === 'named' && !!f.name && !!f.public)
+    );
   }
   if (f.class === 'transit-stop') return sw.transit === 'on' && !f.twin;
   if (f.class === 'furniture') return sw.furniture === 'on';

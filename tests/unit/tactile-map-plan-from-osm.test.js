@@ -413,6 +413,10 @@ describe('draftPlan', () => {
     const shops = draft(['shop']);
     expect(byId(shops, 'osm-node-31').on).toBe(false);
     expect(byId(shops, 'osm-node-32').on).toBe(true);
+    // The toilets are a public place a traveler uses; the shops are not.
+    expect(
+      ['31', '32', '33'].map((id) => Boolean(byId(shops, `osm-node-${id}`).public))
+    ).toEqual([false, false, true]);
   });
 
   it('keeps the ref of a stop and starts a stop position off where its platform stands within 30 m', () => {
