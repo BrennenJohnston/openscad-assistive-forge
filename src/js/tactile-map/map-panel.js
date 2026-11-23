@@ -168,7 +168,12 @@ import {
   tapeSentence,
   titlePlateSets,
 } from './plate-export.js';
-import { OUTPUT_FORMATS, downloadFile, projectStem } from '../download.js';
+import {
+  OUTPUT_FORMATS,
+  downloadFile,
+  handedOver,
+  projectStem,
+} from '../download.js';
 
 const DEBOUNCE_MS = 350;
 const CUSTOM_MIN_MM = 100;
@@ -333,6 +338,13 @@ function isLevelsFile(svg) {
  *   format)` stand in for the engine and the file save in a test;
  *   `getEditor()` resolves to the drawing editor the door opens.
  */
+/**
+ * Whether a map from a drawing set the tile's north cue to None. Kept here,
+ * not on a panel, so a panel built again (a project opened again) still
+ * gives the arrow back when another type is chosen.
+ */
+let cueSetForDrawing = false;
+
 export function initMapPanel(config, options = {}) {
   destroyMapPanel();
   panel = new MapPanel(config, options);
@@ -587,6 +599,9 @@ class MapPanel {
     window.addEventListener('forge:full-render-done', this.onFullRender);
     window.addEventListener('forge:preview-current', this.onPreviewCurrent);
     this.unsubscribe = stateManager.subscribe(() => {
+      // A link straight to a map from a drawing: its cue once the model's
+      // parameters arrive.
+      this.cueForType();
       const tape = this.tapeWidth();
       const cue = this.northCue();
       const title = this.titleKey();
@@ -609,6 +624,7 @@ class MapPanel {
       this.adoptPicture();
       if (this.mapType === 'drawing') this.steps?.refresh();
     });
+    this.cueForType();
     stateManager.setDerivedParameters(() => this.ownValues());
     this.schedule(0);
   }
@@ -641,6 +657,11 @@ class MapPanel {
       c.titleBandParam,
       c.coneMarksParam,
       this.plan.meta?.waiting ? c.titleParam : null,
+      // The cue a map from a drawing set to None; one the person chose counts.
+      cueSetForDrawing &&
+      stateManager.getState()?.parameters?.north_cue === 'None'
+        ? 'north_cue'
+        : null,
     ].filter(Boolean);
   }
 
@@ -1358,6 +1379,27 @@ class MapPanel {
     return Number.isFinite(value) && value > 0 ? value : 12.7;
   }
 
+  /**
+   * A map from a drawing starts with no north cue: a station drawing carries
+   * its own north arrow, the plate's would land on the drawing, and a key
+   * sheet needs none. The cue set here goes back when another type is
+   * chosen; a cue the person chose stays. Nothing happens before the
+   * model's parameters are in.
+   */
+  cueForType() {
+    const cue = stateManager.getState()?.parameters?.north_cue;
+    if (typeof cue !== 'string') return;
+    if (this.mapType === 'drawing') {
+      if (!cueSetForDrawing && cue === 'Arrow with N') {
+        cueSetForDrawing = true;
+        setParameterValue('north_cue', 'None');
+      }
+    } else if (this.mapType && cueSetForDrawing) {
+      cueSetForDrawing = false;
+      if (cue === 'None') setParameterValue('north_cue', 'Arrow with N');
+    }
+  }
+
   /** The tile's north cue, which decides where a split map's cue goes. */
   northCue() {
     const cue = stateManager.getState()?.parameters?.north_cue;
@@ -1979,7 +2021,14 @@ class MapPanel {
       fill(s2, [p.width]);
       fill(s3, [p.door, a.symbolSet]);
       fill(s4, [note(WORKFLOW_STRINGS.drawingApply)]);
-      fill(s5, [p.intro, p.trim, p.bed, p.warnings, p.render]);
+      fill(s5, [
+        p.intro,
+        note(WORKFLOW_STRINGS.drawingNorth),
+        p.trim,
+        p.bed,
+        p.warnings,
+        p.render,
+      ]);
     }
     box.replaceChildren(this.steps.el);
     this.syncFileControl();
@@ -2055,6 +2104,7 @@ class MapPanel {
     if (!type) return;
     this.mapType = type.key;
     this.lastType = type.key;
+    this.cueForType();
     this.trim = TRIM_BY_TYPE[type.key] ?? false;
     if (this.refs.trim) this.refs.trim.checked = this.trim;
     if (type.key === 'drawing') {
@@ -2715,11 +2765,13 @@ class MapPanel {
         });
         this.download(bytes, fileName, 'zip');
         if (stop) {
-          sentence = `Stopped after plate ${rendered.length}; the zip holds the plates finished so far.`;
+          sentence = `Stopped after plate ${rendered.length}. ${handedOver('The zip holds the plates finished so far')}`;
         } else if (n === 1) {
-          sentence = `The plate is in ${fileName}.`;
+          sentence = handedOver(`The plate is in ${fileName}`, { hint: true });
         } else {
-          sentence = `All ${n} plates are in ${fileName}.`;
+          sentence = handedOver(`All ${n} plates are in ${fileName}`, {
+            hint: true,
+          });
         }
       }
       if (stop?.error) sentence += ` ${stop.error}`;
@@ -2938,7 +2990,7 @@ class MapPanel {
     const { bytes } = this.buildPdf({ stem, parameters });
     const fileName = `${stem}_print.pdf`;
     this.download(bytes, fileName, 'pdf');
-    this.say(`The PDF is in ${fileName}.`);
+    this.say(handedOver(`${fileName} is ready`, { hint: true }));
   }
 
   schedule(delay = DEBOUNCE_MS) {
