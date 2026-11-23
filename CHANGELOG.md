@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A place map of a large building's own name drafts as a small one does: the
   30 m to its sidewalks and its door is measured from the building's outline.
 
+### Fixed
+
+- Opening the Tactile Map Designer and changing nothing no longer leaves a
+  draft, so the next visit does not ask to restore one.
+
 ## [5.8.0] - 2026-11-18
 
 ### Added
