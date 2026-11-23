@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   public places a traveler uses, such as a library, a school or a clinic;
   shops, cafes and offices come in with Everything in the data or All points.
 
+### Fixed
+
+- Opening the Tactile Map Designer and changing nothing no longer leaves a
+  draft, so the next visit does not ask to restore one.
+
 ## [5.8.0] - 2026-11-18
 
 ### Added

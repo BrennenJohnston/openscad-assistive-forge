@@ -3158,3 +3158,74 @@ describe('the model switch beside the paper', () => {
     expect(modelBox()).toBeNull();
   });
 });
+
+describe('a draft kept in the browser', () => {
+  // The model's own starting values for what the panel writes; every other
+  // value starts as the test's own.
+  const MODEL_STARTS = {
+    map_file: 'sample_station.svg',
+    map_width_mm: 480,
+    map_height_mm: 360,
+    plate_id: '',
+    plate_shows_title: 'yes',
+    plate_shows_north: 'yes',
+  };
+  const kept = () => localStorage.getItem(stateManager.localStorageKey);
+
+  async function openTheSample() {
+    const starts = { ...params(), ...MODEL_STARTS };
+    stateManager.setState({ defaults: starts, parameters: starts });
+    mount();
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    localStorage.clear();
+  }
+
+  afterEach(() => {
+    localStorage.clear();
+    stateManager.setState({ defaults: null });
+  });
+
+  it("keeps none for the sample alone: what the panel writes is no change of the person's", async () => {
+    await openTheSample();
+    expect(params().map_width_mm).toBe(500);
+    stateManager.performLocalStorageSave();
+    expect(kept()).toBeNull();
+  });
+
+  it("keeps one once a value of the person's own changes", async () => {
+    await openTheSample();
+    setParameterValue('base_thickness_mm', '0.8');
+    stateManager.performLocalStorageSave();
+    expect(JSON.parse(kept()).parameters.base_thickness_mm).toBe('0.8');
+  });
+
+  it('keeps none for the empty plate and its waiting title', async () => {
+    await openTheSample();
+    mount({ type: 'place', config: { titleParam: 'title_text' } });
+    await vi.waitFor(
+      () => expect(params().title_text).toBe('NO MAP YET'),
+      SETTLE
+    );
+    stateManager.performLocalStorageSave();
+    expect(kept()).toBeNull();
+  });
+
+  it("keeps one for a drawing of the person's own in the control", async () => {
+    await openTheSample();
+    stateManager.setState({
+      parameters: {
+        ...params(),
+        map_file: { name: 'station.svg', data: svgToDataUrl(DRAWING) },
+      },
+    });
+    stateManager.performLocalStorageSave();
+    expect(JSON.parse(kept()).parameters.map_file.name).toBe('station.svg');
+  });
+
+  it('counts every value again once the panel has gone', async () => {
+    await openTheSample();
+    destroyMapPanel();
+    stateManager.performLocalStorageSave();
+    expect(JSON.parse(kept()).parameters.map_width_mm).toBe(500);
+  });
+});
