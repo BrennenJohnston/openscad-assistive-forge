@@ -12,7 +12,8 @@
  * places, the transit stops, the street furniture, the curbs. The draft
  * builder marks what each switch reads (plan-from-osm.js: `way` on the
  * sidewalks near the address and the crossings they meet, `address` on the
- * address's own door, `twin` on a stop's second point, `roomy` on a curb
+ * address's own door, `twin` on a stop's second point, `duplicate` on a
+ * stop or station another of its name stands on, `roomy` on a curb
  * with room, `street` on a street drawn as one line, `what` on every
  * point, building and park, `public` on a public place a traveler uses).
  *
@@ -192,6 +193,7 @@ function nearLines(ring, lines, reach) {
  * @returns {boolean}
  */
 export function wantsPoint(f, sw) {
+  if (f.duplicate) return false;
   if (sw.everything) return true;
   if (f.class === 'landmark') {
     return (
@@ -268,6 +270,9 @@ export function applyDetail(features, { switches, scale, mmPerM }) {
     if (f.class === 'you-are-here' || f.class === 'destination') {
       return f.on !== false;
     }
+    // One place, one symbol: a stop's duplicate is the editor's to turn on
+    // (wantsPoint says so too, for a route's stops near the walk).
+    if (f.duplicate) return false;
     if (sw.everything) return true;
     switch (f.class) {
       case 'walkway':

@@ -328,4 +328,31 @@ describe('the detail levels', () => {
       false,
     ]);
   });
+
+  it("keeps a stop's duplicate off under every tier, Everything in the data too", () => {
+    const features = [
+      { id: 's', class: 'transit-stop', kind: 'point', at: [10, 10], on: true },
+      {
+        id: 'd',
+        class: 'transit-stop',
+        kind: 'point',
+        at: [10, 10],
+        on: false,
+        duplicate: true,
+      },
+    ];
+    for (const level of DETAIL_LEVELS.place) {
+      const { features: out } = applyDetail(features, {
+        type: 'place',
+        switches: switchesFor('place', level.key),
+        scale: null,
+        size: { w: 100, h: 100 },
+        mmPerM: 1,
+      });
+      expect(out.find((f) => f.id === 'd').on).toBe(false);
+      expect(wantsPoint(features[1], switchesFor('place', level.key))).toBe(
+        false
+      );
+    }
+  });
 });
