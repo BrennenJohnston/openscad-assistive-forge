@@ -6011,9 +6011,10 @@ async function initApp() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      const done = EXPORT_STRINGS.done(files.length, filename);
-      updateStatus(done);
-      announceImmediate(done);
+      // The bar over the preview has room for a few words; the sentence
+      // is said in full.
+      updateStatus(`Ready: ${filename}`, 'default', { announce: false });
+      announceImmediate(EXPORT_STRINGS.done(files.length, filename));
     } catch (error) {
       console.error('Stencil set export failed:', error);
       const said = EXPORT_STRINGS.failed(error.message);
@@ -12980,7 +12981,10 @@ if (rounded) {
     );
 
     downloadSTL(state.stl, filename);
-    updateStatus(`Downloaded (previous STL): ${filename}`);
+    updateStatus(`Ready (previous STL): ${filename}`, 'default', {
+      announce: false,
+    });
+    announceImmediate(handedOver(`The previous model, ${filename}, is ready`));
   });
 
   // ========== Publish project ==========
@@ -14492,7 +14496,10 @@ if (rounded) {
           a.download = `${sanitizeFilename(preset.name)}.json`;
           a.click();
           URL.revokeObjectURL(url);
-          updateStatus(`Exported preset: ${preset.name}`);
+          updateStatus(`Ready: ${a.download}`, 'default', { announce: false });
+          announceImmediate(
+            handedOver(`The preset ${preset.name} is ready as ${a.download}`)
+          );
         }
       } else if (action === 'export-all') {
         // Export in OpenSCAD native format (includes "design default values" as first entry)
@@ -14511,7 +14518,12 @@ if (rounded) {
           a.download = `${modelName.replace('.scad', '')}-presets.json`;
           a.click();
           URL.revokeObjectURL(url);
-          updateStatus('Exported all presets (OpenSCAD native format)');
+          updateStatus(`Ready: ${a.download}`, 'default', { announce: false });
+          announceImmediate(
+            handedOver(
+              `All presets are ready in OpenSCAD's own format as ${a.download}`
+            )
+          );
         } else {
           updateStatus(
             'No presets to export. Create some presets first using the + button.'
@@ -16192,9 +16204,11 @@ if (rounded) {
     URL.revokeObjectURL(url);
 
     const changeCount = parsed.changeCount || 0;
-    updateStatus(`Exported ${changeCount} changed parameter(s)`);
+    const what = changeCount === 1 ? 'parameter is' : 'parameters are';
+    // The file's name is long for the bar on a phone; it is said in full.
+    updateStatus('Ready: changed settings', 'default', { announce: false });
     announceImmediate(
-      `Downloaded ${changeCount} changed parameters as JSON file`
+      handedOver(`${changeCount} changed ${what} ready as ${a.download}`)
     );
   });
 
