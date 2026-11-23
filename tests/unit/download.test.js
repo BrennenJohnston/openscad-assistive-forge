@@ -24,6 +24,7 @@ import {
   downloadFile,
   downloadSTL,
   formatFileSize,
+  handedOver,
 } from '../../src/js/download.js';
 
 describe('Download Manager', () => {
@@ -454,5 +455,45 @@ describe('Download Manager', () => {
 
       expect(mockAnchor.click).toHaveBeenCalledTimes(7);
     });
+  });
+});
+
+describe('handedOver', () => {
+  it('says the browser saves a file, never that it was saved, and where there is room what to do when nothing arrives', () => {
+    expect(handedOver('model.stl is ready')).toBe(
+      'model.stl is ready; your browser saves it.'
+    );
+    expect(handedOver('map.pdf is ready', { hint: true })).toBe(
+      'map.pdf is ready; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.'
+    );
+    expect(handedOver('x.zip is ready')).not.toMatch(/saved|Downloaded/);
+  });
+});
+
+describe('no export says it saved the file', () => {
+  // The page hands a file to the browser and cannot see it arrive, so a
+  // status or an announcement never opens with "Downloaded" or "Exported".
+  it('finds no status or announcement in the app that claims a download', async () => {
+    const { readdirSync, readFileSync } = await import('node:fs');
+    const { join, relative } = await import('node:path');
+    const root = join(__dirname, '../../src');
+    const claim =
+      /\b(?:updateStatus|announce\w*)\(\s*[`'"](?:Downloaded|Exported)\b/g;
+    const found = [];
+    const walk = (dir) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else if (entry.name.endsWith('.js')) {
+          const text = readFileSync(path, 'utf8');
+          for (const m of text.matchAll(claim)) {
+            const line = text.slice(0, m.index).split('\n').length;
+            found.push(`${relative(root, path)}:${line}`);
+          }
+        }
+      }
+    };
+    walk(root);
+    expect(found).toEqual([]);
   });
 });

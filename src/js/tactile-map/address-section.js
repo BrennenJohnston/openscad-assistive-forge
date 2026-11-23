@@ -154,7 +154,11 @@ export const ADDRESS_STRINGS = Object.freeze({
     off: 'Off',
     on: 'On',
   },
-  landmarkChoices: { none: 'None', named: 'Named places', all: 'All points' },
+  landmarkChoices: {
+    none: 'None',
+    named: 'Named public places',
+    all: 'All points',
+  },
   /** A11Y: the live line under the choices, once the data is here. */
   detailCount: (on, symbols) =>
     `${on} ${on === 1 ? 'feature' : 'features'} on, ${symbols} different ${symbols === 1 ? 'symbol' : 'symbols'}.`,
