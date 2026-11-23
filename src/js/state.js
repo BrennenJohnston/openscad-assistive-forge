@@ -115,6 +115,9 @@ export class StateManager {
     // A link's values are read by the first project load in a page and by
     // no other: the next project starts from its own defaults.
     this._urlParamsRead = false;
+    // Asked at each draft save: the parameters the open project's panel
+    // writes by itself.
+    this.derivedParameters = null;
   }
 
   subscribe(callback) {
@@ -247,6 +250,18 @@ export class StateManager {
     return null;
   }
 
+  /**
+   * A project's panel names the parameters it writes by itself. They are no
+   * change of the person's, so no draft is kept for them alone. The answer
+   * is asked for at each save: it changes once the person has work of their
+   * own in the panel.
+   *
+   * @param {(() => string[])|null} names - null when the panel has gone
+   */
+  setDerivedParameters(names) {
+    this.derivedParameters = names;
+  }
+
   saveToLocalStorage() {
     // Debounce saves to avoid excessive writes
     if (this.saveTimeout) {
@@ -271,8 +286,10 @@ export class StateManager {
     // A draft is worth a question on the next visit only once something
     // changed: a parameter away from its default, or an edit to the code.
     const defaults = this.state.defaults || {};
+    const derived = new Set(this.derivedParameters?.() || []);
     const parameterChanged = Object.keys(defaults).some(
       (k) =>
+        !derived.has(k) &&
         JSON.stringify(this.state.parameters[k]) !== JSON.stringify(defaults[k])
     );
     if (!parameterChanged && this.state.sourceEdited !== true) {

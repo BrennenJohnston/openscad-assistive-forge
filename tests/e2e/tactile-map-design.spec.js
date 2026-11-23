@@ -140,7 +140,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     // beyond every symbol, so none moves for it.
     await makeTheMap(page);
     await expect(status).toHaveText(
-      'Draft map ready: 19 of 286 features on; 2 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
+      'Draft map ready: 21 of 286 features on; 2 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
     );
     const rows = await page
       .locator('#drawingEditorSurface .svg-prep-object-name')
@@ -163,7 +163,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       'Step 3 of 5: What to show'
     );
     const line = page.locator('#tactileMapDetailCount');
-    await expect(line).toHaveText('19 features on, 5 different symbols.');
+    await expect(line).toHaveText('21 features on, 5 different symbols.');
     await tabTo(page, '#tactileMapDetail-named');
     await page.keyboard.press('ArrowDown');
     await expect(page.locator('#tactileMapDetail-buildings')).toBeChecked();
@@ -176,7 +176,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowUp');
     await expect(page.locator('#tactileMapDetail-named')).toBeChecked();
-    await expect(line).toHaveText('19 features on, 5 different symbols.', {
+    await expect(line).toHaveText('21 features on, 5 different symbols.', {
       timeout: 15000,
     });
 
@@ -192,10 +192,9 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
 
     await makeTheMap(page);
     // The ready sentence waits for the braille translator, so the count of
-    // warnings is taken with the labels measured in contracted UEB; no symbol
-    // moves for the north arrow beyond the numbers' margin.
+    // warnings is taken with the labels measured in contracted UEB.
     await expect(status).toHaveText(
-      'Draft map ready: 19 of 286 features on; 2 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
+      'Draft map ready: 21 of 286 features on; 2 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
     );
     await closeTheEditor(page);
 
@@ -211,7 +210,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     const trim = page.locator('#tactileMapTrim');
     await expect(trim).toBeChecked();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 202.5 x 128 mm, A1 to B2. The key takes 27 plates.'
+      '4 plates of 215 x 131 mm, A1 to B2. The key takes 27 plates.'
     );
     await trim.uncheck();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
@@ -219,7 +218,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     );
     await trim.check();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 202.5 x 128 mm, A1 to B2. The key takes 27 plates.'
+      '4 plates of 215 x 131 mm, A1 to B2. The key takes 27 plates.'
     );
     // The key follows Labels, braille wedges to start.
     await expect(page.locator('#tactileMapLabels')).toHaveValue('wedge');
@@ -281,10 +280,10 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     expect(names).not.toContain('tactile_map_B3.stl');
     const readme = await zip.file('README.txt').async('string');
     expect(summary).toBe(
-      '4 plates of 218.5 x 128 mm, A1 to B2. The key takes 21 plates.'
+      '4 plates of 218.5 x 131 mm, A1 to B2. The key takes 21 plates.'
     );
     expect(readme).toContain(
-      'each 218.5 x 128 mm, trimmed to the shapes with a 10 mm margin, wider at the sides that hold numbers. Print one of each: A1, A2, B1, B2.'
+      'each 218.5 x 131 mm, trimmed to the shapes with a 10 mm margin, wider at the sides that hold numbers. Print one of each: A1, A2, B1, B2.'
     );
     expect(readme).toContain('\nKey\nSymbols: University of Oregon symbols.\n');
     expect(readme).toContain(

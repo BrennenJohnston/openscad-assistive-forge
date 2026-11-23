@@ -465,6 +465,102 @@ describe('draftPlan', () => {
     expect(byId(plan, 'osm-node-42').on).toBe(true);
   });
 
+  it('keeps one of the stops and stations of one name whose symbols would stand closer than the gap, and drops a number two of them disagree on', () => {
+    const marks = [
+      node(
+        60,
+        { railway: 'station', public_transport: 'station', name: 'Symphony' },
+        [0, -40]
+      ),
+      node(
+        61,
+        { railway: 'platform', public_transport: 'platform', name: 'Symphony' },
+        [3, -40]
+      ),
+      node(
+        62,
+        { railway: 'platform', public_transport: 'platform', name: 'Symphony' },
+        [100, -40]
+      ),
+      node(
+        63,
+        {
+          highway: 'bus_stop',
+          public_transport: 'platform',
+          name: 'Pine & 3rd',
+          ref: '100',
+        },
+        [0, -80]
+      ),
+      node(
+        64,
+        {
+          highway: 'bus_stop',
+          public_transport: 'platform',
+          name: 'Pine & 3rd',
+          ref: '101',
+        },
+        [1, -80]
+      ),
+      node(
+        65,
+        { highway: 'bus_stop', public_transport: 'platform', name: 'Pine & 4th' },
+        [2, -42]
+      ),
+      node(
+        66,
+        {
+          public_transport: 'stop_position',
+          bus: 'yes',
+          name: 'Pine & 5th',
+          ref: '300',
+        },
+        [0, -140]
+      ),
+      node(
+        67,
+        {
+          highway: 'bus_stop',
+          public_transport: 'platform',
+          name: 'Pine & 5th',
+          ref: '300',
+        },
+        [0.5, -140]
+      ),
+    ];
+    const draft = (landmarks) =>
+      draftPlan({
+        elements: marks,
+        center: CENTER,
+        radiusM: 250,
+        landmarks,
+        size: { w: 480, h: 360 },
+      }).plan;
+    const plan = draft(['transit-stop']);
+    const state = (id, from = plan) => {
+      const f = byId(from, `osm-node-${id}`);
+      return [f.on, Boolean(f.duplicate), f.ref ?? null];
+    };
+    expect(state(60)).toEqual([true, false, null]);
+    expect(state(61)).toEqual([false, true, null]);
+    expect(state(62)).toEqual([true, false, null]);
+    expect(state(63)).toEqual([true, false, null]);
+    expect(state(64)).toEqual([false, true, '101']);
+    expect(state(65)).toEqual([true, false, null]);
+    // A stop position at its platform is a duplicate, and the platform is
+    // the one kept even when every stop starts off.
+    expect(state(66)).toEqual([false, true, '300']);
+    expect(state(67)).toEqual([true, false, '300']);
+    const off = draft([]);
+    expect(state(66, off)).toEqual([false, true, '300']);
+    expect(state(67, off)).toEqual([false, false, '300']);
+    const names = featureNames(plan.features);
+    const nameOf = (id) =>
+      names[plan.features.findIndex((f) => f.id === `osm-node-${id}`)];
+    expect(nameOf(60)).toBe('Train station: Symphony');
+    expect(nameOf(63)).toBe('Bus stop: Pine & 3rd');
+  });
+
   it("starts the address's own entrance on at every scale where entrances are ticked, and no other", () => {
     const marks = [
       node(50, { entrance: 'main' }, [8, 12]),
@@ -487,6 +583,55 @@ describe('draftPlan', () => {
       ['50', '51', '52'].map((id) => on(at('neighborhood'), `osm-node-${id}`))
     ).toEqual([true, false, false]);
     expect(on(at('blocks', []), 'osm-node-50')).toBe(false);
+  });
+
+  it("measures the reach from the outline of a building the address stands in, so a large building's sidewalks and door start on", () => {
+    // A library 100 x 80 m about the address, a sidewalk 10 m past its south
+    // wall (50 m from the address), its door on that wall (40 m) and one on
+    // its east wall (50 m), and another building's door further east.
+    const marks = [
+      way(70, { building: 'yes', name: 'Central Library' }, [
+        [-50, -40],
+        [50, -40],
+        [50, 40],
+        [-50, 40],
+        [-50, -40],
+      ]),
+      way(71, { highway: 'footway', footway: 'sidewalk' }, [
+        [-60, -50],
+        [60, -50],
+      ]),
+      way(72, { highway: 'footway', footway: 'sidewalk' }, [
+        [-60, -120],
+        [60, -120],
+      ]),
+      node(73, { entrance: 'main' }, [0, -40]),
+      node(74, { entrance: 'yes' }, [50, 0]),
+      node(75, { entrance: 'yes' }, [140, 0]),
+    ];
+    const draft = (place) =>
+      draftPlan({
+        elements: marks,
+        center: CENTER,
+        radiusM: 250,
+        landmarks: ['entrance'],
+        size: { w: 480, h: 360 },
+        place,
+      }).plan;
+    const state = (plan, id) => {
+      const f = byId(plan, id);
+      return [Boolean(f.on), Boolean(f.address)];
+    };
+    const library = draft({ name: 'Central Library, Seattle', ...CENTER });
+    expect(state(library, 'osm-way-71')).toEqual([true, false]);
+    expect(state(library, 'osm-way-72')).toEqual([false, false]);
+    expect(state(library, 'osm-node-73')).toEqual([true, true]);
+    expect(byId(library, 'osm-node-74').address).toBeFalsy();
+    expect(byId(library, 'osm-node-75').address).toBeFalsy();
+    // With no address (a route's base) the reach stays at the point.
+    const base = draft(null);
+    expect(state(base, 'osm-way-71')).toEqual([false, false]);
+    expect(byId(base, 'osm-node-73').address).toBeFalsy();
   });
 
   it('makes the tram a track and the foot path a walkway, both off', () => {

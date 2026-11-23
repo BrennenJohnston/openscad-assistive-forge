@@ -614,7 +614,39 @@ class MapPanel {
       this.adoptPicture();
       if (this.mapType === 'drawing') this.steps?.refresh();
     });
+    stateManager.setDerivedParameters(() => this.ownValues());
     this.schedule(0);
+  }
+
+  /**
+   * The parameters this panel writes while the map is its sample or the
+   * empty plate: no change of the person's, so the app keeps no draft for
+   * them alone. A map drafted or a drawing chosen is the person's work, and
+   * then every value counts.
+   *
+   * @returns {string[]}
+   */
+  ownValues() {
+    if (this.source) return [];
+    const c = this.config;
+    return [
+      c.mapFileParam,
+      c.mapFileKindParam,
+      c.widthParam,
+      c.heightParam,
+      c.plateIdParam,
+      c.plateShowsTitleParam,
+      c.plateShowsNorthParam,
+      c.plateKindParam,
+      c.raisedWordsParam,
+      c.numberWedgesParam,
+      c.leadLinesParam,
+      c.brailleWedgesParam,
+      c.marginParam,
+      c.titleBandParam,
+      c.coneMarksParam,
+      this.plan.meta?.waiting ? c.titleParam : null,
+    ].filter(Boolean);
   }
 
   /**
@@ -940,8 +972,11 @@ class MapPanel {
     // The numbers the things could not hold go to the band. One that would
     // stand across a seam between plates moves off it, and the band is laid
     // out again for the sheet that gives; the seams found are kept,
-    // so the passes settle.
+    // so the passes settle. Each call starts from no band, so the same plan
+    // gives the same sheet whatever an earlier call left: the plates cut in
+    // step 5 and the marks a render places come from one layout.
     const seams = { x: [], y: [] };
+    this.bandNeeds = {};
     let band = this.placeBand(labeled, seams);
     for (let pass = 0; pass < 3; pass += 1) {
       this.bandNeeds = band.sides;
@@ -3722,6 +3757,7 @@ class MapPanel {
       this.unsubscribe();
       this.unsubscribe = null;
     }
+    stateManager.setDerivedParameters(null);
     if (this.el?.parentNode) this.el.parentNode.removeChild(this.el);
     this.el = null;
     this.address?.destroy();
