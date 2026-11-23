@@ -3159,6 +3159,46 @@ describe('the model switch beside the paper', () => {
   });
 });
 
+describe('the north cue of a map from a drawing', () => {
+  const panel = () =>
+    document.getElementById('tactileMapPanel').__forgeMapPanel;
+
+  it('starts at None on a drawing, says so in the last step, and gives the arrow back to a place map', async () => {
+    stateManager.setState({
+      parameters: { ...params(), north_cue: 'Arrow with N' },
+    });
+    mount({ type: 'drawing' });
+    expect(panel().mapType).toBe('drawing');
+    await vi.waitFor(() => expect(params().north_cue).toBe('None'), SETTLE);
+    expect(document.getElementById('tactileMapPanel').textContent).toContain(
+      'A map from a drawing starts with no north cue, since a drawing carries its own; Title and north adds one.'
+    );
+    panel().setType('place');
+    await vi.waitFor(
+      () => expect(params().north_cue).toBe('Arrow with N'),
+      SETTLE
+    );
+  });
+
+  it('keeps a cue the person chose, on a drawing and after it', async () => {
+    mount({ type: 'drawing' });
+    stateManager.setState({
+      parameters: { ...params(), north_cue: 'Arrow with N' },
+    });
+    await vi.waitFor(() => expect(params().north_cue).toBe('None'), SETTLE);
+    stateManager.setState({
+      parameters: { ...params(), north_cue: 'North line' },
+    });
+    panel().setType('place');
+    expect(params().north_cue).toBe('North line');
+    stateManager.setState({
+      parameters: { ...params(), north_cue: 'Arrow with N' },
+    });
+    panel().setType('route');
+    expect(params().north_cue).toBe('Arrow with N');
+  });
+});
+
 describe('a draft kept in the browser', () => {
   // The model's own starting values for what the panel writes; every other
   // value starts as the test's own.
@@ -3220,6 +3260,20 @@ describe('a draft kept in the browser', () => {
     });
     stateManager.performLocalStorageSave();
     expect(JSON.parse(kept()).parameters.map_file.name).toBe('station.svg');
+  });
+
+  it('keeps none for a map from a drawing with no drawing yet: the north cue it sets is its own', async () => {
+    const starts = { ...params(), ...MODEL_STARTS, north_cue: 'Arrow with N' };
+    stateManager.setState({ defaults: starts, parameters: starts });
+    mount({ type: 'drawing' });
+    await vi.waitFor(() => expect(params().north_cue).toBe('None'), SETTLE);
+    localStorage.clear();
+    stateManager.performLocalStorageSave();
+    expect(kept()).toBeNull();
+    setParameterValue('north_cue', 'North line');
+    stateManager.performLocalStorageSave();
+    expect(JSON.parse(kept()).parameters.north_cue).toBe('North line');
+    document.getElementById('tactileMapPanel').__forgeMapPanel.setType('place');
   });
 
   it('counts every value again once the panel has gone', async () => {

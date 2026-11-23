@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - After an export the app says the file is ready and the browser saves it,
   not that it was saved; the tactile map maker adds what to do when nothing
   arrives, since a browser can hold a download behind its own prompt.
+- A tactile map from a drawing starts with no north cue, so the plate's arrow
+  no longer lands on a drawing that carries its own; Title and north adds one.
 
 ### Fixed
 

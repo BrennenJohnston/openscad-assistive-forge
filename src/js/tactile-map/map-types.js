@@ -92,6 +92,9 @@ export const WORKFLOW_STRINGS = Object.freeze({
   /** The drawing workflow's first step, above the tile's Map file control. */
   drawingChoose:
     'Choose an SVG or a DXF drawing, or a photo to trace. Until you choose one, the map uses the sample station.',
+  /** The drawing workflow's last step, under its first line. */
+  drawingNorth:
+    'A map from a drawing starts with no north cue, since a drawing carries its own; Title and north adds one.',
   /** The drawing workflow's fourth step. */
   drawingApply:
     'Press Apply classes in the editor. The plates in the next step follow what you applied.',
