@@ -168,6 +168,42 @@ test.describe('Tactile Map tile', () => {
     }
   });
 
+  test("the sample left alone keeps no draft and the next visit asks nothing; a value of the person's own keeps one", async ({
+    page,
+  }) => {
+    const kept = () =>
+      page.evaluate(() => localStorage.getItem('openscad-forge-editor-draft'));
+    const question = page.getByRole('alertdialog', {
+      name: 'Restore a saved draft?',
+    });
+    const sampleShown = () =>
+      expect(page.locator('#tactileMapSummary')).toHaveText(
+        /^4 plates of 250 x 190 mm/,
+        { timeout: 10000 }
+      );
+    await openTactileMap(page);
+    await sampleShown();
+    // The app saves a draft two seconds after the last change, once a value
+    // is away from the model's own. The file and the sizes the panel writes
+    // for its sample are, and they are no change of the person's.
+    await page.waitForTimeout(3000);
+    expect(await kept()).toBeNull();
+    await openTactileMap(page);
+    await sampleShown();
+    await expect(question).toHaveCount(0);
+
+    await page
+      .getByRole('button', { name: 'Expand all parameter groups' })
+      .click();
+    await page.locator('#param-print_style').selectOption('All printed');
+    await expect.poll(kept, { timeout: 10000 }).not.toBeNull();
+    await page.goto('/?example=tactile-map&type=drawing');
+    await expect(question).toBeVisible({ timeout: 20000 });
+    await question.getByRole('button', { name: 'Discard draft' }).click();
+    await expect(question).toHaveCount(0);
+    expect(await kept()).toBeNull();
+  });
+
   test('lays the map paper over the plate, never the map file itself, and Show Model hides the plate to read it', async ({
     page,
   }) => {
@@ -1075,12 +1111,14 @@ test.describe('the draft map', () => {
           has: page.locator('.svg-prep-object-name', { hasText: name }),
         })
         .first();
+    // A cafe is named by what it is and waits, off, for Everything in the
+    // data: the named places a map starts with are the public ones.
     const cafe = rowOf('Restaurant: Plaza Cafe');
     await expect(cafe.locator('.svg-prep-object-name')).toHaveText(
-      /^\d+ Restaurant: Plaza Cafe$/
+      'Restaurant: Plaza Cafe'
     );
     await expect(cafe.locator('.drawing-editor-class-select')).toHaveValue(
-      'landmark'
+      'ignore'
     );
     await expect(
       rowOf('Bus stop 29405: NE Pacific St & Montlake Blvd NE').locator(
@@ -1186,6 +1224,12 @@ test.describe('the draft map', () => {
     await expect(page.locator('#tactileMapSummary')).toContainText(
       'The key takes'
     );
+    // The ready sentence counts the warnings step 5 lists for the draft as
+    // it was made, before the labels change.
+    const said = Number(
+      (await status.textContent()).match(/; (\d+) warnings?\./)?.[1] ?? 0
+    );
+    expect(said).toBe(await page.locator('#tactileMapWarnings li').count());
     await page.locator('#tactileMapLabels').selectOption('tape');
     // Each numbered place gets a channel for its braille number; the names
     // are in the key.
@@ -1214,21 +1258,18 @@ test.describe('the draft map', () => {
     await expect(page.locator('#tactileMapWarnings')).not.toContainText(
       'No room for'
     );
-    // The ready sentence counts the warnings step 5 lists.
-    const said = Number(
-      (await status.textContent()).match(/; (\d+) warnings?\./)?.[1] ?? 0
-    );
-    expect(said).toBe(await page.locator('#tactileMapWarnings li').count());
     // The key, a row a piece: each place's piece holds its number's channel,
-    // then its name on tape, the cafe's among them.
+    // then its name on tape, the bus stop's among them.
     const pieces = await page.evaluate(() =>
       document
         .getElementById('tactileMapPanel')
         .__forgeMapPanel.keyPages.map((p) => p.tape)
     );
-    const cafe = pieces.find((t) => t.join(' ').includes('plaza cafe'));
-    expect(cafe[0]).toMatch(/^#\d+$/);
-    expect(cafe.slice(1).join(' ')).toBe('restaurant: plaza cafe');
+    const stop = pieces.find((t) => t.join(' ').includes('bus stop 29405'));
+    expect(stop[0]).toMatch(/^#\d+$/);
+    expect(stop.slice(1).join(' ')).toBe(
+      'bus stop 29405: ne pacific st & montlake blvd ne'
+    );
     const tape = pieces.flat();
     // The labels' tape, measured by the braille translator in the grade
     // chosen: uncontracted to start, as a hand-press labeler writes,
