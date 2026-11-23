@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A tactile map gives a stop or station mapped more than once at one spot one
   number and one row in its key; the copies stay in the editor, off.
+- A place map of a large building's own name drafts as a small one does: the
+  30 m to its sidewalks and its door is measured from the building's outline.
 
 ## [5.8.0] - 2026-11-18
 
