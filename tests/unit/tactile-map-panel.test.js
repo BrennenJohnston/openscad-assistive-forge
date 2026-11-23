@@ -3262,6 +3262,20 @@ describe('a draft kept in the browser', () => {
     expect(JSON.parse(kept()).parameters.map_file.name).toBe('station.svg');
   });
 
+  it('keeps none for a map from a drawing with no drawing yet: the north cue it sets is its own', async () => {
+    const starts = { ...params(), ...MODEL_STARTS, north_cue: 'Arrow with N' };
+    stateManager.setState({ defaults: starts, parameters: starts });
+    mount({ type: 'drawing' });
+    await vi.waitFor(() => expect(params().north_cue).toBe('None'), SETTLE);
+    localStorage.clear();
+    stateManager.performLocalStorageSave();
+    expect(kept()).toBeNull();
+    setParameterValue('north_cue', 'North line');
+    stateManager.performLocalStorageSave();
+    expect(JSON.parse(kept()).parameters.north_cue).toBe('North line');
+    document.getElementById('tactileMapPanel').__forgeMapPanel.setType('place');
+  });
+
   it('counts every value again once the panel has gone', async () => {
     await openTheSample();
     destroyMapPanel();

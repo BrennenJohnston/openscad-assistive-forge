@@ -652,6 +652,11 @@ class MapPanel {
       c.titleBandParam,
       c.coneMarksParam,
       this.plan.meta?.waiting ? c.titleParam : null,
+      // The cue a map from a drawing set to None; one the person chose counts.
+      cueSetForDrawing &&
+      stateManager.getState()?.parameters?.north_cue === 'None'
+        ? 'north_cue'
+        : null,
     ].filter(Boolean);
   }
 
