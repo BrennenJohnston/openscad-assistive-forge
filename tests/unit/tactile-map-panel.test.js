@@ -1519,9 +1519,9 @@ describe('render every plate and download', () => {
     expect(await zip.file('plate_grid.svg').async('string')).toContain(
       '>B2</text>'
     );
-    expect(status()).toBe('All 4 plates are in tactile_map_plates.zip.');
+    expect(status()).toBe('All 4 plates are in tactile_map_plates.zip; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.');
     expect(announce).toHaveBeenCalledWith(
-      'All 4 plates are in tactile_map_plates.zip.',
+      'All 4 plates are in tactile_map_plates.zip; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.',
       expect.anything()
     );
     expect(announce).toHaveBeenCalledWith(
@@ -1609,10 +1609,10 @@ describe('render every plate and download', () => {
     expect(readme).not.toContain('Stopped');
     expect(pending.length).toBe(2);
     expect(status()).toBe(
-      'Stopped after plate 2; the zip holds the plates finished so far.'
+      'Stopped after plate 2. The zip holds the plates finished so far; your browser saves it.'
     );
     expect(announce).toHaveBeenCalledWith(
-      'Stopped after plate 2; the zip holds the plates finished so far.',
+      'Stopped after plate 2. The zip holds the plates finished so far; your browser saves it.',
       expect.anything()
     );
     expect(b2.checked).toBe(true);
@@ -1637,7 +1637,7 @@ describe('render every plate and download', () => {
     expect(names.filter((name) => name.endsWith('.stl')).length).toBe(2);
     expect(n).toBe(3);
     expect(announceError).toHaveBeenCalledWith(
-      'Stopped after plate 2; the zip holds the plates finished so far. The engine stopped.',
+      'Stopped after plate 2. The zip holds the plates finished so far; your browser saves it. The engine stopped.',
       expect.anything()
     );
     expect(document.getElementById('tactileMapRenderAll').hidden).toBe(false);
@@ -2964,7 +2964,7 @@ describe('the PDF for the transcriber', () => {
     button.click();
     await vi.waitFor(() => expect(downloads.length).toBe(2), SETTLE);
     expect(mediaBox(downloads[1].bytes)).toEqual([841.89, 595.28]);
-    expect(status()).toBe('The PDF is in tactile_map_print.pdf.');
+    expect(status()).toBe('tactile_map_print.pdf is ready; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.');
   });
 
   it("leaves the tape's braille off the key page: the labels page draws it as dots, and the PDF's fonts cannot spell it", async () => {
