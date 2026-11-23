@@ -13,6 +13,8 @@
  */
 
 import { northZones } from '../../src/js/tactile-map/keep-clear.js';
+import { pullTiles } from '../../src/js/tactile-map/osm-tiles.js';
+import { groundBox } from '../../src/js/tactile-map/scales.js';
 import { numberNamed } from '../../src/js/tactile-map/map-numbers.js';
 import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -2015,7 +2017,7 @@ describe('the map data row', () => {
       ['Everything in the data', false],
     ]);
     expect(said(tiers()[1])).toBe(
-      'The way, the named places and transit stops the scale has room for, and the buildings along the way.'
+      'The way, the transit stops and named public places (a library, a school, a clinic) the scale has room for, and the buildings along the way.'
     );
     expect(document.getElementById('tactileMapDetailCount').hidden).toBe(true);
     expect(make().textContent).toBe('Make the map');
@@ -2261,7 +2263,7 @@ describe('the map data row', () => {
       [
         'Named places and points',
         'named',
-        ['None', 'Named places', 'All points'],
+        ['None', 'Named public places', 'All points'],
       ],
       ['Transit stops', 'on', ['Off', 'On']],
       ['Benches, bins and racks', 'off', ['Off', 'On']],
@@ -2381,6 +2383,74 @@ describe('the map Make the map drafts', () => {
     make().click();
     await vi.waitFor(() => expect(getMapData()).not.toBeNull());
   }
+
+  it('lays out the same sheet and the same marks on every call, whatever the last call left behind', async () => {
+    // 3600 Ferry Pl NE from its map tiles, with braille wedges: enough
+    // numbers that some stand in the margin's band, across plates' seams.
+    const FERRY = {
+      name: 'Center on Human Development and Disability South, 3600, Ferry Place Northeast, Seattle',
+      lat: 47.6481285,
+      lon: -122.3086726,
+    };
+    const tile = (x) =>
+      readFileSync(`tests/fixtures/tactile-map/sourdough-15-${x}-11438.mvt`);
+    const TILE = { 5250: tile(5250), 5251: tile(5251) };
+    const fetchTile = async (url) => {
+      const x = Object.keys(TILE).find((k) => url.includes(`/15/${k}/11438`));
+      const bytes = x ? TILE[x] : new Uint8Array(0);
+      return {
+        ok: true,
+        status: x ? 200 : 204,
+        arrayBuffer: async () =>
+          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      };
+    };
+    const { elements } = await pullTiles({
+      box: groundBox(FERRY, 1000, { w: 480, h: 360 }),
+      fetch: fetchTile,
+    });
+    opened = null;
+    mount({
+      type: 'place',
+      labels: 'wedge',
+      config: {
+        plateKindParam: 'plate_kind',
+        raisedWordsParam: 'raised_words',
+        numberWedgesParam: 'number_wedges',
+      },
+      searchPlaces: vi.fn(async () => [FERRY]),
+      pullArea: vi.fn(async () => ({ elements, bytes: 1, ms: 1 })),
+      getEditor: async () => editor,
+    });
+    const input = document.getElementById('tactileMapAddress');
+    input.value = '3600 Ferry Pl NE';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('tactileMapSearch').click();
+    await vi.waitFor(() =>
+      expect(
+        document.querySelectorAll('#tactileMapResults input[type="radio"]')
+      ).toHaveLength(1)
+    );
+    document.querySelector('#tactileMapResults input[type="radio"]').click();
+    make().click();
+    await vi.waitFor(() => expect(opened).not.toBeNull(), { timeout: 15000 });
+    const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+    const once = () => {
+      const { sheet, labeled } = panel.clearedPlan(panel.labeled());
+      return JSON.stringify({
+        w: sheet.w,
+        h: sheet.h,
+        shift: panel.faceShift(sheet),
+        marks: (labeled.marks || []).map((m) => [m.number, m.box]),
+      });
+    };
+    const settled = once();
+    expect(once()).toBe(settled);
+    panel.bandNeeds = {};
+    expect(once()).toBe(settled);
+    panel.bandNeeds = { top: 40, right: 40, bottom: 40, left: 40 };
+    expect(once()).toBe(settled);
+  });
 
   it('stands first in its step, the status box under it, then the file door and the credit', () => {
     mount({ type: 'place' });
@@ -3086,5 +3156,76 @@ describe('the model switch beside the paper', () => {
     modelBox().dispatchEvent(new Event('change'));
     mount();
     expect(modelBox()).toBeNull();
+  });
+});
+
+describe('a draft kept in the browser', () => {
+  // The model's own starting values for what the panel writes; every other
+  // value starts as the test's own.
+  const MODEL_STARTS = {
+    map_file: 'sample_station.svg',
+    map_width_mm: 480,
+    map_height_mm: 360,
+    plate_id: '',
+    plate_shows_title: 'yes',
+    plate_shows_north: 'yes',
+  };
+  const kept = () => localStorage.getItem(stateManager.localStorageKey);
+
+  async function openTheSample() {
+    const starts = { ...params(), ...MODEL_STARTS };
+    stateManager.setState({ defaults: starts, parameters: starts });
+    mount();
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    localStorage.clear();
+  }
+
+  afterEach(() => {
+    localStorage.clear();
+    stateManager.setState({ defaults: null });
+  });
+
+  it("keeps none for the sample alone: what the panel writes is no change of the person's", async () => {
+    await openTheSample();
+    expect(params().map_width_mm).toBe(500);
+    stateManager.performLocalStorageSave();
+    expect(kept()).toBeNull();
+  });
+
+  it("keeps one once a value of the person's own changes", async () => {
+    await openTheSample();
+    setParameterValue('base_thickness_mm', '0.8');
+    stateManager.performLocalStorageSave();
+    expect(JSON.parse(kept()).parameters.base_thickness_mm).toBe('0.8');
+  });
+
+  it('keeps none for the empty plate and its waiting title', async () => {
+    await openTheSample();
+    mount({ type: 'place', config: { titleParam: 'title_text' } });
+    await vi.waitFor(
+      () => expect(params().title_text).toBe('NO MAP YET'),
+      SETTLE
+    );
+    stateManager.performLocalStorageSave();
+    expect(kept()).toBeNull();
+  });
+
+  it("keeps one for a drawing of the person's own in the control", async () => {
+    await openTheSample();
+    stateManager.setState({
+      parameters: {
+        ...params(),
+        map_file: { name: 'station.svg', data: svgToDataUrl(DRAWING) },
+      },
+    });
+    stateManager.performLocalStorageSave();
+    expect(JSON.parse(kept()).parameters.map_file.name).toBe('station.svg');
+  });
+
+  it('counts every value again once the panel has gone', async () => {
+    await openTheSample();
+    destroyMapPanel();
+    stateManager.performLocalStorageSave();
+    expect(JSON.parse(kept()).parameters.map_width_mm).toBe(500);
   });
 });
