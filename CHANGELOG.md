@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mark steep sidewalks on a tactile map with no sidewalk drawn, as at a
   neighborhood's scale, says nothing was measured instead of that none is
   steep.
+- A tactile map's count under What to show no longer counts the ground of an
+  earlier scale: after a new scale, side or plate it waits for the next draft.
 
 ## [5.8.0] - 2026-11-18
 
