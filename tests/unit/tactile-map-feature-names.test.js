@@ -81,6 +81,16 @@ describe('feature names', () => {
     ]);
   });
 
+  it('gives the plain names, repeats uncounted, when asked', () => {
+    expect(featureNames(PLAN.features, { counted: false })).toEqual([
+      'Husky Union Building',
+      'East Stevens Way Northeast',
+      'East Stevens Way Northeast',
+      'Stairs near Husky Union Building',
+      'You are here',
+    ]);
+  });
+
   it("counts a stop's duplicate and its second point after the stop, so the stop a key shows carries no count", () => {
     const stop = (id, extra) => ({
       id,
