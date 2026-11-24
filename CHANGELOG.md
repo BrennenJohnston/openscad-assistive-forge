@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   arrives, since a browser can hold a download behind its own prompt.
 - A tactile map from a drawing starts with no north cue, so the plate's arrow
   no longer lands on a drawing that carries its own; Title and north adds one.
+- A tactile map's key and its braille name two places of one name plainly;
+  each has its own number, and only the editor's rows add "(2)".
 
 ### Fixed
 

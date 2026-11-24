@@ -167,6 +167,26 @@ describe('keyFor', () => {
     expect(numbers[3].name).toBe('Oceanography Building');
   });
 
+  it('names two places of one name plainly, each with its own number, and the README the same', () => {
+    const plan = emptyPlan(200, 150);
+    plan.features.push(
+      point('p1', 'transit-stop', [40, 40], {
+        name: 'Symphony',
+        what: 'Train station',
+      }),
+      point('p2', 'transit-stop', [160, 110], {
+        name: 'Symphony',
+        what: 'Train station',
+      })
+    );
+    const key = keyFor(plan);
+    expect(key.numbers.map((n) => [n.number, n.name])).toEqual([
+      [1, 'Train station: Symphony'],
+      [2, 'Train station: Symphony'],
+    ]);
+    expect(keyText(key)).not.toMatch(/\(\d+\)/);
+  });
+
   it('gives every kind a row of its own in the built-in sets, and a set that draws two alike says so', () => {
     const plan = emptyPlan(200, 150);
     plan.features.push(
