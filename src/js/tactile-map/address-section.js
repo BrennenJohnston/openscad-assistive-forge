@@ -154,7 +154,11 @@ export const ADDRESS_STRINGS = Object.freeze({
     off: 'Off',
     on: 'On',
   },
-  landmarkChoices: { none: 'None', named: 'Named places', all: 'All points' },
+  landmarkChoices: {
+    none: 'None',
+    named: 'Named public places',
+    all: 'All points',
+  },
   /** A11Y: the live line under the choices, once the data is here. */
   detailCount: (on, symbols) =>
     `${on} ${on === 1 ? 'feature' : 'features'} on, ${symbols} different ${symbols === 1 ? 'symbol' : 'symbols'}.`,
@@ -248,6 +252,8 @@ export const ADDRESS_STRINGS = Object.freeze({
   steepMarked: (n, g) => `${n} steep segments marked, steeper than ${g} %.`,
   /** A11Y: the same, none. */
   steepNone: (g) => `No sidewalk is steeper than ${g} %.`,
+  /** A11Y: on, with no sidewalk on the map (a far scale draws none). */
+  steepNothing: 'No sidewalk is on the map, so no slope is measured.',
   /** A11Y: the tiles did not answer. */
   tilesNoAnswer:
     'The height tiles did not answer. Steep sidewalks are not marked this time.',
@@ -1061,6 +1067,22 @@ export function createAddressSection({
       );
     }
     customRow.hidden = currentScale().key !== 'custom';
+    // A new scale, side or plate is new ground: the count of the data kept
+    // was of the old one, so it goes until the next draft counts again.
+    if (!dataFits()) setCount('');
+  }
+
+  /**
+   * Whether the data kept is the ground the choices ask for now; a file is
+   * its own ground. Make the map pulls again when it is not.
+   */
+  function dataFits() {
+    return !osm || osm.source === 'file' || osm.key === pullKey();
+  }
+
+  function setCount(text) {
+    detailCount.textContent = text || '';
+    detailCount.hidden = !text;
   }
 
   const ticked = () =>
@@ -1507,10 +1529,9 @@ export function createAddressSection({
       return symbolRadios.find((r) => r.checked)?.value || setChoices[0].key;
     },
     /** The count under the choices, once a draft exists. */
-    setDetailCount(text) {
-      detailCount.textContent = text || '';
-      detailCount.hidden = !text;
-    },
+    setDetailCount: setCount,
+    /** Whether the data kept is the ground the choices ask for now. */
+    dataFits: () => dataFits(),
     /** Put a tier and its groups back (a refusal), as getDetail gave them. */
     setDetail(detail) {
       if (!detail) return;
