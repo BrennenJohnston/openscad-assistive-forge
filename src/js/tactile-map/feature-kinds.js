@@ -164,3 +164,57 @@ export function isFurniture(tags) {
     FURNITURE_AMENITIES.includes(firstValue(t.amenity))
   );
 }
+
+/**
+ * The amenity values of a public place a traveler goes to or asks for: a
+ * library, a school, a clinic, a post office, a town hall, toilets. Shops,
+ * food, offices and the rest are places too, but a map of where a reader is
+ * going carries these first; the rest wait for the fullest tier.
+ */
+export const PUBLIC_AMENITIES = Object.freeze([
+  'library',
+  'school',
+  'college',
+  'university',
+  'kindergarten',
+  'hospital',
+  'clinic',
+  'doctors',
+  'dentist',
+  'pharmacy',
+  'post_office',
+  'toilets',
+  'townhall',
+  'courthouse',
+  'police',
+  'fire_station',
+  'community_centre',
+  'social_facility',
+]);
+
+/**
+ * Is this point a public place a traveler uses (PUBLIC_AMENITIES, any
+ * healthcare, a government office, a museum, an information office)?
+ *
+ * @param {Record<string, string>} [tags]
+ * @returns {boolean}
+ */
+export function isPublicPlace(tags) {
+  const t = tags && typeof tags === 'object' ? tags : {};
+  if (t.amenity !== undefined)
+    return PUBLIC_AMENITIES.includes(firstValue(t.amenity));
+  if (t.shop !== undefined) return false;
+  if (t.healthcare !== undefined) return true;
+  if (t.office !== undefined) return firstValue(t.office) === 'government';
+  if (t.tourism !== undefined) {
+    const v = firstValue(t.tourism);
+    // Information is also a board, a map or a signpost; only an office or a
+    // visitor center is a place to go to.
+    if (v === 'information')
+      return ['office', 'visitor_centre'].includes(
+        firstValue(t.information || '')
+      );
+    return v === 'museum';
+  }
+  return false;
+}

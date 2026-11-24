@@ -16,6 +16,7 @@ import {
   DETAIL_LEVELS,
   applyDetail,
   switchesFor,
+  wantsPoint,
   SYMBOLS_WARN,
   SYMBOLS_MAX,
 } from '../../src/js/tactile-map/detail-levels.js';
@@ -138,10 +139,21 @@ describe('the detail levels', () => {
       size: plan.size,
       mmPerM: plan.meta.geo.mmPerM,
     }).features;
-    expect(onOf(named, 'landmark').every((f) => f.name)).toBe(true);
-    expect(onOf(named, 'landmark').some((f) => f.name === 'Plaza Cafe')).toBe(
+    expect(onOf(named, 'landmark').every((f) => f.name && f.public)).toBe(
       true
     );
+    // A cafe is for Everything in the data, not for the named places.
+    const cafe = (features) =>
+      onOf(features, 'landmark').some((f) => f.name === 'Plaza Cafe');
+    expect(cafe(named)).toBe(false);
+    const everything = applyDetail(plan.features, {
+      type: 'place',
+      switches: switchesFor('place', 'everything'),
+      scale,
+      size: plan.size,
+      mmPerM: plan.meta.geo.mmPerM,
+    }).features;
+    expect(cafe(everything)).toBe(true);
   });
 
   it('leaves You are here as the reader set it at every tier, Everything included: off until placed, on once placed', async () => {
@@ -290,5 +302,57 @@ describe('the detail levels', () => {
     expect(twelve.warning).toBe(
       '12 different symbols: more than 10 is hard to remember.'
     );
+  });
+
+  it('numbers the named public places at Named places, and shops, food and offices only at All points or Everything', () => {
+    const library = { class: 'landmark', name: 'Library', public: true };
+    const cafe = { class: 'landmark', name: 'Cafe' };
+    const unnamed = { class: 'landmark', public: true };
+    const at = (key) => switchesFor('place', key);
+    expect(
+      [library, cafe, unnamed].map((f) => wantsPoint(f, at('named')))
+    ).toEqual([true, false, false]);
+    expect(
+      [library, cafe, unnamed].map((f) => wantsPoint(f, at('buildings')))
+    ).toEqual([true, false, false]);
+    expect(
+      [library, cafe, unnamed].map((f) => wantsPoint(f, at('everything')))
+    ).toEqual([true, true, true]);
+    const allPoints = { ...at('named'), landmarks: 'all' };
+    expect(
+      [library, cafe, unnamed].map((f) => wantsPoint(f, allPoints))
+    ).toEqual([true, true, true]);
+    const route = switchesFor('route', 'named');
+    expect([library, cafe].map((f) => wantsPoint(f, route))).toEqual([
+      true,
+      false,
+    ]);
+  });
+
+  it("keeps a stop's duplicate off under every tier, Everything in the data too", () => {
+    const features = [
+      { id: 's', class: 'transit-stop', kind: 'point', at: [10, 10], on: true },
+      {
+        id: 'd',
+        class: 'transit-stop',
+        kind: 'point',
+        at: [10, 10],
+        on: false,
+        duplicate: true,
+      },
+    ];
+    for (const level of DETAIL_LEVELS.place) {
+      const { features: out } = applyDetail(features, {
+        type: 'place',
+        switches: switchesFor('place', level.key),
+        scale: null,
+        size: { w: 100, h: 100 },
+        mmPerM: 1,
+      });
+      expect(out.find((f) => f.id === 'd').on).toBe(false);
+      expect(wantsPoint(features[1], switchesFor('place', level.key))).toBe(
+        false
+      );
+    }
   });
 });

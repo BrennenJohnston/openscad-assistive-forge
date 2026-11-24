@@ -134,13 +134,13 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     await axeClean(page, 'step 4');
 
     // The first draft: the places are named, and most of the data starts off.
-    // Every named area and point carries a number, and a place with no room
-    // for its name is no warning: its number carries it. The two warnings are
-    // symbols closer than the gap; the margin's numbers keep the north arrow
-    // beyond every symbol, so none moves for it.
+    // Every named area and public place carries a number, and a place with no
+    // room for its name is no warning: its number carries it. The cafes are
+    // rows of their own, off. The one warning is a symbol moved a little to
+    // keep the north arrow clear.
     await makeTheMap(page);
     await expect(status).toHaveText(
-      'Draft map ready: 19 of 286 features on; 2 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
+      'Draft map ready: 12 of 286 features on; 1 warning. Choose what stays. The key has 5 symbols and 6 numbered places.'
     );
     const rows = await page
       .locator('#drawingEditorSurface .svg-prep-object-name')
@@ -151,8 +151,11 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       '1 Building: Center on Human Development and Disability South'
     );
     const row = (pattern) => rows.some((name) => pattern.test(name));
-    expect(row(/^\d+ Restaurant: Plaza Cafe$/)).toBe(true);
-    expect(row(/^\d+ Cafe: Lobby Espresso$/)).toBe(true);
+    expect(
+      row(/^\d+ Clinic: University of Washington Medical Center - Montlake$/)
+    ).toBe(true);
+    expect(row(/^Restaurant: Plaza Cafe$/)).toBe(true);
+    expect(row(/^Cafe: Lobby Espresso$/)).toBe(true);
     expect(row(/^\d+ Bus stop 29405/)).toBe(true);
     await closeTheEditor(page);
 
@@ -163,11 +166,11 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       'Step 3 of 5: What to show'
     );
     const line = page.locator('#tactileMapDetailCount');
-    await expect(line).toHaveText('19 features on, 5 different symbols.');
+    await expect(line).toHaveText('12 features on, 5 different symbols.');
     await tabTo(page, '#tactileMapDetail-named');
     await page.keyboard.press('ArrowDown');
     await expect(page.locator('#tactileMapDetail-buildings')).toBeChecked();
-    await expect(line).toHaveText('171 features on, 9 different symbols.', {
+    await expect(line).toHaveText('162 features on, 9 different symbols.', {
       timeout: 15000,
     });
     await page.keyboard.press('ArrowDown');
@@ -176,7 +179,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowUp');
     await expect(page.locator('#tactileMapDetail-named')).toBeChecked();
-    await expect(line).toHaveText('19 features on, 5 different symbols.', {
+    await expect(line).toHaveText('12 features on, 5 different symbols.', {
       timeout: 15000,
     });
 
@@ -192,10 +195,10 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
 
     await makeTheMap(page);
     // The ready sentence waits for the braille translator, so the count of
-    // warnings is taken with the labels measured in contracted UEB; no symbol
-    // moves for the north arrow beyond the numbers' margin.
+    // warnings is taken with the labels measured in contracted UEB; the one
+    // warning is the symbol moved for the north arrow.
     await expect(status).toHaveText(
-      'Draft map ready: 19 of 286 features on; 2 warnings. Choose what stays. The key has 5 symbols and 15 numbered places.'
+      'Draft map ready: 12 of 286 features on; 1 warning. Choose what stays. The key has 5 symbols and 6 numbered places.'
     );
     await closeTheEditor(page);
 
@@ -205,21 +208,21 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     // inside the 480 x 360 face. Its band is 10 mm, wider at the sides whose
     // numbers stand there (braille wedges to start), and the sheet cuts into
     // four plates. Off, the whole face in its band cuts into six. The key is
-    // a piece a row: its title, its five kinds and the fifteen places; on
-    // wedges a name too long for one wedge goes on to a piece of its own (six
+    // a piece a row: its title, its five kinds and the six places; on wedges
+    // a name too long for one wedge goes on to a piece of its own (five
     // here).
     const trim = page.locator('#tactileMapTrim');
     await expect(trim).toBeChecked();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 202.5 x 128 mm, A1 to B2. The key takes 27 plates.'
+      '4 plates of 205.5 x 131 mm, A1 to B2. The key takes 17 plates.'
     );
     await trim.uncheck();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '6 plates of 181.3 x 198 mm, A1 to B3. The key takes 27 plates.'
+      '6 plates of 173 x 198 mm, A1 to B3. The key takes 17 plates.'
     );
     await trim.check();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 202.5 x 128 mm, A1 to B2. The key takes 27 plates.'
+      '4 plates of 205.5 x 131 mm, A1 to B2. The key takes 17 plates.'
     );
     // The key follows Labels, braille wedges to start.
     await expect(page.locator('#tactileMapLabels')).toHaveValue('wedge');
@@ -244,7 +247,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       'Area: a raised area, low',
     ]);
     expect(key.plates).toEqual(
-      Array.from({ length: 27 }, (_, i) => `key-${i + 1}`)
+      Array.from({ length: 17 }, (_, i) => `key-${i + 1}`)
     );
 
     // Braille label tape, chosen by keyboard: its pieces are channels, quick
@@ -265,7 +268,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
         .getElementById('tactileMapPanel')
         .__forgeMapPanel.keyPages.map((p) => ({ id: p.id, size: p.size }))
     );
-    expect(pieces).toHaveLength(21);
+    expect(pieces).toHaveLength(12);
 
     // The zip: the map's plates, the key's pieces, and the README.
     const downloadPromise = page.waitForEvent('download', { timeout: 420_000 });
@@ -281,10 +284,10 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     expect(names).not.toContain('tactile_map_B3.stl');
     const readme = await zip.file('README.txt').async('string');
     expect(summary).toBe(
-      '4 plates of 218.5 x 128 mm, A1 to B2. The key takes 21 plates.'
+      '4 plates of 199 x 131 mm, A1 to B2. The key takes 12 plates.'
     );
     expect(readme).toContain(
-      'each 218.5 x 128 mm, trimmed to the shapes with a 10 mm margin, wider at the sides that hold numbers. Print one of each: A1, A2, B1, B2.'
+      'each 199 x 131 mm, trimmed to the shapes with a 10 mm margin, wider at the sides that hold numbers. Print one of each: A1, A2, B1, B2.'
     );
     expect(readme).toContain('\nKey\nSymbols: University of Oregon symbols.\n');
     expect(readme).toContain(
@@ -296,11 +299,11 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     );
     expect(readme).not.toContain('sized by an estimate');
     // Each place's number on the map, a label of its own with its braille.
-    expect(readme).toMatch(/- #10 \([⠀-⣿]+, 3 cells, 26\.6 mm\): /);
+    expect(readme).toMatch(/- #6 \([⠀-⣿]+, 2 cells, 20\.4 mm\): /);
     // Each key piece's tape, its number then its name.
     expect(readme).toContain('Key 1 plate, label tape top to bottom:');
     expect(readme.replace(/\n- /g, ' ')).toMatch(
-      /#10 restaurant: plaza cafe\b/
+      /#1 building: center on human development and disability south\b/
     );
     expect(readme).not.toMatch(/Abbreviations/);
     // The map's labels in number order, wherever each number stands.
@@ -328,7 +331,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     expect(size[1]).toBeCloseTo(pieces[0].size.h, 1);
     expect(pieces[0].size.h).toBeLessThan(75);
     await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
-      'All 25 plates are in tactile_map_plates.zip.'
+      'All 16 plates are in tactile_map_plates.zip; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.'
     );
   });
 

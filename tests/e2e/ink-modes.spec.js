@@ -380,6 +380,50 @@ test.describe('A model that takes an image', () => {
       'blue-field-glyph.svg'
     );
   });
+
+  test('a drawing chosen after a picture puts the picture controls away, and Clear does too', async ({
+    page,
+  }) => {
+    test.setTimeout(180000);
+    await page.goto('/?example=logo-plate');
+    await page
+      .locator('.param-control')
+      .first()
+      .waitFor({ state: 'attached', timeout: 60000 });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3000 });
+      await notNow.click();
+    } catch {
+      // no save prompt for this example
+    }
+    const expandAll = page.locator('#expandAllGroupsBtn');
+    if (await expandAll.isVisible().catch(() => false)) {
+      await expandAll.click();
+    }
+    const input = page.locator('.param-control input[type="file"]').first();
+    const offer = page.locator('.trace-progress-start').first();
+    await input.setInputFiles(BLUE_FIELD);
+    await expect(page.locator('.ink-controls')).toBeVisible({ timeout: 60000 });
+
+    // A drawing is no picture: nothing to convert again, crop or keep from.
+    await input.setInputFiles(
+      path.join(FIXTURES, 'svg-edit', 'nested-squares.svg')
+    );
+    await expect(page.locator('.file-info')).toContainText(
+      'nested-squares.svg',
+      { timeout: 30000 }
+    );
+    await expect(page.locator('.ink-controls')).toBeHidden();
+    await expect(offer).toBeHidden();
+    await expect(page.locator('.trace-progress-crop')).toBeHidden();
+
+    await input.setInputFiles(BLUE_FIELD);
+    await expect(page.locator('.ink-controls')).toBeVisible({ timeout: 60000 });
+    await page.locator('.param-control .file-clear-button').first().click();
+    await expect(page.locator('.ink-controls')).toBeHidden();
+    await expect(offer).toBeHidden();
+  });
 });
 
 test.describe('the credit line a stock icon carries', () => {

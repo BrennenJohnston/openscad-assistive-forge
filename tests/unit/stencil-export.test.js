@@ -165,7 +165,9 @@ describe('the strings it says', () => {
     expect(EXPORT_STRINGS.step(0, 7, 'Plate 1, Black')).toBe(
       'Plate 1, Black. Part 1 of 7.'
     )
-    expect(EXPORT_STRINGS.done(8, 'harley-plates.zip')).toContain('8 files')
+    expect(EXPORT_STRINGS.done(8, 'harley-plates.zip')).toBe(
+      '8 files are in harley-plates.zip; your browser saves it.'
+    )
   })
 
   it('uses no em dashes', () => {
