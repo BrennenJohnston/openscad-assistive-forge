@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   steep.
 - A tactile map's count under What to show no longer counts the ground of an
   earlier scale: after a new scale, side or plate it waits for the next draft.
+- On a tactile map from a drawing, a picture or drawing checked in the Map
+  file control is measured at the drawing's real width, not at a charm's,
+  so it is no longer called too thin to print.
 
 ## [5.8.0] - 2026-11-18
 
