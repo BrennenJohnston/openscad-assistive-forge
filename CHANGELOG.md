@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Opening the Tactile Map Designer and changing nothing no longer leaves a
   draft, so the next visit does not ask to restore one.
+- A file control that held a picture puts its conversion, crop and picture
+  settings away when a drawing or a DXF is chosen after it, or the file is
+  cleared.
 - Mark steep sidewalks on a tactile map with no sidewalk drawn, as at a
   neighborhood's scale, says nothing was measured instead of that none is
   steep.
