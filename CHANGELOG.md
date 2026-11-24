@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no longer lands on a drawing that carries its own; Title and north adds one.
 - A tactile map's key and its braille name two places of one name plainly;
   each has its own number, and only the editor's rows add "(2)".
+- Where a map's north arrow would stand on a symbol or a label, the arrow
+  gets a column of its own beside the map, and nothing moves for it.
 
 ### Fixed
 

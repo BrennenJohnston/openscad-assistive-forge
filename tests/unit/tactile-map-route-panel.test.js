@@ -385,7 +385,10 @@ describe('focus after the editor', () => {
 });
 
 describe('the plate summary', () => {
-  it('says plate sizes in tenths of a millimeter at most: a 364 x 253 map in its 10 mm band on an A1 mini is 6 plates of 128 x 136.5 mm', async () => {
+  // Cut to 364 mm, the sample's first label channel reaches under the north
+  // arrow, so the arrow takes its 34 mm column: 10 + 364 + 34 = 408 mm
+  // across, three plates.
+  it('says plate sizes in tenths of a millimeter at most: a 364 x 253 map with the north arrow in its own column on an A1 mini is 6 plates of 136 x 136.5 mm', async () => {
     mount({
       type: 'drawing',
       plan: { ...sampleStationPlan(), size: { w: 364, h: 253 } },
@@ -396,7 +399,7 @@ describe('the plate summary', () => {
     await vi.waitFor(
       () =>
         expect($('tactileMapSummary').textContent).toBe(
-          '6 plates of 128 x 136.5 mm, A1 to B3.'
+          '6 plates of 136 x 136.5 mm, A1 to B3. The north arrow stands in a column of its own at the right, clear of the map.'
         ),
       SETTLE
     );
