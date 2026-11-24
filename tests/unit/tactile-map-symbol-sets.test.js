@@ -322,3 +322,17 @@ describe("the symbols guide's example file", () => {
     expect(() => validateSymbolLibrary(data, 'the guide')).not.toThrow();
   });
 });
+
+describe("the symbols guide's University of Oregon table", () => {
+  it("says what the set gives each class: a class the set leaves to its basic shape is listed with the basic shapes", () => {
+    const guide = readFileSync('docs/guides/TACTILE_MAP_SYMBOLS.md', 'utf8');
+    const rows = guide.split('\n').filter((line) => line.startsWith('| '));
+    const basic = rows.find((line) => /their basic shapes/.test(line));
+    const flexible = rows.find((line) => /\| Flexible feature \(2\)/.test(line));
+    expect(OREGON_2012.classSymbols.furniture).toBeNull();
+    expect(OREGON_2012.classSymbols.landmark).toBe('flexible-feature');
+    expect(basic).toMatch(/street furniture/i);
+    expect(flexible).toMatch(/^\| Landmark /);
+    expect(flexible).not.toMatch(/furniture/i);
+  });
+});
