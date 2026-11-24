@@ -22,6 +22,7 @@ vi.mock('../../src/js/ui-generator.js', async () => {
       stateManager.setState({ parameters: params });
       return true;
     }),
+    setDesignFitBoxMm: vi.fn(),
   };
 });
 
