@@ -9,8 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A tactile map gives a stop or station mapped more than once at one spot one
+  number and one row in its key; the copies stay in the editor, off.
+- A place map of a large building's own name drafts as a small one does: the
+  30 m to its sidewalks and its door is measured from the building's outline.
+- A tactile map's Named places level numbers the transit stops and the named
+  public places a traveler uses, such as a library, a school or a clinic;
+  shops, cafes and offices come in with Everything in the data or All points.
+- After an export the app says the file is ready and the browser saves it,
+  not that it was saved; the tactile map maker adds what to do when nothing
+  arrives, since a browser can hold a download behind its own prompt.
+- A tactile map from a drawing starts with no north cue, so the plate's arrow
+  no longer lands on a drawing that carries its own; Title and north adds one.
 - A tactile map's key and its braille name two places of one name plainly;
   each has its own number, and only the editor's rows add "(2)".
+
+### Fixed
+
+- Opening the Tactile Map Designer and changing nothing no longer leaves a
+  draft, so the next visit does not ask to restore one.
+- A file control that held a picture puts its conversion, crop and picture
+  settings away when a drawing or a DXF is chosen after it, or the file is
+  cleared.
+- Mark steep sidewalks on a tactile map with no sidewalk drawn, as at a
+  neighborhood's scale, says nothing was measured instead of that none is
+  steep.
 
 ## [5.8.0] - 2026-11-18
 

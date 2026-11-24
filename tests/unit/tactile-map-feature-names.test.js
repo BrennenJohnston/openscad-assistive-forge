@@ -91,6 +91,30 @@ describe('feature names', () => {
     ]);
   });
 
+  it("counts a stop's duplicate and its second point after the stop, so the stop a key shows carries no count", () => {
+    const stop = (id, extra) => ({
+      id,
+      class: 'transit-stop',
+      kind: 'point',
+      at: [50, 50],
+      what: 'Bus stop',
+      ref: '660',
+      name: '4th Avenue & Madison Street',
+      ...extra,
+    });
+    expect(
+      featureNames([
+        stop('a', { duplicate: true, on: false }),
+        stop('b', { twin: true, on: false }),
+        stop('c', { on: true }),
+      ])
+    ).toEqual([
+      'Bus stop 660: 4th Avenue & Madison Street (2)',
+      'Bus stop 660: 4th Avenue & Madison Street (3)',
+      'Bus stop 660: 4th Avenue & Madison Street',
+    ]);
+  });
+
   it('names an unnamed feature by its class alone when nothing named is on the map', () => {
     expect(
       featureNames([
