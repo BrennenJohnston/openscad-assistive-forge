@@ -29,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A file control that held a picture puts its conversion, crop and picture
   settings away when a drawing or a DXF is chosen after it, or the file is
   cleared.
+- Mark steep sidewalks on a tactile map with no sidewalk drawn, as at a
+  neighborhood's scale, says nothing was measured instead of that none is
+  steep.
 - A tactile map's count under What to show no longer counts the ground of an
   earlier scale: after a new scale, side or plate it waits for the next draft.
 

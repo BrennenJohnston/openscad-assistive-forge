@@ -252,6 +252,8 @@ export const ADDRESS_STRINGS = Object.freeze({
   steepMarked: (n, g) => `${n} steep segments marked, steeper than ${g} %.`,
   /** A11Y: the same, none. */
   steepNone: (g) => `No sidewalk is steeper than ${g} %.`,
+  /** A11Y: on, with no sidewalk on the map (a far scale draws none). */
+  steepNothing: 'No sidewalk is on the map, so no slope is measured.',
   /** A11Y: the tiles did not answer. */
   tilesNoAnswer:
     'The height tiles did not answer. Steep sidewalks are not marked this time.',
