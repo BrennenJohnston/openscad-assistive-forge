@@ -12,7 +12,10 @@
  * @license GPL-3.0-or-later
  */
 
-import { northZones } from '../../src/js/tactile-map/keep-clear.js';
+import {
+  NORTH_ARROW_COLUMN_MM,
+  northZones,
+} from '../../src/js/tactile-map/keep-clear.js';
 import { pullTiles } from '../../src/js/tactile-map/osm-tiles.js';
 import { groundBox } from '../../src/js/tactile-map/scales.js';
 import { numberNamed } from '../../src/js/tactile-map/map-numbers.js';
@@ -31,6 +34,7 @@ vi.mock('../../src/js/ui-generator.js', async () => {
       stateManager.setState({ parameters: params });
       return true;
     }),
+    setDesignFitBoxMm: vi.fn(),
   };
 });
 
@@ -53,7 +57,10 @@ import {
   projectLatLon,
   trimElement,
 } from '../../src/js/tactile-map/osm-geometry.js';
-import { setParameterValue } from '../../src/js/ui-generator.js';
+import {
+  setDesignFitBoxMm,
+  setParameterValue,
+} from '../../src/js/ui-generator.js';
 import {
   drawingFromPlan,
   rowOrder,
@@ -1285,7 +1292,32 @@ describe('the warnings in Check and print', () => {
   };
   const box = () => document.getElementById('tactileMapWarningsBox');
 
-  it('keeps the north arrow clear in the levels file: a symbol moves out, a shape stops short, and the list says so once', async () => {
+  const panelNow = () =>
+    document.querySelector('#tactileMapPanel, .tactile-map-panel')
+      ?.__forgeMapPanel;
+  const levelsIn = (zone, sheet) => {
+    const { svg } = files[files.length - 1];
+    const found = [];
+    for (const m of svg.matchAll(/([\d.]+) ([\d.]+)/g)) {
+      const [x, y] = [Number(m[1]), Number(m[2])];
+      if (
+        x > zone.x0 + 0.01 &&
+        x < sheet.w &&
+        y > zone.y0 &&
+        y < zone.y1 - 0.01
+      ) {
+        found.push([x, y]);
+      }
+    }
+    return found;
+  };
+  const warningTexts = () =>
+    [...document.getElementById('tactileMapWarnings').children].map(
+      (li) => li.textContent
+    );
+  const COLUMN = /north arrow stands in a column of its own/;
+
+  it('gives the north arrow a column of its own where it would stand on the map: nothing moves, nothing is cut, and the plates sentence says so', async () => {
     const plan = sampleStationPlan();
     const { w } = plan.size;
     plan.features.push(landmark('corner', w - 8, 8), {
@@ -1302,24 +1334,61 @@ describe('the warnings in Check and print', () => {
     });
     mount({ type: 'drawing', plan });
     await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
-    const panel = document.querySelector(
-      '#tactileMapPanel, .tactile-map-panel'
-    )?.__forgeMapPanel;
+    const panel = panelNow();
     const sheet = panel.sheet;
+    expect(sheet.band.right).toBe(Math.ceil(NORTH_ARROW_COLUMN_MM));
     const [zone] = northZones({ sheetW: sheet.w, cue: panel.northCue() });
+    expect(sheet.faceAt[0] + sheet.face.w).toBeLessThanOrEqual(zone.x0);
+    expect(levelsIn(zone, sheet)).toEqual([]);
+    const { labeled, moved } = panel.clearedPlan(panel.labeled());
+    expect(moved).toEqual([]);
+    expect(labeled.plan.features.find((f) => f.id === 'corner').at).toEqual([
+      w - 8,
+      8,
+    ]);
+    // The block's far corner is in the levels file where it was drawn.
+    const [cx, cy] = [sheet.faceAt[0] + w - 2, sheet.faceAt[1] + 2];
     const { svg } = files[files.length - 1];
-    const inZone = [];
-    for (const m of svg.matchAll(/([\d.]+) ([\d.]+)/g)) {
-      const [x, y] = [Number(m[1]), Number(m[2])];
-      if (x > zone.x0 + 0.01 && x < sheet.w && y > 0 && y < zone.y1 - 0.01) {
-        inZone.push([x, y]);
-      }
-    }
-    expect(inZone).toEqual([]);
-    const texts = [
-      ...document.getElementById('tactileMapWarnings').children,
-    ].map((li) => li.textContent);
-    expect(texts.filter((t) => /keep the north arrow/.test(t))).toHaveLength(1);
+    const corner = [...svg.matchAll(/([\d.]+) ([\d.]+)/g)].some(
+      (m) =>
+        Math.abs(Number(m[1]) - cx) < 0.01 && Math.abs(Number(m[2]) - cy) < 0.01
+    );
+    expect(corner).toBe(true);
+    expect(document.getElementById('tactileMapSummary').textContent).toMatch(
+      COLUMN
+    );
+    expect(warningTexts().filter((t) => /keep the north/.test(t))).toEqual([]);
+  });
+
+  it('keeps its margin when the arrow stands on nothing, and says nothing of a column', async () => {
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const panel = panelNow();
+    expect(panel.clearedPlan(panel.labeled()).arrowColumn).toBe(false);
+    expect(panel.sheet.band.right).toBe(panel.sheet.marginMm);
+    expect(
+      document.getElementById('tactileMapSummary').textContent
+    ).not.toMatch(COLUMN);
+  });
+
+  it('with a north line, a symbol under it moves out, the list says so once, and the sheet keeps its margin', async () => {
+    stateManager.setState({
+      parameters: { ...params(), north_cue: 'North line' },
+    });
+    const plan = sampleStationPlan();
+    plan.features.push(landmark('top', plan.size.w / 2, 6));
+    mount({ type: 'drawing', plan });
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const panel = panelNow();
+    const sheet = panel.sheet;
+    expect(sheet.band.right).toBe(sheet.marginMm);
+    const [zone] = northZones({ sheetW: sheet.w, cue: panel.northCue() });
+    expect(levelsIn(zone, sheet)).toEqual([]);
+    expect(warningTexts().filter((t) => /keep the north/.test(t))).toHaveLength(
+      1
+    );
+    expect(
+      document.getElementById('tactileMapSummary').textContent
+    ).not.toMatch(COLUMN);
   });
 
   it('folds the list into a closed disclosure that says how many there are', async () => {
@@ -1519,9 +1588,9 @@ describe('render every plate and download', () => {
     expect(await zip.file('plate_grid.svg').async('string')).toContain(
       '>B2</text>'
     );
-    expect(status()).toBe('All 4 plates are in tactile_map_plates.zip.');
+    expect(status()).toBe('All 4 plates are in tactile_map_plates.zip; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.');
     expect(announce).toHaveBeenCalledWith(
-      'All 4 plates are in tactile_map_plates.zip.',
+      'All 4 plates are in tactile_map_plates.zip; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.',
       expect.anything()
     );
     expect(announce).toHaveBeenCalledWith(
@@ -1609,10 +1678,10 @@ describe('render every plate and download', () => {
     expect(readme).not.toContain('Stopped');
     expect(pending.length).toBe(2);
     expect(status()).toBe(
-      'Stopped after plate 2; the zip holds the plates finished so far.'
+      'Stopped after plate 2. The zip holds the plates finished so far; your browser saves it.'
     );
     expect(announce).toHaveBeenCalledWith(
-      'Stopped after plate 2; the zip holds the plates finished so far.',
+      'Stopped after plate 2. The zip holds the plates finished so far; your browser saves it.',
       expect.anything()
     );
     expect(b2.checked).toBe(true);
@@ -1637,7 +1706,7 @@ describe('render every plate and download', () => {
     expect(names.filter((name) => name.endsWith('.stl')).length).toBe(2);
     expect(n).toBe(3);
     expect(announceError).toHaveBeenCalledWith(
-      'Stopped after plate 2; the zip holds the plates finished so far. The engine stopped.',
+      'Stopped after plate 2. The zip holds the plates finished so far; your browser saves it. The engine stopped.',
       expect.anything()
     );
     expect(document.getElementById('tactileMapRenderAll').hidden).toBe(false);
@@ -1827,7 +1896,10 @@ describe('the drawing door', () => {
         map_file: { name: 'other.svg', data: svgToDataUrl(OTHER) },
       },
     });
-    await vi.waitFor(() => expect(getMapPlan().meta.waiting).toBe(true), SETTLE);
+    await vi.waitFor(
+      () => expect(getMapPlan().meta.waiting).toBe(true),
+      SETTLE
+    );
     expect(getMapPlan().features.some((f) => f.class === 'wall')).toBe(false);
 
     click('tactileMapEditDrawing');
@@ -1840,9 +1912,29 @@ describe('the drawing door', () => {
       () => expect(getMapPlan().meta.waiting).toBeFalsy(),
       SETTLE
     );
-    expect(getMapPlan().features.filter((f) => f.class === 'wall')).toHaveLength(
-      1
+    expect(
+      getMapPlan().features.filter((f) => f.class === 'wall')
+    ).toHaveLength(1);
+  });
+
+  it("tells the file control the drawing's own size, a new width at once, and nothing on a place map or once the panel has gone", async () => {
+    mountWithDoor();
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    setDesignFitBoxMm.mockClear();
+    holdDrawing();
+    await vi.waitFor(() =>
+      expect(setDesignFitBoxMm).toHaveBeenLastCalledWith({ w: 340, h: 240 })
     );
+    const width = document.getElementById('tactileMapDrawingWidth');
+    width.value = '170';
+    width.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(setDesignFitBoxMm).toHaveBeenLastCalledWith({ w: 170, h: 120 });
+    document.getElementById('tactileMapPanel').__forgeMapPanel.setType('place');
+    expect(setDesignFitBoxMm).toHaveBeenLastCalledWith(null);
+    document.getElementById('tactileMapPanel').__forgeMapPanel.setType('drawing');
+    expect(setDesignFitBoxMm).toHaveBeenLastCalledWith({ w: 170, h: 120 });
+    destroyMapPanel();
+    expect(setDesignFitBoxMm).toHaveBeenLastCalledWith(null);
   });
 
   it('says the scale when the drawing width changes, and rebuilds the plan at it', async () => {
@@ -2017,7 +2109,7 @@ describe('the map data row', () => {
       ['Everything in the data', false],
     ]);
     expect(said(tiers()[1])).toBe(
-      'The way, the named places and transit stops the scale has room for, and the buildings along the way.'
+      'The way, the transit stops and named public places (a library, a school, a clinic) the scale has room for, and the buildings along the way.'
     );
     expect(document.getElementById('tactileMapDetailCount').hidden).toBe(true);
     expect(make().textContent).toBe('Make the map');
@@ -2263,7 +2355,7 @@ describe('the map data row', () => {
       [
         'Named places and points',
         'named',
-        ['None', 'Named places', 'All points'],
+        ['None', 'Named public places', 'All points'],
       ],
       ['Transit stops', 'on', ['Off', 'On']],
       ['Benches, bins and racks', 'off', ['Off', 'On']],
@@ -2402,7 +2494,10 @@ describe('the map Make the map drafts', () => {
         ok: true,
         status: x ? 200 : 204,
         arrayBuffer: async () =>
-          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+          bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength
+          ),
       };
     };
     const { elements } = await pullTiles({
@@ -2657,6 +2752,25 @@ describe('the map Make the map drafts', () => {
     expect(way.some((f) => f.class === 'you-are-here')).toBe(false);
   });
 
+  it("quiets step 3's line when the scale changes after a draft, counts nothing from the old ground, and counts again after the next draft", async () => {
+    await pullData();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    const line = document.getElementById('tactileMapDetailCount');
+    expect(line.hidden).toBe(false);
+    document.getElementById('tactileMapScale-blocks').click();
+    expect(line.hidden).toBe(true);
+    document.getElementById('tactileMapDetail-everything').click();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(line.hidden).toBe(true);
+    expect(line.textContent).toBe('');
+    opened = null;
+    make().click();
+    await vi.waitFor(() => expect(opened).not.toBeNull());
+    await vi.waitFor(() => expect(line.hidden).toBe(false));
+    const on = getMapPlan().features.filter((f) => f.on).length;
+    expect(line.textContent).toMatch(new RegExp(`^${on} features on, `));
+  });
+
   it('takes the rows back by index: a feature off keeps its class, one on takes the class, and the plan is rebuilt', async () => {
     await pullData();
     await vi.waitFor(() => expect(opened).not.toBeNull());
@@ -2834,6 +2948,27 @@ describe('the steep switch', () => {
     );
   });
 
+  it('says there is nothing to measure when no sidewalk is on the map, and reads no terrain tile', async () => {
+    const fetchTiles = vi.fn(async () => ({ ok: false, status: 403 }));
+    await drafted({ elevationAt: null, fetchTiles });
+    const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+    panel.plan = {
+      ...panel.plan,
+      features: panel.plan.features.map((f) =>
+        f.class === 'walkway' ? { ...f, on: false } : f
+      ),
+    };
+    steepBox().checked = true;
+    steepBox().dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(addressStatus()).toBe(
+        'No sidewalk is on the map, so no slope is measured.'
+      )
+    );
+    expect(fetchTiles).not.toHaveBeenCalled();
+    expect(steepBox().checked).toBe(true);
+  });
+
   it('says no sidewalk is steeper on flat ground, and reads again at a new grade', async () => {
     await drafted({ elevationAt: () => 100 });
     steepBox().checked = true;
@@ -2964,7 +3099,7 @@ describe('the PDF for the transcriber', () => {
     button.click();
     await vi.waitFor(() => expect(downloads.length).toBe(2), SETTLE);
     expect(mediaBox(downloads[1].bytes)).toEqual([841.89, 595.28]);
-    expect(status()).toBe('The PDF is in tactile_map_print.pdf.');
+    expect(status()).toBe('tactile_map_print.pdf is ready; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.');
   });
 
   it("leaves the tape's braille off the key page: the labels page draws it as dots, and the PDF's fonts cannot spell it", async () => {
@@ -3156,5 +3291,130 @@ describe('the model switch beside the paper', () => {
     modelBox().dispatchEvent(new Event('change'));
     mount();
     expect(modelBox()).toBeNull();
+  });
+});
+
+describe('the north cue of a map from a drawing', () => {
+  const panel = () =>
+    document.getElementById('tactileMapPanel').__forgeMapPanel;
+
+  it('starts at None on a drawing, says so in the last step, and gives the arrow back to a place map', async () => {
+    stateManager.setState({
+      parameters: { ...params(), north_cue: 'Arrow with N' },
+    });
+    mount({ type: 'drawing' });
+    expect(panel().mapType).toBe('drawing');
+    await vi.waitFor(() => expect(params().north_cue).toBe('None'), SETTLE);
+    expect(document.getElementById('tactileMapPanel').textContent).toContain(
+      'A map from a drawing starts with no north cue, since a drawing carries its own; Title and north adds one.'
+    );
+    panel().setType('place');
+    await vi.waitFor(
+      () => expect(params().north_cue).toBe('Arrow with N'),
+      SETTLE
+    );
+  });
+
+  it('keeps a cue the person chose, on a drawing and after it', async () => {
+    mount({ type: 'drawing' });
+    stateManager.setState({
+      parameters: { ...params(), north_cue: 'Arrow with N' },
+    });
+    await vi.waitFor(() => expect(params().north_cue).toBe('None'), SETTLE);
+    stateManager.setState({
+      parameters: { ...params(), north_cue: 'North line' },
+    });
+    panel().setType('place');
+    expect(params().north_cue).toBe('North line');
+    stateManager.setState({
+      parameters: { ...params(), north_cue: 'Arrow with N' },
+    });
+    panel().setType('route');
+    expect(params().north_cue).toBe('Arrow with N');
+  });
+});
+
+describe('a draft kept in the browser', () => {
+  // The model's own starting values for what the panel writes; every other
+  // value starts as the test's own.
+  const MODEL_STARTS = {
+    map_file: 'sample_station.svg',
+    map_width_mm: 480,
+    map_height_mm: 360,
+    plate_id: '',
+    plate_shows_title: 'yes',
+    plate_shows_north: 'yes',
+  };
+  const kept = () => localStorage.getItem(stateManager.localStorageKey);
+
+  async function openTheSample() {
+    const starts = { ...params(), ...MODEL_STARTS };
+    stateManager.setState({ defaults: starts, parameters: starts });
+    mount();
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    localStorage.clear();
+  }
+
+  afterEach(() => {
+    localStorage.clear();
+    stateManager.setState({ defaults: null });
+  });
+
+  it("keeps none for the sample alone: what the panel writes is no change of the person's", async () => {
+    await openTheSample();
+    expect(params().map_width_mm).toBe(500);
+    stateManager.performLocalStorageSave();
+    expect(kept()).toBeNull();
+  });
+
+  it("keeps one once a value of the person's own changes", async () => {
+    await openTheSample();
+    setParameterValue('base_thickness_mm', '0.8');
+    stateManager.performLocalStorageSave();
+    expect(JSON.parse(kept()).parameters.base_thickness_mm).toBe('0.8');
+  });
+
+  it('keeps none for the empty plate and its waiting title', async () => {
+    await openTheSample();
+    mount({ type: 'place', config: { titleParam: 'title_text' } });
+    await vi.waitFor(
+      () => expect(params().title_text).toBe('NO MAP YET'),
+      SETTLE
+    );
+    stateManager.performLocalStorageSave();
+    expect(kept()).toBeNull();
+  });
+
+  it("keeps one for a drawing of the person's own in the control", async () => {
+    await openTheSample();
+    stateManager.setState({
+      parameters: {
+        ...params(),
+        map_file: { name: 'station.svg', data: svgToDataUrl(DRAWING) },
+      },
+    });
+    stateManager.performLocalStorageSave();
+    expect(JSON.parse(kept()).parameters.map_file.name).toBe('station.svg');
+  });
+
+  it('keeps none for a map from a drawing with no drawing yet: the north cue it sets is its own', async () => {
+    const starts = { ...params(), ...MODEL_STARTS, north_cue: 'Arrow with N' };
+    stateManager.setState({ defaults: starts, parameters: starts });
+    mount({ type: 'drawing' });
+    await vi.waitFor(() => expect(params().north_cue).toBe('None'), SETTLE);
+    localStorage.clear();
+    stateManager.performLocalStorageSave();
+    expect(kept()).toBeNull();
+    setParameterValue('north_cue', 'North line');
+    stateManager.performLocalStorageSave();
+    expect(JSON.parse(kept()).parameters.north_cue).toBe('North line');
+    document.getElementById('tactileMapPanel').__forgeMapPanel.setType('place');
+  });
+
+  it('counts every value again once the panel has gone', async () => {
+    await openTheSample();
+    destroyMapPanel();
+    stateManager.performLocalStorageSave();
+    expect(JSON.parse(kept()).parameters.map_width_mm).toBe(500);
   });
 });

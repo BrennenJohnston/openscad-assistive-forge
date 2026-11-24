@@ -45,16 +45,16 @@ The authors note that any change in a symbol's size should be tested for readabi
 
 Each map class takes one of the set's symbols, or keeps its basic shape where the set has none:
 
-| Class                                  | Takes                                                     |
-| -------------------------------------- | --------------------------------------------------------- |
-| Entrance                               | Entrance (number 9 on the sheet)                          |
-| Stairs                                 | Elevation change (3)                                      |
-| A crossing drawn as a point            | Intersection (5)                                          |
-| Landmark, and street furniture with it | Flexible feature (2)                                      |
-| Transit stop                           | Challenging feature (1)                                   |
-| Curb ramp, raised curb, elevators      | their basic shapes: the set has no curbs and no elevators |
-| You are here                           | its basic mark, the same in every set                     |
-| Destination                            | its cone, the same in every set                           |
+| Class                                               | Takes                                         |
+| --------------------------------------------------- | --------------------------------------------- |
+| Entrance                                            | Entrance (number 9 on the sheet)              |
+| Stairs                                              | Elevation change (3)                          |
+| A crossing drawn as a point                         | Intersection (5)                              |
+| Landmark                                            | Flexible feature (2)                          |
+| Transit stop                                        | Challenging feature (1)                       |
+| Street furniture, curb ramp, raised curb, elevators | their basic shapes: the set has none of these |
+| You are here                                        | its basic mark, the same in every set         |
+| Destination                                         | its cone, the same in every set               |
 
 The set's fourteen point symbols, numbered as the sheet prints them:
 

@@ -123,32 +123,42 @@ export function placeFinder(features = []) {
 }
 
 /**
- * The names of the features, in their order.
+ * The names of the features, in their order. Repeats are counted, "(2)",
+ * so every row of the editor reads apart; `counted: false` gives the plain
+ * names, for a reader who tells repeats apart by their numbers.
  *
  * @param {object[]} features - a plan's features
+ * @param {{ counted?: boolean }} [options]
  * @returns {string[]}
  */
-export function featureNames(features = []) {
+export function featureNames(features = [], { counted = true } = {}) {
   const nearestName = placeFinder(features);
-  const seen = new Map();
-  return features.map((f) => {
+  const bases = features.map((f) => {
     const what = whatWord(f);
-    let base;
     if (f.name) {
-      base =
-        what && (f.ref || !saysItself(f.name, f.what))
-          ? `${what}: ${f.name}`
-          : f.name;
-    } else if (what && f.ref) {
-      base = what;
-    } else {
-      const word = what || classWord(f.class);
-      const at = anchorOf(f);
-      const near = at ? nearestName(at) : null;
-      base = near ? `${word} near ${near}` : word;
+      return what && (f.ref || !saysItself(f.name, f.what))
+        ? `${what}: ${f.name}`
+        : f.name;
     }
-    const times = (seen.get(base) || 0) + 1;
-    seen.set(base, times);
-    return times === 1 ? base : `${base} (${times})`;
+    if (what && f.ref) return what;
+    const word = what || classWord(f.class);
+    const at = anchorOf(f);
+    const near = at ? nearestName(at) : null;
+    return near ? `${word} near ${near}` : word;
   });
+  if (!counted) return bases;
+  // A stop's second point and a duplicate are counted after the stop they
+  // repeat, so the one a key shows never carries a count.
+  const repeats = (f) => Boolean(f?.twin || f?.duplicate);
+  const names = new Array(features.length);
+  const seen = new Map();
+  for (const pass of [false, true]) {
+    features.forEach((f, i) => {
+      if (repeats(f) !== pass) return;
+      const times = (seen.get(bases[i]) || 0) + 1;
+      seen.set(bases[i], times);
+      names[i] = times === 1 ? bases[i] : `${bases[i]} (${times})`;
+    });
+  }
+  return names;
 }

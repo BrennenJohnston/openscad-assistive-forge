@@ -802,8 +802,9 @@ describe('at 3600 Ferry Pl NE, Every building', () => {
         query: '3600 Ferry Pl NE',
       },
     });
+    // Every building, with all the points, so the band has numbers to place.
     const applied = applyDetail(plan.features, {
-      switches: switchesFor('place', 'buildings'),
+      switches: { ...switchesFor('place', 'buildings'), landmarks: 'all' },
       scale,
       mmPerM: plan.meta.geo.mmPerM,
     });

@@ -172,6 +172,24 @@ export function downloadFile(arrayBuffer, filename, format = 'stl') {
   URL.revokeObjectURL(url);
 }
 
+/** Said where there is room, after a file is handed to the browser. */
+export const NOT_ARRIVED =
+  'If nothing arrives, your browser may be asking to allow downloads from this site.';
+
+/**
+ * What the page can say once it hands a file to the browser: that the
+ * browser saves it, never that it was saved. A browser can hold a second
+ * download behind a prompt of its own, which the page cannot see.
+ *
+ * @param {string} lead - what is ready, without a full stop ("x.stl is ready")
+ * @param {{ hint?: boolean }} [options] - add NOT_ARRIVED where there is room
+ * @returns {string}
+ */
+export function handedOver(lead, { hint = false } = {}) {
+  const sentence = `${lead}; your browser saves it.`;
+  return hint ? `${sentence} ${NOT_ARRIVED}` : sentence;
+}
+
 /**
  * Download STL file (legacy compatibility)
  * @param {ArrayBuffer} arrayBuffer - STL data
