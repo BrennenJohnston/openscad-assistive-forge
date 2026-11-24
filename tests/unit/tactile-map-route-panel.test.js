@@ -22,6 +22,7 @@ vi.mock('../../src/js/ui-generator.js', async () => {
       stateManager.setState({ parameters: params });
       return true;
     }),
+    setDesignFitBoxMm: vi.fn(),
   };
 });
 
@@ -251,12 +252,12 @@ describe('Make a route map', () => {
         1,
         172,
         360
-      ) + ' The key has 10 symbols and 6 numbered places.'
+      ) + ' The key has 9 symbols and 4 numbered places.'
     );
     // The destination is keyed by its cone and named in its own row, so it
     // takes no number.
     expect(addressStatus()).toBe(
-      'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk. The key has 10 symbols and 6 numbered places.'
+      'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk. The key has 9 symbols and 4 numbered places.'
     );
     // The model is told the sheet: the fitted face and the 10 mm band
     // around it (no title typed, so no title band).
@@ -384,7 +385,10 @@ describe('focus after the editor', () => {
 });
 
 describe('the plate summary', () => {
-  it('says plate sizes in tenths of a millimeter at most: a 364 x 253 map in its 10 mm band on an A1 mini is 6 plates of 128 x 136.5 mm', async () => {
+  // Cut to 364 mm, the sample's first label channel reaches under the north
+  // arrow, so the arrow takes its 34 mm column: 10 + 364 + 34 = 408 mm
+  // across, three plates.
+  it('says plate sizes in tenths of a millimeter at most: a 364 x 253 map with the north arrow in its own column on an A1 mini is 6 plates of 136 x 136.5 mm', async () => {
     mount({
       type: 'drawing',
       plan: { ...sampleStationPlan(), size: { w: 364, h: 253 } },
@@ -395,7 +399,7 @@ describe('the plate summary', () => {
     await vi.waitFor(
       () =>
         expect($('tactileMapSummary').textContent).toBe(
-          '6 plates of 128 x 136.5 mm, A1 to B3.'
+          '6 plates of 136 x 136.5 mm, A1 to B3. The north arrow stands in a column of its own at the right, clear of the map.'
         ),
       SETTLE
     );

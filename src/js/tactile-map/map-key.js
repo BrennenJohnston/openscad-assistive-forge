@@ -232,8 +232,9 @@ export function keyFor(plan, settings = {}) {
     shape: `a raised area, ${LEVEL_WORDS[classes[c]?.level] || 'low'}`,
   }));
 
-  // The named things, in number order.
-  const names = featureNames(all);
+  // The named things, in number order, by their plain names: each has its
+  // own number, so the editor's "(2)" for a repeated name is left out.
+  const names = featureNames(all, { counted: false });
   const saidById = new Map(all.map((f, i) => [f.id, names[i]]));
   const numbers = numberedThings(plan).map((f, i) => ({
     number: i + 1,

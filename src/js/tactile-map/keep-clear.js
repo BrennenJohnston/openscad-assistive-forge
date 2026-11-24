@@ -11,7 +11,11 @@
  * the cue, since the arrow has nowhere else to be.
  *
  * Positions on a tactile map are relative, and a short move keeps a symbol
- * beside what it marks. The panel says what moved, in one sentence.
+ * beside what it marks. The panel says what moved, in one sentence. The
+ * arrow's box is deep, though, and a move out of it can be tens of
+ * millimeters, so where the arrow would stand on a symbol the panel gives it
+ * a column of its own beside the map instead (NORTH_ARROW_COLUMN_MM) and
+ * nothing moves for it; the north line still moves what is under it.
  *
  * Zones are in the sheet's frame, millimeters, y down, the top left at the
  * origin. No DOM here: a worker may import this file.
@@ -41,6 +45,13 @@ export const NORTH_LINE_MM = 2;
 
 /** What the cue keeps around it (mm), the clearance raised letters keep. */
 export const NORTH_CLEARANCE_MM = SHEET_CLEARANCE_MM;
+
+/**
+ * How far the arrow and its clearance reach in from the plate's right edge:
+ * a band this wide on the right leaves the whole face clear of the arrow.
+ */
+export const NORTH_ARROW_COLUMN_MM =
+  NORTH_ARROW_MM.edge + NORTH_ARROW_MM.width + NORTH_CLEARANCE_MM;
 
 /** The classes a reader steers by: other symbols stay off them. */
 const MARKS = new Set(['destination', 'you-are-here']);
@@ -162,6 +173,25 @@ function escape(start, half, hard, soft, bounds) {
 }
 
 /**
+ * Whether the zones stand on anything keepClear would move for them: a
+ * symbol or a label channel.
+ *
+ * @param {object[]} features - In the plan's frame
+ * @param {object} options - keepClear's
+ * @returns {boolean}
+ */
+export function zonesCover(features, options) {
+  const { zones = [] } = options;
+  return features.some(
+    (f) =>
+      f.on !== false &&
+      (f.kind === 'point' || f.kind === 'channel') &&
+      Array.isArray(f.at) &&
+      zones.some((o) => overlaps(f.at, halfOf(f, options), o))
+  );
+}
+
+/**
  * The plan's features with the zones and the marks kept clear. Hands back the
  * same array when nothing moved.
  *
@@ -245,7 +275,7 @@ export function keepClear(features, options) {
 export function keptClearNote(moved) {
   if (!moved.length) return null;
   const say = (n) => String(Math.round(n * 10) / 10);
-  const why = 'to keep the north arrow and the marks clear.';
+  const why = 'to keep the north cue and the marks clear.';
   if (moved.length === 1)
     return `One symbol moved ${say(moved[0].mm)} mm ${why}`;
   const most = Math.max(...moved.map((m) => m.mm));

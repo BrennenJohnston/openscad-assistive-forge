@@ -90,7 +90,7 @@ test('downloads are named for the project and the day; the STL kinds apart', asy
   ]);
 });
 
-test('Export Changed Settings names the project in its file', async ({
+test('Export Changed Settings names the project in its file and says the browser saves it', async ({
   page,
 }) => {
   await openBox(page);
@@ -119,13 +119,22 @@ test('Export Changed Settings names the project in its file', async ({
       if (p.tagName === 'DETAILS') p.open = true;
     }
   });
+  const mark = await announcementMark(page);
   const download = page.waitForEvent('download', { timeout: 30_000 });
   await page.locator('#exportChangedBtn').click();
   const file = await download;
   const day = new Date().toISOString().slice(0, 10);
-  expect(file.suggestedFilename()).toBe(
-    `simple_box-${day}-changed-settings.json`
+  const name = `simple_box-${day}-changed-settings.json`;
+  expect(file.suggestedFilename()).toBe(name);
+  // The page cannot see the file arrive: it says the browser saves it.
+  await expect(page.locator('#previewStatusText')).toHaveText(
+    'Ready: changed settings'
   );
+  await expect
+    .poll(async () => (await announcementsSince(page, mark)).map((a) => a.text))
+    .toContain(
+      `1 changed parameter is ready as ${name}; your browser saves it.`
+    );
   const text = await new Promise((resolve, reject) => {
     file.createReadStream().then((s) => {
       let out = '';
