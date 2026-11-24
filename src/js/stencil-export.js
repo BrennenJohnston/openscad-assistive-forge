@@ -21,7 +21,7 @@
  */
 
 import { paintSequence } from './stencil-plates.js';
-import { sanitizeFilename } from './download.js';
+import { handedOver, sanitizeFilename } from './download.js';
 
 /** File extension per output format the set can be exported in. */
 const EXTENSION = {
@@ -157,7 +157,7 @@ export async function exportStencilSet({
 export const EXPORT_STRINGS = Object.freeze({
   start: (n) => `Exporting ${n} parts. This renders each one in turn.`,
   step: (done, total, label) => `${label}. Part ${done + 1} of ${total}.`,
-  done: (n, filename) => `Exported ${n} files as ${filename}.`,
+  done: (n, filename) => handedOver(`${n} files are in ${filename}`),
   failed: (reason) => `The export stopped. ${reason}`,
   button: 'Export all plates',
   busy: 'Exporting...',

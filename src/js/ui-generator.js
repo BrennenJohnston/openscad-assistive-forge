@@ -4832,8 +4832,7 @@ function createFileControl(
       if (isSvgFile) {
         const rawSvgText = dataUrlToText(dataUrl);
         currentFileName = file.name;
-        cropUndo = null;
-        lastCrop = null;
+        forgetPicture();
         const processed = processSvgForOpenScad(rawSvgText);
         // Chosen from the empty editor: it opens on the drawing, whatever
         // the analysis alone would have done.
@@ -4866,15 +4865,19 @@ function createFileControl(
     reader.readAsDataURL(file);
   }
 
-  // Clear file
-  clearButton.addEventListener('click', () => {
-    if (currentFileName) setSvgPrepMetadata(currentFileName, null);
-    // Clearing the file stops any conversion of it. Silently, because clearing
-    // is the person's own action and already speaks for itself; announcing a
-    // cancel on top of it would be a second announcement for one action.
+  /**
+   * The picture a file brought, forgotten: its conversion stopped, and its
+   * offer, its crop and what to keep from it put away, since a cleared
+   * control or a drawing chosen after it has no picture to convert again.
+   * Silently: clearing or choosing is the person's own action and already
+   * speaks for itself, and a cancel said on top of it would be a second
+   * announcement for one action.
+   */
+  function forgetPicture() {
     if (traceRunner && traceRunner.isRunning()) traceRunner.cancel();
     traceProgress.finish();
     traceProgress.hide();
+    inkControlsContainer.hidden = true;
     inkSourceImageData = null;
     inkSourceFileName = null;
     inkSourceDataUrl = null;
@@ -4882,6 +4885,12 @@ function createFileControl(
     lastCrop = null;
     sourceFileLabel = null;
     currentQuickLook = null;
+  }
+
+  // Clear file
+  clearButton.addEventListener('click', () => {
+    if (currentFileName) setSvgPrepMetadata(currentFileName, null);
+    forgetPicture();
     fileInput.value = '';
     fileInfo.textContent = 'No file selected';
     fileInfo.className = 'file-info';
@@ -4901,6 +4910,7 @@ function createFileControl(
   const galleryOptions = galleryOptionsMap[param.name];
   if (galleryOptions && galleryOptions.length > 0) {
     const gallery = createSvgGallery(galleryOptions, param, (name, fileObj) => {
+      forgetPicture();
       if (fileObj._rawSvg) {
         const rawSvg = fileObj._rawSvg;
         delete fileObj._rawSvg;
