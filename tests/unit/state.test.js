@@ -740,8 +740,59 @@ describe('State Management', () => {
       
       // Should not throw
       expect(() => state.performLocalStorageSave()).not.toThrow()
-      
+
       localStorage.setItem = originalSetItem
+    })
+
+    describe("the values a project's panel writes by itself", () => {
+      const file = { name: 'tactile_map.scad', content: '// tile' }
+      const defaults = { map_file: 'sample_station.svg', base_thickness_mm: 0.4 }
+      const kept = () => localStorage.getItem(state.localStorageKey)
+
+      beforeEach(() => {
+        localStorage.clear()
+        state.setState({
+          uploadedFile: file,
+          defaults,
+          parameters: { map_file: 'levels_whole.svg', base_thickness_mm: 0.4 },
+        })
+      })
+
+      it('keep no draft when nothing else is away from its default', () => {
+        state.setDerivedParameters(() => ['map_file'])
+        state.performLocalStorageSave()
+        expect(kept()).toBeNull()
+      })
+
+      it("keep the draft once a value of the person's own changed", () => {
+        state.setDerivedParameters(() => ['map_file'])
+        state.setState({
+          parameters: { map_file: 'levels_whole.svg', base_thickness_mm: 0.8 },
+        })
+        state.performLocalStorageSave()
+        expect(JSON.parse(kept()).parameters.base_thickness_mm).toBe(0.8)
+      })
+
+      it('count again when the panel names none, and when it has gone', () => {
+        state.setDerivedParameters(() => [])
+        state.performLocalStorageSave()
+        expect(JSON.parse(kept()).parameters.map_file).toBe('levels_whole.svg')
+        localStorage.clear()
+        state.setDerivedParameters(() => ['map_file'])
+        state.setDerivedParameters(null)
+        state.performLocalStorageSave()
+        expect(kept()).not.toBeNull()
+      })
+
+      it('are asked for at each save, so the answer can change', () => {
+        let own = ['map_file']
+        state.setDerivedParameters(() => own)
+        state.performLocalStorageSave()
+        expect(kept()).toBeNull()
+        own = []
+        state.performLocalStorageSave()
+        expect(kept()).not.toBeNull()
+      })
     })
   })
 

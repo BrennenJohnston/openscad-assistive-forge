@@ -252,12 +252,12 @@ describe('Make a route map', () => {
         1,
         172,
         360
-      ) + ' The key has 10 symbols and 6 numbered places.'
+      ) + ' The key has 9 symbols and 4 numbered places.'
     );
     // The destination is keyed by its cone and named in its own row, so it
     // takes no number.
     expect(addressStatus()).toBe(
-      'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk. The key has 10 symbols and 6 numbered places.'
+      'Route map ready: a 244 m walk from Husky Union Building to Bill & Melinda Gates Center, 1 crossing and 1 flight of steps on the way. The map is 172 x 360 mm, fitted to the walk. The key has 9 symbols and 4 numbered places.'
     );
     // The model is told the sheet: the fitted face and the 10 mm band
     // around it (no title typed, so no title band).
