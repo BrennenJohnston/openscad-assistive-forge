@@ -26,6 +26,15 @@ const num = (s) => {
   return Number.isFinite(v) ? v : null;
 };
 
+/**
+ * An element's child elements, each stepped to from the one before. A live
+ * `children` list counts itself again on every read in jsdom, so walking one
+ * of thousands item by item grows with the square of its length.
+ */
+function* childElements(el) {
+  for (let c = el.firstElementChild; c; c = c.nextElementSibling) yield c;
+}
+
 /** The OSM XML: nodes first into a table, then ways with their points. */
 function fromOsmXml(text, name) {
   const doc = new DOMParser().parseFromString(text, 'application/xml');
@@ -37,7 +46,7 @@ function fromOsmXml(text, name) {
   }
   const tagsOf = (el) => {
     const tags = {};
-    for (const t of el.children) {
+    for (const t of childElements(el)) {
       if (t.tagName.toLowerCase() === 'tag') {
         tags[t.getAttribute('k')] = t.getAttribute('v');
       }
@@ -46,7 +55,7 @@ function fromOsmXml(text, name) {
   };
   const places = new Map();
   const nodes = [];
-  for (const n of doc.documentElement.children) {
+  for (const n of childElements(doc.documentElement)) {
     if (n.tagName.toLowerCase() !== 'node') continue;
     const id = n.getAttribute('id');
     const lat = num(n.getAttribute('lat'));
@@ -59,10 +68,10 @@ function fromOsmXml(text, name) {
     }
   }
   const ways = [];
-  for (const w of doc.documentElement.children) {
+  for (const w of childElements(doc.documentElement)) {
     if (w.tagName.toLowerCase() !== 'way') continue;
     const geometry = [];
-    for (const nd of w.children) {
+    for (const nd of childElements(w)) {
       if (nd.tagName.toLowerCase() !== 'nd') continue;
       const p = places.get(nd.getAttribute('ref'));
       if (p) geometry.push({ lat: p.lat, lon: p.lon });
