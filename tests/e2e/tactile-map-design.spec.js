@@ -49,6 +49,33 @@ async function makeTheMap(page) {
   });
 }
 
+/**
+ * The ready sentence says the warning count step 5 lists: the list read once
+ * it has stood unchanged for two seconds, as a person would find it.
+ */
+async function expectSaidCountListed(page) {
+  const said = Number(
+    (await page.locator('#tactileMapAddressStatus').textContent()).match(
+      /; (\d+) warnings?\./
+    )?.[1] ?? 0
+  );
+  const items = page.locator('#tactileMapWarnings li');
+  let last = -1;
+  let since = Date.now();
+  for (const start = Date.now(); Date.now() - start < 20000; ) {
+    const now = await items.count();
+    if (now !== last) {
+      last = now;
+      since = Date.now();
+    } else if (Date.now() - since >= 2000) {
+      break;
+    }
+    await page.waitForTimeout(250);
+  }
+  const listed = await items.allTextContents();
+  expect(listed.length, JSON.stringify(listed)).toBe(said);
+}
+
 /** Escape the editor; focus comes back to Make the map. */
 async function closeTheEditor(page) {
   await page.keyboard.press('Escape');
@@ -143,6 +170,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     await expect(status).toHaveText(
       'Draft map ready: 12 of 286 features on; no warnings. Choose what stays. The key has 5 symbols and 6 numbered places.'
     );
+    await expectSaidCountListed(page);
     const rows = await page
       .locator('#drawingEditorSurface .svg-prep-object-name')
       .allTextContents();
@@ -195,11 +223,12 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     await nextStep(page, 4, 'Make the map');
 
     await makeTheMap(page);
-    // The ready sentence waits for the braille translator, so the count of
-    // warnings is taken with the labels measured in contracted UEB.
+    // The ready sentence counts step 5's own list, the labels measured in
+    // contracted UEB.
     await expect(status).toHaveText(
       'Draft map ready: 12 of 286 features on; no warnings. Choose what stays. The key has 5 symbols and 6 numbered places.'
     );
+    await expectSaidCountListed(page);
     await closeTheEditor(page);
 
     await nextStep(page, 5, 'Check and print');
