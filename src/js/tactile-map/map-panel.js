@@ -2937,7 +2937,13 @@ class MapPanel {
     })) {
       zip.file(entry.name, entry.data);
     }
-    return zip.generateAsync({ type: 'uint8array' });
+    // Compressed: a binary STL shrinks to about a quarter, and a map with a
+    // key in braille runs to tens of megabytes stored as it is.
+    return zip.generateAsync({
+      type: 'uint8array',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 },
+    });
   }
 
   /**
