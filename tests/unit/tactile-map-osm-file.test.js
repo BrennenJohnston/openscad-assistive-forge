@@ -5,7 +5,7 @@
  *
  * @license GPL-3.0-or-later
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   elementsFromText,
   centerOf,
@@ -222,15 +222,13 @@ describe('centerOf', () => {
 });
 
 describe('a large export', () => {
-  // jsdom's XML reader is the slow part here (about 2.5 s for this file on
-  // the development machine; a browser's DOMParser reads the same text in a
-  // fraction of that, measured in the phase's record). The floor catches a
-  // reader that has gone quadratic, not the browser's speed.
-  // jsdom's XML reader takes about 2.5 s on this file, and five times that
-  // under coverage instrumentation on the CI runner (13.9 s measured), so
-  // the floor guards against a slide into minutes, not against a slow box.
+  // The floor catches a walk over the file that grows with the square of its
+  // size, as reading a live `children` list item by item does in jsdom (each
+  // read counts the list again: 5.5 s for this file, 39 s for twice it).
+  // jsdom's XML reading is done before the clock starts, so a busy machine
+  // slows only the walk, a few milliseconds when each element is read once.
   it(
-    'parses 5,000 nodes and 500 ways, and says how long it took',
+    'reads 5,000 nodes and 500 ways in under 2 s, the XML already parsed',
     { timeout: 60_000 },
     () => {
       const nodes = [];
@@ -248,15 +246,30 @@ describe('a large export', () => {
         );
       }
       const text = `<?xml version="1.0"?><osm version="0.6">${nodes.join('')}${ways.join('')}</osm>`;
-      const t0 = performance.now();
-      const elements = elementsFromText(text, 'big.osm');
-      const ms = performance.now() - t0;
+      const doc = new DOMParser().parseFromString(text, 'application/xml');
+      vi.stubGlobal(
+        'DOMParser',
+        class {
+          parseFromString() {
+            return doc;
+          }
+        }
+      );
+      let elements;
+      let ms;
+      try {
+        const t0 = performance.now();
+        elements = elementsFromText(text, 'big.osm');
+        ms = performance.now() - t0;
+      } finally {
+        vi.unstubAllGlobals();
+      }
       console.log(
         `large export: ${(text.length / 1024).toFixed(0)} KB, ${elements.length} elements in ${ms.toFixed(0)} ms`
       );
       expect(elements).toHaveLength(500);
       expect(elements[499].geometry).toHaveLength(10);
-      expect(ms).toBeLessThan(30000);
+      expect(ms).toBeLessThan(2000);
     }
   );
 });
