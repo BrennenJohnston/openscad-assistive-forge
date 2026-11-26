@@ -867,6 +867,29 @@ describe('a draft at a named scale', () => {
     );
   });
 
+  it('marks as the way, over a neighborhood, a street passing within 30 m of the address and no farther one', () => {
+    const hood = draftPlan({
+      elements: [
+        way(20, { highway: 'residential', name: 'Beside' }, [
+          [-400, 20],
+          [400, 20],
+        ]),
+        way(21, { highway: 'residential', name: 'Across town' }, [
+          [-400, 300],
+          [400, 300],
+        ]),
+      ],
+      center: CENTER,
+      scale: { ratio: 4000, rules: scaleChoice('neighborhood').rules },
+      landmarks: [],
+      size: { w: 480, h: 360 },
+    }).plan;
+    const marks = (id) =>
+      byId(hood, `osm-way-${id}`).map((f) => [f.street, !!f.way, f.on]);
+    expect(marks(20)).toEqual([[true, true, true]]);
+    expect(marks(21)).toEqual([[true, false, true]]);
+  });
+
   it('draws a street as one line over a few blocks where its curbs would fall 3 mm apart or closer', () => {
     const blocks = draftAt('blocks');
     // 6 m at 1:2000 is 3 mm: one line; 10 m is 5 mm: a pair.

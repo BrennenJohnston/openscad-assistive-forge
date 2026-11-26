@@ -19,6 +19,7 @@ import {
   wantsPoint,
   SYMBOLS_WARN,
   SYMBOLS_MAX,
+  NEAR_M,
 } from '../../src/js/tactile-map/detail-levels.js';
 import { draftPlan } from '../../src/js/tactile-map/plan-from-osm.js';
 import { pullTiles, TILE_URL } from '../../src/js/tactile-map/osm-tiles.js';
@@ -354,5 +355,89 @@ describe('the detail levels', () => {
         false
       );
     }
+  });
+
+  // The way's sidewalk along y 50 and another along y 150, in mm.
+  const onAt = (features, key, mmPerM = 1) =>
+    applyDetail(features, {
+      type: 'place',
+      switches: switchesFor('place', key),
+      scale: null,
+      size: { w: 200, h: 200 },
+      mmPerM,
+    })
+      .features.filter((f) => f.on)
+      .map((f) => f.id);
+
+  it('numbers a named place or a stop at Named places only within 30 m of the way it draws; Every building and Everything keep them all', () => {
+    const line = (y) => [
+      [0, y],
+      [200, y],
+    ];
+    const features = [
+      {
+        id: 'way',
+        class: 'walkway',
+        kind: 'line',
+        points: line(50),
+        way: true,
+      },
+      { id: 'side', class: 'walkway', kind: 'line', points: line(150) },
+      {
+        id: 'library',
+        class: 'landmark',
+        kind: 'point',
+        at: [100, 50 + NEAR_M],
+        name: 'Library',
+        public: true,
+      },
+      {
+        id: 'clinic',
+        class: 'landmark',
+        kind: 'point',
+        at: [100, 140],
+        name: 'Clinic',
+        public: true,
+      },
+      { id: 'stop', class: 'transit-stop', kind: 'point', at: [20, 40] },
+      { id: 'far-stop', class: 'transit-stop', kind: 'point', at: [20, 110] },
+    ];
+    expect(onAt(features, 'named')).toEqual(['way', 'library', 'stop']);
+    // A level drawing every sidewalk keeps every place, as it always did.
+    expect(onAt(features, 'buildings')).toEqual(features.map((f) => f.id));
+    expect(onAt(features, 'everything')).toEqual(features.map((f) => f.id));
+    // The reach is in meters: at half a millimeter a meter the library's
+    // 30 mm are 60 m, the stop's 10 mm are 20 m.
+    expect(onAt(features, 'named', 0.5)).toEqual(['way', 'stop']);
+  });
+
+  it('draws a street as one line at the first two levels only where it is part of the way, and every street from Every building up', () => {
+    const features = [
+      {
+        id: 'beside',
+        class: 'curb',
+        kind: 'line',
+        points: [
+          [0, 50],
+          [200, 50],
+        ],
+        street: true,
+        way: true,
+      },
+      {
+        id: 'across-town',
+        class: 'curb',
+        kind: 'line',
+        points: [
+          [0, 150],
+          [200, 150],
+        ],
+        street: true,
+      },
+    ];
+    expect(onAt(features, 'way')).toEqual(['beside']);
+    expect(onAt(features, 'named')).toEqual(['beside']);
+    expect(onAt(features, 'buildings')).toEqual(['beside', 'across-town']);
+    expect(onAt(features, 'everything')).toEqual(['beside', 'across-town']);
   });
 });

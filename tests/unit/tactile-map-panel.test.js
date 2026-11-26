@@ -2126,8 +2126,11 @@ describe('the map data row', () => {
       ['Every building', false],
       ['Everything in the data', false],
     ]);
+    expect(said(tiers()[0])).toBe(
+      'The sidewalks and crossings near the address, or over a neighborhood its streets, its door, the steps and You are here; nothing else.'
+    );
     expect(said(tiers()[1])).toBe(
-      'The way, the transit stops and named public places (a library, a school, a clinic) the scale has room for, and the buildings along the way.'
+      'The way, the transit stops and named public places (a library, a school, a clinic) near it that the scale has room for, and the buildings along it.'
     );
     expect(document.getElementById('tactileMapDetailCount').hidden).toBe(true);
     expect(make().textContent).toBe('Make the map');

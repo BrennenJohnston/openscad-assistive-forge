@@ -40,9 +40,10 @@ import { DEFAULT_SETTINGS } from './levels-svg.js';
 import { kindOf, isFurniture, isPublicPlace } from './feature-kinds.js';
 import { DESTINATION_CONE_MM } from './symbol-library.js';
 import { segmentsCross } from './map-labels.js';
+import { NEAR_M } from './detail-levels.js';
 
 /** A walkway with a point this close to the address starts on. */
-export const NEAR_M = 30;
+export { NEAR_M };
 /** A crossing whose end lies this close to an on walkway's end starts on. */
 export const TOUCH_MM = 2;
 /**
@@ -515,12 +516,17 @@ export function draftPlan({
           Number(t.width) > 0 ? Number(t.width) : ROAD_WIDTHS_M[highway];
         roads.push({ points, widthM });
         // A street whose curbs would fall too close to read as two draws as
-        // one line; over a whole neighborhood the streets are the map, on.
+        // one line; over a whole neighborhood the streets are the map, on,
+        // and one passing the address is the way, as a sidewalk is nearer.
         if (streetAsOneLine(widthM)) {
           addLine(id, 'curb', points, rules.streetsAsOneLine === true, name);
           if (rules.streetsAsOneLine === true) {
+            const way = nearCenter(points);
             for (const f of features) {
-              if (f.id === id || f.id.startsWith(`${id}-`)) f.street = true;
+              if (f.id === id || f.id.startsWith(`${id}-`)) {
+                f.street = true;
+                f.way = way;
+              }
             }
           }
           continue;

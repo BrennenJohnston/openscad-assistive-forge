@@ -1120,11 +1120,13 @@ test.describe('the draft map', () => {
     await expect(cafe.locator('.drawing-editor-class-select')).toHaveValue(
       'ignore'
     );
+    // A bus stop is named by its number. This one stands more than 30 m
+    // from the way, so Named places leaves it off, in the list.
     await expect(
       rowOf('Bus stop 29405: NE Pacific St & Montlake Blvd NE').locator(
         '.drawing-editor-class-select'
       )
-    ).toHaveValue('transit-stop');
+    ).toHaveValue('ignore');
     await expect(
       rowOf('Bench near Northeast San Juan Road').locator(
         '.drawing-editor-class-select'
@@ -1220,7 +1222,9 @@ test.describe('the draft map', () => {
     page,
   }) => {
     test.setTimeout(240_000);
-    const status = await makeFerryDraft(page);
+    // Every building, where the bus stop is on: it stands beyond the 30 m
+    // Named places keeps to.
+    const status = await makeFerryDraft(page, { detail: 'buildings' });
     await expect(page.locator('#tactileMapSummary')).toContainText(
       'The key takes'
     );
@@ -2096,7 +2100,9 @@ test.describe("the draft keeps the editor's changes", () => {
     page,
   }) => {
     test.setTimeout(300_000);
-    await makeFerryDraft(page);
+    // Every building, where the bus stop is on: it stands beyond the 30 m
+    // Named places keeps to.
+    await makeFerryDraft(page, { detail: 'buildings' });
     const editor = page.locator('#drawingEditorSurface .drawing-editor').first();
     const selects = page.locator(
       '#drawingEditorSurface .drawing-editor-class-select'
@@ -2154,13 +2160,13 @@ test.describe("the draft keeps the editor's changes", () => {
     expect(await onOf('transit-stop')).not.toContain(off[0]);
     await close();
 
-    // Every building drafts again: more on, the stop still off.
-    const buildings = (await onOf('area')).length;
+    // Everything drafts again: more on, the stop still off.
+    const points = (await onOf('landmark')).length;
     await goToStep(page, 3);
-    await page.locator('#tactileMapDetail-buildings').check();
+    await page.locator('#tactileMapDetail-everything').check();
     await reopen();
     await close();
-    expect((await onOf('area')).length).toBeGreaterThan(buildings);
+    expect((await onOf('landmark')).length).toBeGreaterThan(points);
     expect(await onOf('transit-stop')).not.toContain(off[0]);
   });
 });

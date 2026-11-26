@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gets a column of its own beside the map, and nothing moves for it.
 - A tactile map's zip of plates is compressed, about a quarter of its old
   size; every file in it is the same as before.
+- A place map's Named places level numbers only the places and stops within
+  30 m of a path it draws, and over a neighborhood its first two levels draw
+  the streets passing the address rather than every street.
 
 ### Fixed
 
