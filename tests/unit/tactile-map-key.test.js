@@ -239,6 +239,15 @@ describe('keyFor', () => {
     );
     expect(keyFor(plan).entries).toHaveLength(12);
   });
+
+  it('says the transit stop as an outlined rectangle at the size it prints', () => {
+    const plan = emptyPlan(400, 300);
+    plan.features.push(point('s', 'transit-stop', [100, 100]));
+    const stop = keyFor(plan).entries.find((e) =>
+      e.classes.includes('transit-stop')
+    );
+    expect(stop.shape).toBe('an outlined rectangle 10 by 5 mm');
+  });
 });
 
 describe('the key as words', () => {

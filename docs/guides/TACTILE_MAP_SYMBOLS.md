@@ -29,7 +29,7 @@ Each kind has a form of its own, so no two kinds feel alike. They come from a pr
 | Raised curb      | A curb a wheel cannot take                  | A comb: a bar with three teeth                                         |
 | You are here     | The reader's own place                      | A disc 10 mm across with a 4 mm dot in its center that stands higher   |
 | Destination cone | The address you typed, or where a walk ends | A cone 4.9 mm across at its foot and 4.9 mm tall from the plate's underside |
-| Transit stop     | A bus, train or tram stop                   | An outlined square holding a T                                         |
+| Transit stop     | A bus, train or tram stop                   | An outlined rectangle, twice as long as it is high: a bus seen from above |
 | Uphill chevron   | The uphill direction of a steep sidewalk    | Three chevrons pointing uphill, 1.1 mm line; along a line, one every 10 mm |
 
 ## The University of Oregon set

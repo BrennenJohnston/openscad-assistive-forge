@@ -75,7 +75,7 @@ const SHAPE_WORDS = Object.freeze({
   'curb-ramp': (mm) => `three rising bars, ${mm} mm`,
   'raised-curb': (mm) => `a comb, ${mm} mm`,
   circle: (mm) => `a disc ${mm} mm across`,
-  'transit-stop': (mm) => `an outlined square with a T, ${mm} mm`,
+  'transit-stop': (mm) => `an outlined rectangle ${mm} by ${say(mm / 2)} mm`,
 });
 
 const LINE_WORDS = Object.freeze({

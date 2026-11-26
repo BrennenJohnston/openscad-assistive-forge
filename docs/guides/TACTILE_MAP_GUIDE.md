@@ -125,7 +125,7 @@ Every map is a plan: a list of features in millimeters, each with a class and a 
 | Landmark                   | a named place: a cafe, a clinic, a garage | symbol | a solid diamond, 10 mm | BANA 2022 8.6.5; Jehoel 2009                                        |
 | Destination                | the address you typed, or a walk's end | symbol | a cone 4.9 mm tall and 4.9 mm across, flat at the top, standing above everything else | Touch Mapper's address marker (skarkkai/touch-mapper, AGPL-3.0)     |
 | You are here               | the reader's place, placed by you      | symbol | a disc, 10 mm, with a 4 mm center dot one symbol step higher    | BANA 2022 8.5.6; ISO 19028 6.5.1                                    |
-| Transit stop               | a bus, train or tram stop              | symbol | an outlined square with a T, 10 mm | BANA 2022 8.5.4                                                     |
+| Transit stop               | a bus, train or tram stop              | symbol | an outlined rectangle 10 by 5 mm   | BANA 2022 8.5.4                                                     |
 | Curb ramp                  | a lowered or flush curb, no edge       | symbol | three rising bars, 10 mm | OpenSidewalks curbs; Jehoel 2009                                    |
 | Raised curb                | a curb a wheel cannot take             | symbol | a comb, 10 mm | OpenSidewalks curbs; Jehoel 2009                                    |
 | Text                       | a word you drew                        | symbol | the letters as drawn                                             | ADA 703.2                                                           |

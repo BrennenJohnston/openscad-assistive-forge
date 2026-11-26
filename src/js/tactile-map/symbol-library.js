@@ -160,10 +160,10 @@ export const BUILT_IN_SYMBOLS = [
     key: 'transit-stop',
     name: 'Transit stop',
     pathData:
-      'M 1 0 L 0 0 L 0 1 L 1 1 Z M 0.11 0.11 L 0.89 0.11 L 0.89 0.89 L 0.11 0.89 Z M 0.555 0.365 L 0.73 0.365 L 0.73 0.255 L 0.27 0.255 L 0.27 0.365 L 0.445 0.365 L 0.445 0.76 L 0.555 0.76 Z',
+      'M 0 0.25 L 1 0.25 L 1 0.75 L 0 0.75 Z M 0.12 0.37 L 0.12 0.63 L 0.88 0.63 L 0.88 0.37 Z',
     minSizeMm: SYMBOL_MIN_SIZE_MM,
     source:
-      'An outlined square holding a T, a frame with a letter inside, from the ticket machine on my SeaTac key',
+      'An outlined rectangle twice as long as it is high, a bus seen from above: the clearest of three forms I felt on a printed plate, and unlike the square holding a T on my SeaTac key, which is its ticket machine',
   },
   {
     key: 'chevron-uphill',
