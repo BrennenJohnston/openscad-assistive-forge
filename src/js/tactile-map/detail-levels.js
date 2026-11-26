@@ -34,6 +34,11 @@ export const SYMBOLS_WARN = 10;
 export const SYMBOLS_MAX = 15;
 /** A building this close to the way, in meters, stands along it. */
 export const ALONG_M = 10;
+/**
+ * The reach, in meters, from the address to a sidewalk that starts on, and
+ * from the way a level draws to a place or stop it numbers.
+ */
+export const NEAR_M = 30;
 
 /** The switches and the choices each takes, in the order they are offered. */
 export const SWITCHES = Object.freeze({
@@ -114,8 +119,8 @@ export const DETAIL_LEVELS = Object.freeze({
       'Everything in the data',
     ],
     [
-      'The sidewalks and crossings near the address, its door, the steps and You are here; nothing else.',
-      'The way, the transit stops and named public places (a library, a school, a clinic) the scale has room for, and the buildings along the way.',
+      'The sidewalks and crossings near the address, or over a neighborhood its streets, its door, the steps and You are here; nothing else.',
+      'The way, the transit stops and named public places (a library, a school, a clinic) near it that the scale has room for, and the buildings along it.',
       'Every sidewalk, crossing, building and entrance, and the named public places.',
       'Every feature in the data, for you to turn off what a reader does not need.',
     ],
@@ -183,6 +188,19 @@ function nearLines(ring, lines, reach) {
   }
   return false;
 }
+
+/** Whether a point comes within `reach` mm of any of the lines. */
+function pointNearLines(p, lines, reach) {
+  for (const pts of lines) {
+    for (let i = 1; i < pts.length; i += 1) {
+      if (toSegment(p, pts[i - 1], pts[i]) <= reach) return true;
+    }
+  }
+  return false;
+}
+
+/** The lines a reader follows: a sidewalk, a crossing, a street drawn as one. */
+const PATHS = new Set(['walkway', 'crossing', 'curb']);
 
 /**
  * Whether a tier's switches want a point of a named-place group (a
@@ -296,7 +314,8 @@ export function applyDetail(features, { switches, scale, mmPerM }) {
       case 'raised-curb':
         return sw.curbs === 'on' && !!f.roomy;
       case 'curb':
-        return !!f.street;
+        // A street drawn as one line is a path: the way's, or every one.
+        return !!f.street && (sw.sidewalks === 'all' || !!f.way);
       default:
         // A route, a steep run, words, channels: not the levels' to switch.
         return f.class === 'route' ||
@@ -309,6 +328,29 @@ export function applyDetail(features, { switches, scale, mmPerM }) {
   };
 
   const out = features.map((f) => ({ ...f, on: decide(f) }));
+  // Where a level draws the way alone, a named place or a stop it numbers is
+  // one the way brings a reader to; a level drawing every sidewalk keeps
+  // every one, as do All points and Everything.
+  if (!sw.everything && sw.sidewalks !== 'all') {
+    const drawn = out
+      .filter(
+        (f) =>
+          f.on &&
+          f.kind === 'line' &&
+          PATHS.has(f.class) &&
+          Array.isArray(f.points)
+      )
+      .map((f) => f.points);
+    const near = NEAR_M * (mmPerM || 1);
+    for (const f of out) {
+      const counted =
+        (f.class === 'landmark' && sw.landmarks === 'named') ||
+        f.class === 'transit-stop';
+      if (f.on && counted && Array.isArray(f.at)) {
+        f.on = pointNearLines(f.at, drawn, near);
+      }
+    }
+  }
   return { features: out, ...judgeSymbols(out, sw) };
 }
 
