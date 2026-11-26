@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A place map's Named places level numbers only the places and stops within
   30 m of a path it draws, and over a neighborhood its first two levels draw
   the streets passing the address rather than every street.
+- A tactile map's transit stop is an outlined rectangle 10 by 5 mm, a bus
+  seen from above, in place of the square holding a T.
 
 ### Fixed
 

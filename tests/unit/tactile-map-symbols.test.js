@@ -109,6 +109,23 @@ describe('the built-in symbols', () => {
     }
   });
 
+  it('draw the transit stop as an outlined rectangle 10 by 5 mm at 10 mm, its line 1.2 mm, the form felt on the printed plate', () => {
+    const stop = BUILT_IN_SYMBOLS.find((s) => s.key === 'transit-stop');
+    const box = (ring) => [
+      Math.min(...ring.map((p) => p.x)),
+      Math.max(...ring.map((p) => p.x)),
+      Math.min(...ring.map((p) => p.y)),
+      Math.max(...ring.map((p) => p.y)),
+    ];
+    expect(ringsFromPathData(stop.pathData).map(box)).toEqual([
+      [0, 1, 0.25, 0.75],
+      [0.12, 0.88, 0.37, 0.63],
+    ]);
+    const line = thinnestFeatureMm(stop.pathData, 10);
+    expect(line).toBeGreaterThan(1.1);
+    expect(line).toBeLessThan(1.3);
+  });
+
   it('stay inside the unit box and the landmark diamond keeps its area', () => {
     for (const s of BUILT_IN_SYMBOLS) {
       for (const ring of ringsFromPathData(s.pathData)) {

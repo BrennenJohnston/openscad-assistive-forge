@@ -259,7 +259,8 @@ export const MAP_CLASSES = Object.freeze([
     kind: 'point',
     level: 2,
     symbolKey: 'transit-stop',
-    source: 'An outlined square with a T, from my SeaTac key; BANA 2022 8.5.4',
+    source:
+      'An outlined rectangle, a bus seen from above, chosen by touch on a printed plate; BANA 2022 8.5.4',
     osm: [
       {
         tag: 'public_transport',
