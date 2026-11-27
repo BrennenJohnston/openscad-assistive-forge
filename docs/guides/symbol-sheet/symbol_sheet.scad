@@ -18,7 +18,7 @@ include <symbol_sheet_data.scad>
 
 /* [Set] */
 // Which set to print.
-symbol_set = "University of Oregon symbols"; // [Forge basic shapes, University of Oregon symbols]
+symbol_set = "University of Oregon symbols"; // [Forge basic shapes, University of Oregon symbols, SeaTac station symbols]
 
 /* [Heights] */
 // Thickness of the plate under the symbols (mm); printed whole, so 1.2 at the least.

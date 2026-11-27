@@ -1,11 +1,14 @@
 /**
  * The tactile map's symbols: the basic shapes drawn from published sources,
  * the University of Oregon's published set (symbol-sets/oregon-2012.js),
- * and a door for a set of your own.
+ * my SeaTac station set (symbol-sets/seatac-station.js), and a door for a
+ * set of your own.
  *
  * Each symbol is filled path data in a unit box (0 to 1, x right, y down)
  * with no strokes, so it prints as a solid raised shape at any size. The
- * levels builder scales it to the symbol size and centers it on the point.
+ * levels builder scales it to the symbol size and centers it on the point;
+ * a symbol with a size of its own (`sizeMm`: the station symbols, at the
+ * sizes I printed and felt) keeps that size in every set.
  * The sizes follow the tactile graphics guidelines: a point symbol is 6 mm
  * or more across and 3 mm from anything else (BANA 2022, 3.4.3.11), and no
  * part of it is thinner than 1.0 mm at 10 mm, which is what a 0.4 mm nozzle
@@ -32,6 +35,8 @@ import {
 import { lineWidthPercentiles } from '../ink-extraction.js';
 import { MAP_CLASSES } from './map-classes.js';
 import { OREGON_2012 } from './symbol-sets/oregon-2012.js';
+import { SEATAC_STATION } from './symbol-sets/seatac-station.js';
+import { STATION_SYMBOLS } from './symbol-sets/station-symbols.js';
 
 /** The smallest a point symbol may be, across (BANA 2022, 3.4.3.11). */
 export const SYMBOL_MIN_SIZE_MM = 6;
@@ -174,6 +179,7 @@ export const BUILT_IN_SYMBOLS = [
     source:
       'Three chevrons pointing uphill, from the escalator on my SeaTac key, scaled to 10 mm with the line at 1.1 mm; drawn along a Steep sidewalk',
   },
+  ...STATION_SYMBOLS,
 ];
 
 /** A number for a sentence: one decimal at most, no trailing zero. */
@@ -381,12 +387,14 @@ export const BUILT_IN_SETS = [
     symbols: BUILT_IN_SYMBOLS,
   },
   OREGON_2012,
+  SEATAC_STATION,
 ];
 
 /**
  * A set's symbols as the library the levels builder reads: every basic
  * shape, with the set's own shape put under the key each class it covers
- * asks for. Two classes asking for one key share the set's shape.
+ * asks for, marked `fromSet`. Two classes asking for one key share the
+ * set's shape.
  *
  * @param {string} setKey
  * @returns {Array<object>}
@@ -405,7 +413,12 @@ export function librarySymbolsFor(setKey) {
       name: shape.name,
       pathData: shape.pathData,
       minSizeMm: shape.minSizeMm,
+      ...(shape.sizeMm !== undefined ? { sizeMm: shape.sizeMm } : {}),
+      ...(shape.basicForm ? { basicForm: true } : {}),
       source: shape.source,
+      // The set's own shape, even where it is the basic one: the key does
+      // not call it borrowed.
+      fromSet: true,
     });
   }
   return [...byKey.values()];

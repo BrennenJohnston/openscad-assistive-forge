@@ -15,7 +15,7 @@
  *
  * @license GPL-3.0-or-later
  */
-import { MAP_CLASSES } from './map-classes.js';
+import { MAP_CLASSES, mapClass } from './map-classes.js';
 import { featureNames } from './feature-names.js';
 import { numberedThings } from './map-numbers.js';
 import {
@@ -23,7 +23,12 @@ import {
   activeSet,
   BUILT_IN_SYMBOLS,
 } from './symbol-library.js';
-import { BUILTIN_SYMBOLS, DEFAULT_SETTINGS, symbolMap } from './levels-svg.js';
+import {
+  BUILTIN_SYMBOLS,
+  DEFAULT_SETTINGS,
+  pointSizeMm,
+  symbolMap,
+} from './levels-svg.js';
 
 /**
  * The most braille cells a name takes on tape beside a point's symbol: 12.7
@@ -38,8 +43,11 @@ const POINT_ORDER = [
   'you-are-here',
   'entrance',
   'stairs',
+  'escalator',
   'elevator-up',
   'elevator-down',
+  'turnstile',
+  'ticket-machine',
   'crossing',
   'transit-stop',
   'landmark',
@@ -53,6 +61,9 @@ const LINE_ORDER = [
   'route',
   'steep',
   'traffic-island',
+  'platform-edge',
+  'fare-zone',
+  'shoreline',
   'curb',
   'track',
   'wall',
@@ -76,6 +87,9 @@ const SHAPE_WORDS = Object.freeze({
   'raised-curb': (mm) => `a comb, ${mm} mm`,
   circle: (mm) => `a disc ${mm} mm across`,
   'transit-stop': (mm) => `an outlined rectangle ${mm} by ${say(mm / 2)} mm`,
+  turnstile: (mm) => `a bar ${say(mm / 2)} by ${mm} mm`,
+  escalator: (mm) => `three chevrons ${mm} mm long, pointing the way it runs`,
+  'ticket-machine': (mm) => `an outlined square ${mm} mm holding a T`,
 });
 
 const LINE_WORDS = Object.freeze({
@@ -88,6 +102,24 @@ const LINE_WORDS = Object.freeze({
 });
 
 const say = (n) => String(Math.round(n * 10) / 10);
+
+/**
+ * A line row's words: its style at its width, and its level. A band or a
+ * chain carries marks one level up, and says both; a class with dashes of
+ * its own (the shoreline side) gives their length. A11Y.
+ */
+function lineShape(style, width, level, def) {
+  const w = say(width);
+  const low = LEVEL_WORDS[level] || 'low';
+  const up = LEVEL_WORDS[level + 1] || 'high';
+  if (style === 'bars')
+    return `a band ${w} mm wide with bars across it, the band ${low} and the bars ${up}`;
+  if (style === 'beads')
+    return `a chain of beads ${w} mm wide, a block on each, the beads ${low} and the blocks ${up}`;
+  if (style === 'dashed' && def?.dashMm !== undefined)
+    return `short dashes ${w} mm wide, ${say(def.dashMm)} mm long and ${say(def.dashGapMm ?? def.dashMm)} mm apart, ${low}`;
+  return `${(LINE_WORDS[style] || LINE_WORDS.solid)(w)}, ${low}`;
+}
 
 /** The key row of a crossing drawn dashed, one with no marking. A11Y. */
 const UNMARKED_CROSSING = 'Crossing, unmarked';
@@ -155,7 +187,7 @@ export function keyFor(plan, settings = {}) {
       sizeMm: 0,
     };
     if (!entry.classes.includes(f.class)) entry.classes.push(f.class);
-    entry.sizeMm = Math.max(entry.sizeMm, f.size ?? s.symbolSizeMm);
+    entry.sizeMm = Math.max(entry.sizeMm, pointSizeMm(f, s));
     // The destination's row carries the address it marks.
     if (f.class === 'destination' && f.name) entry.address = f.name;
     bySymbol.set(key, entry);
@@ -163,12 +195,12 @@ export function keyFor(plan, settings = {}) {
   const points = [...bySymbol.values()].map((e) => {
     e.classes.sort((a, b) => rank(POINT_ORDER, a) - rank(POINT_ORDER, b));
     const shape = shapeOf(e.symbolKey);
-    // The basic shape in words; a set's or a file's shape by its own name.
-    const basic =
-      SHAPE_WORDS[e.symbolKey] &&
-      shape?.pathData === basicShapes[e.symbolKey]?.pathData;
+    // The basic shape in words, and a set's shape drawn in a basic form at
+    // its own size; any other set's or file's shape by its own name.
+    const same = shape?.pathData === basicShapes[e.symbolKey]?.pathData;
+    const basic = SHAPE_WORDS[e.symbolKey] && (same || shape?.basicForm);
     // A built-in set with no shape for a class keeps the basic one, and says so.
-    const borrowed = basic && otherSet && !shape?.solid;
+    const borrowed = same && otherSet && !shape?.solid && !shape?.fromSet;
     return {
       ...e,
       name:
@@ -211,7 +243,7 @@ export function keyFor(plan, settings = {}) {
         style,
         widthMm,
         level,
-        shape: `${(LINE_WORDS[style] || LINE_WORDS.solid)(say(widthMm))}, ${LEVEL_WORDS[level] || 'low'}${pause}`,
+        shape: `${lineShape(style, widthMm, level, mapClass(f.class))}${pause}`,
       });
     }
   }

@@ -35,6 +35,7 @@ import {
   settingsForSet,
 } from '../../src/js/tactile-map/levels-svg.js';
 import { ringsFromPathData } from '../../src/js/ring-geometry.js';
+import { emptyPlan } from '../../src/js/tactile-map/plan.js';
 import {
   sheetLayout,
   symbolSheetData,
@@ -158,10 +159,11 @@ describe('the University of Oregon set', () => {
 });
 
 describe('symbol sets in the library', () => {
-  it('lists the basic shapes first, then the Oregon set', () => {
+  it('lists the basic shapes first, then the Oregon set, then my SeaTac station set', () => {
     expect(BUILT_IN_SETS.map((s) => [s.key, s.name])).toEqual([
       ['forge-basic', 'Forge basic shapes'],
       ['oregon-2012', 'University of Oregon symbols'],
+      ['seatac-station', 'SeaTac station symbols'],
     ]);
     expect(BUILT_IN_SETS[0].symbols).toBe(BUILT_IN_SYMBOLS);
     expect(BUILT_IN_SETS[0].symbolSizeMm).toBe(10);
@@ -303,8 +305,9 @@ describe('the symbol sheet', () => {
       expect(layout.plateH).toBeLessThanOrEqual(256);
       expect(layout.cells).toHaveLength(set.symbols.length);
       for (const c of layout.cells) {
+        // A symbol with a size of its own prints at it on every sheet.
         expect(c.size).toBe(
-          Math.max(c.symbol.minSizeMm ?? 0, set.symbolSizeMm)
+          c.symbol.sizeMm ?? Math.max(c.symbol.minSizeMm ?? 0, set.symbolSizeMm)
         );
       }
     }
@@ -334,5 +337,96 @@ describe("the symbols guide's University of Oregon table", () => {
     expect(basic).toMatch(/street furniture/i);
     expect(flexible).toMatch(/^\| Landmark /);
     expect(flexible).not.toMatch(/furniture/i);
+  });
+});
+
+describe('the SeaTac station set', () => {
+  const set = () => BUILT_IN_SETS.find((x) => x.key === 'seatac-station');
+  const extent = (symbol) => {
+    const pts = ringsFromPathData(symbol.pathData).flat();
+    return [
+      (Math.max(...pts.map((p) => p.x)) - Math.min(...pts.map((p) => p.x))) *
+        symbol.sizeMm,
+      (Math.max(...pts.map((p) => p.y)) - Math.min(...pts.map((p) => p.y))) *
+        symbol.sizeMm,
+    ];
+  };
+
+  it("is the third set, at my key's 16 mm, with its stairs and elevators at the sizes I printed and the three station symbols", () => {
+    expect(BUILT_IN_SETS.map((x) => x.key)).toEqual([
+      'forge-basic',
+      'oregon-2012',
+      'seatac-station',
+    ]);
+    expect(set().name).toBe('SeaTac station symbols');
+    expect(set().symbolSizeMm).toBe(16);
+    expect(set().symbols.map((x) => x.key)).toEqual([
+      'stairs',
+      'elevator-up',
+      'elevator-down',
+      'turnstile',
+      'escalator',
+      'ticket-machine',
+    ]);
+    const points = MAP_CLASSES.filter((c) => c.kind === 'point').map(
+      (c) => c.key
+    );
+    expect(Object.keys(set().classSymbols).sort()).toEqual(
+      [...points, 'crossing'].sort()
+    );
+    for (const key of [
+      'stairs',
+      'elevator-up',
+      'elevator-down',
+      'turnstile',
+      'escalator',
+      'ticket-machine',
+    ]) {
+      expect(set().classSymbols[key], key).toBe(key);
+    }
+    const byKey = Object.fromEntries(set().symbols.map((x) => [x.key, x]));
+    // The zigzag: 17.07 by 3.95 mm from the drawing's corner points, its
+    // line 1.21 mm with sharp corners.
+    const [sw, sh] = extent(byKey.stairs);
+    expect(sw).toBeCloseTo(17.07, 1);
+    expect(sh).toBeCloseTo(3.95, 1);
+    const line = thinnestFeatureMm(byKey.stairs.pathData, byKey.stairs.sizeMm);
+    expect(line).toBeGreaterThan(1.1);
+    expect(line).toBeLessThan(1.35);
+    // The triangles: 18.41 mm a side, 15.95 tall, an outline 2.2 mm.
+    for (const key of ['elevator-up', 'elevator-down']) {
+      const [w, h] = extent(byKey[key]);
+      expect(w, key).toBeCloseTo(18.41, 1);
+      expect(h, key).toBeCloseTo(15.95, 1);
+    }
+    for (const key of ['turnstile', 'escalator', 'ticket-machine']) {
+      expect(byKey[key], key).toBe(BUILT_IN_SYMBOLS.find((x) => x.key === key));
+    }
+  });
+
+  it('draws a station map at those sizes: stairs 17 mm, an elevator 18.4 mm, a landmark at the set size, a turnstile still 2 by 4', () => {
+    const s = settingsForSet('seatac-station');
+    expect(s.symbolSizeMm).toBe(16);
+    const sizeOf = (cls) => {
+      const plan = emptyPlan(100, 80);
+      plan.features.push({
+        id: cls,
+        class: cls,
+        kind: 'point',
+        at: [50, 40],
+        on: true,
+      });
+      const pts = buildLevelRings(plan, s).rings.level2.flat();
+      return [
+        Math.max(...pts.map((p) => p.x)) - Math.min(...pts.map((p) => p.x)),
+        Math.max(...pts.map((p) => p.y)) - Math.min(...pts.map((p) => p.y)),
+      ];
+    };
+    expect(sizeOf('stairs')[0]).toBeCloseTo(17.07, 1);
+    expect(sizeOf('elevator-up')[0]).toBeCloseTo(18.41, 1);
+    expect(sizeOf('landmark')[0]).toBeCloseTo(16, 1);
+    const [tw, th] = sizeOf('turnstile');
+    expect(tw).toBeCloseTo(2, 1);
+    expect(th).toBeCloseTo(4, 1);
   });
 });

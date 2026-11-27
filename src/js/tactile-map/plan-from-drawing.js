@@ -27,7 +27,12 @@
  * - a POINT class: a point at the shape's center, with the class's symbol
  *   drawn there by the levels builder; the drawn shape itself is dropped.
  *   The bars or strokes of one drawn symbol, within SYMBOL_MERGE_MM of
- *   each other, are one point.
+ *   each other, are one point, unless the class makes a point of each
+ *   shape (a turnstile: each bar of a bank is a gate). A class that turns
+ *   (`turn`) gives the point the angle of what was drawn: a turnstile lies
+ *   along its bar's long side, an escalator points the way its chevrons
+ *   do, read from where the strokes' own center sits against the center of
+ *   their outline: an open chevron's outline is fuller on its open side.
  * - Ignore: dropped.
  *
  * The scale is `unitsPerMm`: how many drawing units make a millimeter,
@@ -666,6 +671,105 @@ function chainDots(centers) {
   return chains;
 }
 
+/** The angle in degrees, y down, of the long axis of some rings, or null for a round shape. */
+function longAxisDegrees(rings) {
+  let area = 0;
+  let sx = 0;
+  let sy = 0;
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+  for (const ring of rings) {
+    const sign = areaOf(ring) < 0 ? -1 : 1;
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i];
+      const b = ring[(i + 1) % ring.length];
+      const cross = (a.x * b.y - b.x * a.y) * sign;
+      area += cross / 2;
+      sx += ((a.x + b.x) * cross) / 6;
+      sy += ((a.y + b.y) * cross) / 6;
+      sxx += ((a.x * a.x + a.x * b.x + b.x * b.x) * cross) / 12;
+      syy += ((a.y * a.y + a.y * b.y + b.y * b.y) * cross) / 12;
+      sxy +=
+        ((a.x * b.y + 2 * a.x * a.y + 2 * b.x * b.y + b.x * a.y) * cross) / 24;
+    }
+  }
+  if (!(area > 0)) return null;
+  const cx = sx / area;
+  const cy = sy / area;
+  const vxx = sxx - area * cx * cx;
+  const vyy = syy - area * cy * cy;
+  const vxy = sxy - area * cx * cy;
+  if (Math.hypot(vxx - vyy, 2 * vxy) < 1e-6 * (vxx + vyy)) return null;
+  return (0.5 * Math.atan2(2 * vxy, vxx - vyy) * 180) / Math.PI;
+}
+
+/** The convex hull of some points, by Andrew's monotone chain. */
+function hullOf(points) {
+  const pts = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+  if (pts.length < 3) return pts;
+  const cross = (o, a, b) =>
+    (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower = [];
+  for (const p of pts) {
+    while (
+      lower.length >= 2 &&
+      cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0
+    )
+      lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (
+      upper.length >= 2 &&
+      cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0
+    )
+      upper.pop();
+    upper.push(p);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+/** The way some rings point, in degrees y down, or null: from their outline's center to their own. */
+function pointingDegrees(rings) {
+  let area = 0;
+  let x = 0;
+  let y = 0;
+  for (const ring of rings) {
+    const a = Math.abs(areaOf(ring));
+    const c = centroid(ring);
+    area += a;
+    x += c.x * a;
+    y += c.y * a;
+  }
+  if (!(area > 0)) return null;
+  const hull = centroid(hullOf(rings.flat()));
+  const dx = x / area - hull.x;
+  const dy = y / area - hull.y;
+  if (Math.hypot(dx, dy) < 1e-6) return null;
+  return (Math.atan2(dy, dx) * 180) / Math.PI;
+}
+
+/** A point class's angle for the rings drawn, or null when it does not turn. */
+function turnOf(def, rings) {
+  if (def?.turn === 'axis') {
+    // The symbol's long side stands up its box: turn it from there.
+    const axis = longAxisDegrees(rings);
+    if (axis === null) return null;
+    let a = axis - 90;
+    while (a <= -90) a += 180;
+    while (a > 90) a -= 180;
+    return Math.round(a * 10) / 10;
+  }
+  if (def?.turn === 'direction') {
+    const a = pointingDegrees(rings);
+    return a === null ? null : Math.round(a * 10) / 10;
+  }
+  return null;
+}
+
 /** Groups of indexes whose centers chain within `withinMm` of each other. */
 function clusterWithin(centers, withinMm) {
   const n = centers.length;
@@ -930,15 +1034,23 @@ export function planFromRegions({
   }
 
   for (const [cls, list] of points) {
-    for (const group of clusterWithin(
-      list.map((p) => p.at),
-      SYMBOL_MERGE_MM
-    )) {
+    const def = mapClass(cls);
+    const groups = def?.eachShape
+      ? list.map((_, i) => [i])
+      : clusterWithin(
+          list.map((p) => p.at),
+          SYMBOL_MERGE_MM
+        );
+    for (const group of groups) {
       const members = group
         .map((i) => list[i])
         .sort((a, b) => a.e.region.index - b.e.region.index);
       const x = members.reduce((sum, m) => sum + m.at[0], 0) / members.length;
       const y = members.reduce((sum, m) => sum + m.at[1], 0) / members.length;
+      const angle = turnOf(
+        def,
+        members.map((m) => m.e.mm)
+      );
       plan.features.push({
         id: idFor(members[0].e.region),
         class: cls,
@@ -946,6 +1058,7 @@ export function planFromRegions({
         name: nameOf(members[0].e.region),
         ...madeName(members[0].e.region),
         at: [round2(x), round2(y)],
+        ...(angle === null ? {} : { angle }),
         on: true,
       });
     }

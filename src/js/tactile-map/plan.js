@@ -16,13 +16,14 @@
  *   { id, class, kind, on, name? }
  *   kind 'line':    points [[x, y], ...] (two or more); width? (mm, instead
  *                   of the class's); style? ('solid', 'dotted', 'dashed',
- *                   'double', 'ticks')
+ *                   'double', 'ticks', 'chevrons', 'bars', 'beads')
  *   kind 'area':    ring [[x, y], ...] (three or more); holes? (rings of
  *                   three or more points inside the ring, left open: a
  *                   courtyard, a slot, a letter's counter); texture? (a
  *                   name; none by default)
  *   kind 'point':   at [x, y] (the symbol's center); symbol? (a symbol key
- *                   instead of the class's); size? (mm)
+ *                   instead of the class's); size? (mm); angle? (degrees,
+ *                   y down: the way the symbol's right-hand side faces)
  *   kind 'text':    at [x, y] (the top left of the letters); text; size?
  *                   (the capital height in mm, 16 by default)
  *   kind 'channel': at [x, y] (the center of the tape strip); length (mm);

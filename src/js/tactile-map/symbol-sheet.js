@@ -50,7 +50,7 @@ export function sheetLayout(set) {
   const cells = set.symbols.map((s, i) => ({
     number: i + 1,
     name: s.name,
-    size: Math.max(s.minSizeMm ?? 0, set.symbolSizeMm),
+    size: s.sizeMm ?? Math.max(s.minSizeMm ?? 0, set.symbolSizeMm),
     symbol: s,
   }));
   const rows = [];

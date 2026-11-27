@@ -324,3 +324,68 @@ describe('the key with a published set in use', () => {
     ).toBe('three rising bars, 10 mm');
   });
 });
+
+describe('the station rows', () => {
+  afterEach(() => setActiveSet('forge-basic'));
+  const station = () => {
+    const plan = emptyPlan(400, 300);
+    [
+      'turnstile',
+      'escalator',
+      'ticket-machine',
+      'stairs',
+      'elevator-up',
+      'landmark',
+    ].forEach((cls, i) =>
+      plan.features.push(point(`p${i}`, cls, [30 + i * 40, 100]))
+    );
+    plan.features.push(
+      line('s', 'shoreline'),
+      line('f', 'fare-zone'),
+      line('e', 'platform-edge')
+    );
+    return plan;
+  };
+  const rows = (key) =>
+    Object.fromEntries(key.entries.map((e) => [e.name, e.shape]));
+
+  it('says each station class in its own words, at the size it prints', () => {
+    const r = rows(keyFor(station()));
+    expect(r['Shoreline side']).toBe(
+      'short dashes 1.5 mm wide, 3 mm long and 3 mm apart, low'
+    );
+    expect(r['Paid fare zone']).toBe(
+      'a band 5 mm wide with bars across it, the band low and the bars middle'
+    );
+    expect(r['Platform edge']).toBe(
+      'a chain of beads 2.4 mm wide, a block on each, the beads low and the blocks middle'
+    );
+    expect(r.Turnstile).toBe('a bar 2 by 4 mm');
+    expect(r.Escalator).toBe(
+      'three chevrons 18.5 mm long, pointing the way it runs'
+    );
+    expect(r['Ticket machine']).toBe('an outlined square 15.8 mm holding a T');
+    expect(r.Stairs).toBe('a zigzag, 10 mm');
+  });
+
+  it("keeps the basic words for my SeaTac set's stairs and elevators at their sizes, and calls basic only the shapes the set borrows", () => {
+    setActiveSet('seatac-station');
+    const r = rows(keyFor(station(), settingsForSet('seatac-station')));
+    expect(r.Stairs).toBe('a zigzag, 17.1 mm');
+    expect(r['Elevator up']).toBe('an outlined triangle pointing up, 18.4 mm');
+    expect(r.Turnstile).toBe('a bar 2 by 4 mm');
+    expect(r.Escalator).toBe(
+      'three chevrons 18.5 mm long, pointing the way it runs'
+    );
+    expect(r.Landmark).toBe('a solid diamond, 16 mm, basic shape');
+  });
+
+  it("says a station symbol is the basic shape in the Oregon set, which has none of its own, and leaves Oregon's walkway words as they were", () => {
+    setActiveSet('oregon-2012');
+    const plan = station();
+    plan.features.push(line('w', 'walkway'));
+    const r = rows(keyFor(plan, settingsForSet('oregon-2012')));
+    expect(r.Turnstile).toBe('a bar 2 by 4 mm, basic shape');
+    expect(r.Walkway).toMatch(/^a dashed line /);
+  });
+});

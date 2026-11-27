@@ -268,3 +268,15 @@ describe('cutZones', () => {
     expect(cutZones(rings, [])).toBe(rings);
   });
 });
+
+describe('keepClear, a station symbol', () => {
+  it('moves a ticket machine out of the zone by its own 15.75 mm, not the set size', () => {
+    const zone = { x0: 250, y0: 0, x1: 300, y1: 80 };
+    const out = keepClear([point('t', 'ticket-machine', [290, 20])], {
+      ...OPTIONS,
+      zones: [zone],
+      sizeOf: (f) => (f.class === 'ticket-machine' ? 15.75 : 10),
+    });
+    expect(out.features[0].at[0] + 15.75 / 2).toBeLessThanOrEqual(250);
+  });
+});

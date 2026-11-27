@@ -261,6 +261,10 @@ export const OREGON_2012 = Object.freeze({
     'elevator-down': null,
     'you-are-here': null,
     destination: null,
+    // The station symbols keep my forms in every set.
+    turnstile: null,
+    escalator: null,
+    'ticket-machine': null,
   },
   lineStyles: LINE_STYLES,
   fills: FILLS,

@@ -169,9 +169,12 @@ export const ADDRESS_STRINGS = Object.freeze({
   symbolSetLegend: 'Symbol set',
   symbolSetOwn: 'Your own set (a file)',
   symbolSetSentences: {
-    'forge-basic': 'Ten simple shapes at 10 mm.',
+    'forge-basic':
+      'Simple shapes at 10 mm, and the turnstile, escalator and ticket machine at their own sizes.',
     'oregon-2012':
       'Fourteen symbols from a University of Oregon study at 13 mm, with its street, sidewalk and railroad lines.',
+    'seatac-station':
+      'Stairs and elevators from my SeaTac station key at 17 to 18 mm, with its turnstile, escalator and ticket machine; the other shapes at 16 mm.',
     file: 'A JSON file of symbols of your own; the symbols guide says how to write one.',
   },
   /** A11Y: said once when the set changes. */

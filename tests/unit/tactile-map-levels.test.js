@@ -24,6 +24,8 @@ import {
   BUILTIN_SYMBOLS,
   CHANNEL_CUTS,
   LEVELS_BY_CLASS,
+  pointSizeMm,
+  settingsForSet,
 } from '../../src/js/tactile-map/levels-svg.js';
 import { offsetRing } from '../../src/js/svg-offset.js';
 import { regionArea, ringsFromPathData } from '../../src/js/ring-geometry.js';
@@ -644,5 +646,220 @@ describe('the pedestrian base classes', () => {
     );
     expect(buildLevelRings(plan).cones).toEqual([[50, 50]]);
     expect(buildLevelRings(emptyPlan(100, 100)).cones).toEqual([]);
+  });
+});
+
+describe('the station lines, as my SeaTac key draws them', () => {
+  const build = (cls, points) => {
+    const plan = emptyPlan(100, 80);
+    plan.features.push({ id: cls, class: cls, kind: 'line', points, on: true });
+    return buildLevelRings(plan);
+  };
+  const boxOf = (ring) => ({
+    x0: Math.min(...ring.map((p) => p.x)),
+    x1: Math.max(...ring.map((p) => p.x)),
+    y0: Math.min(...ring.map((p) => p.y)),
+    y1: Math.max(...ring.map((p) => p.y)),
+  });
+  const byX = (rings) => rings.map(boxOf).sort((a, b) => a.x0 - b.x0);
+  const tooWide = (warnings) =>
+    warnings.filter((w) => w.code === 'line-too-wide');
+
+  it('draws a shoreline side as dashes 3 mm long and 3 mm apart, 1.5 mm wide, on the floor', () => {
+    const { rings } = build('shoreline', [
+      [10, 30],
+      [40, 30],
+    ]);
+    expect(rings.level2).toEqual([]);
+    const dashes = byX(rings.level1);
+    expect(dashes).toHaveLength(5);
+    dashes.forEach((d, i) => {
+      expect(d.x0).toBeCloseTo(10 + 6 * i, 2);
+      expect(d.x1 - d.x0).toBeCloseTo(3, 2);
+      expect(d.y1 - d.y0).toBeCloseTo(1.5, 2);
+    });
+  });
+
+  it('draws a paid fare zone as a band 5.04 mm wide on the floor and nine 0.72 mm bars across it on the symbol level, every 2.664 mm, over the key sample 23.04 mm long', () => {
+    const { rings, warnings } = build('fare-zone', [
+      [10, 30],
+      [33.04, 30],
+    ]);
+    const band = byX(rings.level1);
+    expect(band).toHaveLength(1);
+    expect(band[0].x0).toBeCloseTo(10, 2);
+    expect(band[0].x1).toBeCloseTo(33.04, 2);
+    expect(band[0].y1 - band[0].y0).toBeCloseTo(5.04, 2);
+    const bars = byX(rings.level2);
+    expect(bars).toHaveLength(9);
+    bars.forEach((b, i) => {
+      expect((b.x0 + b.x1) / 2).toBeCloseTo(10.864 + 2.664 * i, 2);
+      expect(b.x1 - b.x0).toBeCloseTo(0.72, 2);
+      expect(b.y1 - b.y0).toBeCloseTo(4.032, 2);
+      expect(b.y0 - band[0].y0).toBeCloseTo(0.504, 2);
+    });
+    expect(tooWide(warnings)).toEqual([]);
+  });
+
+  it("centres a fare zone's bars on a line of any length, the same margin at both ends, and keeps them apart and inside the band round a corner", () => {
+    const straight = byX(
+      build('fare-zone', [
+        [10, 30],
+        [50, 30],
+      ]).rings.level2
+    );
+    expect(straight).toHaveLength(15);
+    const first = straight[0].x0 - 10;
+    const last = 50 - straight[14].x1;
+    expect(first).toBeCloseTo(last, 2);
+    expect(first).toBeGreaterThanOrEqual(0.504);
+    const corner = [
+      [10, 10],
+      [40, 10],
+      [40, 40],
+    ];
+    // Twenty-two bars fit 60 mm; on the inside of the turn the eleventh
+    // would touch the tenth, so it is left out and no two bars fuse.
+    const bent = build('fare-zone', corner).rings.level2;
+    expect(bent).toHaveLength(21);
+    for (const bar of bent) {
+      expect(regionArea([bar])).toBeCloseTo(0.72 * 4.032, 2);
+    }
+    const toLine = (p) =>
+      Math.min(
+        Math.max(Math.abs(p.y - 10), Math.max(0, p.x - 40), 0) +
+          (p.x < 10 ? 10 - p.x : 0),
+        Math.abs(p.x - 40) + Math.max(0, 10 - p.y) + Math.max(0, p.y - 40)
+      );
+    for (const p of bent.flat()) expect(toLine(p)).toBeLessThan(2.52);
+  });
+
+  it('draws a platform edge as beads 1.55 by 2.4 mm every 3.8435 mm, joined on the floor by necks 0.706 mm at their middle, a block 1.4 mm across on each bead on the symbol level', () => {
+    const { rings, warnings } = build('platform-edge', [
+      [10, 30],
+      [49.985, 30],
+    ]);
+    expect(rings.level1).toHaveLength(1);
+    const chain = boxOf(rings.level1[0]);
+    expect(chain.x0).toBeCloseTo(10, 2);
+    expect(chain.x1).toBeCloseTo(49.985, 2);
+    expect(chain.y1 - chain.y0).toBeCloseTo(2.4, 2);
+    // Each neck's middle, halfway between two beads, is 0.706 mm across.
+    for (let i = 0; i < 10; i++) {
+      const middle = 10 + 3.8435 * i + 1.55 + (3.8435 - 1.55) / 2;
+      const ys = rings.level1[0]
+        .filter((p) => Math.abs(p.x - middle) < 1e-3)
+        .map((p) => p.y);
+      expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(0.706, 2);
+    }
+    const blocks = byX(rings.level2);
+    expect(blocks).toHaveLength(11);
+    blocks.forEach((b, i) => {
+      // The two end blocks stand 0.01 mm inside their bead, so no face of
+      // the floor and the block only touch.
+      const start = 10 + 3.8435 * i + (i === 0 ? 0.01 : 0);
+      const end = 10 + 3.8435 * i + 1.55 - (i === 10 ? 0.01 : 0);
+      expect(b.x0).toBeCloseTo(start, 2);
+      expect(b.x1).toBeCloseTo(end, 2);
+      expect(b.y1 - b.y0).toBeCloseTo(1.4, 2);
+    });
+    expect(tooWide(warnings)).toEqual([]);
+  });
+});
+
+describe('the station symbols on a map', () => {
+  const point = (id, cls, at, extra = {}) => ({
+    id,
+    class: cls,
+    kind: 'point',
+    at,
+    on: true,
+    ...extra,
+  });
+  const boxOf = (rings) => {
+    const all = rings.flat();
+    const xs = all.map((p) => p.x);
+    const ys = all.map((p) => p.y);
+    return [
+      Math.max(...xs) - Math.min(...xs),
+      Math.max(...ys) - Math.min(...ys),
+    ];
+  };
+  const codes = (warnings, code) => warnings.filter((w) => w.code === code);
+
+  it('draws them at their own sizes in every set, whatever size the set draws its symbols', () => {
+    for (const set of [{}, settingsForSet('oregon-2012')]) {
+      const sizeOf = (cls) => {
+        const plan = emptyPlan(100, 80);
+        plan.features.push(point(cls, cls, [50, 40]));
+        return boxOf(buildLevelRings(plan, set).rings.level2);
+      };
+      const [tw, th] = sizeOf('turnstile');
+      expect(tw).toBeCloseTo(2, 2);
+      expect(th).toBeCloseTo(4, 2);
+      // A symbol's rings are joined in its unit box at a thousandth of the
+      // box, 0.02 mm on an 18.5 mm symbol.
+      const [ew, eh] = sizeOf('escalator');
+      expect(ew).toBeCloseTo(18.469, 1);
+      expect(eh).toBeCloseTo(10.034, 1);
+      const [kw, kh] = sizeOf('ticket-machine');
+      expect(kw).toBeCloseTo(15.75, 2);
+      expect(kh).toBeCloseTo(15.75, 2);
+    }
+  });
+
+  it('lets a row of turnstiles 4 mm apart stand without a warning, at their own 2 by 4 mm', () => {
+    const plan = emptyPlan(100, 80);
+    for (const [i, x] of [40, 44, 48, 52].entries()) {
+      plan.features.push(point(`gate-${i}`, 'turnstile', [x, 40]));
+    }
+    const { warnings } = buildLevelRings(plan);
+    expect(codes(warnings, 'symbol-too-small')).toEqual([]);
+    expect(codes(warnings, 'too-close')).toEqual([]);
+  });
+
+  it('still warns when a turnstile stands close to anything else, or is drawn smaller than its own size', () => {
+    const plan = emptyPlan(100, 80);
+    plan.features.push(
+      point('gate', 'turnstile', [40, 40]),
+      point('cafe', 'landmark', [48, 40]),
+      point('small', 'turnstile', [80, 40], { size: 3 })
+    );
+    const { warnings } = buildLevelRings(plan);
+    expect(codes(warnings, 'too-close').map((w) => w.featureIds)).toEqual([
+      ['gate', 'cafe'],
+    ]);
+    expect(codes(warnings, 'symbol-too-small').map((w) => w.featureId)).toEqual(
+      ['small']
+    );
+  });
+
+  it('turns a symbol to its angle: an escalator at 90 degrees points down the map, a turnstile at 90 lies across it', () => {
+    const plan = emptyPlan(100, 80);
+    plan.features.push(point('down', 'escalator', [50, 40], { angle: 90 }));
+    const rings = buildLevelRings(plan).rings.level2;
+    const [w, h] = boxOf(rings);
+    expect(w).toBeCloseTo(10.034, 1);
+    expect(h).toBeCloseTo(18.469, 1);
+    // Its lowest point is the last chevron's tip, on the middle line.
+    const lowest = rings.flat().reduce((a, p) => (p.y > a.y ? p : a));
+    expect(lowest.x).toBeCloseTo(50, 1);
+    const across = emptyPlan(100, 80);
+    across.features.push(point('gate', 'turnstile', [50, 40], { angle: 90 }));
+    const [tw, th] = boxOf(buildLevelRings(across).rings.level2);
+    expect(tw).toBeCloseTo(4, 2);
+    expect(th).toBeCloseTo(2, 2);
+  });
+
+  it("measures a point at its own size first, then its symbol's own size, then the set's", () => {
+    const oregon = settingsForSet('oregon-2012');
+    expect(pointSizeMm(point('e', 'escalator', [0, 0]))).toBeCloseTo(18.469, 3);
+    expect(pointSizeMm(point('e', 'escalator', [0, 0]), oregon)).toBeCloseTo(
+      18.469,
+      3
+    );
+    expect(pointSizeMm(point('l', 'landmark', [0, 0]))).toBe(10);
+    expect(pointSizeMm(point('l', 'landmark', [0, 0]), oregon)).toBe(13);
+    expect(pointSizeMm(point('e', 'escalator', [0, 0], { size: 12 }))).toBe(12);
   });
 });

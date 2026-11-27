@@ -343,3 +343,25 @@ describe('the order of the editor rows', () => {
     expect(byId('walk-off').on).toBe(false);
   });
 });
+
+describe('drawingFromPlan, a station symbol', () => {
+  it('draws a turnstile at its own 2 by 4 mm, turned the way the plan turns it', () => {
+    const p = emptyPlan(100, 80);
+    p.features.push({
+      id: 'gate',
+      class: 'turnstile',
+      kind: 'point',
+      at: [50, 40],
+      angle: 90,
+      on: true,
+    });
+    const d = drawingFromPlan(p).match(/ d="([^"]*)"/)[1];
+    const pts = ringsFromPathData(d).flat();
+    const w =
+      Math.max(...pts.map((q) => q.x)) - Math.min(...pts.map((q) => q.x));
+    const h =
+      Math.max(...pts.map((q) => q.y)) - Math.min(...pts.map((q) => q.y));
+    expect(w).toBeCloseTo(4, 1);
+    expect(h).toBeCloseTo(2, 1);
+  });
+});

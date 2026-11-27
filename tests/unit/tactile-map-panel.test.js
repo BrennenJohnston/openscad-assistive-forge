@@ -2631,6 +2631,7 @@ describe('the map Make the map drafts', () => {
     expect(radios.map((r) => r.value)).toEqual([
       'forge-basic',
       'oregon-2012',
+      'seatac-station',
       'file',
     ]);
     expect(
@@ -2640,7 +2641,21 @@ describe('the map Make the map drafts', () => {
     ).toEqual([
       'Forge basic shapes',
       'University of Oregon symbols',
+      'SeaTac station symbols',
       'Your own set (a file)',
+    ]);
+    // Each choice is described by its sentence, read with it.
+    expect(
+      radios.map(
+        (r) =>
+          document.getElementById(r.getAttribute('aria-describedby'))
+            .textContent
+      )
+    ).toEqual([
+      'Simple shapes at 10 mm, and the turnstile, escalator and ticket machine at their own sizes.',
+      'Fourteen symbols from a University of Oregon study at 13 mm, with its street, sidewalk and railroad lines.',
+      'Stairs and elevators from my SeaTac station key at 17 to 18 mm, with its turnstile, escalator and ticket machine; the other shapes at 16 mm.',
+      'A JSON file of symbols of your own; the symbols guide says how to write one.',
     ]);
     expect(radios[0].checked).toBe(true);
     const door = document.getElementById('tactileMapSymbolDoor');
@@ -2662,7 +2677,7 @@ describe('the map Make the map drafts', () => {
       expect(
         document.getElementById('tactileMapAddressStatus').textContent
       ).toBe('Symbols: University of Oregon symbols.');
-      radios[2].click();
+      radios[3].click();
       expect(door.hidden).toBe(false);
       expect(
         door.contains(document.getElementById('tactileMapSymbolFile'))

@@ -35,6 +35,9 @@ const KEYS = [
   'destination-cone',
   'transit-stop',
   'chevron-uphill',
+  'turnstile',
+  'escalator',
+  'ticket-machine',
 ];
 
 const fileOf = (value, name = 'symbols.json') => ({
@@ -82,15 +85,16 @@ describe('the built-in symbols', () => {
     ]);
   });
 
-  it('are the thirteen shapes, each with a name and a source; the destination cone the one solid, at its own size', () => {
+  it('are the sixteen shapes, each with a name and a source; the destination cone the one solid, at its own size', () => {
     expect(BUILT_IN_SYMBOLS.map((s) => s.key)).toEqual(KEYS);
     for (const s of BUILT_IN_SYMBOLS) {
       expect(typeof s.name, s.key).toBe('string');
       expect(s.name.length, s.key).toBeGreaterThan(0);
       expect(typeof s.source, s.key).toBe('string');
       expect(s.source.length, s.key).toBeGreaterThan(10);
+      // A symbol with a size of its own is smallest at that size.
       expect(s.minSizeMm, s.key).toBe(
-        s.key === 'destination-cone' ? 4.9 : SYMBOL_MIN_SIZE_MM
+        s.key === 'destination-cone' ? 4.9 : (s.sizeMm ?? SYMBOL_MIN_SIZE_MM)
       );
       expect(ringsFromPathData(s.pathData).length, s.key).toBeGreaterThan(0);
       expect(s.solid, s.key).toBe(
@@ -101,11 +105,78 @@ describe('the built-in symbols', () => {
     expect(cone.source).toMatch(/Touch Mapper/);
   });
 
-  it('have no part thinner than 1.0 mm at 10 mm', () => {
-    for (const s of BUILT_IN_SYMBOLS) {
-      expect(thinnestFeatureMm(s.pathData, 10), s.key).toBeGreaterThanOrEqual(
-        SYMBOL_MIN_FEATURE_MM
-      );
+  it('have no part thinner than 1.0 mm at 10 mm, or at their own size', () => {
+    // The raster reads the ticket machine's frame, 1.0 mm by its numbers,
+    // as 0.92; the station test below measures it from the numbers.
+    for (const s of BUILT_IN_SYMBOLS.filter(
+      (x) => x.key !== 'ticket-machine'
+    )) {
+      expect(
+        thinnestFeatureMm(s.pathData, s.sizeMm ?? 10),
+        s.key
+      ).toBeGreaterThanOrEqual(SYMBOL_MIN_FEATURE_MM);
+    }
+  });
+
+  it('draw the station symbols at the sizes of my SeaTac key: a turnstile bar 2 by 4 mm, three escalator chevrons 18.5 by 10 mm on a 1.2 mm line, a ticket machine 15.75 mm square holding a T', () => {
+    const symbol = (key) => BUILT_IN_SYMBOLS.find((x) => x.key === key);
+    const size = (key) => {
+      const s = symbol(key);
+      const rings = ringsFromPathData(s.pathData);
+      const xs = rings.flat().map((p) => p.x * s.sizeMm);
+      const ys = rings.flat().map((p) => p.y * s.sizeMm);
+      return [
+        Math.max(...xs) - Math.min(...xs),
+        Math.max(...ys) - Math.min(...ys),
+        rings.length,
+      ];
+    };
+    const [tw, th, tn] = size('turnstile');
+    expect(tw).toBeCloseTo(2, 3);
+    expect(th).toBeCloseTo(4, 3);
+    expect(tn).toBe(1);
+    const [ew, eh, en] = size('escalator');
+    expect(ew).toBeCloseTo(18.469, 2);
+    expect(eh).toBeCloseTo(10.034, 2);
+    expect(en).toBe(3);
+    const line = thinnestFeatureMm(symbol('escalator').pathData, 18.469);
+    expect(line).toBeGreaterThan(1.1);
+    expect(line).toBeLessThan(1.3);
+    const [kw, kh, kn] = size('ticket-machine');
+    expect(kw).toBeCloseTo(15.75, 2);
+    expect(kh).toBeCloseTo(15.75, 2);
+    // The frame's outer and inner edges, and the T inside it: the frame
+    // 1.0 mm on every side, the T's bar and stem 1.05 mm.
+    expect(kn).toBe(3);
+    const [outer, inner, tee] = ringsFromPathData(
+      symbol('ticket-machine').pathData
+    ).map((ring) => ({
+      x0: Math.min(...ring.map((p) => p.x * 15.75)),
+      x1: Math.max(...ring.map((p) => p.x * 15.75)),
+      y0: Math.min(...ring.map((p) => p.y * 15.75)),
+      y1: Math.max(...ring.map((p) => p.y * 15.75)),
+    }));
+    for (const side of ['x0', 'y0']) {
+      expect(inner[side] - outer[side]).toBeCloseTo(1.0, 2);
+    }
+    for (const side of ['x1', 'y1']) {
+      expect(outer[side] - inner[side]).toBeCloseTo(1.0, 2);
+    }
+    const teeRing = ringsFromPathData(symbol('ticket-machine').pathData)[2];
+    const ys = [...new Set(teeRing.map((p) => p.y * 15.75))].sort(
+      (a, b) => a - b
+    );
+    const xs = [...new Set(teeRing.map((p) => p.x * 15.75))].sort(
+      (a, b) => a - b
+    );
+    expect(ys[1] - ys[0]).toBeCloseTo(1.05, 2);
+    expect(xs[2] - xs[1]).toBeCloseTo(1.05, 2);
+    expect(tee.x1 - tee.x0).toBeCloseTo(6.3, 2);
+    // The escalator points to the right in its box: each chevron's tip is
+    // its rightmost point, on the middle line.
+    for (const ring of ringsFromPathData(symbol('escalator').pathData)) {
+      const right = ring.reduce((a, p) => (p.x > a.x ? p : a));
+      expect(right.y).toBeCloseTo(0.5, 3);
     }
   });
 
@@ -225,7 +296,7 @@ describe('the file door', () => {
     expect(activeLibrary()).toHaveLength(2);
     expect(activeLibrary().map((s) => s.key)).toEqual(['a', 'b']);
     setLibrary(null);
-    expect(activeLibrary()).toHaveLength(13);
+    expect(activeLibrary()).toHaveLength(KEYS.length);
     expect(activeLibrary()).toBe(BUILT_IN_SYMBOLS);
   });
 });
