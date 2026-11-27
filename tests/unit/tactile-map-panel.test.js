@@ -24,6 +24,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import JSZip from 'jszip';
+import { layKeyOnBeds } from '../../src/js/tactile-map/key-beds.js';
 
 vi.mock('../../src/js/ui-generator.js', async () => {
   const { stateManager } = await import('../../src/js/state.js');
@@ -1535,6 +1536,57 @@ describe('the tape channels, a recess or cut through', () => {
 });
 
 describe('render every plate and download', () => {
+  it('lays the key on beds: step 5 counts its pieces and beds, a piece chosen is said as a piece, the zip holds one file a bed, the README says where each row is, and the last sentence names the beds', async () => {
+    mount({
+      config: {
+        plateKindParam: 'plate_kind',
+        raisedWordsParam: 'raised_words',
+        keyLetterParam: 'key_letter_height_mm',
+      },
+    });
+    await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
+    const p = document.getElementById('tactileMapPanel').__forgeMapPanel;
+    const pieces = p.keyPages.length;
+    expect(pieces).toBeGreaterThan(1);
+    const beds = layKeyOnBeds(
+      p.keyPages.map((k) => ({ id: k.id, w: k.size.w, h: k.size.h })),
+      p.bed()
+    );
+    const said = beds.length === 1 ? 'one bed' : `${beds.length} beds`;
+    const range =
+      beds.length === 1 ? 'key-bed-1' : `key-bed-1 to key-bed-${beds.length}`;
+    expect(document.getElementById('tactileMapSummary').textContent).toMatch(
+      new RegExp(` The key: ${pieces} pieces on ${said}\\.$`)
+    );
+    const first = document.querySelector(
+      '#tactileMapPlates input[value^="key"]'
+    );
+    first.checked = true;
+    first.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(announce).toHaveBeenCalledWith(
+      'Showing the key 1 piece.',
+      expect.anything()
+    );
+    click('tactileMapRenderAll');
+    const { names, readme } = await readZip();
+    expect(names.filter((n) => /^tactile_map_key/.test(n))).toEqual(
+      beds.map((b) => `tactile_map_${b.id}.stl`)
+    );
+    expect(readme).toContain(
+      `The key prints as ${pieces} pieces on ${said}, one file a bed (${range}), ` +
+        'each piece 5 mm from the next; read it before the map. ' +
+        'Lay the pieces in this order, the first farthest from the reader:\n' +
+        `- Key 1, bed ${beds.findIndex((b) => b.pieces.some((q) => q.id === 'key-1')) + 1}: ${p.keyPages[0].name}\n`
+    );
+    expect(readme).toContain(
+      'On each bed the pieces stand in rows from the front, each row left to right:\n- Bed 1: '
+    );
+    const mapPlates = 4;
+    expect(status()).toBe(
+      `The ${mapPlates} map plates and the key on ${said} are in tactile_map_plates.zip; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.`
+    );
+  });
+
   it('packs the archive compressed: every entry in its directory is deflated', async () => {
     await vi.waitFor(() => expect(files.length).toBeGreaterThan(0), SETTLE);
     document.getElementById('tactileMapRenderAll').click();

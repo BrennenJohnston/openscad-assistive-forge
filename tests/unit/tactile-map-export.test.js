@@ -579,7 +579,7 @@ describe('the README says what the map is', () => {
     ]);
   });
 
-  it('names each key plate by its row, in the order to lay them', () => {
+  it('names each key piece by its row and its bed, in the order to lay them, then each bed front to back', () => {
     const readme = readmeText({
       ...base,
       about: { type: 'drawing' },
@@ -588,35 +588,47 @@ describe('the README says what the map is', () => {
         { id: 'key-2', name: '1 Building: Center on Human Development' },
         { id: 'key-3', name: '1 Building: Center on Human Development, line 2' },
       ],
+      keyBeds: [
+        { id: 'key-bed-1', pieces: [{ id: 'key-3' }, { id: 'key-1' }] },
+        { id: 'key-bed-2', pieces: [{ id: 'key-2' }] },
+      ],
     });
     expect(readme).toContain(
-      'The key prints on 3 plates of its own, to read before the map. ' +
-        'Lay them in this order, the first farthest from the reader:\n' +
-        '- key-1: Key: Station\n' +
-        '- key-2: 1 Building: Center on Human Development\n' +
-        '- key-3: 1 Building: Center on Human Development, line 2\n'
+      'The key prints as 3 pieces on 2 beds, one file a bed (key-bed-1 to key-bed-2), ' +
+        'each piece 5 mm from the next; read it before the map. ' +
+        'Lay the pieces in this order, the first farthest from the reader:\n' +
+        '- Key 1, bed 1: Key: Station\n' +
+        '- Key 2, bed 2: 1 Building: Center on Human Development\n' +
+        '- Key 3, bed 1: 1 Building: Center on Human Development, line 2\n' +
+        'On each bed the pieces stand in rows from the front, each row left to right:\n' +
+        '- Bed 1: Key 3, Key 1\n' +
+        '- Bed 2: Key 2\n'
     );
     const one = readmeText({
       ...base,
       about: { type: 'drawing' },
       keyPlates: [{ id: 'key', name: 'Key: Station' }],
+      keyBeds: [{ id: 'key-bed-1', pieces: [{ id: 'key' }] }],
     });
     expect(one).toContain(
-      'The key prints on a plate of its own, to read before the map:\n' +
-        '- key: Key: Station\n'
+      'The key prints as one piece on one bed (key-bed-1); read it before the map:\n' +
+        '- Key: Key: Station\n'
     );
     expect(readmeText({ ...base, about: { type: 'drawing' } })).not.toContain(
       'The key prints'
     );
   });
 
-  it('lists each key plate’s label tape, top to bottom', () => {
+  it('lists each key piece’s label tape, top to bottom', () => {
     const readme = readmeText({
       ...base,
       about: { type: 'drawing' },
       keyPlates: [
         { id: 'key-1', name: 'Key: Station' },
         { id: 'key-2', name: 'Restaurant: Plaza Cafe' },
+      ],
+      keyBeds: [
+        { id: 'key-bed-1', pieces: [{ id: 'key-1' }, { id: 'key-2' }] },
       ],
       keyText: 'Key\n\nSymbols, You are here first:\n- You are here: a disc\n',
       keyTape: [
@@ -627,10 +639,10 @@ describe('the README says what the map is', () => {
     expect(readme.trimEnd().split('\n').slice(-7)).toEqual([
       '- You are here: a disc',
       '',
-      'Key 1 plate, label tape top to bottom:',
+      'Key 1 piece, label tape top to bottom:',
       '- key: station',
       '- you are here',
-      'Key 2 plate, label tape top to bottom:',
+      'Key 2 piece, label tape top to bottom:',
       '- pc restaurant: plaza cafe',
     ]);
   });
