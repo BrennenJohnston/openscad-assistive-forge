@@ -886,7 +886,7 @@ async function makeFerryDraft(page, { detail } = {}) {
   const status = page.locator('#tactileMapAddressStatus');
   await expect(status).toContainText('Draft map ready: ', { timeout: 15000 });
   await expect(status).toHaveText(
-    / The key has \d+ symbols and \d+ numbered places\.$/
+    / The key has \d+ symbols and \d+ numbered places?\.$/
   );
   await expect(
     page.locator('#drawingEditorSurface .drawing-editor').first()

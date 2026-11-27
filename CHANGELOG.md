@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the streets passing the address rather than every street.
 - A tactile map's transit stop is an outlined rectangle 10 by 5 mm, a bus
   seen from above, in place of the square holding a T.
+- A place map's Named places numbers a building along the way only when it
+  holds a public place or the address; Every building numbers every named one.
 
 ### Fixed
 

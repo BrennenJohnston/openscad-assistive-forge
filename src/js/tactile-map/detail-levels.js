@@ -29,6 +29,7 @@
  *
  * @license GPL-3.0-or-later
  */
+import { distanceTo } from './feature-names.js';
 
 export const SYMBOLS_WARN = 10;
 export const SYMBOLS_MAX = 15;
@@ -350,6 +351,30 @@ export function applyDetail(features, { switches, scale, mmPerM }) {
         f.on = pointNearLines(f.at, drawn, near);
       }
     }
+  }
+  // The buildings drawn along the way take a number only when they hold a
+  // public place: tagged as one, or with a public place's point inside, on
+  // or off; the address's own building, the map's subject, keeps its number.
+  // A level drawing more buildings numbers every named one.
+  const publicPoints = features
+    .filter(
+      (f) =>
+        (f.public || f.class === 'destination') &&
+        f.kind === 'point' &&
+        Array.isArray(f.at)
+    )
+    .map((f) => f.at);
+  for (const f of out) {
+    if (f.kind !== 'area') continue;
+    const quiet =
+      !sw.everything &&
+      sw.buildings === 'along' &&
+      f.what === 'Building' &&
+      !!f.name &&
+      !f.public &&
+      !publicPoints.some((p) => distanceTo(f, p) === 0);
+    if (quiet) f.unnumbered = true;
+    else delete f.unnumbered;
   }
   return { features: out, ...judgeSymbols(out, sw) };
 }

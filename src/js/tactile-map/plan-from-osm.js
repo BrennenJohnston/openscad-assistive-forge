@@ -441,7 +441,7 @@ export function draftPlan({
       features.push(f);
     }
   };
-  const addArea = (id, cls, ring, on, name, what) => {
+  const addArea = (id, cls, ring, on, name, what, publicPlace = false) => {
     for (const [i, piece] of clipRing(ring, w, h).entries()) {
       if (piece.length < 3 || ringArea(piece) < MIN_AREA_MM2) continue;
       const f = {
@@ -453,6 +453,7 @@ export function draftPlan({
       };
       if (name) f.name = name;
       if (what) f.what = what;
+      if (publicPlace) f.public = true;
       features.push(f);
     }
   };
@@ -547,7 +548,8 @@ export function draftPlan({
           closed ? points.slice(0, -1) : points,
           false,
           name,
-          t.building ? 'Building' : t.leisure ? 'Park' : undefined
+          t.building ? 'Building' : t.leisure ? 'Park' : undefined,
+          Boolean(t.building) && isPublicPlace(t)
         );
       } else if (cls === 'crossing') {
         if (!rules.crossings) continue;

@@ -29,6 +29,8 @@ const TIE_MM = 1000;
 /**
  * Whether a feature gets a number. A drawn shape named only by what it is
  * ("Rectangle 3") has no name of its own: `madeName`, from the plan builder.
+ * A building a level draws along the way that holds no public place is
+ * `unnumbered` (detail-levels.js): drawn, and numbered at Every building.
  *
  * @param {object} f - a plan feature
  * @returns {boolean}
@@ -39,6 +41,7 @@ export function isNamedThing(f) {
     (f.kind === 'area' || f.kind === 'point') &&
     Boolean(f.name) &&
     !f.madeName &&
+    !f.unnumbered &&
     !OWN_ROW.has(f.class)
   );
 }
