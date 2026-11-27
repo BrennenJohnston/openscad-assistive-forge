@@ -272,4 +272,130 @@ test.describe('the three map types end to end', () => {
     expect(lines[3]).toBe('A map from a drawing.');
     expect(readme).not.toMatch(/OpenStreetMap/);
   });
+
+  test('a station drawing: every station class, turnstiles and an escalator turned as drawn, my SeaTac set in step 3, and the key in its words', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await openChooser(page);
+    await chooseByKeyboard(page, 'A map from your drawing');
+    // Three lines 100 mm long, two turnstile bars lying across the drawing
+    // 4 mm apart, an escalator's three chevrons pointing down it, and a
+    // ticket machine, on a drawing 340 x 240 mm.
+    const chevron = (tx, ty) =>
+      [
+        [0, -1.704],
+        [4.165, -5.869],
+        [5.017, -5.017],
+        [0, 0],
+        [-5.017, -5.017],
+        [-4.165, -5.869],
+      ]
+        .map(([x, y], i) => `${i ? 'L' : 'M'} ${tx + x} ${ty + y}`)
+        .join(' ') + ' Z';
+    const drawing =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="340mm" height="240mm" viewBox="0 0 340 240">' +
+      '<rect x="20" y="20" width="100" height="1.5"/>' +
+      '<rect x="20" y="60" width="100" height="5"/>' +
+      '<rect x="20" y="100" width="100" height="2.4"/>' +
+      '<rect x="200" y="20" width="4" height="2"/>' +
+      '<rect x="200" y="24" width="4" height="2"/>' +
+      [0, 1, 2]
+        .map((i) => `<path d="${chevron(250, 120 + 6.3 * i)}"/>`)
+        .join('') +
+      '<rect x="280" y="180" width="16" height="16"/>' +
+      '</svg>';
+    await page.setInputFiles('#param-map_file', {
+      name: 'station.svg',
+      mimeType: 'image/svg+xml',
+      buffer: Buffer.from(drawing),
+    });
+    await expect
+      .poll(() => parameter(page, 'map_file'), { timeout: 30000 })
+      .toBe('station.svg');
+    await nextStep(page, 2, "The drawing's real width");
+    await nextStep(page, 3, 'Class the shapes');
+    await tabTo(page, '#tactileMapEditDrawing');
+    await page.keyboard.press('Enter');
+    await expect(
+      page.locator('#drawingEditorSurface .drawing-editor').first()
+    ).toHaveAttribute('data-purpose', 'map', { timeout: 60000 });
+    const selects = page.locator(
+      '#drawingEditorSurface .drawing-editor-class-select'
+    );
+    const classes = [
+      'shoreline',
+      'fare-zone',
+      'platform-edge',
+      'turnstile',
+      'turnstile',
+      'escalator',
+      'escalator',
+      'escalator',
+      'ticket-machine',
+    ];
+    await expect(selects).toHaveCount(classes.length);
+    for (const [i, cls] of classes.entries()) {
+      await selects.nth(i).selectOption(cls);
+    }
+    await tabTo(page, '#drawingEditorSurface .drawing-editor-apply');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#drawingEditorSurface')).toBeHidden();
+    await expect
+      .poll(() => parameter(page, 'map_file_kind'), { timeout: 30000 })
+      .toBe('levels');
+    await tabTo(page, '#tactileMapSymbolSet-forge-basic');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await expect(
+      page.locator('#tactileMapSymbolSet-seatac-station')
+    ).toBeChecked();
+    await axeClean(page, 'station step 3');
+
+    const { features, rows, set } = await page.evaluate(() => {
+      const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+      return {
+        features: panel.plan.features.map((f) => ({
+          class: f.class,
+          kind: f.kind,
+          angle: f.angle ?? null,
+        })),
+        rows: panel.labeled().key.entries.map((e) => `${e.name}: ${e.shape}`),
+        set: panel.labeled().key.set,
+      };
+    });
+    expect(set).toEqual({
+      key: 'seatac-station',
+      name: 'SeaTac station symbols',
+    });
+    const of = (cls) => features.filter((f) => f.class === cls);
+    // Each bar is a gate, lying across; the three chevrons are one
+    // escalator, pointing down the map.
+    expect(of('turnstile').map((f) => [f.kind, Math.abs(f.angle)])).toEqual([
+      ['point', 90],
+      ['point', 90],
+    ]);
+    expect(of('escalator').map((f) => [f.kind, f.angle])).toEqual([
+      ['point', 90],
+    ]);
+    for (const cls of ['shoreline', 'fare-zone', 'platform-edge']) {
+      expect(
+        of(cls).map((f) => f.kind),
+        cls
+      ).toEqual(['line']);
+    }
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        'Escalator: three chevrons 18.5 mm long, pointing the way it runs',
+        'Turnstile: a bar 2 by 4 mm',
+        'Ticket machine: an outlined square 15.8 mm holding a T',
+        'Platform edge: a chain of beads 2.4 mm wide, a block on each, the beads low and the blocks middle',
+        'Paid fare zone: a band 5 mm wide with bars across it, the band low and the bars middle',
+        'Shoreline side: short dashes 1.5 mm wide, 3 mm long and 3 mm apart, low',
+      ])
+    );
+    await nextStep(page, 4, 'Apply classes');
+    await nextStep(page, 5, 'Check and print');
+    await axeClean(page, 'station step 5');
+  });
 });

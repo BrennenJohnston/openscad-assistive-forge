@@ -2,17 +2,17 @@
 
 The set is provisional until it has been printed and felt; a shape that confuses readers is a change to data, not to the app.
 
-The Tactile Map tile places point symbols for the things a reader looks for on a map: stairs, elevators, entrances, landmarks, a transit stop, and the place the reader stands. This page lists the ten shapes the app ships, what each stands for, how big it prints, and where its shape comes from. You can also load a set of your own, which the last section explains.
+The Tactile Map tile places point symbols for the things a reader looks for on a map: stairs, elevators, entrances, landmarks, a transit stop, and the place the reader stands. This page lists the shapes the app ships, what each stands for, how big it prints, and where its shape comes from. You can also load a set of your own, which the last section explains.
 
 ## The rules every symbol keeps
 
-- A symbol is at least 6 mm across, and the map keeps 3 mm clear around it. Below that, two shapes stop being two shapes under a finger (Braille Authority of North America, Guidelines and Standards for Tactile Graphics 2022, 3.4.3.11).
+- A symbol is at least 6 mm across, and the map keeps 3 mm clear around it. Below that, two shapes stop being two shapes under a finger (Braille Authority of North America, Guidelines and Standards for Tactile Graphics 2022, 3.4.3.11). The turnstile is the one exception: a 2 by 4 mm bar I printed and felt.
 - The default size is 10 mm, the size the published standard for tactile maps uses (ISO 19028, as reviewed by Wabinski, Moscicka and Touya in 2024) and the size my station maps were printed at.
-- No part of a symbol is thinner than 1.0 mm at 10 mm, which is what a 0.4 mm nozzle lays down reliably.
+- No part of a symbol is thinner than 1.0 mm at 10 mm, or at its own size for a station symbol, which is what a 0.4 mm nozzle lays down reliably.
 - Every shape is a filled, flat-topped area, raised 0.8 mm above the floor level so it stands out from lines. Shapes with a few straight sides and a clear outline, prisms and pyramids rather than domes, were recognized best in printed tests (Gual, Puyuelo and Lloveras 2012).
 - The levels builder warns when a map carries more than 15 different symbols or two symbols closer than 3 mm, because maps with too much on them are the complaint readers raise most often.
 
-## The thirteen shapes
+## The basic shapes
 
 Each kind has a form of its own, so no two kinds feel alike. They come from a printed sheet of candidates and from a key I printed for the SeaTac station, and they are told apart on purpose: solid against outline, open against closed, whole against interrupted.
 
@@ -31,6 +31,18 @@ Each kind has a form of its own, so no two kinds feel alike. They come from a pr
 | Destination cone | The address you typed, or where a walk ends | A cone 4.9 mm across at its foot and 4.9 mm tall from the plate's underside |
 | Transit stop     | A bus, train or tram stop                   | An outlined rectangle, twice as long as it is high: a bus seen from above |
 | Uphill chevron   | The uphill direction of a steep sidewalk    | Three chevrons pointing uphill, 1.1 mm line; along a line, one every 10 mm |
+
+## The station symbols
+
+Three symbols from my SeaTac key keep their own forms and sizes in every set, since a station's parts read the same whatever set a map takes. A drawing turns two of them: a turnstile lies the way its drawn bar lies, and an escalator points the way its drawn chevrons point.
+
+| Name           | Stands for                  | Shape, at its own size                                                   |
+| -------------- | --------------------------- | ------------------------------------------------------------------------ |
+| Turnstile      | A fare gate: one bar a gate | A bar 2 by 4 mm                                                          |
+| Escalator      | An escalator                | Three chevrons with sharp tips, 18.5 by 10 mm, 1.2 mm line, 6.3 mm apart |
+| Ticket machine | A ticket or fare machine    | An outlined square 15.75 mm holding a T, its frame 1.0 mm, the T 1.05 mm |
+
+The station's lines are classes, in the [guide's class table](TACTILE_MAP_GUIDE.md#the-classes): the shoreline side, the paid fare zone and the platform edge. The fare zone's bars are 0.72 mm wide and the platform edge's necks 0.706 mm at their narrowest, under the 1.0 mm above: I printed each at that width and at 1.2 mm, felt both, and chose the width I drew.
 
 ## The University of Oregon set
 
@@ -55,6 +67,7 @@ Each map class takes one of the set's symbols, or keeps its basic shape where th
 | Street furniture, curb ramp, raised curb, elevators | their basic shapes: the set has none of these |
 | You are here                                        | its basic mark, the same in every set         |
 | Destination                                         | its cone, the same in every set               |
+| Turnstile, escalator, ticket machine                | the station symbols, the same in every set    |
 
 The set's fourteen point symbols, numbered as the sheet prints them:
 
@@ -77,9 +90,13 @@ The set's fourteen point symbols, numbered as the sheet prints them:
 
 Its line symbols are a plain line for a street (the Curb or edge class), two lines 5 mm apart for a railroad (Track) and short dashes for a sidewalk (Walkway), each 1.2 mm wide; its fence, one-way and two-way street, sidewalk-with-stairs and water lines, and its six area fills, are named in the set and not drawn, since no map class uses them yet.
 
+## My SeaTac station set
+
+The third set is the tactile key I made for the SeaTac station: its stairs, a zigzag 17.1 by 3.9 mm on a 1.2 mm line with sharp corners, and its elevators, outlined triangles 18.4 mm a side with a 2.2 mm outline, with the three station symbols above. Every other class keeps its basic shape, drawn at the key's 16 mm frame, and the key says so.
+
 ## A sheet to print
 
-`docs/guides/symbol-sheet/symbol_sheet.scad` prints a set on one plate, every symbol at the size a map draws it, its number in raised 8 mm digits under it, at the map's own heights: a 1.2 mm plate, symbols 1.4 mm above it. Open it in OpenSCAD, choose the set under **Set** (the University of Oregon set or the basic shapes), and render; the console lists each number's name. The Oregon sheet is 235 by 107 mm, the basic one 228 by 44 mm, so each fits a 256 mm bed.
+`docs/guides/symbol-sheet/symbol_sheet.scad` prints a set on one plate, every symbol at the size a map draws it, its number in raised 8 mm digits under it, at the map's own heights: a 1.2 mm plate, symbols 1.4 mm above it. Open it in OpenSCAD, choose the set under **Set** (the University of Oregon set, the basic shapes or my SeaTac station set), and render; the console lists each number's name. The Oregon sheet is 235 by 107 mm, the basic one 250 by 88 mm and the SeaTac one 172 by 52 mm, so each fits a 256 mm bed.
 
 ## Loading a set of your own
 

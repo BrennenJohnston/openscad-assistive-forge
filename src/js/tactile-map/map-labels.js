@@ -26,6 +26,7 @@ import {
   buildLevelRings,
   DEFAULT_SETTINGS,
   LEVELS_BY_CLASS,
+  pointSizeMm,
 } from './levels-svg.js';
 import {
   channelLengthMm,
@@ -135,7 +136,7 @@ function obstaclesOf(plan, s, textBoxes) {
     if (f.on === false) continue;
     const cls = classes[f.class] || {};
     if (f.kind === 'point') {
-      const h = (f.size ?? s.symbolSizeMm) / 2;
+      const h = pointSizeMm(f, s) / 2;
       out.push({ rect: rect(f.at[0], f.at[1], h, h) });
     } else if (f.kind === 'line' && Array.isArray(f.points)) {
       const half = (f.width ?? cls.width ?? 1.5) / 2;
@@ -278,7 +279,7 @@ export function labelPlan(plan, settings = {}) {
 
   // A piece `bw` wide and `bh` tall: a channel, a number, or the two.
   const placeBeside = (f, bw, bh) => {
-    const half = (f.size ?? s.symbolSizeMm) / 2;
+    const half = pointSizeMm(f, s) / 2;
     for (const [cx, cy] of candidates(f.at, half, bw, bh, keep + 0.2)) {
       const r = rect(cx, cy, bw / 2, bh / 2);
       if (!inBounds(r) || clearance(r, obstacles) < keep) continue;

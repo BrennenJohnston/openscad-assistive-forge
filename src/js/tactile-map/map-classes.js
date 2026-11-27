@@ -22,8 +22,15 @@ import { FURNITURE_AMENITIES } from './feature-kinds.js';
  * @property {'line'|'area'|'point'|'ignore'} kind
  * @property {number} [level] - 1 to 3; the level the feature rises to
  * @property {number} [widthMm] - A line's width in millimeters
- * @property {'solid'|'dotted'|'dashed'|'double'|'ticks'|'chevrons'} [style] - A line's style
+ * @property {'solid'|'dotted'|'dashed'|'double'|'ticks'|'chevrons'|'bars'|'beads'} [style] - A line's style
+ * @property {number} [dashMm] - A dashed line's dash, where it is not the builder's
+ * @property {number} [dashGapMm] - A dashed line's gap, where it is not the builder's
  * @property {string} [symbolKey] - A point's symbol in the symbol library
+ * @property {'axis'|'direction'} [turn] - A point drawn from a drawing turns
+ *   to its shape: 'axis' lays the symbol's long side along the shape's,
+ *   'direction' points it the way the shape points (plan-from-drawing.js)
+ * @property {boolean} [eachShape] - Each drawn shape is a point of its own,
+ *   never joined with its neighbors as the strokes of one symbol
  * @property {string} source - Where the shape or the figure comes from
  * @property {Array<{tag: string, values?: string[], kind: 'way'|'closed'|'node'}>} [osm]
  *   - The OpenStreetMap tags that read as this class (plan-from-osm.js);
@@ -113,6 +120,38 @@ export const MAP_CLASSES = Object.freeze([
     ],
   },
   {
+    key: 'shoreline',
+    name: 'Shoreline side',
+    kind: 'line',
+    level: 1,
+    widthMm: 1.5,
+    style: 'dashed',
+    dashMm: 3,
+    dashGapMm: 3,
+    source:
+      'my SeaTac station key: the side a cane trails, dashes 3 mm long and 3 mm apart, 1.5 mm wide, on the floor level',
+  },
+  {
+    key: 'fare-zone',
+    name: 'Paid fare zone',
+    kind: 'line',
+    level: 1,
+    widthMm: 5.04,
+    style: 'bars',
+    source:
+      'my SeaTac station key: a band 5.04 mm wide on the floor level, with bars across it on the symbol level, 0.72 mm wide every 2.664 mm; I printed and felt the bars at that width',
+  },
+  {
+    key: 'platform-edge',
+    name: 'Platform edge',
+    kind: 'line',
+    level: 1,
+    widthMm: 2.4,
+    style: 'beads',
+    source:
+      'my SeaTac station key: a chain of beads 1.55 by 2.4 mm every 3.84 mm on the floor level, joined by necks 0.706 mm at their narrowest, each bead carrying a block 1.4 mm across on the symbol level; I printed and felt the necks at that width',
+  },
+  {
     key: 'track',
     name: 'Track',
     kind: 'line',
@@ -162,6 +201,17 @@ export const MAP_CLASSES = Object.freeze([
     ],
   },
   {
+    key: 'turnstile',
+    name: 'Turnstile',
+    kind: 'point',
+    level: 2,
+    symbolKey: 'turnstile',
+    turn: 'axis',
+    eachShape: true,
+    source:
+      'my SeaTac station key: a bar 2 by 4 mm for each gate, turned to the drawn bar; I printed and felt a row of four, 4 mm apart',
+  },
+  {
     key: 'stairs',
     name: 'Stairs',
     kind: 'point',
@@ -170,6 +220,16 @@ export const MAP_CLASSES = Object.freeze([
     source: 'A zigzag, from my SeaTac key; BANA 2022',
     // A steps way: a stairs point at its middle and a walkway line.
     osm: [{ tag: 'highway', values: ['steps'], kind: 'way' }],
+  },
+  {
+    key: 'escalator',
+    name: 'Escalator',
+    kind: 'point',
+    level: 2,
+    symbolKey: 'escalator',
+    turn: 'direction',
+    source:
+      'my SeaTac station key: three chevrons 18.5 mm long, pointing the way the escalator runs, turned as the drawing points them',
   },
   {
     key: 'elevator-up',
@@ -186,6 +246,15 @@ export const MAP_CLASSES = Object.freeze([
     level: 2,
     symbolKey: 'elevator-down',
     source: 'An outlined triangle, turned over, from my SeaTac key',
+  },
+  {
+    key: 'ticket-machine',
+    name: 'Ticket machine',
+    kind: 'point',
+    level: 2,
+    symbolKey: 'ticket-machine',
+    source:
+      'my SeaTac station key: an outlined square 15.75 mm holding a T, its frame 1.0 mm and the T 1.05 mm; I printed and felt them at those widths',
   },
   {
     key: 'entrance',
@@ -331,7 +400,7 @@ export function mapClass(key) {
  * its counters the holes the plan keeps; a typed word (the plan's text
  * kind) is drawn by the tile itself and reads no class.
  *
- * @returns {Record<string, {kind: string, level?: number, width?: number, style?: string, symbol?: string}>}
+ * @returns {Record<string, {kind: string, level?: number, width?: number, style?: string, symbol?: string, dashMm?: number, dashGapMm?: number}>}
  */
 export function levelsByClass() {
   const out = {};
@@ -341,6 +410,8 @@ export function levelsByClass() {
     if (c.widthMm !== undefined) row.width = c.widthMm;
     if (c.style !== undefined) row.style = c.style;
     if (c.symbolKey !== undefined) row.symbol = c.symbolKey;
+    if (c.dashMm !== undefined) row.dashMm = c.dashMm;
+    if (c.dashGapMm !== undefined) row.dashGapMm = c.dashGapMm;
     out[c.key] = row;
   }
   out.channel = { kind: 'channel' };

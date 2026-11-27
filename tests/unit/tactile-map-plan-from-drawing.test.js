@@ -31,6 +31,7 @@ import {
 } from '../../src/js/tactile-map/plan-from-drawing.js';
 import { validatePlan } from '../../src/js/tactile-map/plan.js';
 import { buildLevelRings } from '../../src/js/tactile-map/levels-svg.js';
+import { BUILT_IN_SYMBOLS } from '../../src/js/tactile-map/symbol-library.js';
 
 /**
  * A drawing at 480 x 360 units, one unit a millimeter: a 100 x 2 bar, a
@@ -403,5 +404,88 @@ describe('a plan from a drawing', () => {
       '<path d="M 10 10 L 110 10" stroke="black" fill="none" stroke-width="2"/>' +
       '</svg>';
     expect(filledOutlines(drawn)).toBe(drawn);
+  });
+});
+
+describe('station points from a drawing', () => {
+  const svgOf = (body) =>
+    '<svg xmlns="http://www.w3.org/2000/svg" width="480mm" height="360mm" viewBox="0 0 480 360">' +
+    body +
+    '</svg>';
+  /** The escalator's three chevrons at 18.469 mm, turned and placed. */
+  const escalator = (cx, cy, degrees) => {
+    const shape = BUILT_IN_SYMBOLS.find((s) => s.key === 'escalator');
+    const a = (degrees * Math.PI) / 180;
+    return ringsFromPathData(shape.pathData)
+      .map((ring) => {
+        const pts = ring.map((p) => {
+          const x = (p.x - 0.5) * 18.469;
+          const y = (p.y - 0.5) * 18.469;
+          return [
+            cx + x * Math.cos(a) - y * Math.sin(a),
+            cy + x * Math.sin(a) + y * Math.cos(a),
+          ];
+        });
+        return `<path d="M ${pts.map((p) => p.join(' ')).join(' L ')} Z"/>`;
+      })
+      .join('');
+  };
+  const sizeOnMap = (plan, id) => {
+    const one = { ...plan, features: plan.features.filter((f) => f.id === id) };
+    const ring = buildLevelRings(one).rings.level2.flat();
+    return [
+      Math.max(...ring.map((p) => p.x)) - Math.min(...ring.map((p) => p.x)),
+      Math.max(...ring.map((p) => p.y)) - Math.min(...ring.map((p) => p.y)),
+    ];
+  };
+
+  it('makes each drawn turnstile bar its own turnstile, lying the way the bar lies', () => {
+    // Four bars 2 by 4 mm lying across the drawing, 4 mm apart, and four
+    // standing up.
+    const lying = [100, 104, 108, 112]
+      .map((y) => `<rect x="100" y="${y}" width="4" height="2"/>`)
+      .join('');
+    const standing = [200, 204, 208, 212]
+      .map((x) => `<rect x="${x}" y="100" width="2" height="4"/>`)
+      .join('');
+    const classes = Object.fromEntries(
+      Array.from({ length: 8 }, (_, i) => [i, 'turnstile'])
+    );
+    const { plan } = build(svgOf(lying + standing), classes);
+    expect(plan.features).toHaveLength(8);
+    for (const f of plan.features) {
+      expect(f.kind).toBe('point');
+      const [w, h] = sizeOnMap(plan, f.id);
+      const across = f.at[0] < 50;
+      expect(w, f.id).toBeCloseTo(across ? 4 : 2, 1);
+      expect(h, f.id).toBeCloseTo(across ? 2 : 4, 1);
+    }
+  });
+
+  it('points an escalator the way its drawn chevrons point, and turns no other point', () => {
+    const body =
+      escalator(60, 60, 0) +
+      escalator(160, 60, 90) +
+      escalator(260, 60, 180) +
+      escalator(360, 60, 270) +
+      '<rect x="100" y="200" width="10" height="2"/>' +
+      '<rect x="100" y="203" width="10" height="2"/>' +
+      '<rect x="100" y="206" width="10" height="2"/>';
+    const classes = Object.fromEntries(
+      Array.from({ length: 12 }, (_, i) => [i, 'escalator'])
+    );
+    for (const i of [12, 13, 14]) classes[i] = 'stairs';
+    const { plan } = build(svgOf(body), classes);
+    const escalators = plan.features
+      .filter((f) => f.class === 'escalator')
+      .sort((a, b) => a.at[0] - b.at[0]);
+    expect(escalators).toHaveLength(4);
+    const turned = escalators.map(
+      (f) => ((Math.round(f.angle) % 360) + 360) % 360
+    );
+    expect(turned).toEqual([0, 90, 180, 270]);
+    const stairs = plan.features.filter((f) => f.class === 'stairs');
+    expect(stairs).toHaveLength(1);
+    expect(stairs[0].angle).toBeUndefined();
   });
 });

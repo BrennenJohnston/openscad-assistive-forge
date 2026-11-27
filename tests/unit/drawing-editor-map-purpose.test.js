@@ -88,20 +88,26 @@ afterEach(() => {
 });
 
 describe('the class table', () => {
-  it('lists the twenty-one classes and Ignore last, each with a kind, a name and a source', () => {
+  it('lists the twenty-seven classes and Ignore last, each with a kind, a name and a source', () => {
     expect(MAP_CLASS_KEYS).toEqual([
       'wall',
       'curb',
       'walkway',
       'route',
       'crossing',
+      'shoreline',
+      'fare-zone',
+      'platform-edge',
       'track',
       'steep',
       'traffic-island',
       'area',
+      'turnstile',
       'stairs',
+      'escalator',
       'elevator-up',
       'elevator-down',
+      'ticket-machine',
       'entrance',
       'furniture',
       'landmark',
@@ -126,6 +132,8 @@ describe('the class table', () => {
           'double',
           'ticks',
           'chevrons',
+          'bars',
+          'beads',
         ]).toContain(row.style);
       }
       if (row.kind === 'point') expect(row.symbolKey).toBeTruthy();
@@ -136,13 +144,19 @@ describe('the class table', () => {
       'Walkway',
       'Route',
       'Crossing',
+      'Shoreline side',
+      'Paid fare zone',
+      'Platform edge',
       'Track',
       'Steep sidewalk',
       'Traffic island',
       'Area',
+      'Turnstile',
       'Stairs',
+      'Escalator',
       'Elevator up',
       'Elevator down',
+      'Ticket machine',
       'Entrance',
       'Street furniture',
       'Landmark',
@@ -154,6 +168,43 @@ describe('the class table', () => {
       'Text',
       'Ignore',
     ]);
+    // The station classes, as my SeaTac key draws them: the lines on the
+    // floor, their bars and blocks on the symbol level, the points on the
+    // symbol level, none read from OpenStreetMap.
+    const row = (key) => MAP_CLASSES.find((c) => c.key === key);
+    expect(row('shoreline')).toMatchObject({
+      kind: 'line',
+      level: 1,
+      widthMm: 1.5,
+      style: 'dashed',
+      dashMm: 3,
+      dashGapMm: 3,
+    });
+    expect(row('fare-zone')).toMatchObject({
+      kind: 'line',
+      level: 1,
+      widthMm: 5.04,
+      style: 'bars',
+    });
+    expect(row('platform-edge')).toMatchObject({
+      kind: 'line',
+      level: 1,
+      widthMm: 2.4,
+      style: 'beads',
+    });
+    for (const key of ['turnstile', 'escalator', 'ticket-machine']) {
+      expect(row(key)).toMatchObject({ kind: 'point', level: 2, symbolKey: key });
+    }
+    for (const key of [
+      'shoreline',
+      'fare-zone',
+      'platform-edge',
+      'turnstile',
+      'escalator',
+      'ticket-machine',
+    ]) {
+      expect(row(key).osm, key).toBeUndefined();
+    }
     // Drawn words are areas one symbol step above the floor they sit on:
     // the title's own raise with the defaults, the symbol level.
     const text = MAP_CLASSES.find((c) => c.key === 'text');

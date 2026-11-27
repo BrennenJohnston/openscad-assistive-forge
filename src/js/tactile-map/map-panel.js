@@ -82,6 +82,7 @@ import {
   featureLevel,
   levelsSvgFromRings,
   pointRings,
+  pointSizeMm,
   settingsForSet,
 } from './levels-svg.js';
 import { keyFor, keySentence, keyText } from './map-key.js';
@@ -1060,6 +1061,7 @@ class MapPanel {
     const clear = {
       zones: this.northZonesOn(sheet).map(toPlan),
       symbolSizeMm: s.symbolSizeMm,
+      sizeOf: (f) => pointSizeMm(f, s),
       gapMm: s.minGapMm,
       channelAcrossMm: s.tapeWidthMm + s.channelClearanceMm,
       bounds: toPlan({ x0: 0, y0: 0, x1: sheet.w, y1: sheet.h }),

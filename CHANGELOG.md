@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A tactile map from a drawing has six station classes from my SeaTac key:
+  Shoreline side, Paid fare zone, Platform edge, Turnstile, Escalator and
+  Ticket machine; a turnstile lies and an escalator points as drawn.
+- A third symbol set, SeaTac station symbols, draws the stairs and elevators
+  at the sizes of my station key.
+
 ### Changed
 
 - A tactile map gives a stop or station mapped more than once at one spot one

@@ -58,10 +58,10 @@ function ringsOf(f, settings, symbols) {
     return [toPts(f.ring), ...(f.holes || []).map(toPts)];
   }
   if (f.kind === 'point') {
-    const size = f.size ?? settings.symbolSizeMm;
     const key = f.symbol ?? cls.symbol ?? 'circle';
     const shape = symbols[key] || symbols.circle || BUILTIN_SYMBOLS.circle;
-    return symbolRings(shape, size, f.at);
+    const size = f.size ?? shape.sizeMm ?? settings.symbolSizeMm;
+    return symbolRings(shape, size, f.at, f.angle);
   }
   if (f.kind === 'text') {
     const size = f.size ?? settings.titleCharHeightMm;

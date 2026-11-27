@@ -101,13 +101,13 @@ export function northZones({
   );
 }
 
-function halfOf(f, { symbolSizeMm, channelAcrossMm }) {
+function halfOf(f, { symbolSizeMm, channelAcrossMm, sizeOf }) {
   if (f.kind === 'channel') {
     const across = channelAcrossMm / 2;
     const along = f.length / 2;
     return f.vertical ? [across, along] : [along, across];
   }
-  const half = (f.size ?? symbolSizeMm) / 2;
+  const half = (sizeOf ? sizeOf(f) : (f.size ?? symbolSizeMm)) / 2;
   return [half, half];
 }
 
@@ -199,6 +199,8 @@ export function zonesCover(features, options) {
  * @param {object} options
  * @param {Array<{x0: number, y0: number, x1: number, y1: number}>} options.zones - In the plan's frame
  * @param {number} options.symbolSizeMm
+ * @param {(f: object) => number} [options.sizeOf] - A point's symbol size,
+ *   where it is not the set's (the station symbols keep their own)
  * @param {number} options.gapMm - What other symbols keep from a mark
  * @param {{x0: number, y0: number, x1: number, y1: number}} options.bounds - Where a symbol may stand
  * @param {number} options.channelAcrossMm - A label channel's width

@@ -54,6 +54,9 @@ export const STROKE_METHOD = 'segments-and-discs';
 
 const DISC_SEGMENTS = 24;
 
+/** The line styles the widest-single-line check leaves alone. */
+const NOT_SINGLE_LINES = new Set(['double', 'bars', 'beads']);
+
 /**
  * A symbol is a shape in a unit box (0 to 1, y down), scaled to the symbol
  * size and centered on the point. An entry carries `ring` ([[u, v], ...]) or
@@ -96,17 +99,18 @@ export const BUILTIN_SYMBOLS = {
 
 /**
  * The builder's settings for a built-in symbol set: its symbols, the size
- * they were published at, and its line styles on the classes that draw
- * with them. The basic shapes need none: the defaults are theirs.
+ * they were published at, and its line styles, if it has any, on the
+ * classes that draw with them. The basic shapes need none: the defaults
+ * are theirs.
  *
  * @param {string} setKey
  * @returns {object}
  */
 export function settingsForSet(setKey) {
   const set = BUILT_IN_SETS.find((x) => x.key === setKey);
-  if (!set || !set.lineStyles) return {};
+  if (!set || set.key === BUILT_IN_SETS[0].key) return {};
   const classes = { ...LEVELS_BY_CLASS };
-  for (const line of set.lineStyles) {
+  for (const line of set.lineStyles || []) {
     if (!line.class || !classes[line.class]) continue;
     const row = { ...classes[line.class], style: line.style };
     if (line.widthMm !== undefined) row.width = line.widthMm;
@@ -196,6 +200,19 @@ export const DEFAULT_SETTINGS = {
   // uphill (BANA 2022 3.4.3.3 keeps dashes between 6 and 10 mm).
   chevronPitchMm: 10,
   chevronAcrossMm: 6,
+  // A Paid fare zone's bars, from my SeaTac key: 0.72 mm wide and 4.032 mm
+  // across the band, one every 2.664 mm, at least 0.504 mm in from its ends.
+  fareBarMm: 0.72,
+  fareBarAcrossMm: 4.032,
+  fareBarPitchMm: 2.664,
+  fareBarEndMm: 0.504,
+  // A Platform edge's beads, from my SeaTac key: 1.55 mm along, one every
+  // 3.8435 mm, joined by necks 0.706 mm at their middle; a block 1.4 mm
+  // across on each bead.
+  beadMm: 1.55,
+  beadPitchMm: 3.8435,
+  beadNeckMm: 0.706,
+  beadBlockAcrossMm: 1.4,
   maxSingleLineMm: 2.2,
   maxSymbols: 15,
   maxTextures: 4,
@@ -449,6 +466,113 @@ export function chevronsLine(pairs, width, pitch, across, uphill = 'end') {
   return union(pieces);
 }
 
+/** How many marks `size` long, every `pitch`, fit in `room`; at least one. */
+function marksIn(room, size, pitch) {
+  return Math.max(1, Math.floor((room - size) / pitch + 1e-9) + 1);
+}
+
+/**
+ * A rectangle centered at arc length s along a polyline, `lengthMm` on the
+ * line's direction there and `acrossMm` square to it.
+ */
+function markAt(points, s, lengthMm, acrossMm) {
+  const p = along(points, s);
+  const nx = -p.ty;
+  const ny = p.tx;
+  const ha = lengthMm / 2;
+  const hc = acrossMm / 2;
+  return positive([
+    pt(p.x + p.tx * ha + nx * hc, p.y + p.ty * ha + ny * hc),
+    pt(p.x - p.tx * ha + nx * hc, p.y - p.ty * ha + ny * hc),
+    pt(p.x - p.tx * ha - nx * hc, p.y - p.ty * ha - ny * hc),
+    pt(p.x + p.tx * ha - nx * hc, p.y + p.ty * ha - ny * hc),
+  ]);
+}
+
+/**
+ * A Paid fare zone: a band the line's width with square ends, and bars
+ * across it, the run of bars centered so both ends keep the same margin.
+ * The bars go one level above the band.
+ */
+function barsLine(pairs, width, s) {
+  const points = toPoints(pairs);
+  const total = lengthOf(points);
+  const band = strokePolyline(pairs, width, { caps: 'butt' });
+  const room = total - 2 * s.fareBarEndMm;
+  if (room < s.fareBarMm) return { rings: band, marks: [] };
+  const n = marksIn(room, s.fareBarMm, s.fareBarPitchMm);
+  const run = (n - 1) * s.fareBarPitchMm + s.fareBarMm;
+  const first = (total - run) / 2 + s.fareBarMm / 2;
+  // On the inside of a turn a bar can reach the one before it; it is left
+  // out, so no two bars fuse into a mark of another shape.
+  const bars = [];
+  for (let i = 0; i < n; i++) {
+    const bar = markAt(
+      points,
+      first + i * s.fareBarPitchMm,
+      s.fareBarMm,
+      s.fareBarAcrossMm
+    );
+    const before = bars[bars.length - 1];
+    if (before && union([before, bar]).length < 2) continue;
+    bars.push(bar);
+  }
+  return { rings: band, marks: union(bars) };
+}
+
+/**
+ * A Platform edge: beads the line's width across, centered on the line as
+ * a run, each joined to the next by a neck that narrows to its middle and
+ * reaches 0.01 mm into both beads; a block on each bead one level up, the
+ * two end blocks 0.01 mm inside their bead so no faces only touch.
+ */
+function beadsLine(pairs, width, s) {
+  const points = toPoints(pairs);
+  const total = lengthOf(points);
+  const bead = s.beadMm;
+  const pitch = s.beadPitchMm;
+  const n = marksIn(total, bead, pitch);
+  const start = (total - ((n - 1) * pitch + bead)) / 2;
+  const EPS = 0.01;
+  const floor = [];
+  const blocks = [];
+  for (let i = 0; i < n; i++) {
+    const s0 = start + i * pitch;
+    floor.push(markAt(points, s0 + bead / 2, bead, width));
+    const inStart = i === 0 ? EPS : 0;
+    const inEnd = i === n - 1 ? EPS : 0;
+    blocks.push(
+      markAt(
+        points,
+        s0 + bead / 2 + (inStart - inEnd) / 2,
+        bead - inStart - inEnd,
+        s.beadBlockAcrossMm
+      )
+    );
+    if (i === n - 1) continue;
+    const p = along(points, s0 + bead - EPS);
+    const q = along(points, s0 + pitch + EPS);
+    const len = Math.hypot(q.x - p.x, q.y - p.y);
+    if (len < 1e-9) continue;
+    const nx = -(q.y - p.y) / len;
+    const ny = (q.x - p.x) / len;
+    const m = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+    const end = width / 2;
+    const waist = s.beadNeckMm / 2;
+    floor.push(
+      positive([
+        pt(p.x - nx * end, p.y - ny * end),
+        pt(m.x - nx * waist, m.y - ny * waist),
+        pt(q.x - nx * end, q.y - ny * end),
+        pt(q.x + nx * end, q.y + ny * end),
+        pt(m.x + nx * waist, m.y + ny * waist),
+        pt(p.x + nx * end, p.y + ny * end),
+      ])
+    );
+  }
+  return { rings: union(floor), marks: union(blocks) };
+}
+
 function doubleLine(pairs, width, gap) {
   const points = toPoints(pairs);
   const d = (width + gap) / 2;
@@ -458,12 +582,41 @@ function doubleLine(pairs, width, gap) {
   ]);
 }
 
-/** A symbol's ring at a size, centered on a point. */
-export function symbolRings(shape, size, at) {
+/**
+ * A symbol's rings at a size, centered on a point and turned by `angle`
+ * degrees: the way its right-hand side then faces, measured on the map
+ * with y down, so 90 turns a symbol to face down the map.
+ */
+export function symbolRings(shape, size, at, angle = 0) {
   const [cx, cy] = at;
+  const a = ((angle || 0) * Math.PI) / 180;
+  const cos = Math.cos(a);
+  const sin = Math.sin(a);
   return shapeRings(shape).map((ring) =>
-    ring.map((p) => pt(cx - size / 2 + p.x * size, cy - size / 2 + p.y * size))
+    ring.map((p) => {
+      const x = (p.x - 0.5) * size;
+      const y = (p.y - 0.5) * size;
+      return pt(cx + x * cos - y * sin, cy + x * sin + y * cos);
+    })
   );
+}
+
+/**
+ * The size a point's symbol prints at: the feature's own, else its symbol's
+ * own (the station symbols), else the set's.
+ *
+ * @param {object} f - a point feature
+ * @param {object} [settings] - the levels builder's
+ * @returns {number} mm
+ */
+export function pointSizeMm(f, settings = {}) {
+  if (f.size !== undefined) return f.size;
+  const s = { ...DEFAULT_SETTINGS, ...settings };
+  const cls = (s.classes || LEVELS_BY_CLASS)[f.class] || {};
+  const shape = symbolMap(s.symbols || activeLibrary())[
+    f.symbol ?? cls.symbol ?? 'circle'
+  ];
+  return shape?.sizeMm ?? s.symbolSizeMm;
 }
 
 /**
@@ -482,7 +635,12 @@ export function pointRings(f, settings = {}) {
     symbols[f.symbol ?? cls.symbol ?? 'circle'] ||
     symbols.circle ||
     BUILTIN_SYMBOLS.circle;
-  return symbolRings(shape, f.size ?? s.symbolSizeMm, f.at);
+  return symbolRings(
+    shape,
+    f.size ?? shape.sizeMm ?? s.symbolSizeMm,
+    f.at,
+    f.angle
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -635,9 +793,19 @@ export function buildLevelRings(plan, settings = {}) {
         );
       else if (style === 'double')
         rings = doubleLine(f.points, width, cls.gapMm ?? s.doubleGapMm);
-      else rings = strokePolyline(f.points, width);
+      else if (style === 'bars' || style === 'beads') {
+        const form =
+          style === 'bars'
+            ? barsLine(f.points, width, s)
+            : beadsLine(f.points, width, s);
+        rings = form.rings;
+        if (form.marks.length)
+          built.push({ f, level: level + 1, rings: form.marks });
+      } else rings = strokePolyline(f.points, width);
       built.push({ f, level, rings });
-      if (style !== 'double' && width > s.maxSingleLineMm) {
+      // A double line, and a band carrying bars or beads carrying blocks,
+      // are not single lines.
+      if (!NOT_SINGLE_LINES.has(style) && width > s.maxSingleLineMm) {
         warn(
           'line-too-wide',
           f.id,
@@ -656,7 +824,6 @@ export function buildLevelRings(plan, settings = {}) {
       if (f.texture) textures.add(f.texture);
     } else if (kind === 'point') {
       const level = f.level ?? cls.level ?? 2;
-      const size = f.size ?? s.symbolSizeMm;
       const key = f.symbol ?? cls.symbol ?? 'circle';
       symbolKeys.add(key);
       let shape = symbols[key];
@@ -664,19 +831,27 @@ export function buildLevelRings(plan, settings = {}) {
         unknownSymbols.add(key);
         shape = symbols.circle || BUILTIN_SYMBOLS.circle;
       }
-      built.push({ f, level, rings: symbolRings(shape, size, f.at) });
+      const size = f.size ?? shape.sizeMm ?? s.symbolSizeMm;
+      built.push({ f, level, rings: symbolRings(shape, size, f.at, f.angle) });
       if (typeof shape.raisedPathData === 'string') {
         built.push({
           f,
           level: 'here',
-          rings: symbolRings({ pathData: shape.raisedPathData }, size, f.at),
+          rings: symbolRings(
+            { pathData: shape.raisedPathData },
+            size,
+            f.at,
+            f.angle
+          ),
         });
       }
       points.push({ f, size });
       if (shape.solid) cones.push([f.at[0], f.at[1]]);
       // A solid symbol (the destination cone) is read by its height, not
-      // its footprint: the flat-symbol floor does not apply.
-      if (size < s.minSymbolMm && !shape.solid) {
+      // its footprint, and a symbol at a size of its own (the turnstile's
+      // bar) was printed and felt at that size: the floor does not apply.
+      const ownSize = shape.sizeMm !== undefined && size === shape.sizeMm;
+      if (size < s.minSymbolMm && !shape.solid && !ownSize) {
         warn(
           'symbol-too-small',
           f.id,
@@ -767,7 +942,9 @@ export function buildLevelRings(plan, settings = {}) {
       const dx = Math.abs(a.f.at[0] - b.f.at[0]);
       const dy = Math.abs(a.f.at[1] - b.f.at[1]);
       const gap = Math.max(0, Math.max(dx, dy) - (a.size + b.size) / 2);
-      if (gap < s.minGapMm) {
+      // A bank of gates stands as drawn, each bar beside the next.
+      const bank = a.f.class === 'turnstile' && b.f.class === 'turnstile';
+      if (gap < s.minGapMm && !bank) {
         pairs.push({ a, b, gap });
         spotOf[root(j)] = root(i);
       }

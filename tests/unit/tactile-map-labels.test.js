@@ -269,3 +269,21 @@ describe('labelPlan, on an area', () => {
     expect(labels[0].number).toBe(1);
   });
 });
+
+describe('labelPlan, at a station symbol', () => {
+  it("lays a named escalator's channel clear of the escalator at its own 18.5 mm", () => {
+    const plan = emptyPlan(300, 200);
+    plan.features.push(pt('up', 'escalator', [150, 100], { name: 'Up' }));
+    const { plan: labeled, labels } = labelPlan(plan);
+    expect(labels).toHaveLength(1);
+    const channel = labeled.features.find((f) => f.kind === 'channel');
+    const [hx, hy] = channel.vertical
+      ? [ACROSS / 2, channel.length / 2]
+      : [channel.length / 2, ACROSS / 2];
+    const half = 18.469 / 2;
+    const clear =
+      Math.abs(channel.at[0] - 150) - hx >= half ||
+      Math.abs(channel.at[1] - 100) - hy >= half;
+    expect(clear).toBe(true);
+  });
+});
