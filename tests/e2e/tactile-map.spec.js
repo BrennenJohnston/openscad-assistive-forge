@@ -2011,8 +2011,9 @@ test.describe('a place map, end to end', () => {
     const places = Number(
       (await status.textContent()).match(/and (\d+) numbered places\.$/)[1]
     );
-    // Named places numbers 15 here; every building numbers more.
-    expect(places).toBeGreaterThan(15);
+    // Named places numbers 4 here; every building numbers 15, the medical
+    // center, mapped as its building and a clinic in it, once.
+    expect(places).toBe(15);
 
     // The paper under the plate, and the View menu's switch hiding the
     // plate to read it.

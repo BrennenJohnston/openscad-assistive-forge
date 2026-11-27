@@ -204,7 +204,7 @@ The key prints a row a piece, each piece as small as its row, so a row prints on
 
 ## Numbers on the map
 
-Every named building, area and point that is on carries a number, and the key lists each number with its name, so a name too long for the map is still one number away. The draft's rows in the editor read with the number first, as "3 Building: Haring Center"; two places of one name are told apart there as "(2)", while the key names both plainly, since each has its own number. A kind with no name of its own, a bench or an unnamed building, keeps its symbol and takes no number, and a street keeps its name on the paper and the PDF.
+Every named building, area and point that is on carries a number, and the key lists each number with its name, so a name too long for the map is still one number away. The draft's rows in the editor read with the number first, as "3 Building: Haring Center"; two places of one name are told apart there as "(2)", while the key names both plainly, since each has its own number. A place mapped as its building and as a point inside it, by one name, is one place: the building carries its number, and the point keeps its symbol. A kind with no name of its own, a bench or an unnamed building, keeps its symbol and takes no number, and a street keeps its name on the paper and the PDF.
 
 A map with an address counts outward from it: the address's own building is 1, then the nearest and on, so placing or dragging You are here moves no number and a printed key stays right. A map with no address counts outward from You are here, and one with neither reads row by row, left to right. A route map counts in walking order along the route. Things the same distance away go left to right, then top to bottom.
 
