@@ -2122,6 +2122,69 @@ for (const size of [
   });
 }
 
+// Held upright the status line sits at the top of the preview, on the ready
+// badge's row. After a download it names the file beside the size and the
+// triangle count, longer than the room left of the badge: it wraps there, and
+// a first line that ends where the words broke shows no divider.
+for (const size of [
+  { width: 412, height: 915 },
+  { width: 412, height: 810 },
+]) {
+  test.describe(`The ready badge held upright, ${size.width} x ${size.height}`, () => {
+    test.use({ viewport: size, hasTouch: true });
+
+    test('after a download the status line stays clear of the ready badge', async ({
+      page,
+    }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 120_000);
+      await openPhoneProject(page, LOOKS[0]);
+      await expect(page.locator('.preview-state-indicator')).toHaveClass(
+        /state-current/,
+        { timeout: WASM_READY_TIMEOUT }
+      );
+      const primary = page.locator('#primaryActionBtn');
+      await primary.click();
+      await expect(primary).toContainText('Download', { timeout: 120_000 });
+      const download = page.waitForEvent('download', { timeout: 60_000 });
+      await primary.click();
+      await download;
+      await expect(page.locator('#previewStatusText')).toHaveText(/^Ready: /);
+      await page.waitForTimeout(400);
+      const m = await page.evaluate(readBadgeAndLine);
+      expect.soft(m.badge, 'the ready badge shown').not.toBeNull();
+      if (!m.badge) return;
+      expect
+        .soft(
+          m.overlap,
+          `the status line keeps clear of the badge (the line ends at x ${Math.round(m.lineRight)}, the badge starts at ${Math.round(m.badge.left)})`
+        )
+        .toBeLessThanOrEqual(0);
+      const words = await page.evaluate(() => {
+        const box = (id) => document.getElementById(id).getBoundingClientRect();
+        const text = box('previewStatusText');
+        const stats = box('previewStatusStats');
+        const divider = document.querySelector(
+          '#previewStatusBar .preview-status-divider'
+        );
+        return {
+          inside: Math.max(text.right, stats.right) <= innerWidth + 0.5,
+          wrapped: stats.top > text.top + 1,
+          dividerShown: divider.checkVisibility({ visibilityProperty: true }),
+        };
+      });
+      expect
+        .soft(words.inside, 'the line keeps its words on the screen')
+        .toBe(true);
+      expect
+        .soft(
+          words.wrapped && words.dividerShown,
+          'a wrapped first line ends without a divider'
+        )
+        .toBe(false);
+    });
+  });
+}
+
 /** The ready badge's box and how far the status line reaches into it. Read in the page. */
 function readBadgeAndLine() {
   const badge = document.querySelector('.preview-state-indicator');

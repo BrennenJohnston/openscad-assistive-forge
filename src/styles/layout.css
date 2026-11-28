@@ -2027,11 +2027,25 @@ body[data-app-surface='welcome'] #uiModeToggle {
    nothing, and a cap that does bite makes a control you tap repeatedly
    scroll.
    Both edges must be written: leaving `bottom` at its inherited value
-   stretches the box the full height of the preview. */
+   stretches the box the full height of the preview.
+   On that row the line keeps to the room left of the badge (main.js
+   measures it) and wraps there: after a download it names the file too, and
+   at 412 px it ran 77 px over the badge. */
 @media (max-width: 767px) {
   .preview-status-bar {
     top: var(--space-xs);
     bottom: auto;
+    max-width: calc(
+      100% - 2 * var(--space-xs) - var(--preview-badge-room, 0px)
+    );
+    flex-wrap: wrap;
+    row-gap: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .preview-status-bar.wrapped .preview-status-divider {
+    visibility: hidden;
   }
 }
 

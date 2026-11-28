@@ -15853,6 +15853,46 @@ if (rounded) {
     }).observe(echoDrawerEl);
   }
 
+  // On a phone the status line shares the top of the preview with the ready
+  // badge at the right: layout.css keeps the line to the room left of the
+  // badge, measured here, and lets it wrap. A first line that ends where the
+  // words broke hides its divider; hidden, not removed, so the line keeps its
+  // width and the wrap cannot undo itself.
+  if (
+    previewStatusBar &&
+    previewStatusText &&
+    previewStatusStats &&
+    'ResizeObserver' in window
+  ) {
+    const keepClearOfBadge = () => {
+      const host = previewStatusBar.offsetParent;
+      const badge = previewStateIndicator.getBoundingClientRect();
+      const room =
+        host && badge.width > 0
+          ? host.getBoundingClientRect().left +
+            host.clientLeft +
+            host.clientWidth -
+            badge.left
+          : 0;
+      previewStatusBar.style.setProperty(
+        '--preview-badge-room',
+        `${Math.max(0, Math.ceil(room))}px`
+      );
+      const text = previewStatusText.getBoundingClientRect();
+      const stats = previewStatusStats.getBoundingClientRect();
+      previewStatusBar.classList.toggle(
+        'wrapped',
+        stats.height > 0 && stats.top > text.top + 1
+      );
+    };
+    const badgeWatch = new ResizeObserver(keepClearOfBadge);
+    badgeWatch.observe(previewStatusBar);
+    badgeWatch.observe(previewStateIndicator);
+    if (previewStatusBar.parentElement) {
+      badgeWatch.observe(previewStatusBar.parentElement);
+    }
+  }
+
   // Echo drawer "View Full Console" button
   const echoViewConsoleBtn = document.getElementById('echoViewConsoleBtn');
   echoViewConsoleBtn?.addEventListener('click', openConsoleModal);

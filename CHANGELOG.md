@@ -65,6 +65,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so it is no longer called too thin to print.
 - A tactile map's ready sentence counts its warnings from the list step 5
   shows, the key's notes and the numbers only the key holds included.
+- On a phone held upright the status line over the preview no longer covers
+  the Preview ready badge: a long line, such as one naming a downloaded file,
+  wraps in the room beside the badge.
 
 ## [5.8.0] - 2026-11-18
 
