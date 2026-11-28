@@ -589,6 +589,36 @@ describe('draftPlan', () => {
     expect(on(at('blocks', []), 'osm-node-50')).toBe(false);
   });
 
+  it('marks a building tagged as a public place public, as it marks such a point, and no other building', () => {
+    const square = (e) => [
+      [e, 0],
+      [e + 20, 0],
+      [e + 20, 20],
+      [e, 20],
+      [e, 0],
+    ];
+    const plan = draftPlan({
+      elements: [
+        way(
+          80,
+          { building: 'yes', amenity: 'library', name: 'Library' },
+          square(0)
+        ),
+        way(81, { building: 'hotel', name: 'Hotel' }, square(40)),
+        way(82, { building: 'yes', shop: 'books', name: 'Books' }, square(80)),
+      ],
+      center: CENTER,
+      radiusM: 250,
+      landmarks: [],
+      size: { w: 480, h: 360 },
+    }).plan;
+    expect(
+      ['80', '81', '82'].map((id) =>
+        Boolean(byId(plan, `osm-way-${id}`).public)
+      )
+    ).toEqual([true, false, false]);
+  });
+
   it("measures the reach from the outline of a building the address stands in, so a large building's sidewalks and door start on", () => {
     // A library 100 x 80 m about the address, a sidewalk 10 m past its south
     // wall (50 m from the address), its door on that wall (40 m) and one on

@@ -901,7 +901,7 @@ async function makeFerryDraft(page, { detail } = {}) {
   const status = page.locator('#tactileMapAddressStatus');
   await expect(status).toContainText('Draft map ready: ', { timeout: 15000 });
   await expect(status).toHaveText(
-    / The key has \d+ symbols and \d+ numbered places\.$/
+    / The key has \d+ symbols and \d+ numbered places?\.$/
   );
   await expect(
     page.locator('#drawingEditorSurface .drawing-editor').first()
@@ -2026,7 +2026,7 @@ test.describe('a place map, end to end', () => {
     const places = Number(
       (await status.textContent()).match(/and (\d+) numbered places\.$/)[1]
     );
-    // Named places numbers 4 here; every building numbers 15, the medical
+    // Named places numbers 1 here; every building numbers 15, the medical
     // center, mapped as its building and a clinic in it, once.
     expect(places).toBe(15);
 

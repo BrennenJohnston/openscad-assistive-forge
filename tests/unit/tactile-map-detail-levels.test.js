@@ -22,6 +22,7 @@ import {
   NEAR_M,
 } from '../../src/js/tactile-map/detail-levels.js';
 import { draftPlan } from '../../src/js/tactile-map/plan-from-osm.js';
+import { numberedThings } from '../../src/js/tactile-map/map-numbers.js';
 import { pullTiles, TILE_URL } from '../../src/js/tactile-map/osm-tiles.js';
 import { scaleChoice, groundBox } from '../../src/js/tactile-map/scales.js';
 
@@ -409,6 +410,100 @@ describe('the detail levels', () => {
     // The reach is in meters: at half a millimeter a meter the library's
     // 30 mm are 60 m, the stop's 10 mm are 20 m.
     expect(onAt(features, 'named', 0.5)).toEqual(['way', 'stop']);
+  });
+
+  it("numbers, at Named places, only the buildings along the way that hold a public place, tagged as one or with a public place inside, on or off, and the address's own building; Every building numbers every named one", () => {
+    const square = (x0, y0, x1, y1) => [
+      [x0, y0],
+      [x1, y0],
+      [x1, y1],
+      [x0, y1],
+    ];
+    const building = (id, ring, extra = {}) => ({
+      id,
+      class: 'area',
+      kind: 'area',
+      what: 'Building',
+      ring,
+      ...extra,
+    });
+    const features = [
+      {
+        id: 'way',
+        class: 'walkway',
+        kind: 'line',
+        points: [
+          [0, 50],
+          [200, 50],
+        ],
+        way: true,
+      },
+      building('hotel', square(10, 52, 40, 80), { name: 'Hotel' }),
+      building('library', square(60, 52, 90, 80), {
+        name: 'Library',
+        public: true,
+      }),
+      // A long hall: its clinic stands beyond the way's 30 m, so the level
+      // leaves the clinic off, and the hall still holds it.
+      building('hall', square(110, 52, 140, 150), { name: 'Hall' }),
+      {
+        id: 'clinic',
+        class: 'landmark',
+        kind: 'point',
+        at: [125, 140],
+        name: 'Clinic',
+        public: true,
+      },
+      building('shed', square(160, 52, 190, 80)),
+      // The address's own building, numbered 1, is the map's subject.
+      building('home', square(10, 20, 40, 48), { name: 'Home' }),
+      {
+        id: 'destination',
+        class: 'destination',
+        kind: 'point',
+        at: [25, 30],
+        name: '1 Home Way',
+        on: true,
+      },
+    ];
+    const at = (key) =>
+      applyDetail(features, {
+        switches: switchesFor('place', key),
+        scale: null,
+        mmPerM: 1,
+      }).features;
+    const named = at('named');
+    const byId = (list, id) => list.find((f) => f.id === id);
+    expect(byId(named, 'clinic').on).toBe(false);
+    for (const id of ['hotel', 'library', 'hall']) {
+      expect(byId(named, id).on, id).toBe(true);
+    }
+    expect(byId(named, 'hotel').unnumbered).toBe(true);
+    expect(byId(named, 'home').unnumbered).toBeUndefined();
+    expect(byId(named, 'library').unnumbered).toBeUndefined();
+    expect(byId(named, 'hall').unnumbered).toBeUndefined();
+    // An unnamed building has no number to lose.
+    expect(byId(named, 'shed').unnumbered).toBeUndefined();
+    expect(numberedThings({ features: named }).map((f) => f.id)).toEqual([
+      'home',
+      'library',
+      'hall',
+    ]);
+    // Buildings set to Named ones under Change a group numbers them too.
+    const changed = applyDetail(features, {
+      switches: { ...switchesFor('place', 'named'), buildings: 'named' },
+      scale: null,
+      mmPerM: 1,
+    }).features;
+    expect(byId(changed, 'hotel').unnumbered).toBeUndefined();
+    // Every building numbers every named one, the mark gone.
+    const every = at('buildings');
+    expect(byId(every, 'hotel').unnumbered).toBeUndefined();
+    expect(
+      numberedThings({ features: every })
+        .map((f) => f.id)
+        .sort()
+    ).toEqual(['clinic', 'hall', 'home', 'hotel', 'library']);
   });
 
   it('draws a street as one line at the first two levels only where it is part of the way, and every street from Every building up', () => {

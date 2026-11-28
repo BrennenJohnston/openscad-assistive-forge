@@ -167,7 +167,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     // 30 m from the way, so they wait, off and unnumbered.
     await makeTheMap(page);
     await expect(status).toHaveText(
-      'Draft map ready: 10 of 286 features on; no warnings. Choose what stays. The key has 3 symbols and 4 numbered places.'
+      'Draft map ready: 10 of 286 features on; no warnings. Choose what stays. The key has 3 symbols and 1 numbered place.'
     );
     await expectSaidCountListed(page);
     const rows = await page
@@ -225,7 +225,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     // The ready sentence counts step 5's own list, the labels measured in
     // contracted UEB.
     await expect(status).toHaveText(
-      'Draft map ready: 10 of 286 features on; no warnings. Choose what stays. The key has 3 symbols and 4 numbered places.'
+      'Draft map ready: 10 of 286 features on; no warnings. Choose what stays. The key has 3 symbols and 1 numbered place.'
     );
     await expectSaidCountListed(page);
     await closeTheEditor(page);
@@ -235,10 +235,11 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     // A place map starts trimmed: the shapes at Ferry Place sit in a box well
     // inside the 480 x 360 face. Its band is 10 mm, wider at the sides whose
     // numbers stand there (braille wedges to start), and the sheet cuts into
-    // two plates. Off, the whole face in its band cuts into six. The key is
-    // a piece a row: its title, its three kinds and the four places; on
-    // wedges a name too long for one wedge goes on to a piece of its own
-    // (three here).
+    // two plates. Off, the whole face in its band cuts into four. The key is
+    // a piece a row: its title, its three kinds and the one place Named
+    // places numbers here, the address's own building (the others along the
+    // way hold no public place); on wedges a name too long for one wedge
+    // goes on to a piece of its own (two here).
     const trim = page.locator('#tactileMapTrim');
     await expect(trim).toBeChecked();
     const bedsNow = () =>
@@ -250,15 +251,15 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       });
     const WEDGE_BEDS = await bedsNow();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      `2 plates of 139 x 204 mm, A1 to A2. The key: 11 pieces on ${WEDGE_BEDS}.`
+      `2 plates of 139 x 204 mm, A1 to A2. The key: 7 pieces on ${WEDGE_BEDS}.`
     );
     await trim.uncheck();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      `6 plates of 173 x 198 mm, A1 to B3. The key: 11 pieces on ${WEDGE_BEDS}.`
+      `4 plates of 250 x 198 mm, A1 to B2. The key: 7 pieces on ${WEDGE_BEDS}.`
     );
     await trim.check();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      `2 plates of 139 x 204 mm, A1 to A2. The key: 11 pieces on ${WEDGE_BEDS}.`
+      `2 plates of 139 x 204 mm, A1 to A2. The key: 7 pieces on ${WEDGE_BEDS}.`
     );
     // The key follows Labels, braille wedges to start.
     await expect(page.locator('#tactileMapLabels')).toHaveValue('wedge');
@@ -281,7 +282,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
       'Area: a raised area, low',
     ]);
     expect(key.plates).toEqual(
-      Array.from({ length: 11 }, (_, i) => `key-${i + 1}`)
+      Array.from({ length: 7 }, (_, i) => `key-${i + 1}`)
     );
 
     // Braille label tape, chosen by keyboard: its pieces are channels, quick
@@ -304,7 +305,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
         beds: panel.keyBeds(),
       };
     });
-    expect(pieces).toHaveLength(8);
+    expect(pieces).toHaveLength(5);
     const TAPE_BEDS = beds.length === 1 ? 'one bed' : `${beds.length} beds`;
 
     // The zip: the map's plates, the key's pieces laid on beds, and the README.
@@ -327,7 +328,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     expect(names).not.toContain('tactile_map_B1.stl');
     const readme = await zip.file('README.txt').async('string');
     expect(summary).toBe(
-      `2 plates of 139 x 204 mm, A1 to A2. The key: 8 pieces on ${TAPE_BEDS}.`
+      `2 plates of 139 x 204 mm, A1 to A2. The key: 5 pieces on ${TAPE_BEDS}.`
     );
     expect(readme).toContain(
       'each 139 x 204 mm, trimmed to the shapes with a 10 mm margin, wider at the sides that hold numbers. Print one of each: A1, A2.'
@@ -342,7 +343,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     );
     expect(readme).not.toContain('sized by an estimate');
     // Each place's number on the map, a label of its own with its braille.
-    expect(readme).toMatch(/- #4 \([⠀-⣿]+, 2 cells, 20\.4 mm\): /);
+    expect(readme).toMatch(/- #1 \([⠀-⣿]+, 2 cells, 20\.4 mm\): /);
     // Each key piece's tape, its number then its name.
     expect(readme).toContain('Key 1 piece, label tape top to bottom:');
     expect(readme.replace(/\n- /g, ' ')).toMatch(
@@ -570,6 +571,30 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     const editor = page.locator('#drawingEditorSurface');
     const svg = editor.locator('.drawing-editor-canvas-svg');
     const viewBox = () => svg.getAttribute('viewBox');
+    // The preview renders behind the editor; when it lands, its messages bar
+    // shows over the editor's foot and the picture's pane gives up the bar's
+    // height. The drag's steps are measured in the picture's own units, so
+    // the drag waits for no render to be under way (the pill leaves pending
+    // and generating for ready, or stays outdated where the browser has no
+    // 3D view and nothing renders) and for the pane to keep one height.
+    await expect(page.locator('.preview-state-indicator')).not.toHaveClass(
+      /state-(pending|rendering)/,
+      { timeout: 90_000 }
+    );
+    let paneHeight = -1;
+    await expect
+      .poll(
+        async () => {
+          const h = await svg.evaluate(
+            (el) => el.getBoundingClientRect().height
+          );
+          const held = h === paneHeight;
+          paneHeight = h;
+          return held;
+        },
+        { intervals: [300] }
+      )
+      .toBe(true);
     // The shapes drawn and the view fitted to them, before any move.
     await expect(
       editor.locator('[data-layer="regions"] path').first()
