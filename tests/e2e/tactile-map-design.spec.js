@@ -13,7 +13,6 @@ import { test, expect } from '@playwright/test';
 import JSZip from 'jszip';
 import { readFileSync } from 'node:fs';
 import { parseSTL } from '../../scripts/parity/stl-stats.mjs';
-import { previewSettled } from './helpers/preview-settled.js';
 import {
   routeMapServices,
   openChooser,
@@ -540,14 +539,33 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
   }) => {
     test.setTimeout(240_000);
     await openFerryDraft(page);
-    // The preview renders behind the editor; when it lands, the messages bar
-    // under the editor changes and the picture's pane takes a new height.
-    // Waiting for it keeps a resize out of the drag, whose steps are
-    // measured in the picture's own units.
-    await previewSettled(page);
     const editor = page.locator('#drawingEditorSurface');
     const svg = editor.locator('.drawing-editor-canvas-svg');
     const viewBox = () => svg.getAttribute('viewBox');
+    // The preview renders behind the editor; when it lands, its messages bar
+    // shows over the editor's foot and the picture's pane gives up the bar's
+    // height. The drag's steps are measured in the picture's own units, so
+    // the drag waits for no render to be under way (the pill leaves pending
+    // and generating for ready, or stays outdated where the browser has no
+    // 3D view and nothing renders) and for the pane to keep one height.
+    await expect(page.locator('.preview-state-indicator')).not.toHaveClass(
+      /state-(pending|rendering)/,
+      { timeout: 90_000 }
+    );
+    let paneHeight = -1;
+    await expect
+      .poll(
+        async () => {
+          const h = await svg.evaluate(
+            (el) => el.getBoundingClientRect().height
+          );
+          const held = h === paneHeight;
+          paneHeight = h;
+          return held;
+        },
+        { intervals: [300] }
+      )
+      .toBe(true);
     // The shapes drawn and the view fitted to them, before any move.
     await expect(
       editor.locator('[data-layer="regions"] path').first()
