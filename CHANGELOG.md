@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the streets passing the address rather than every street.
 - A tactile map's transit stop is an outlined rectangle 10 by 5 mm, a bus
   seen from above, in place of the square holding a T.
+- A tactile map's key prints on as few beds as its pieces fit, one file a
+  bed, each row still a piece of its own; step 5 and the README say how
+  many beds and where each row is.
 
 ### Fixed
 
