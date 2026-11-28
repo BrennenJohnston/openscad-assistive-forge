@@ -242,16 +242,24 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     // goes on to a piece of its own (two here).
     const trim = page.locator('#tactileMapTrim');
     await expect(trim).toBeChecked();
+    const bedsNow = () =>
+      page.evaluate(() => {
+        const n = document
+          .getElementById('tactileMapPanel')
+          .__forgeMapPanel.keyBeds().length;
+        return n === 1 ? 'one bed' : `${n} beds`;
+      });
+    const WEDGE_BEDS = await bedsNow();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '2 plates of 139 x 204 mm, A1 to A2. The key takes 7 plates.'
+      `2 plates of 139 x 204 mm, A1 to A2. The key: 7 pieces on ${WEDGE_BEDS}.`
     );
     await trim.uncheck();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '4 plates of 250 x 198 mm, A1 to B2. The key takes 7 plates.'
+      `4 plates of 250 x 198 mm, A1 to B2. The key: 7 pieces on ${WEDGE_BEDS}.`
     );
     await trim.check();
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      '2 plates of 139 x 204 mm, A1 to A2. The key takes 7 plates.'
+      `2 plates of 139 x 204 mm, A1 to A2. The key: 7 pieces on ${WEDGE_BEDS}.`
     );
     // The key follows Labels, braille wedges to start.
     await expect(page.locator('#tactileMapLabels')).toHaveValue('wedge');
@@ -290,28 +298,37 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     const summary = (
       await page.locator('#tactileMapSummary').textContent()
     ).trim();
-    const pieces = await page.evaluate(() =>
-      document
-        .getElementById('tactileMapPanel')
-        .__forgeMapPanel.keyPages.map((p) => ({ id: p.id, size: p.size }))
-    );
+    const { pieces, beds } = await page.evaluate(() => {
+      const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+      return {
+        pieces: panel.keyPages.map((p) => ({ id: p.id, size: p.size })),
+        beds: panel.keyBeds(),
+      };
+    });
     expect(pieces).toHaveLength(5);
+    const TAPE_BEDS = beds.length === 1 ? 'one bed' : `${beds.length} beds`;
 
-    // The zip: the map's plates, the key's pieces, and the README.
+    // The zip: the map's plates, the key's pieces laid on beds, and the README.
     const downloadPromise = page.waitForEvent('download', { timeout: 420_000 });
     await tabTo(page, '#tactileMapRenderAll', 80);
     await page.keyboard.press('Enter');
     const download = await downloadPromise;
     const zip = await JSZip.loadAsync(readFileSync(await download.path()));
     const names = Object.keys(zip.files);
-    for (const id of ['A1', 'A2', ...pieces.map((p) => p.id)]) {
+    for (const id of ['A1', 'A2']) {
       expect(names).toContain(`tactile_map_${id}.stl`);
       expect(names).toContain(`levels_${id}.svg`);
     }
+    for (const piece of pieces) {
+      expect(names).toContain(`levels_${piece.id}.svg`);
+      expect(names).not.toContain(`tactile_map_${piece.id}.stl`);
+    }
+    for (const bed of beds)
+      expect(names).toContain(`tactile_map_${bed.id}.stl`);
     expect(names).not.toContain('tactile_map_B1.stl');
     const readme = await zip.file('README.txt').async('string');
     expect(summary).toBe(
-      '2 plates of 139 x 204 mm, A1 to A2. The key takes 5 plates.'
+      `2 plates of 139 x 204 mm, A1 to A2. The key: 5 pieces on ${TAPE_BEDS}.`
     );
     expect(readme).toContain(
       'each 139 x 204 mm, trimmed to the shapes with a 10 mm margin, wider at the sides that hold numbers. Print one of each: A1, A2.'
@@ -328,7 +345,7 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     // Each place's number on the map, a label of its own with its braille.
     expect(readme).toMatch(/- #1 \([⠀-⣿]+, 2 cells, 20\.4 mm\): /);
     // Each key piece's tape, its number then its name.
-    expect(readme).toContain('Key 1 plate, label tape top to bottom:');
+    expect(readme).toContain('Key 1 piece, label tape top to bottom:');
     expect(readme.replace(/\n- /g, ' ')).toMatch(
       /#1 building: center on human development and disability south\b/
     );
@@ -339,26 +356,38 @@ test.describe('a place map at 3600 Ferry Pl NE', () => {
     );
     expect(listed).toEqual(listed.map((_, i) => i + 1));
 
-    // A key piece is the size of its row, its channels cut for the tape.
+    // A key piece is the size of its row, its channels cut for the tape;
+    // a bed's file holds its pieces where the layout puts them, from 2 mm
+    // in at the front left.
     const levels = await zip.file('levels_key-1.svg').async('string');
     expect(levels).toMatch(/<g id="channels"><path d="[^"]+"\/><\/g>/);
-    const { triangles } = parseSTL(
-      await zip.file('tactile_map_key-1.stl').async('uint8array')
-    );
-    const size = [0, 1].map((axis) => {
-      let lo = Infinity;
-      let hi = -Infinity;
-      for (let i = axis; i < triangles.length; i += 3) {
-        lo = Math.min(lo, triangles[i]);
-        hi = Math.max(hi, triangles[i]);
-      }
-      return hi - lo;
-    });
-    expect(size[0]).toBeCloseTo(pieces[0].size.w, 1);
-    expect(size[1]).toBeCloseTo(pieces[0].size.h, 1);
     expect(pieces[0].size.h).toBeLessThan(75);
+    for (const bed of beds) {
+      const { triangles } = parseSTL(
+        await zip.file(`tactile_map_${bed.id}.stl`).async('uint8array')
+      );
+      const extent = [0, 1].map((axis) => {
+        let lo = Infinity;
+        let hi = -Infinity;
+        for (let i = axis; i < triangles.length; i += 3) {
+          lo = Math.min(lo, triangles[i]);
+          hi = Math.max(hi, triangles[i]);
+        }
+        return [lo, hi];
+      });
+      expect(extent[0][0], bed.id).toBeCloseTo(2, 1);
+      expect(extent[1][0], bed.id).toBeCloseTo(2, 1);
+      expect(extent[0][1], bed.id).toBeCloseTo(
+        Math.max(...bed.pieces.map((q) => q.x + q.w)),
+        1
+      );
+      expect(extent[1][1], bed.id).toBeCloseTo(
+        Math.max(...bed.pieces.map((q) => q.y + q.h)),
+        1
+      );
+    }
     await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
-      'All 7 plates are in tactile_map_plates.zip; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.'
+      `The 2 map plates and the key on ${TAPE_BEDS} are in tactile_map_plates.zip; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.`
     );
   });
 

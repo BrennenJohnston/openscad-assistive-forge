@@ -11,6 +11,7 @@
 import { svgToDataUrl } from '../svg-text-encoding.js';
 import { ringsToPathData } from '../ring-geometry.js';
 import { keyLabel } from './key-layout.js';
+import { KEY_BED_GAP_MM } from './key-beds.js';
 import { plateLevelsSvg, titleLabel } from './plate-tiling.js';
 import { levelsSvgFromRings } from './levels-svg.js';
 import { plateRows, rowsText } from './sheet.js';
@@ -436,11 +437,13 @@ function aboutOf(about) {
  * @param {{ base: number, tops: number[] }} input.heights
  * @param {number} input.tapeWidthMm
  * @param {object} [input.about] - what the map is (`mapAbout`)
- * @param {Array<{id: string, name: string}>} [input.keyPlates] - the key
- *   plates in the key's order, each named by its row's words
+ * @param {Array<{id: string, name: string}>} [input.keyPlates] - the key's
+ *   pieces in the key's order, each named by its row's words
+ * @param {Array<{id: string, pieces: Array<{id: string}>}>} [input.keyBeds] -
+ *   the beds the pieces are laid on (key-beds.js `layKeyOnBeds`)
  * @param {string} [input.keyText] - the key as text (map-key.js `keyText`)
  * @param {Array<{id: string, texts: string[]}>} [input.keyTape] - each key
- *   plate's texts to write on label tape, top to bottom
+ *   piece's texts to write on label tape, top to bottom
  * @param {string} [input.pdfName] - the PDF in the archive, named first
  * @param {string[]} [input.unspelled] - names the PDF's fonts could not spell
  * @param {number} [input.trimMm] - the margin kept when the sheet was
@@ -462,6 +465,7 @@ export function readmeText({
   tapeWidthMm,
   about,
   keyPlates = [],
+  keyBeds = [],
   keyText = '',
   keyTape = [],
   pdfName = '',
@@ -512,27 +516,62 @@ export function readmeText({
     (tape ? `${tapeSentence(tape)} ` : '') +
     (tape?.failed ? `${ENGINE_ESTIMATE_SENTENCE} ` : '') +
     'The picture plate_grid.svg shows the layout.\n' +
-    (keyPlates.length === 1
-      ? 'The key prints on a plate of its own, to read before the map:\n'
-      : '') +
-    (keyPlates.length > 1
-      ? `The key prints on ${keyPlates.length} plates of its own, to read before the map. ` +
-        'Lay them in this order, the first farthest from the reader:\n'
-      : '') +
-    keyPlates.map((p) => `- ${p.id}: ${p.name}\n`).join('') +
+    keyBedsText(keyPlates, keyBeds) +
     credits.map((line) => `${line}\n`).join('') +
     (keyText ? `\n${keyText}` : '') +
     (tapeLists.length ? '\n' : '') +
     tapeLists
       .map(
         (k) =>
-          `${keyLabel(k.id)} plate, label tape top to bottom:\n` +
+          `${keyLabel(k.id)} piece, label tape top to bottom:\n` +
           k.texts.map((t) => `- ${t}\n`).join('')
       )
       .join('') +
     (unspelled.length
       ? `\nNames the PDF could not spell: ${unspelled.join('; ')}\n`
       : '')
+  );
+}
+
+/**
+ * The key's pieces in the README: each row with its bed, in the order to lay
+ * them, then each bed's pieces from the front, each row left to right, so a
+ * piece is found by where it stands. A11Y.
+ *
+ * @param {Array<{id: string, name: string}>} keyPlates - in the key's order
+ * @param {Array<{id: string, pieces: Array<{id: string}>}>} keyBeds
+ * @returns {string}
+ */
+function keyBedsText(keyPlates, keyBeds) {
+  const n = keyPlates.length;
+  if (!n) return '';
+  if (n === 1) {
+    return (
+      `The key prints as one piece on one bed (${keyBeds[0].id}); read it before the map:\n` +
+      `- ${keyLabel(keyPlates[0].id)}: ${keyPlates[0].name}\n`
+    );
+  }
+  const m = keyBeds.length;
+  const bedOf = new Map();
+  keyBeds.forEach((bed, i) => {
+    for (const piece of bed.pieces) bedOf.set(piece.id, i + 1);
+  });
+  const range =
+    m === 1 ? keyBeds[0].id : `${keyBeds[0].id} to ${keyBeds[m - 1].id}`;
+  return (
+    `The key prints as ${n} pieces on ${m === 1 ? 'one bed' : `${m} beds`}, one file a bed (${range}), ` +
+    `each piece ${KEY_BED_GAP_MM} mm from the next; read it before the map. ` +
+    'Lay the pieces in this order, the first farthest from the reader:\n' +
+    keyPlates
+      .map((p) => `- ${keyLabel(p.id)}, bed ${bedOf.get(p.id)}: ${p.name}\n`)
+      .join('') +
+    'On each bed the pieces stand in rows from the front, each row left to right:\n' +
+    keyBeds
+      .map(
+        (bed, i) =>
+          `- Bed ${i + 1}: ${bed.pieces.map((p) => keyLabel(p.id)).join(', ')}\n`
+      )
+      .join('')
   );
 }
 

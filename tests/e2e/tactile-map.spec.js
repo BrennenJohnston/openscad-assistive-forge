@@ -78,7 +78,7 @@ test.describe('Tactile Map tile', () => {
     );
     // The sample's 480 x 360 face in its 10 mm band: a 500 x 380 sheet.
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      /^4 plates of 250 x 190 mm, A1 to B2\. The key takes (one plate|\d+ plates)\.$/,
+      /^4 plates of 250 x 190 mm, A1 to B2\. The key: (one piece|\d+ pieces) on (one bed|\d+ beds)\.$/,
       { timeout: 10000 }
     );
     // The whole map, its four plates, then the key's plates.
@@ -460,19 +460,24 @@ test.describe('Tactile Map tile', () => {
     expect(download.suggestedFilename()).toBe('tactile_map_plates.zip');
     const zip = await JSZip.loadAsync(readFileSync(await download.path()));
     const names = Object.keys(zip.files).sort();
-    const keyIds = await page.evaluate(() =>
-      document
-        .getElementById('tactileMapPanel')
-        .__forgeMapPanel.keyPages.map((p) => p.id)
-    );
+    const { keyIds, beds } = await page.evaluate(() => {
+      const panel = document.getElementById('tactileMapPanel').__forgeMapPanel;
+      return {
+        keyIds: panel.keyPages.map((p) => p.id),
+        beds: panel.keyBeds(),
+      };
+    });
     expect(keyIds.length).toBeGreaterThan(0);
+    const bedOf = (id) =>
+      beds.findIndex((b) => b.pieces.some((p) => p.id === id)) + 1;
+    const bedsSaid = beds.length === 1 ? 'one bed' : `${beds.length} beds`;
     expect(names.filter((name) => name.endsWith('.stl'))).toEqual(
       [
         'tactile_map_A1.stl',
         'tactile_map_A2.stl',
         'tactile_map_B1.stl',
         'tactile_map_B2.stl',
-        ...keyIds.map((id) => `tactile_map_${id}.stl`),
+        ...beds.map((b) => `tactile_map_${b.id}.stl`),
       ].sort()
     );
     for (const id of keyIds) expect(names).toContain(`levels_${id}.svg`);
@@ -480,19 +485,29 @@ test.describe('Tactile Map tile', () => {
     expect(readme).toMatch(
       /\nKey\nSymbols: Forge basic shapes\.\n\nSymbols, You are here first:\n/
     );
-    // Each key plate by its row's words, in the key's order.
+    // Each key piece by its row's words and its bed, in the key's order.
     const keyNames = await page.evaluate(() =>
       document
         .getElementById('tactileMapPanel')
         .__forgeMapPanel.keyPages.map((p) => p.name)
     );
     expect(keyNames.every(Boolean)).toBe(true);
+    const label = (id) => (id === 'key' ? 'Key' : `Key ${id.slice(4)}`);
     expect(readme).toContain(
-      (keyIds.length === 1
-        ? 'The key prints on a plate of its own, to read before the map:\n'
-        : `The key prints on ${keyIds.length} plates of its own, to read before the map. ` +
-          'Lay them in this order, the first farthest from the reader:\n') +
-        keyIds.map((id, i) => `- ${id}: ${keyNames[i]}\n`).join('')
+      keyIds.length === 1
+        ? 'The key prints as one piece on one bed (key-bed-1); read it before the map:\n' +
+            `- Key: ${keyNames[0]}\n`
+        : `The key prints as ${keyIds.length} pieces on ${bedsSaid}, one file a bed (` +
+            (beds.length === 1
+              ? 'key-bed-1'
+              : `key-bed-1 to key-bed-${beds.length}`) +
+            '), each piece 5 mm from the next; read it before the map. ' +
+            'Lay the pieces in this order, the first farthest from the reader:\n' +
+            keyIds
+              .map(
+                (id, i) => `- ${label(id)}, bed ${bedOf(id)}: ${keyNames[i]}\n`
+              )
+              .join('')
     );
     expect(names).toContain('map_plan.json');
     expect(names).toContain('README.txt');
@@ -520,7 +535,7 @@ test.describe('Tactile Map tile', () => {
     expect(size[1]).toBeCloseTo(190, 1);
     expect(size[2]).toBeCloseTo(2.4, 1);
     await expect(page.locator('#tactileMapRenderStatus')).toHaveText(
-      `All ${4 + keyIds.length} plates are in tactile_map_plates.zip; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.`
+      `The 4 map plates and the key on ${bedsSaid} are in tactile_map_plates.zip; your browser saves it. If nothing arrives, your browser may be asking to allow downloads from this site.`
     );
     await expect(page.locator('#tactileMapRenderAll')).toBeVisible();
     await expect(page.locator('#tactileMapRenderCancel')).toBeHidden();
@@ -554,7 +569,7 @@ test.describe('Tactile Map tile', () => {
     test.setTimeout(300_000);
     await openTactileMap(page);
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      /^4 plates of 250 x 190 mm, A1 to B2\. The key takes (one plate|\d+ plates)\.$/,
+      /^4 plates of 250 x 190 mm, A1 to B2\. The key: (one piece|\d+ pieces) on (one bed|\d+ beds)\.$/,
       { timeout: 10000 }
     );
     // A drawing at 340 x 240 mm whose shapes, a 300 x 2 mm bar and a
@@ -611,7 +626,7 @@ test.describe('Tactile Map tile', () => {
     await expect(page.locator('#drawingEditorSurface')).toBeHidden();
     // The 302 x 202 face in its 10 mm band: a 322 x 222 sheet.
     await expect(page.locator('#tactileMapSummary')).toHaveText(
-      /^2 plates of 161 x 222 mm, A1 to A2\. The key takes (one plate|\d+ plates)\.$/,
+      /^2 plates of 161 x 222 mm, A1 to A2\. The key: (one piece|\d+ pieces) on (one bed|\d+ beds)\.$/,
       { timeout: 10000 }
     );
     await expect(page.locator('#param-map_width_mm-spinbox')).toHaveValue(
@@ -979,9 +994,11 @@ test.describe('the draft map', () => {
     await expect(
       page.locator('#drawingEditorSurface .drawing-editor-canvas')
     ).toBeVisible();
-    await expect(page.locator('#tactileMapSummary')).toContainText('plates', {
-      timeout: 10000,
-    });
+    // Step 5's summary is written once the draft's plates are laid out.
+    await expect(page.locator('#tactileMapSummary')).toContainText(
+      /plates? of \d/,
+      { timeout: 10000 }
+    );
     // The levels file the draft wrote; Apply must write another.
     const levelsBefore = await page.evaluate(
       () => window.stateManager?.getState()?.parameters?.map_file?.data
@@ -1225,9 +1242,7 @@ test.describe('the draft map', () => {
     // Every building, where the bus stop is on: it stands beyond the 30 m
     // Named places keeps to.
     const status = await makeFerryDraft(page, { detail: 'buildings' });
-    await expect(page.locator('#tactileMapSummary')).toContainText(
-      'The key takes'
-    );
+    await expect(page.locator('#tactileMapSummary')).toContainText('The key: ');
     // The ready sentence counts the warnings step 5 lists for the draft as
     // it was made, before the labels change.
     const said = Number(
@@ -2011,8 +2026,9 @@ test.describe('a place map, end to end', () => {
     const places = Number(
       (await status.textContent()).match(/and (\d+) numbered places\.$/)[1]
     );
-    // Named places numbers 15 here; every building numbers more.
-    expect(places).toBeGreaterThan(15);
+    // Named places numbers 1 here; every building numbers 15, the medical
+    // center, mapped as its building and a clinic in it, once.
+    expect(places).toBe(15);
 
     // The paper under the plate, and the View menu's switch hiding the
     // plate to read it.

@@ -88,6 +88,7 @@ import {
 import { keyFor, keySentence, keyText } from './map-key.js';
 import { numberNamed } from './map-numbers.js';
 import { keyLabel, keyPieces, keyRows, KEY_LETTER_MM } from './key-layout.js';
+import { join3mf, joinStl, layKeyOnBeds } from './key-beds.js';
 import {
   channelLengthMm,
   labelPlan,
@@ -2802,6 +2803,18 @@ class MapPanel {
         }
       }
 
+      // The key's pieces laid on beds: one file a bed, each piece at its place.
+      const keyBeds = this.keyBeds();
+      let meshes = rendered;
+      if (keyBeds.length && rendered.some((r) => isKeyId(r.id))) {
+        try {
+          meshes = await this.keyBedFiles(rendered, keyBeds, format);
+        } catch (err) {
+          stop = { error: err?.message || String(err) };
+          meshes = rendered.filter((r) => !isKeyId(r.id));
+        }
+      }
+
       let sentence;
       if (rendered.length === 0) {
         sentence =
@@ -2811,16 +2824,24 @@ class MapPanel {
         const bytes = await this.buildArchive({
           stem,
           extension: OUTPUT_FORMATS[format]?.extension || '.stl',
-          rendered,
+          rendered: meshes,
           sets,
           rings: parts.rings,
           sheet,
           parameters,
           marks: parts.marks,
+          keyBeds,
         });
         this.download(bytes, fileName, 'zip');
+        const mapPlates = n - this.keyPages.length;
+        const b = keyBeds.length;
         if (stop) {
           sentence = `Stopped after plate ${rendered.length}. ${handedOver('The zip holds the plates finished so far')}`;
+        } else if (b) {
+          sentence = handedOver(
+            `${mapPlates === 1 ? 'The map plate' : `The ${mapPlates} map plates`} and the key on ${b === 1 ? 'one bed' : `${b} beds`} are in ${fileName}`,
+            { hint: true }
+          );
         } else if (n === 1) {
           sentence = handedOver(`The plate is in ${fileName}`, { hint: true });
         } else {
@@ -2890,6 +2911,7 @@ class MapPanel {
     sheet,
     parameters,
     marks = [],
+    keyBeds = [],
   }) {
     const bed = this.bed();
     const bedName =
@@ -2906,6 +2928,7 @@ class MapPanel {
       tapeWidthMm: this.tapeWidth(),
       about: this.mapAbout(),
       keyPlates: this.keyPages.map((p) => ({ id: p.id, name: p.name })),
+      keyBeds,
       keyText: this.keyPages.length ? keyText(cleared.key) : '',
       keyTape: this.keyPages.map((p) => ({ id: p.id, texts: p.tape })),
       pdfName: PDF_NAME,
@@ -3138,7 +3161,7 @@ class MapPanel {
           id === 'whole'
             ? 'Showing the whole map.'
             : isKeyId(id)
-              ? `Showing the ${keyLabel(id).toLowerCase()} plate.`
+              ? `Showing the ${keyLabel(id).toLowerCase()} piece.`
               : isTitleId(id)
                 ? `Showing the ${titleLabel(id).toLowerCase()} plate.`
                 : `Showing plate ${id}.`,
@@ -3408,6 +3431,40 @@ class MapPanel {
     return next;
   }
 
+  /** The key's pieces laid on the bed in use (key-beds.js). */
+  keyBeds() {
+    return layKeyOnBeds(
+      this.keyPages.map((p) => ({ id: p.id, w: p.size.w, h: p.size.h })),
+      this.bed()
+    );
+  }
+
+  /**
+   * The rendered meshes with the key's pieces joined a file a bed, each
+   * piece at its place on its bed; a bed none of whose pieces finished is
+   * left out.
+   */
+  async keyBedFiles(rendered, beds, format) {
+    const bytesOf = new Map(rendered.map((r) => [r.id, r.bytes]));
+    const out = rendered.filter((r) => !isKeyId(r.id));
+    for (const bed of beds) {
+      const parts = bed.pieces
+        .filter((p) => bytesOf.has(p.id))
+        .map((p) => ({
+          bytes: bytesOf.get(p.id),
+          x: p.x,
+          y: p.y,
+          name: keyLabel(p.id),
+        }));
+      if (!parts.length) continue;
+      out.push({
+        id: bed.id,
+        bytes: format === '3mf' ? await join3mf(parts) : joinStl(parts),
+      });
+    }
+    return out;
+  }
+
   /** The key's plates as render sets, in the tile's Key mode. */
   keyParameterSets(parameters) {
     if (!this.config.plateKindParam) return [];
@@ -3503,7 +3560,8 @@ class MapPanel {
     this.keyPages = this.layout ? this.buildKeyPages(layout) : [];
     const k = this.keyPages.length;
     if (k) {
-      sentence += ` The key takes ${k === 1 ? 'one plate' : `${k} plates`}.`;
+      const b = this.keyBeds().length;
+      sentence += ` The key: ${k === 1 ? 'one piece' : `${k} pieces`} on ${b === 1 ? 'one bed' : `${b} beds`}.`;
     }
     if (this.refs.summary.textContent !== sentence)
       this.refs.summary.textContent = sentence;

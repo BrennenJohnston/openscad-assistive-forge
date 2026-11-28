@@ -40,11 +40,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the streets passing the address rather than every street.
 - A tactile map's transit stop is an outlined rectangle 10 by 5 mm, a bus
   seen from above, in place of the square holding a T.
+- A tactile map's key prints on as few beds as its pieces fit, one file a
+  bed, each row still a piece of its own; step 5 and the README say how
+  many beds and where each row is.
 - A place map's Named places numbers a building along the way only when it
   holds a public place or the address; Every building numbers every named one.
 
 ### Fixed
 
+- A place mapped as its building and as a point in it, by one name, has one
+  number and one row in a tactile map's key, the building's.
 - Opening the Tactile Map Designer and changing nothing no longer leaves a
   draft, so the next visit does not ask to restore one.
 - A file control that held a picture puts its conversion, crop and picture

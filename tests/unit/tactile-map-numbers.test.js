@@ -85,6 +85,49 @@ describe('what gets a number', () => {
   });
 });
 
+describe('one number a place', () => {
+  const hall = (extra = {}) =>
+    box('hall', 0, 0, 40, 30, { name: 'Central Library', ...extra });
+
+  it('gives a named point standing in its own building no number of its own: the building carries the number, the key one row, the map one label', () => {
+    const plan = emptyPlan(200, 100);
+    plan.features.push(
+      hall(),
+      point('lib', [20, 15], { name: ' central  library', what: 'Library' }),
+      point('cafe', [60, 15], { name: 'Pine' })
+    );
+    expect(ids(plan)).toEqual(['hall', 'cafe']);
+    expect(keyFor(plan).numbers.map((n) => n.featureId)).toEqual([
+      'hall',
+      'cafe',
+    ]);
+    const { labels } = labelPlan(plan);
+    expect(labels.map((l) => l.featureId)).not.toContain('lib');
+    // Both stay drawn.
+    expect(numberNamed(plan).features.find((f) => f.id === 'lib').on).toBe(
+      true
+    );
+  });
+
+  it('keeps a number for a point of that name outside the building, for one of another name inside it, and for one whose building is off', () => {
+    const outside = emptyPlan(200, 100);
+    outside.features.push(
+      hall(),
+      point('lib', [80, 15], { name: 'Central Library' })
+    );
+    expect(ids(outside)).toEqual(['hall', 'lib']);
+    const other = emptyPlan(200, 100);
+    other.features.push(hall(), point('cafe', [20, 15], { name: 'Pine' }));
+    expect(ids(other)).toEqual(['hall', 'cafe']);
+    const off = emptyPlan(200, 100);
+    off.features.push(
+      hall({ on: false }),
+      point('lib', [20, 15], { name: 'Central Library' })
+    );
+    expect(ids(off)).toEqual(['lib']);
+  });
+});
+
 describe('the order of the numbers', () => {
   const address = (at) =>
     point('destination', at, { class: 'destination', name: '3600 Ferry Pl' });
@@ -283,7 +326,20 @@ describe('at 3600 Ferry Pl NE, Every building', () => {
         f.class !== 'you-are-here'
     );
     const numbered = numberNamed(plan).features.filter((f) => f.number);
-    expect(numbered.length).toBe(onNamed.length);
+    // The medical center is mapped as its building and as a clinic in it:
+    // one place, one number, the building's.
+    const unnumbered = onNamed.filter(
+      (f) => !numbered.some((g) => g.id === f.id)
+    );
+    expect(unnumbered.map((f) => [f.kind, f.name])).toEqual([
+      ['point', 'University of Washington Medical Center - Montlake'],
+    ]);
+    expect(
+      numbered.find(
+        (f) => f.name === 'University of Washington Medical Center - Montlake'
+      ).kind
+    ).toBe('area');
+    expect(numbered.length).toBe(onNamed.length - 1);
     expect(numbered.some((f) => f.kind === 'area')).toBe(true);
     expect(numbered.some((f) => f.kind === 'point')).toBe(true);
     expect(numbered.map((f) => f.number).sort((a, b) => a - b)).toEqual(
