@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A place mapped as its building and as a point in it, by one name, has one
+  number and one row in a tactile map's key, the building's.
 - Opening the Tactile Map Designer and changing nothing no longer leaves a
   draft, so the next visit does not ask to restore one.
 - A file control that held a picture puts its conversion, crop and picture

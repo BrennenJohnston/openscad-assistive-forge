@@ -143,7 +143,19 @@ function walkingOrder(things, routes) {
  */
 export function numberedThings(plan) {
   const features = plan?.features || [];
-  const things = features.filter(isNamedThing);
+  const named = features.filter(isNamedThing);
+  // A place mapped as its building and as a point in it, by one name, is one
+  // place: the building carries its number, and the point, still drawn,
+  // takes none of its own.
+  const nameOf = (f) => f.name.trim().replace(/\s+/g, ' ').toLowerCase();
+  const buildings = named.filter((f) => f.kind === 'area');
+  const things = named.filter(
+    (f) =>
+      f.kind !== 'point' ||
+      !buildings.some(
+        (b) => nameOf(b) === nameOf(f) && distanceTo(b, f.at) === 0
+      )
+  );
   const routes = features
     .filter(
       (f) =>
